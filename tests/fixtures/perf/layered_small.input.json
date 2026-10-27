@@ -1,0 +1,37 @@
+{
+  "id":"root",
+  "layoutOptions":{
+    "org.eclipse.elk.algorithm":"org.eclipse.elk.layered",
+    "org.eclipse.elk.direction":"RIGHT",
+    "org.eclipse.elk.edgeRouting":"ORTHOGONAL"
+  },
+  "children":[
+    {"id":"n0","width":40,"height":30},
+    {"id":"n1","width":40,"height":30},
+    {"id":"n2","width":40,"height":30},
+    {"id":"n3","width":40,"height":30},
+    {"id":"n4","width":40,"height":30},
+    {"id":"n5","width":40,"height":30},
+    {"id":"n6","width":40,"height":30},
+    {"id":"n7","width":40,"height":30},
+    {"id":"n8","width":40,"height":30},
+    {"id":"n9","width":40,"height":30}
+  ],
+  "edges":[
+    {"id":"e0","sources":["n3"],"targets":["n6"]},
+    {"id":"e1","sources":["n3"],"targets":["n6"]},
+    {"id":"e2","sources":["n3"],"targets":["n6"]},
+    {"id":"e3","sources":["n3"],"targets":["n4"]},
+    {"id":"e4","sources":["n3"],"targets":["n8"]},
+    {"id":"e5","sources":["n3"],"targets":["n4"]},
+    {"id":"e6","sources":["n3"],"targets":["n4"]},
+    {"id":"e7","sources":["n3"],"targets":["n4"]},
+    {"id":"e8","sources":["n3"],"targets":["n4"]},
+    {"id":"e9","sources":["n3"],"targets":["n4"]},
+    {"id":"e10","sources":["n1"],"targets":["n4"]},
+    {"id":"e11","sources":["n3"],"targets":["n4"]},
+    {"id":"e12","sources":["n1"],"targets":["n2"]},
+    {"id":"e13","sources":["n3"],"targets":["n6"]},
+    {"id":"e14","sources":["n5"],"targets":["n8"]}
+  ]
+}

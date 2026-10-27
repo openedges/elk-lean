@@ -6,9 +6,12 @@ import Elk.Api
 elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)
 elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt
 elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty]
+elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV]
+          [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]
 elk algorithms | options | categories
 elk --version
 ```
+`bench` is elk-rs `perf_benchmark --engine rust_api` (same graphs, same CSV; engine `lean_api`).
 `layout` and `convert` read ELK Text (`.elkt`) input through `Elk.Text.parseElkt`; `--defaults` applies the
 elk-live defaults (node size 30, port size 5) to shapes without a size.
 `batch` consumes the elk-rs parity manifest format (`model_rel_path	input_json	java_layout_json	java_status	java_error`)
@@ -18,7 +21,7 @@ and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills th
 open Elk Elk.Json Elk.Api
 
 def usage : String :=
-  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
+  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV] [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]\n  elk algorithms | options | categories\n  elk --version"
 
 structure LayoutArgs where
   input : Option String := none
@@ -178,6 +181,93 @@ def runBatch (args : List String) : IO UInt32 := do
     IO.println s!"batch completed: ok={ok}, errors={failed}"
     return (if failed == 0 then 0 else 1)
 
+/-- `elk bench` arguments (elk-rs `perf_benchmark` flags). -/
+structure BenchArgs where
+  mode : String := "synthetic"
+  scenarios : Option (Array String) := none
+  iterations : Nat := 20
+  warmup : Nat := 3
+  output : Option String := none
+  inputDir : Option String := none
+  manifest : Option String := none
+  limit : Nat := 50
+  /-- `--dump-dir DIR`: also writes every benchmark input as `DIR/<scenario>.json` (parity checks). -/
+  dumpDir : Option String := none
+
+partial def parseBenchArgs (args : List String) (acc : BenchArgs) : Except String BenchArgs :=
+  let num (flag v : String) : Except String Nat :=
+    match v.toNat? with
+    | some n => .ok n
+    | none => .error s!"{flag} expects a number, got '{v}'"
+  match args with
+  | [] => .ok acc
+  | "--mode" :: v :: rest => parseBenchArgs rest { acc with mode := v }
+  | "--engine" :: _ :: rest => parseBenchArgs rest acc
+  | "--scenarios" :: v :: rest =>
+    parseBenchArgs rest { acc with scenarios := some ((v.splitOn ",").map (·.trimAscii.toString) |>.filter (!·.isEmpty) |>.toArray) }
+  | "--iterations" :: v :: rest => do parseBenchArgs rest { acc with iterations := max (← num "--iterations" v) 1 }
+  | "--warmup" :: v :: rest => do parseBenchArgs rest { acc with warmup := ← num "--warmup" v }
+  | "--output" :: v :: rest => parseBenchArgs rest { acc with output := some v }
+  | "--input-dir" :: v :: rest => parseBenchArgs rest { acc with inputDir := some v }
+  | "--manifest" :: v :: rest => parseBenchArgs rest { acc with manifest := some v }
+  | "--limit" :: v :: rest => do parseBenchArgs rest { acc with limit := ← num "--limit" v }
+  | "--dump-dir" :: v :: rest => parseBenchArgs rest { acc with dumpDir := some v }
+  | a :: _ => .error s!"unknown bench argument '{a}'"
+
+/-- `elk bench`: elk-rs `perf_benchmark --engine rust_api` for elk-lean (`lean_api` rows). -/
+def runBench (args : List String) : IO UInt32 := do
+  let a ← match parseBenchArgs args {} with
+    | .ok a => pure a
+    | .error e => IO.eprintln e; return 2
+  let engine := "lean_api"
+  IO.eprintln "elk-lean Performance Benchmark"
+  IO.eprintln s!"  Engine: {engine}, Mode: {a.mode}, Iterations: {a.iterations}, Warmup: {a.warmup}"
+  IO.eprintln ""
+  let cases ← match a.mode with
+    | "synthetic" =>
+      let all := Elk.Api.PerfBenchmark.syntheticScenarios
+      pure (match a.scenarios with
+        | some names => all.filter fun (n, _) => names.contains n
+        | none => all)
+    | "models" =>
+      match a.manifest, a.inputDir with
+      | some m, _ => IO.eprintln s!"Loading models from manifest: {m}"; Elk.Api.PerfBenchmark.loadModelsFromManifest m a.limit
+      | none, some d => IO.eprintln s!"Loading models from directory: {d}"; Elk.Api.PerfBenchmark.loadModelsFromDir d a.limit
+      | none, none => IO.eprintln "No manifest or input directory specified. Use --manifest or --input-dir."; return 2
+    | m => IO.eprintln s!"Unknown mode: {m}. Use 'synthetic' or 'models'."; return 2
+  if a.mode == "models" then
+    IO.eprintln s!"Loaded {cases.size} models"
+    IO.eprintln ""
+  if let some dir := a.dumpDir then
+    IO.FS.createDirAll dir
+    for (name, json) in cases do
+      IO.FS.writeFile (System.FilePath.mk dir / s!"{name}.json") json
+  let mut lines : Array String := #[]
+  let mut ok := 0
+  let mut errors := 0
+  for (name, json) in cases do
+    match ← Elk.Api.PerfBenchmark.runApiBenchmark json a.iterations a.warmup with
+    | .ok (nanos, avgMs, ops) =>
+      ok := ok + 1
+      if a.mode == "synthetic" || ok <= 5 || ok % 10 == 0 then
+        IO.eprintln s!"  {name}: {Elk.Api.PerfBenchmark.fmtFixed avgMs 4} ms/op, {Elk.Api.PerfBenchmark.fmtFixed ops 0} ops/s ({nanos} ns total)"
+      lines := lines.push (← Elk.Api.PerfBenchmark.csvLine engine name a.iterations a.warmup nanos avgMs ops)
+    | .error e =>
+      errors := errors + 1
+      if a.mode == "synthetic" || errors <= 3 then IO.eprintln s!"  {name}: ERROR — {e}"
+  if a.mode == "models" then
+    IO.eprintln ""
+    IO.eprintln s!"Done: {ok} ok, {errors} errors"
+  IO.eprintln ""
+  let csv := "timestamp,engine,scenario,iterations,warmup,elapsed_nanos,avg_ms,ops_per_sec\n" ++ "\n".intercalate lines.toList ++ "\n"
+  match a.output with
+  | some path =>
+    if let some dir := (System.FilePath.mk path).parent then IO.FS.createDirAll dir
+    IO.FS.writeFile path csv
+    IO.eprintln s!"Results written to {path}"
+  | none => IO.print csv
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] | ["-V"] =>
@@ -186,6 +276,7 @@ def main (args : List String) : IO UInt32 := do
   | "layout" :: rest => runLayout rest
   | "convert" :: rest => runConvert rest
   | "batch" :: rest => runBatch rest
+  | "bench" :: rest => runBench rest
   | ["algorithms"] => IO.println (← knownLayoutAlgorithms); return 0
   | ["options"] => IO.println (← knownLayoutOptions); return 0
   | ["categories"] => IO.println (← knownLayoutCategories); return 0

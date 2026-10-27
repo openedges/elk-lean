@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static int shortest_digits(double x, char *buf, size_t n) {
     for (int prec = 1; prec <= 17; prec++) {
@@ -133,4 +134,11 @@ LEAN_EXPORT double elk_strtod(b_lean_obj_arg s) {
         return NAN;
     }
     return v;
+}
+
+/* Seconds since the Unix epoch (`perf_benchmark` CSV timestamps). Lean >= 4.2x compiles
+ * `BaseIO` externs without a world token and returns the value directly. */
+LEAN_EXPORT lean_obj_res elk_unix_time(void) {
+    time_t t = time(NULL);
+    return lean_usize_to_nat((size_t)(t < 0 ? 0 : t));
 }

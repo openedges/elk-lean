@@ -14,6 +14,10 @@ shortest round-trip digits, positional for decimal exponents `-5..15`, otherwise
 @[extern "elk_float_to_json"]
 opaque Float.toJsonNumber (x : Float) : String
 
+/-- Seconds since the Unix epoch (`SystemTime::now().duration_since(UNIX_EPOCH)`). -/
+@[extern "elk_unix_time"]
+opaque unixTimeSecs : BaseIO Nat
+
 /-- `%.17g` formatting (debug traces). -/
 @[extern "elk_float_to_g17"]
 opaque Float.toG17 (x : Float) : String
