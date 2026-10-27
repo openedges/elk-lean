@@ -34,9 +34,10 @@ def filtersFor : OptimizationGoal → Array BestCandidateFilter
   | .areaDriven => #[AreaFilter.filter, ScaleMeasureFilter.filter, AspectRatioFilter.filter]
 
 /-- `calc_values_for_opt(option, to_place, last_placed, drawing, placed_rects,
-node_node_spacing)`: the drawing obtained by placing `toPlace` at the candidate position. -/
-def calcValuesForOpt (self : AreaApproximation) (g : ElkGraph) (option : DrawingDataDescriptor)
-    (toPlace lastPlaced : NodeId) (drawing : DrawingData) (placedRects : Array NodeId)
+node_node_spacing)` with the shifted coordinate already computed: `shifted` is
+`calculate_y_for_lpr` for `LPR` and `calculate_x_for_lpb` for `LPB` (used only with `lpShift`). -/
+def calcValuesForOptWith (self : AreaApproximation) (g : ElkGraph) (option : DrawingDataDescriptor)
+    (toPlace lastPlaced : NodeId) (drawing : DrawingData) (shifted : Float)
     (nodeNodeSpacing : Float) : DrawingData := Id.run do
   let mut x : Float := 0.0
   let mut y : Float := 0.0
@@ -52,7 +53,7 @@ def calcValuesForOpt (self : AreaApproximation) (g : ElkGraph) (option : Drawing
   | .candidatePositionLastPlacedRight =>
     x := lp.x + lp.width + nodeNodeSpacing
     if self.lpShift then
-      y := Calculations.calculateYForLpr g x placedRects lastPlaced nodeNodeSpacing
+      y := shifted
     else
       y := lp.y
     width := Calculations.widthLprOrLpb drawingWidth x widthToPlace
@@ -60,7 +61,7 @@ def calcValuesForOpt (self : AreaApproximation) (g : ElkGraph) (option : Drawing
   | .candidatePositionLastPlacedBelow =>
     y := lp.y + lp.height + nodeNodeSpacing
     if self.lpShift then
-      x := Calculations.calculateXForLpb g y placedRects lastPlaced nodeNodeSpacing
+      x := shifted
     else
       x := lp.x
     width := Calculations.widthLprOrLpb drawingWidth x widthToPlace
@@ -79,6 +80,31 @@ def calcValuesForOpt (self : AreaApproximation) (g : ElkGraph) (option : Drawing
     width := drawingWidth
     height := drawingHeight
   return DrawingData.withCoordinates self.aspectRatio width height option x y
+
+/-- `calc_values_for_opt(option, to_place, last_placed, drawing, placed_rects,
+node_node_spacing)` with the placed rectangles given by their geometry
+(`Calculations.PlacedRects`). -/
+def calcValuesForOptSoA (self : AreaApproximation) (g : ElkGraph) (option : DrawingDataDescriptor)
+    (toPlace lastPlaced : NodeId) (drawing : DrawingData) (placedRects : Calculations.PlacedRects)
+    (nodeNodeSpacing : Float) : DrawingData :=
+  let lp := g.node lastPlaced
+  let shifted :=
+    if !self.lpShift then 0.0
+    else match option with
+      | .candidatePositionLastPlacedRight =>
+        Calculations.calculateYForLprSoA (lp.x + lp.width + nodeNodeSpacing) placedRects lp.y nodeNodeSpacing
+      | .candidatePositionLastPlacedBelow =>
+        Calculations.calculateXForLpbSoA (lp.y + lp.height + nodeNodeSpacing) placedRects lp.x nodeNodeSpacing
+      | _ => 0.0
+  self.calcValuesForOptWith g option toPlace lastPlaced drawing shifted nodeNodeSpacing
+
+/-- `calc_values_for_opt(option, to_place, last_placed, drawing, placed_rects,
+node_node_spacing)`: the drawing obtained by placing `toPlace` at the candidate position. -/
+def calcValuesForOpt (self : AreaApproximation) (g : ElkGraph) (option : DrawingDataDescriptor)
+    (toPlace lastPlaced : NodeId) (drawing : DrawingData) (placedRects : Array NodeId)
+    (nodeNodeSpacing : Float) : DrawingData :=
+  self.calcValuesForOptSoA g option toPlace lastPlaced drawing
+    (Calculations.PlacedRects.ofNodes g placedRects) nodeNodeSpacing
 
 /-- `check_special_cases(drawing1, drawing2, last_placed, to_place)`: tie break of two remaining
 candidates: two "below" candidates prefer WDB, two "right" candidates prefer WDR, LPR vs LPB
@@ -138,27 +164,37 @@ def approxBoundingBox (self : AreaApproximation) (rectangles : Array NodeId) (no
   let some firstRect := rectangles[0]?
     | throw (IO.userError "java.lang.IllegalStateException: at least one rectangle needed")
   ElkM.modifyNode firstRect fun n => { n with x := 0.0, y := 0.0 }
-  let mut placedRects : Array NodeId := #[firstRect]
-  let mut lastPlaced := firstRect
   let first ← ElkM.getNode firstRect
+  -- the geometry of the placed rectangles (they do not move again in this loop)
+  let mut placedRects : Calculations.PlacedRects := ({} : Calculations.PlacedRects).push
+    first.x first.y first.width first.height
+  let mut lastPlaced := firstRect
   let mut currentValues := DrawingData.new self.aspectRatio first.width first.height .wholeDrawing
   for toPlace in rectangles.extract 1 rectangles.size do
     let g ← get
-    let opt1 := self.calcValuesForOpt g .candidatePositionLastPlacedRight toPlace lastPlaced
-      currentValues placedRects nodeNodeSpacing
-    let opt2 := self.calcValuesForOpt g .candidatePositionLastPlacedBelow toPlace lastPlaced
-      currentValues placedRects nodeNodeSpacing
-    let opt3 := self.calcValuesForOpt g .candidatePositionWholeDrawingRight toPlace lastPlaced
-      currentValues placedRects nodeNodeSpacing
-    let opt4 := self.calcValuesForOpt g .candidatePositionWholeDrawingBelow toPlace lastPlaced
-      currentValues placedRects nodeNodeSpacing
+    -- the LPR y and the LPB x scans in one pass (`calcValuesForOptSoA` per option otherwise)
+    let lp := g.node lastPlaced
+    let (lprY, lpbX) :=
+      if self.lpShift then
+        Calculations.calculateLprAndLpbSoA (lp.x + lp.width + nodeNodeSpacing)
+          (lp.y + lp.height + nodeNodeSpacing) placedRects lp.x lp.y nodeNodeSpacing
+      else (0.0, 0.0)
+    let opt1 := self.calcValuesForOptWith g .candidatePositionLastPlacedRight toPlace lastPlaced
+      currentValues lprY nodeNodeSpacing
+    let opt2 := self.calcValuesForOptWith g .candidatePositionLastPlacedBelow toPlace lastPlaced
+      currentValues lpbX nodeNodeSpacing
+    let opt3 := self.calcValuesForOptWith g .candidatePositionWholeDrawingRight toPlace lastPlaced
+      currentValues 0.0 nodeNodeSpacing
+    let opt4 := self.calcValuesForOptWith g .candidatePositionWholeDrawingBelow toPlace lastPlaced
+      currentValues 0.0 nodeNodeSpacing
     let bestOpt ← match self.findBestCandidate g opt1 opt2 opt3 opt4 toPlace lastPlaced padding with
       | .ok d => pure d
       | .error msg => throw (IO.userError msg)
     ElkM.modifyNode toPlace fun n => { n with x := bestOpt.nextXCoordinate, y := bestOpt.nextYCoordinate }
+    let placed ← ElkM.getNode toPlace
+    placedRects := placedRects.push placed.x placed.y placed.width placed.height
     currentValues := bestOpt.setPlacementOption .wholeDrawing
     lastPlaced := toPlace
-    placedRects := placedRects.push toPlace
   return currentValues
 
 end AreaApproximation
