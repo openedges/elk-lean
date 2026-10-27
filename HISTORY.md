@@ -27,3 +27,7 @@
 - Phase 1 착수: `Elk.Graph`(Ids/Enum/Properties/Model/Util), `Elk.Core.Math`, `Elk.Core.Util`, `Elk.Core.Options`, `Elk.Core.Data`.
 - (해결) `lake build ElkFfi` 단독 호출 시 "job computation" 오류: `globs := #[.andSubmodules root]`는 루트 모듈의 서브모듈 디렉토리(`Elk/Ffi/`)가 존재해야 한다. 모든 lib에 디렉토리와 `.gitkeep`을 추가해 17개 lib 단독 빌드를 모두 확인했다.
 - oracle 스모크 실행 확인: `scripts/oracle_layout.sh tests/tmp/smoke.json …` → 정렬된 키, 정수 스냅(`f64_to_number`: 정수와 1e-6 이내면 정수 출력), trace 19단계 생성(`<trace_dir>/<model>/step_NNN_*.json`).
+
+## 2026-10-27 — 작업 규칙 추가: 에이전트 모델·노력 추정 할당
+- 사용자 요청으로 `.rules`에 "작업 할당 규칙"(작업 시작 시 모델·effort 추정 → 할당 → 재검증, 브리프/보고 형식, 분할 기준)을 추가하고 `PLAN.md` 11.1에 Phase별 초기 추정표를 기록했다.
+- Phase 1 착수: 주 에이전트(fable, max)가 규약 모듈(Ids, Enum/EnumSet 매크로, Java 의미론 헬퍼, stableSort, Random, KVector/KVectorChain/Spacing/Rectangle)을 작성 중. 빌드 검증 후 옵션/데이터/수학/유틸 나머지를 할당표대로 분배한다.

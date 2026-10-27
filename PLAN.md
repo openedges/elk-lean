@@ -239,6 +239,36 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 - `List` 대신 `Array`, `String.append` 대신 보간, 재귀 대신 `for`/`while`.
 - 경고 0 유지(`set_option linter.* false` 금지).
 
-## 11. 진행 기록
-- 단계 완료 시 `HISTORY.md`에 범위/수치/이슈를 기록하고 `.rules`의 "현재 핵심 스냅샷"을 갱신한다.
+## 11. 작업 할당과 진행 기록
+
+### 11.1 에이전트 모델·노력 추정 (규칙: `.rules` "작업 할당 규칙")
+작업 시작 시 항목별로 모델과 effort를 추정해 할당하고, 결과를 `HISTORY.md`의 작업 할당표에 기록한다. Phase별 초기 추정:
+
+| Phase / 작업 | 대응 원본 | 모델 | effort | 비고 |
+|---|---|---|---|---|
+| 1. 기반 규약(ids, enum 매크로, 속성 시스템, 그래프 arena, 모나드, 정렬, Random) | `graph/*`, `core/util/mod.rs` | fable(주) | max | 규약 확정 작업, 직렬 |
+| 1. `Elk.Core.Options` 열거형 전부 + `CoreOptions` + 메타데이터 등록 | `core/options/*` (2.9K줄) | sonnet | high | 기계적이나 양이 많음, 메타데이터 수치 검증 필수 |
+| 1. `Elk.Core.Data` 레지스트리·resolver·validation | `core/data/*`, `core/validation/*` (1.9K줄) | opus | high | 전역 상태·조회 규칙 |
+| 1. `Elk.Core.Math` 나머지(ElkMath, BezierSpline, CubicSpline) | `core/math/elk_math.rs` 등 (1.2K줄) | sonnet | medium | 수치 1:1 |
+| 1. `Elk.Core.Util` 나머지(ElkUtil, ElkSpacings, adapters, progress monitor, IndividualSpacings) | `core/util/*` (4K줄) | opus | high | ElkGraph arena API에 밀접 |
+| 1. 단위 테스트 이식(core/graph) | `core/tests`, `graph/tests` (6K줄) | sonnet | medium | 통과 기준 동일 |
+| 2. JSON Value/파서/프린터 | (자체 설계) | fable(주) | high | 출력 포맷 규약 |
+| 2. JSON importer/exporter/transferLayout | `graph.json/*` (7.3K줄) | opus | xhigh | 좌표 모드·섹션 처리 세밀 |
+| 2. `RecursiveGraphLayoutEngine`, Fixed/Box/Random/Topdown provider | `core/*.rs`, `core/util/*_layout_provider.rs` (2.6K줄) | opus | high | |
+| 2. CLI·parity 파이프라인 스크립트 | elk-rs `scripts/` | sonnet | medium | |
+| 3. alg.common nodespacing | `alg.common/nodespacing/*` (6K줄) | opus | xhigh | 라벨/포트 배치 수치 민감 |
+| 3. alg.common networksimplex, compaction, polyomino, spore, utils | 나머지 11K줄 | sonnet/opus | high | 모듈별 분할 |
+| 4a. layered 그래프 모델·importer/exporter·드라이버·trace | `layered/graph/*`, `elk_layered.rs`, `trace_recorder.rs` (10K줄) | fable(주)+opus | xhigh | 내부 속성 typed 필드 대응표 작성 |
+| 4b. P1 cycles, P2 layers | `p1cycles/*`, `p2layers/*` (6K줄) | sonnet | high | |
+| 4c. intermediate 프로세서 ≈60개 | `intermediate/*` (30K줄) | opus ×4~6 (10개씩 분할) | high~xhigh | 프로세서 간 의존 순서 고려 |
+| 4d. P3 crossing minimization | `p3order/*` (12K줄) | opus | xhigh | 순서 민감 |
+| 4e. P4 node placement | `p4nodes/*` (8K줄) | opus | xhigh | BK/NS 수치 민감 |
+| 4f. P5 edge routing, self loops, components, compound | `p5edges/*`, `loops/*`, `components/*`, `compound/*` (12K줄) | opus ×3 | xhigh | |
+| 5. force/stress, mrtree, radial, rectpacking, spore, disco, topdownpacking, vertiflex | 각 플러그인 | sonnet(소형)/opus(mrtree·rectpacking) | medium~high | 플러그인 단위 병렬 |
+| 6. elkt 파서 | `elkt_test_loader.rs` (3.3K줄), elk-live TS 파서 | sonnet | high | 명세 명확 |
+| 7. 전수 parity·drift 분석·성능 | 전체 | fable(주)+opus | max | |
+| 8. FFI/NAPI/WASM/npm | elk-rs `js/`, `napi/`, `wasm/` | opus | xhigh | 런타임 빌드 리스크 |
+
+### 11.2 진행 기록
+- 단계 완료 시 `HISTORY.md`에 범위/수치/이슈와 작업 할당표(추정 vs 실제)를 기록하고 `.rules`의 "현재 핵심 스냅샷"을 갱신한다.
 - parity 수치는 항상 "모델 수 / 비교 수 / 일치 수 / 드리프트 / 스킵"으로 기록한다.
