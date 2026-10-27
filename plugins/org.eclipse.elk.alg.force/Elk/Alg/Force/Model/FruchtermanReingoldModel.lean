@@ -114,6 +114,14 @@ private def isBend : FParticleId → Bool
   | .bend _ => true
   | _ => false
 
+/-- Result of `scanForces`: where it stopped (`n` = done) and the accumulated displacement. The float
+fields are stored unboxed in the constructor, so a scan allocates one small object. -/
+private structure ScanResult where
+  stop : Nat
+  ax : Float
+  ay : Float
+  deriving Inhabited
+
 /-- The displacement of particle `vi` caused by the particles `ui, ui + 1, …, n - 1` (the inner pair
 loop of `layout`), accumulated onto `(ax, ay)` in loop order. Stops at the first particle at the same
 position as `vi` (returned as the first component, `n` when there is none) so the caller can separate
@@ -121,15 +129,15 @@ the two before continuing; `check = false` skips that test for `ui` itself (the 
 just separated, whose force is computed unconditionally like in Rust). A tail-recursive function
 with unboxed `Float` parameters: a `for` loop would box the accumulators in its state tuple. -/
 private partial def scanForces (px py radii priorities connections : FloatArray) (n vi : Nat)
-    (k temperature : Float) (ui : Nat) (check : Bool) (ax ay : Float) : Nat × Float × Float :=
-  if ui >= n then (n, ax, ay)
+    (k temperature : Float) (ui : Nat) (check : Bool) (ax ay : Float) : ScanResult :=
+  if ui >= n then ⟨n, ax, ay⟩
   else if ui == vi then scanForces px py radii priorities connections n vi k temperature (ui + 1) true ax ay
   else
     let pxu := px.get! ui
     let pyu := py.get! ui
     let pxv := px.get! vi
     let pyv := py.get! vi
-    if check && pxu == pxv && pyu == pyv then (ui, ax, ay)
+    if check && pxu == pxv && pyu == pyv then ⟨ui, ax, ay⟩
     else
       let ddx := pxv - pxu
       let ddy := pyv - pyu
@@ -174,19 +182,20 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
       dx := dx.set! i 0.0
       dy := dy.set! i 0.0
     -- O(n^2) force computation: `scanForces` runs the pair loop of `vi` up to the next particle at
-    -- the same position, which is separated here (monadic: bend points go through the arena)
+    -- the same position, which is separated here (monadic: bend points go through the arena) before
+    -- the scan continues with that pair
     for vi in [0:n] do
-      let mut ui := 0
-      let mut check := true
-      let mut ax := dx.get! vi
-      let mut ay := dy.get! vi
-      while ui < n do
-        let (stop, ax', ay') := scanForces px py radii priorities connections n vi st.k st.temperature ui check ax ay
-        ax := ax'
-        ay := ay'
-        if stop >= n then
-          ui := n
-        else
+      let first := scanForces px py radii priorities connections n vi st.k st.temperature 0 true
+        (dx.get! vi) (dy.get! vi)
+      if first.stop >= n then
+        -- common case: no particle shares the position of `vi`
+        dx := dx.set! vi first.ax
+        dy := dy.set! vi first.ay
+      else
+        let mut r := first
+        let mut ui := first.stop
+        while ui < n do
+          let stop := r.stop
           if isBend particles[stop]! || isBend particles[vi]! then
             -- bend points: edge aware separation through the arena
             modify (setTwoPositions · particles[stop]! particles[vi]! ⟨px.get! stop, py.get! stop⟩
@@ -210,10 +219,10 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
               py := py.set! vi nv.y
               if nu.x != nv.x || nu.y != nv.y then separated := true
           -- the separated pair's force is computed without a second same-position test
-          ui := stop
-          check := false
-      dx := dx.set! vi ax
-      dy := dy.set! vi ay
+          r := scanForces px py radii priorities connections n vi st.k st.temperature stop false r.ax r.ay
+          ui := r.stop
+        dx := dx.set! vi r.ax
+        dy := dy.set! vi r.ay
     -- apply the displacements with bounds
     for vi in [0:n] do
       let bounded := (KVector.mk (dx.get! vi) (dy.get! vi)).bound (-dispBound) (-dispBound) dispBound dispBound

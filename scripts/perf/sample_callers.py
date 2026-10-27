@@ -6,10 +6,12 @@ elk-lean frame above them in a macOS `sample` call graph.
     python3 scripts/perf/sample_callers.py PROFILE.txt 'lean_copy_expand_array|lean_copy_array'
 """
 import collections
+import os
 import re
 import sys
 
-from sample_inclusive import short
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sample_inclusive import short  # noqa: E402
 
 
 def main():

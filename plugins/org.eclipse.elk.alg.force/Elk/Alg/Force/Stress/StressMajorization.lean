@@ -39,43 +39,32 @@ private def popsBefore (a b : HeapEntry) : Bool :=
   | .lt => false
   | .eq => a.position > b.position
 
-private def siftUp (heap : Array HeapEntry) (start : Nat) : Array HeapEntry := Id.run do
-  let mut h := heap
-  let mut i := start
-  while i > 0 do
+/-- Restores the heap property upwards from `i` (tail recursive: the heap array stays unshared and is
+swapped in place). -/
+private partial def siftUp (h : Array HeapEntry) (i : Nat) : Array HeapEntry :=
+  if i == 0 then h
+  else
     let p := (i - 1) / 2
-    if popsBefore h[i]! h[p]! then
-      h := h.swapIfInBounds i p
-      i := p
-    else
-      break
-  return h
+    if popsBefore h[i]! h[p]! then siftUp (h.swapIfInBounds i p) p else h
 
-private def siftDown (heap : Array HeapEntry) : Array HeapEntry := Id.run do
-  let mut h := heap
+/-- Restores the heap property downwards from `i` (same comparisons, in the same order, as the
+`while` loop it replaces). -/
+private partial def siftDown (h : Array HeapEntry) (i : Nat) : Array HeapEntry :=
   let n := h.size
-  let mut i := 0
-  while true do
-    let l := 2 * i + 1
-    let r := l + 1
-    let mut best := i
-    if l < n && popsBefore h[l]! h[best]! then best := l
-    if r < n && popsBefore h[r]! h[best]! then best := r
-    if best == i then break
-    h := h.swapIfInBounds i best
-    i := best
-  return h
+  let l := 2 * i + 1
+  let r := l + 1
+  let best := if l < n && popsBefore h[l]! h[i]! then l else i
+  let best := if r < n && popsBefore h[r]! h[best]! then r else best
+  if best == i then h else siftDown (h.swapIfInBounds i best) best
 
 private def heapPush (heap : Array HeapEntry) (e : HeapEntry) : Array HeapEntry :=
   siftUp (heap.push e) heap.size
 
-private def heapPop (heap : Array HeapEntry) : Option (HeapEntry × Array HeapEntry) :=
-  match heap.back? with
-  | none => none
-  | some last =>
-    let top := heap[0]!
-    let rest := heap.pop
-    if rest.isEmpty then some (top, rest) else some (top, siftDown (rest.set! 0 last))
+/-- Removes the top entry (`heap[0]`) of a non-empty heap. -/
+private def heapRemoveTop (heap : Array HeapEntry) : Array HeapEntry :=
+  let last := heap[heap.size - 1]!
+  let rest := heap.pop
+  if rest.isEmpty then rest else siftDown (rest.set! 0 last) 0
 
 /-- `dijkstra_flat`: shortest path distances from `source` over the adjacency lists. -/
 private def dijkstra (adj : Array (Array (Nat × Float))) (n source : Nat) : FloatArray := Id.run do
@@ -87,8 +76,8 @@ private def dijkstra (adj : Array (Array (Nat × Float))) (n source : Nat) : Flo
     heap := heapPush heap { cost := d, position := i }
   let mut visited : Array Bool := Array.replicate n false
   while !heap.isEmpty do
-    let some (top, rest) := heapPop heap | break
-    heap := rest
+    let top := heap[0]!
+    heap := heapRemoveTop heap
     let position := top.position
     if visited[position]! then continue
     visited := visited.set! position true
