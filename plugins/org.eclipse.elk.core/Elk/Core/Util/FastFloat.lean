@@ -32,6 +32,22 @@ opaque ofNatFast (n : @& Nat) : Float
 @[extern "elk_float_of_int_fast"]
 opaque ofIntFast (i : @& Int) : Float
 
+/-! The core implementations, compiled before the `csimp` lemmas below exist (tests compare against
+them; inside this module the redirection is not active yet). -/
+
+/-- Core `Float.ofScientific` (reference). -/
+def coreOfScientific (m : Nat) (s : Bool) (e : Nat) : Float := Float.ofScientific m s e
+/-- Core `Float.ofNat` (reference). -/
+def coreOfNat (n : Nat) : Float := Float.ofNat n
+/-- Core `Float.ofInt` (reference). -/
+def coreOfInt (i : Int) : Float := Float.ofInt i
+/-- Core `Float.isNaN` (reference). -/
+def coreIsNaN (x : Float) : Bool := x.isNaN
+/-- Core `Float.isFinite` (reference). -/
+def coreIsFinite (x : Float) : Bool := x.isFinite
+/-- Core `Float.isInf` (reference). -/
+def coreIsInf (x : Float) : Bool := x.isInf
+
 /-- Run-time implementation of `ofScientific`: C fast path, core fallback. -/
 def ofScientificImpl (m : Nat) (s : Bool) (e : Nat) : Float :=
   let r := ofScientificFast m s e
@@ -72,6 +88,31 @@ def ofInt (i : Int) : Float := Float.ofInt i
 /-- Compiled code calls `FastFloat.ofNat` for `Nat.toFloat` (an abbreviation of `Float.ofNat` that
 the compiler would otherwise inline after the `csimp` pass). -/
 @[csimp] theorem natToFloat_eq : @Nat.toFloat = @ofNat := rfl
+
+/-- `Float.isNaN` as an inline comparison (`x != x` holds exactly for NaN); the core function is an
+out-of-line C call (`lean_float_isnan`) that showed up in profiles of `fmax`/`fmin`. -/
+def isNaNImpl (x : Float) : Bool := x != x
+
+/-- `Float.isFinite` as inline arithmetic: `x - x` is `0` for finite `x` and NaN for infinities and
+NaN. -/
+def isFiniteImpl (x : Float) : Bool := x - x == 0.0
+
+/-- `Float.isInf` as inline arithmetic: not NaN, and `x - x` is NaN. -/
+def isInfImpl (x : Float) : Bool := x == x && x - x != x - x
+
+/-- `Float.isNaN` with the inline run-time implementation. -/
+@[implemented_by isNaNImpl] def isNaN (x : Float) : Bool := x.isNaN
+/-- `Float.isFinite` with the inline run-time implementation. -/
+@[implemented_by isFiniteImpl] def isFinite (x : Float) : Bool := x.isFinite
+/-- `Float.isInf` with the inline run-time implementation. -/
+@[implemented_by isInfImpl] def isInf (x : Float) : Bool := x.isInf
+
+/-- Compiled code tests NaN with `isNaNImpl`. -/
+@[csimp] theorem isNaN_eq : @Float.isNaN = @isNaN := rfl
+/-- Compiled code tests finiteness with `isFiniteImpl`. -/
+@[csimp] theorem isFinite_eq : @Float.isFinite = @isFinite := rfl
+/-- Compiled code tests infinity with `isInfImpl`. -/
+@[csimp] theorem isInf_eq : @Float.isInf = @isInf := rfl
 
 /-- Float literals (`0.5`): the core instance is inlined after the `csimp` pass, so the redirection
 needs an instance of higher priority (and a higher default-instance priority for literals whose type

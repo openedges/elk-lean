@@ -67,23 +67,24 @@ def initializeModel (g : FGraph) : FruchtermanReingoldModel := Id.run do
 private structure Flat where
   particles : Array FParticleId
   radii : FloatArray
-  priorities : Array Int
-  /-- Row-major `n x n` connection weights (`FGraph::get_connection`), diagonal 0. -/
-  connections : Array Int
+  /-- `PRIORITY` of every particle as a float (`priority as f64`, converted once). -/
+  priorities : FloatArray
+  /-- Row-major `n x n` connection weights (`FGraph::get_connection as f64`), diagonal 0. -/
+  connections : FloatArray
 
 private def extractFlat (g : FGraph) : Flat := Id.run do
   let particles := g.particleIds
   let n := particles.size
   let mut radii := FloatArray.emptyWithCapacity n
-  let mut priorities : Array Int := Array.mkEmpty n
+  let mut priorities := FloatArray.emptyWithCapacity n
   for p in particles do
     radii := radii.push (g.arena.particleRadius p)
-    priorities := priorities.push ((g.arena.particleProperties p).getD ForceOptions.PRIORITY 1)
-  let mut connections : Array Int := Array.replicate (n * n) 0
+    priorities := priorities.push (Float.ofInt ((g.arena.particleProperties p).getD ForceOptions.PRIORITY 1))
+  let mut connections := FloatArray.mk (Array.replicate (n * n) 0.0)
   for i in [0:n] do
     for j in [0:n] do
       if i == j then continue
-      connections := connections.set! (i * n + j) (g.getConnection particles[i]! particles[j]!)
+      connections := connections.set! (i * n + j) (Float.ofInt (g.getConnection particles[i]! particles[j]!))
   return { particles, radii, priorities, connections }
 
 /-- Particle positions as flat coordinate arrays. -/
@@ -112,6 +113,36 @@ private def setTwoPositions (g : FGraph) (a b : FParticleId) (pa pb : KVector) :
 private def isBend : FParticleId → Bool
   | .bend _ => true
   | _ => false
+
+/-- The displacement of particle `vi` caused by the particles `ui, ui + 1, …, n - 1` (the inner pair
+loop of `layout`), accumulated onto `(ax, ay)` in loop order. Stops at the first particle at the same
+position as `vi` (returned as the first component, `n` when there is none) so the caller can separate
+the two before continuing; `check = false` skips that test for `ui` itself (the pair the caller has
+just separated, whose force is computed unconditionally like in Rust). A tail-recursive function
+with unboxed `Float` parameters: a `for` loop would box the accumulators in its state tuple. -/
+private partial def scanForces (px py radii priorities connections : FloatArray) (n vi : Nat)
+    (k temperature : Float) (ui : Nat) (check : Bool) (ax ay : Float) : Nat × Float × Float :=
+  if ui >= n then (n, ax, ay)
+  else if ui == vi then scanForces px py radii priorities connections n vi k temperature (ui + 1) true ax ay
+  else
+    let pxu := px.get! ui
+    let pyu := py.get! ui
+    let pxv := px.get! vi
+    let pyv := py.get! vi
+    if check && pxu == pxv && pyu == pyv then (ui, ax, ay)
+    else
+      let ddx := pxv - pxu
+      let ddy := pyv - pyu
+      let length := Float.sqrt (ddx * ddx + ddy * ddy)
+      if length == 0.0 then scanForces px py radii priorities connections n vi k temperature (ui + 1) true ax ay
+      else
+        let d := fmax (length - radii.get! ui - radii.get! vi) 0.0
+        let force := repulsive d k * priorities.get! ui
+        let connection := connections.get! (ui * n + vi)
+        let force := if connection > 0.0 then force - attractive d k * connection else force
+        let s := force * temperature / length
+        scanForces px py radii priorities connections n vi k temperature (ui + 1) true
+          (ax + ddx * s) (ay + ddy * s)
 
 /-- `FruchtermanReingoldModel::layout(graph, monitor)` (the flat-array version of elk-rs). -/
 def layout (monitor : ProgressMonitor) : FM Unit := do
@@ -142,46 +173,47 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
     for i in [0:n] do
       dx := dx.set! i 0.0
       dy := dy.set! i 0.0
-    -- O(n^2) force computation
+    -- O(n^2) force computation: `scanForces` runs the pair loop of `vi` up to the next particle at
+    -- the same position, which is separated here (monadic: bend points go through the arena)
     for vi in [0:n] do
-      for ui in [0:n] do
-        if ui == vi then continue
-        if px.get! ui == px.get! vi && py.get! ui == py.get! vi then
-          if isBend particles[ui]! || isBend particles[vi]! then
+      let mut ui := 0
+      let mut check := true
+      let mut ax := dx.get! vi
+      let mut ay := dy.get! vi
+      while ui < n do
+        let (stop, ax', ay') := scanForces px py radii priorities connections n vi st.k st.temperature ui check ax ay
+        ax := ax'
+        ay := ay'
+        if stop >= n then
+          ui := n
+        else
+          if isBend particles[stop]! || isBend particles[vi]! then
             -- bend points: edge aware separation through the arena
-            modify (setTwoPositions · particles[ui]! particles[vi]! ⟨px.get! ui, py.get! ui⟩
+            modify (setTwoPositions · particles[stop]! particles[vi]! ⟨px.get! stop, py.get! stop⟩
               ⟨px.get! vi, py.get! vi⟩)
-            random ← AbstractForceModel.avoidSamePosition random particles[ui]! particles[vi]!
-            let pu := (← get).arena.particlePosition particles[ui]!
+            random ← AbstractForceModel.avoidSamePosition random particles[stop]! particles[vi]!
+            let pu := (← get).arena.particlePosition particles[stop]!
             let pv := (← get).arena.particlePosition particles[vi]!
-            px := px.set! ui pu.x
-            py := py.set! ui pu.y
+            px := px.set! stop pu.x
+            py := py.set! stop pu.y
             px := px.set! vi pv.x
             py := py.set! vi pv.y
           else
             let mut separated := false
             while !separated do
-              let (nu, r1) := wiggle ⟨px.get! ui, py.get! ui⟩ random 1.0
+              let (nu, r1) := wiggle ⟨px.get! stop, py.get! stop⟩ random 1.0
               let (nv, r2) := wiggle ⟨px.get! vi, py.get! vi⟩ r1 1.0
               random := r2
-              px := px.set! ui nu.x
-              py := py.set! ui nu.y
+              px := px.set! stop nu.x
+              py := py.set! stop nu.y
               px := px.set! vi nv.x
               py := py.set! vi nv.y
               if nu.x != nv.x || nu.y != nv.y then separated := true
-        -- displacement of vi caused by ui
-        let ddx := px.get! vi - px.get! ui
-        let ddy := py.get! vi - py.get! ui
-        let length := Float.sqrt (ddx * ddx + ddy * ddy)
-        if length == 0.0 then continue
-        let d := fmax (length - radii.get! ui - radii.get! vi) 0.0
-        let mut force := repulsive d st.k * Float.ofInt priorities[ui]!
-        let connection := connections[ui * n + vi]!
-        if connection > 0 then
-          force := force - attractive d st.k * Float.ofInt connection
-        let s := force * st.temperature / length
-        dx := dx.set! vi (dx.get! vi + ddx * s)
-        dy := dy.set! vi (dy.get! vi + ddy * s)
+          -- the separated pair's force is computed without a second same-position test
+          ui := stop
+          check := false
+      dx := dx.set! vi ax
+      dy := dy.set! vi ay
     -- apply the displacements with bounds
     for vi in [0:n] do
       let bounded := (KVector.mk (dx.get! vi) (dy.get! vi)).bound (-dispBound) (-dispBound) dispBound dispBound

@@ -164,35 +164,43 @@ def computeStress (m : StressMajorization) (posX posY : FloatArray) (nodeIds : A
         stress := stress + (m.w[ui]!).get! uj * eucDisplacement * eucDisplacement
     return stress
 
-/-- `compute_new_position_soa`: the new position of node `nodeIdx` (weighted average of the positions
-suggested by all other nodes, restricted by `DIMENSION`). -/
-def computeNewPosition (m : StressMajorization) (posX posY : FloatArray) (nodeIds : Array Nat)
-    (nodeIdx n : Nat) : Float × Float := Id.run do
-  let mut weightSum := 0.0
-  let mut xDisp := 0.0
-  let mut yDisp := 0.0
-  let uId := nodeIds[nodeIdx]!
-  let ux := posX.get! nodeIdx
-  let uy := posY.get! nodeIdx
-  for j in [0:n] do
-    if j == nodeIdx then continue
+/-- The sums of `compute_new_position_soa` over `j, j + 1, …, n - 1` (skipping `nodeIdx`), accumulated
+onto `(weightSum, xDisp, yDisp)` in loop order. Tail recursive with unboxed `Float` parameters (a
+`for` loop would box the three accumulators in its state tuple on every iteration). -/
+private partial def newPositionSums (apspRow wRow posX posY : FloatArray) (nodeIds : Array Nat)
+    (nodeIdx n : Nat) (ux uy : Float) (useX useY : Bool) (j : Nat) (weightSum xDisp yDisp : Float) :
+    Float × Float × Float :=
+  if j >= n then (weightSum, xDisp, yDisp)
+  else if j == nodeIdx then
+    newPositionSums apspRow wRow posX posY nodeIds nodeIdx n ux uy useX useY (j + 1) weightSum xDisp yDisp
+  else
     let vId := nodeIds[j]!
     let vx := posX.get! j
     let vy := posY.get! j
-    let wij := (m.w[uId]!).get! vId
-    weightSum := weightSum + wij
+    let wij := wRow.get! vId
+    let weightSum := weightSum + wij
     let dx := ux - vx
     let dy := uy - vy
     let eucDist := Float.sqrt (dx * dx + dy * dy)
-    let d := (m.apsp[uId]!).get! vId
-    if eucDist > 0.0 && m.dim != Dimension.y then
-      xDisp := xDisp + wij * (vx + d * dx / eucDist)
-    if eucDist > 0.0 && m.dim != Dimension.x then
-      yDisp := yDisp + wij * (vy + d * dy / eucDist)
+    let d := apspRow.get! vId
+    let xDisp := if eucDist > 0.0 && useX then xDisp + wij * (vx + d * dx / eucDist) else xDisp
+    let yDisp := if eucDist > 0.0 && useY then yDisp + wij * (vy + d * dy / eucDist) else yDisp
+    newPositionSums apspRow wRow posX posY nodeIds nodeIdx n ux uy useX useY (j + 1) weightSum xDisp yDisp
+
+/-- `compute_new_position_soa`: the new position of node `nodeIdx` (weighted average of the positions
+suggested by all other nodes, restricted by `DIMENSION`). -/
+def computeNewPosition (m : StressMajorization) (posX posY : FloatArray) (nodeIds : Array Nat)
+    (nodeIdx n : Nat) : Float × Float :=
+  let uId := nodeIds[nodeIdx]!
+  let ux := posX.get! nodeIdx
+  let uy := posY.get! nodeIdx
+  let (weightSum, xDisp, yDisp) :=
+    newPositionSums (m.apsp[uId]!) (m.w[uId]!) posX posY nodeIds nodeIdx n ux uy
+      (m.dim != Dimension.y) (m.dim != Dimension.x) 0 0.0 0.0 0.0
   match m.dim with
-  | .x => return (xDisp / weightSum, uy)
-  | .y => return (ux, yDisp / weightSum)
-  | .xy => return (xDisp / weightSum, yDisp / weightSum)
+  | .x => (xDisp / weightSum, uy)
+  | .y => (ux, yDisp / weightSum)
+  | .xy => (xDisp / weightSum, yDisp / weightSum)
 
 /-- `StressMajorization::execute(graph)`: iterates until `done`, then stores the positions in the
 graph (nodes with `StressOptions.FIXED` keep their position). -/
