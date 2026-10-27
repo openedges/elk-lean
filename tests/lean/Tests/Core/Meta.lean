@@ -64,10 +64,10 @@ def countDependencies (ds : Array LayoutOptionData) : Nat :=
 
 def counts : Suite := suite "core.meta.counts" do
   let s ← LayoutMetaDataService.getInstance
-  checkEq "option count (core 95 + layered 89 + disco 4 + force 5 + spore 10 + stress 5 + topdownpacking 2)" s.optionDataList.size 210
-  checkEq "option order size" s.optionOrder.size 210
+  checkEq "option count (core 95 + layered 89 + disco 4 + force 5 + spore 10 + stress 5 + vertiflex 4 + topdownpacking 2)" s.optionDataList.size 214
+  checkEq "option order size" s.optionOrder.size 214
   checkEq "category count" s.categoryDataList.size 8
-  checkEq "algorithm count" s.algorithmDataList.size 10
+  checkEq "algorithm count" s.algorithmDataList.size 11
   checkEq "dependency count" (countDependencies s.optionDataList) 10
   checkEq "legacy options (layered Java ids)" s.legacyOptions.size 89
   -- elk-rs order (`layout_api.rs`): core, layered, disco, force, (mrtree, radial, rectpacking,)
@@ -75,7 +75,8 @@ def counts : Suite := suite "core.meta.counts" do
   checkEqR "algorithm order" s.algorithmOrder
     #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.layered",
       "org.eclipse.elk.disco", "org.eclipse.elk.force", "org.eclipse.elk.sporeOverlap",
-      "org.eclipse.elk.sporeCompaction", "org.eclipse.elk.stress", "org.eclipse.elk.topdownpacking"]
+      "org.eclipse.elk.sporeCompaction", "org.eclipse.elk.stress", "org.eclipse.elk.vertiflex",
+      "org.eclipse.elk.topdownpacking"]
   checkEqR "category order" s.categoryOrder
     #["org.eclipse.elk.layered", "org.eclipse.elk.orthogonal", "org.eclipse.elk.force",
       "org.eclipse.elk.circle", "org.eclipse.elk.tree", "org.eclipse.elk.planar",

@@ -149,7 +149,7 @@
 | F3. disco | `alg.disco/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F3(worktree) | 완료(`merge F3`): **oracle 결함**: stock runner는 disco에서 `ElkReflect` 미등록 polyomino enum 기본값으로 panic → scratchpad 복사본에 `init_reflect` 3줄 패치한 runner로 fixture 생성(58건 중 56 일치, 2건은 oracle·Lean 동일 오류 메시지). polyomino 옵션은 Rust처럼 packer에 전달되지 않음 |
 | F4. topdownpacking | `alg.topdownpacking/src/**`(1K줄) | sonnet | medium | 서브에이전트 F4(worktree) | 완료(`merge F4`): oracle 하네스(stock runner는 topdownpacking 미등록 → scratchpad에 등록판 빌드)로 fixture 9/9 바이트 일치. **oracle 특이점**: elk-rs는 `as_topdown_layout_provider()`가 `None`이라 predicted graph size를 엔진에 노출하지 않음(Java는 노출) → Rust 따름, Java 동작은 `providerWithPrediction`(미등록) |
 | C1. `Elk.Core.Util.RustSort`(Rust 1.97 `slice::sort_by` = insertion ≤20 + driftsort 정밀 이식, 비일관 비교자 재현) | `core/src/slice/sort/**`(std) | opus | high | 서브에이전트 C1(worktree) | 진행 중 |
-| F5. vertiflex | `alg.vertiflex/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F5(worktree) | 진행 중 |
+| F5. vertiflex | `alg.vertiflex/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F5(worktree) | 완료(`merge F5`): STRAIGHT 214 + BEND 107(probe) + 오류 7 그래프 oracle 바이트 일치. **oracle 특이점/결함**: `layoutStrategy`에 parser 없음(JSON으로 BEND 불가, Rust 따름). elk-rs는 `considerNodeModelOrder`(기본 true)에서 자식이 정확히 2개인 노드에 대해 `index out of bounds` panic → Rust 따름(Java는 정상). `org.eclipse.elk.tree` 카테고리 멤버 vertiflex |
 | F6. radial | `alg.radial/src/**`(3.5K줄) | sonnet | high | 서브에이전트 F6(worktree) | 진행 중 |
 | F7a. mrtree 기반(옵션·TGraph·importer·components·intermediate·TreeUtil) | `alg.mrtree/src/**` 일부(2.9K줄) | opus | high | 서브에이전트 F7a(worktree) | 진행 중 |
 | F7b. mrtree p1~p4·provider | `alg.mrtree/src/{p1treeify,p2order,p3place,p4route}/**`, `tree_layout_provider.rs`(2.6K줄) | opus | high | F7a 이후 | 대기 |

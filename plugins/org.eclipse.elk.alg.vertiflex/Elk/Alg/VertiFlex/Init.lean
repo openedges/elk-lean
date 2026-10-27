@@ -5,7 +5,7 @@ after the core hook) and the layout provider at module initialisation. -/
 namespace Elk.Alg.VertiFlex
 
 builtin_initialize initVertiFlexMetaData : Unit ←
-  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.VertiFlexMetaDataProvider.register
+  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.VertiFlexMetaDataProvider.register (rank := 90)
 
 builtin_initialize registerVertiFlexLayoutProvider : Unit ←
   Elk.Core.LayoutProvider.register Options.VertiFlexOptions.ALGORITHM_ID

@@ -22,6 +22,7 @@ import Tests.TopdownPacking
 import Tests.Force
 import Tests.Disco
 import Tests.Spore
+import Tests.VertiFlex
 
 /-- Test driver (`lake test`). Add each plugin's `suites` here. -/
 def main : IO UInt32 := do
@@ -36,6 +37,7 @@ def main : IO UInt32 := do
     Tests.Force.suites ++
     Tests.Disco.suites ++
     Tests.Spore.suites ++
+    Tests.VertiFlex.suites ++
     Tests.Core.Alg.suites ++
     -- keep `Tests.Core.Engine` last: it registers an extra test algorithm (`core.meta.counts` expects 4)
     Tests.Core.Engine.suites
