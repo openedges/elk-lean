@@ -83,7 +83,7 @@
 - **완료**: Phase 0~6. layered 전 프로세서(P1~P5, intermediate 59개, components/compound/wrapping/self loops), Phase 5 전 알고리즘(force/stress, mrtree, radial, rectpacking, spore, disco, topdownpacking, vertiflex), `.elkt` 파서·`elk convert`, `elk bench`(elk-rs `perf_benchmark` rust_api와 동일 시나리오·CSV).
 - **빌드 상태**: `lake build` 경고 0, `lake test` 12899 통과/0 실패(1 skip: BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요).
 - **Parity(ELK Java 기준)**: 코퍼스 1,998개 중 1,997개 비교(1건은 양쪽 동일 예외): 최종 출력 정확 일치(tol 0) 1,878, 나머지 119는 Java 자체가 실행 컨텍스트(identity hash 순서)에 따라 결과가 바뀌는 모델(패치 0001 적용 Java와는 전부 일치), ticket 213은 Java가 NaN을 내는 의도적 예외. 단계별 trace(tol 0, 엄격 순서): 1,817/1,997 전 단계 정확 일치, 나머지 180은 모두 Java 측 요인(170 비유한 중간 포트 좌표·7 self-loop 변 순서·3 partition 포트 순서, 상세 `HISTORY.md`).
-- **Parity(elk-rs 보조)**: model parity 1447/1447, strict trace 1447/1447, 바이트 일치 1447/1447(`scripts/compare_bytes.sh`).
+- **Parity(elk-rs 보조)**: model parity(1e-6) 1447/1447, strict trace 1447/1447. 바이트 일치는 숫자 의미론을 Java에 맞춘 뒤(1e-6 스냅 없음, 정확 반올림 입력) 1060/1447이며 나머지 차이는 `-0.0`/스냅·≤4e-12 값 차이뿐 — elk-rs 바이트 일치는 더 이상 게이트가 아니다.
 - **성능**: 1차 기준선(elk-rs rust_api 대비 기하평균 6.4배) 이후 FastFloat·파서·zmij·force/stress·P3·P5·mrtree/rectpacking 최적화. 코퍼스 1,447개 총 시간은 1차 측정에서 이미 1.3배, 합성 layered는 P3 1.7배 개선 후 재측정 예정(`tests/perf/report.md`).
 - **Phase 8**: C API(`elk_lean.h`)·NAPI 애드온·npm 패키지(JS 테스트 51/51, 애드온 vs CLI 1447/1448 바이트 일치)·WASM(realworld 550/550, 네이티브 대비 1.5배) 완료. 남은 일: npm에 WASM 로더 연결, Linux/Windows 빌드, 게시.
 - **다음 우선순위**: Java 기준 단계별 전수 결과 정리 → 성능 재측정·기준선 갱신 → 남은 성능(P3 Forster, `NodeMicroLayout`, P5) → npm WASM 통합 → 릴리스 준비.

@@ -65,7 +65,7 @@ sh scripts/build_oracle.sh
 |------|------------|------|
 | **Java result parity** | ELK Java layout JSON vs Lean layout JSON, values compared exactly (abs tol 0; formatting differs by design: Gson `12.0`, elk-lean `12`) and at 1e-6 | `scripts/run_java_parity.sh <java_baseline_dir> <out>` |
 | **Java phase-step trace** | ELK Java LGraph after every layered processor vs Lean, tolerance 0, strict node/port order | `scripts/run_java_trace_parity.sh <models> <out>` |
-| elk-rs model parity | elk-rs layout JSON vs Lean, semantic, abs tol 1e-6; byte identity with `compare_bytes.sh` | `scripts/run_model_parity.sh`, `scripts/compare_bytes.sh` |
+| elk-rs model parity | elk-rs layout JSON vs Lean, semantic, abs tol 1e-6 (`compare_bytes.sh` reports byte identity, which is informational only: elk-rs snaps values within 1e-6 to integers and reads long mantissas with two roundings, elk-lean follows ELK Java) | `scripts/run_model_parity.sh`, `scripts/compare_bytes.sh` |
 | elk-rs phase-step trace | per-processor LGraph snapshots, tol 1e-3, strict storage order (`--strict-order`) | `scripts/run_trace_parity.sh` |
 
 ```sh
@@ -91,8 +91,8 @@ converted to JSON with `elk convert`. The 550 `.elkg` files are XMI copies of th
 graphs; elk-rs does not read them either, so they are not compared. In trace mode the oracle
 runner forces the root algorithm to layered (`force_layered_algorithm`); `elk batch --trace-dir`
 and `elk layout --force-algorithm` do the same. Expected result: every compared model matches
-and is byte-identical (`compare_bytes.sh`; the tolerance-based comparisons hide 1-ulp drifts), one
-ticket model fails identically on both sides.
+within 1e-6 and every trace step matches strictly; one ticket model fails identically on both
+sides. Exact (tolerance 0) agreement is checked against ELK Java, not against elk-rs.
 
 ### C. Metadata equivalence
 

@@ -163,7 +163,7 @@
 
 ### 바이트 단위 parity 달성 (2026-10-31)
 - Z1·PT 보고로 드러난 두 원인: (1) oracle의 serde_json(기본 기능, `float_roundtrip` 없음)은 실수 입력을 `u64` 가수 → `as f64` → `POW10` 곱/나눗셈으로 읽어 17자리 입력에서 정확 반올림과 1 ulp 다르다 → strict 모드 파서가 같은 알고리즘을 따른다(`-0` → `-0.0`, 범위 초과는 오류 포함). (2) `LGraphUtil.getExternalPortPosition`이 Rust `+=` 오른쪽 식을 왼쪽부터 더했다(계층 ptolemy 26개 그래프의 포트 y 1 ulp).
-- `scripts/compare_bytes.sh`(`elk layout --pretty --sort-keys` vs oracle 파일): 코퍼스 1,447/1,447 바이트 일치(이전 1,395). 허용오차 비교(1e-6, trace 1e-3)가 가리던 차이이므로 이후 parity 보고에 바이트 비교를 포함한다.
+- `scripts/compare_bytes.sh`(`elk layout --pretty --sort-keys` vs oracle 파일): 코퍼스 1,447/1,447 바이트 일치(이전 1,395). **이후 숫자 의미론을 ELK Java로 바꾸면서(아래 절) elk-rs와의 바이트 일치는 1,060/1,447로 내려갔고(차이는 `-0.0`/스냅 표기와 ≤4e-12 값), 정확 일치 검사는 Java 기준으로 옮겼다.**
 - 남은 점검 대상: Rust 복합 대입(`a += b + c`)을 평탄한 합으로 옮긴 곳이 더 있을 수 있다(코퍼스에서는 더 드러나지 않음).
 
 ### 성능 2차 (2026-10-27~31): 공통 경로
