@@ -278,7 +278,7 @@ partial def transformEdges (g : ElkGraph) (n : NodeId) (root : Value) : ExportM 
   return root
 
 /-- `export`: the JSON document of the graph below `root`. -/
-def export (g : ElkGraph) (root : NodeId) (opts : ExportOptions := {}) : IO Value := do
+def exportValue (g : ElkGraph) (root : NodeId) (opts : ExportOptions := {}) : IO Value := do
   let (v, _) ← (do
       let rootValue ← transformNode g root #[]
       transformEdges g root rootValue : ExportM Value).run { opts }
@@ -288,7 +288,7 @@ end JsonExporter
 
 /-- `ElkGraphJson.forGraph(graph).toJson()`. -/
 def exportGraph (g : ElkGraph) (root : NodeId) (opts : ExportOptions := {}) : IO String := do
-  let v ← JsonExporter.export g root opts
+  let v ← JsonExporter.exportValue g root opts
   return if opts.prettyPrint then v.renderPretty else v.render
 
 end Elk.Json
