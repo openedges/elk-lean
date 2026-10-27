@@ -11,6 +11,7 @@ import Elk.Core.Util.GraphElementVisitor
 import Elk.Core.Util.ElkUtil
 import Elk.Core.Util.ElkSpacings
 import Elk.Core.Util.LayoutConfigurator
+import Elk.Core.Util.Adapters
 import Elk.Core.Util.FixedLayoutProvider
 import Elk.Core.Util.RandomLayoutProvider
 import Elk.Core.Util.BoxLayoutProvider

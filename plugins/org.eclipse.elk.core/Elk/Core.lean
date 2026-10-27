@@ -10,4 +10,5 @@ import Elk.Core.Init
 import Elk.Core.LayoutProvider
 import Elk.Core.RecursiveGraphLayoutEngine
 import Elk.Core.Providers
+import Elk.Core.Alg
 /-! Root module of the `org.eclipse.elk.core` plugin. Each package has its own aggregator module. -/
