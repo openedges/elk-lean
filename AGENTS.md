@@ -86,7 +86,7 @@
 - **Parity(elk-rs 보조)**: model parity(1e-6) 1447/1447, strict trace 1447/1447. 바이트 일치는 숫자 의미론을 Java에 맞춘 뒤(1e-6 스냅 없음, 정확 반올림 입력) 1060/1447이며 나머지 차이는 `-0.0`/스냅·≤4e-12 값 차이뿐 — elk-rs 바이트 일치는 더 이상 게이트가 아니다.
 - **성능**: 합성 26개 시나리오 lean/rust_api 기하평균 **0.91배**(1차 6.41배 → 2차 1.66배 → 2차 최적화 병합 PF2·PN·PJ·PL5·PL3b + 전역 `Array.modifyIn`; `tests/perf/report.md`, 5% 회귀 게이트 기준선 `baseline_lean_api.csv` 갱신, `d94f161`). layered 1.07~1.13배, force 0.86~0.88배, stress 1.01~1.06배, mrtree 1.0배, rectpacking 0.87~1.03배, radial 0.2~0.4배, routing_splines 1.25배, hierarchy 1.17~1.22배. 남은 병목: `NodeMarginCalculator` 어댑터 클로저, JSON 고정 비용, P5 비임계 사이클·의존성 생성, 스플라인 라우팅.
 - **Phase 8**: C API(`elk_lean.h`)·NAPI 애드온·npm 패키지(JS 테스트 51/51, WASM 3모드 포함; 애드온 vs CLI 1447/1448 바이트 일치)·WASM(realworld 550/550, 네이티브 대비 1.34배, npm 로더 연결 완료) 완료. 남은 일: 깊은 재귀용 Worker 모드, Linux/Windows 빌드, 게시, GMP(LGPL) 정적 링크 검토.
-- **다음 우선순위**: 메모리 수명 재측정 → 남은 고정 비용(JSON·`NodeMarginCalculator`, 스플라인 라우팅) → 릴리스 준비(깊은 재귀용 Worker 모드, Linux/Windows 빌드, npm 게시, GMP 링크 검토) → `--trace-dir` 유무에 따라 출력이 다른 interactive 모델 3개 조사.
+- **다음 우선순위**: 남은 고정 비용(JSON·`NodeMarginCalculator`, 스플라인 라우팅) → 릴리스 준비(깊은 재귀용 Worker 모드, Linux/Windows 빌드, npm 게시, GMP 링크 검토) → `--trace-dir` 유무에 따라 출력이 다른 interactive 모델 3개 조사.
 - **작업 위치 규칙**: 서브에이전트는 worktree에서만 작업한다. worktree가 사라지면 메인 체크아웃으로 옮기지 말고 보고하게 한다(공유 체크아웃에서의 동시 작업은 커밋 범위 혼동을 일으킨다).
 
 ## 기본 실행 명령
