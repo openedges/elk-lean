@@ -59,6 +59,18 @@ def minimumWidth (s : BlockStackId) : RectPackingM Float := do
     minWidth := fmax minWidth (← getBlock b).minWidth
   return minWidth
 
+/-- The binary search loop of `get_width_for_fixed_height` (pure, on the graph value: the block
+heights are those of layouts of copies, nothing moves). -/
+private partial def searchWidth (g : ElkGraph) (blocks : Array Block) (height upperBound lowerBound
+    viableWidth newWidth : Float) : Float :=
+  if lowerBound + 1.0 < upperBound then
+    let totalHeight := blocks.foldl (init := 0.0) fun acc blk => acc + (Block.boundsIn g blk newWidth).2
+    if totalHeight < height then
+      searchWidth g blocks height newWidth lowerBound newWidth ((newWidth - lowerBound) / 2.0 + lowerBound)
+    else
+      searchWidth g blocks height upperBound newWidth viableWidth ((upperBound - newWidth) / 2.0 + newWidth)
+  else viableWidth
+
 /-- `get_width_for_fixed_height(height)`: a single block answers `width_for_target_height`;
 otherwise binary search (step > 1) between the minimum width and the stack width for the
 smallest width whose summed block heights are below `height`. -/
@@ -67,21 +79,14 @@ def getWidthForFixedHeight (s : BlockStackId) (height : Float) : RectPackingM Fl
   if st.blocks.size == 1 then
     return ← Block.widthForTargetHeight st.blocks[0]! height
   let minWidth ← minimumWidth s
-  let mut upperBound := st.width
-  let mut lowerBound := minWidth
-  let mut viableWidth := st.width
-  let mut newWidth := (upperBound - lowerBound) / 2.0 + lowerBound
-  while lowerBound + 1.0 < upperBound do
-    let mut totalHeight : Float := 0.0
-    for b in st.blocks do
-      totalHeight := totalHeight + (← Block.heightForTargetWidth b newWidth)
-    if totalHeight < height then
-      viableWidth := newWidth
-      upperBound := newWidth
-    else
-      lowerBound := newWidth
-    newWidth := (upperBound - lowerBound) / 2.0 + lowerBound
-  return viableWidth
+  let upperBound := st.width
+  let lowerBound := minWidth
+  let mut blocks : Array Block := Array.mkEmpty st.blocks.size
+  for b in st.blocks do
+    blocks := blocks.push (← getBlock b)
+  let g ← getThe ElkGraph
+  return searchWidth g blocks height upperBound lowerBound st.width
+    ((upperBound - lowerBound) / 2.0 + lowerBound)
 
 /-- `place_rects_in(target_width)`: re-places every block below the previous one in
 `target_width`. Like Rust/Java the resulting height is the final `current_y` (it starts at the
