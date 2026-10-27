@@ -57,6 +57,8 @@ def transformAuthoredProperties (obj : Value) (props : PropertyMap) : ImportM Pr
 def transformProperties (obj : Value) (props : PropertyMap) : ImportM PropertyMap := do
   match (← getI).defaults with
   | some g =>
+    -- without defaults the effective options are the authored ones (and the cache is unchanged)
+    if g.values.isEmpty then return ← transformAuthoredProperties obj props
     let (opts, g') ← g.effectiveOptions obj
     modI (·.setDefaults g')
     let mut props := props

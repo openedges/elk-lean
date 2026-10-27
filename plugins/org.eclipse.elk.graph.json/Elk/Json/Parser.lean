@@ -189,7 +189,11 @@ private partial def parseStringBody (bs : String) (q : UInt8) (lenient : Bool) (
 /-- Member names of ELK JSON graphs, most frequent first. A plain key equal to one of them shares
 the constant instead of allocating a copy (and later lookups compare pointer-equal strings). -/
 private def knownKeys : Array String :=
-  #[Key.id, Key.x, Key.y, Key.width, Key.height, Key.labels, Key.text, Key.ports, Key.layoutOptions, Key.properties, Key.children, Key.edges, Key.sources, Key.targets, Key.source, Key.target, Key.sourcePort, Key.targetPort, Key.sections, Key.startPoint, Key.endPoint, Key.bendPoints, Key.incomingShape, Key.outgoingShape, Key.incomingSections, Key.outgoingSections, Key.junctionPoints, Key.container, Key.individualSpacings]
+  #[Key.id, Key.x, Key.y, Key.width, Key.height, Key.labels, Key.text, Key.ports, Key.layoutOptions,
+    Key.properties, Key.children, Key.edges, Key.sources, Key.targets, Key.source, Key.target,
+    Key.sourcePort, Key.targetPort, Key.sections, Key.startPoint, Key.endPoint, Key.bendPoints,
+    Key.incomingShape, Key.outgoingShape, Key.incomingSections, Key.outgoingSections,
+    Key.junctionPoints, Key.container, Key.individualSpacings]
 
 /-- Whether the bytes `[b, b + n)` of `bs` equal the first `n` bytes of `k` (from offset `i`). -/
 private partial def bytesEqAt (bs : String) (b : Nat) (k : String) (i n : Nat) : Bool :=

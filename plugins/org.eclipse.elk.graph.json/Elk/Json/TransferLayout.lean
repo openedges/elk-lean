@@ -15,6 +15,15 @@ open ImportM
 
 namespace JsonImporter
 
+/-! Float constants of the per-element checks (top-level, so they are loaded instead of being
+rebuilt by `Float.ofScientific` on every evaluation). -/
+private def EPS9 : Float := 1e-9
+private def TWO : Float := 2.0
+private def FOUR : Float := 4.0
+private def TWELVE : Float := 12.0
+private def TWENTY_FOUR : Float := 24.0
+private def SIXTY_FOUR : Float := 64.0
+
 /-- Whether `s.toUpper` contains `sub` (upper-case ASCII). `String.toUpper` only maps ASCII
 letters, so a byte-wise search with ASCII case folding is equivalent (and allocates nothing). -/
 private def containsUpper (s sub : String) : Bool :=
@@ -183,7 +192,7 @@ def adjustEdgeX (e : EdgeId) (x : Float) : ImportM Float := do
     if s == t then
       if let some delta := st.insideSelfLoopNodeXDelta.get? s then
         let sourceX ← globalX (.node s)
-        if adjusted > sourceX + 1e-9 then adjusted := adjusted - delta
+        if adjusted > sourceX + EPS9 then adjusted := adjusted - delta
   return adjusted
 
 /-- `adjust_edge_y`. -/
@@ -251,7 +260,7 @@ def recomputeFixedOrderVerticalPortSurroundingHeight (n : NodeId) : ImportM (Opt
     let port := g.port p
     let side := port.props.getD CoreOptions.PORT_SIDE .undefined
     if side != .east && side != .west then return none
-    if port.width.abs > 1e-9 || port.height.abs > 1e-9 then allZeroSized := false
+    if port.width.abs > EPS9 || port.height.abs > EPS9 then allZeroSized := false
     minY := fmin minY port.y
     maxY := fmax maxY (port.y + port.height)
     counted := counted + 1
@@ -301,38 +310,38 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
     let port := g.port p
     let mut side := port.props.getD CoreOptions.PORT_SIDE .undefined
     if side == .undefined then
-      if port.y.abs <= 1e-9 then side := .north
-      else if (port.y - nodeHeight).abs <= 1e-9 then side := .south
+      if port.y.abs <= EPS9 then side := .north
+      else if (port.y - nodeHeight).abs <= EPS9 then side := .south
     hasPorts := true
-    if port.x.abs <= 1e-9 then hasLeft := true
-    if (port.x - nodeWidth).abs <= 1e-9 then hasRight := true
-    if (port.y - nodeHeight / 2.0).abs > 1e-9 then allCentered := false
+    if port.x.abs <= EPS9 then hasLeft := true
+    if (port.x - nodeWidth).abs <= EPS9 then hasRight := true
+    if (port.y - nodeHeight / TWO).abs > EPS9 then allCentered := false
     match side with
-    | .north => if port.y.abs > 1e-9 then northSouthOnBoundary := false
-    | .south => if (port.y - nodeHeight).abs > 1e-9 then northSouthOnBoundary := false
+    | .north => if port.y.abs > EPS9 then northSouthOnBoundary := false
+    | .south => if (port.y - nodeHeight).abs > EPS9 then northSouthOnBoundary := false
     | _ => onlyNorthOrSouth := false
-    if !(port.width.abs <= 1e-9 && port.height.abs <= 1e-9) then allZero := false
+    if !(port.width.abs <= EPS9 && port.height.abs <= EPS9) then allZero := false
   let allPortsZeroSized := allZero
   let hasWestAndEastCenterZeroPorts := allZero && hasLeft && hasRight && allCentered
   let hasOnlyNorthOrSouthBoundaryZeroPorts := allZero && hasPorts && onlyNorthOrSouth && northSouthOnBoundary
   let children := node.children
   let singleChild : Option ElkNode := if children.size == 1 then some (g.node children[0]!) else none
   let hasSinglePointChild := singleChild.any fun c =>
-    (c.x - 12.0).abs <= 1e-9 && (c.y - 12.0).abs <= 1e-9 && c.width.abs <= 1e-9 && c.height.abs <= 1e-9
+    (c.x - TWELVE).abs <= EPS9 && (c.y - TWELVE).abs <= EPS9 && c.width.abs <= EPS9 && c.height.abs <= EPS9
   let hasSinglePointChildCentered := singleChild.any fun c =>
-    (c.x - nodeWidth / 2.0).abs <= 1e-9 && (c.y - 12.0).abs <= 1e-9 && c.width.abs <= 1e-9 && c.height.abs <= 1e-9
+    (c.x - nodeWidth / TWO).abs <= EPS9 && (c.y - TWELVE).abs <= EPS9 && c.width.abs <= EPS9 && c.height.abs <= EPS9
   let hasNoChildren := children.isEmpty
   let rootHint := (← getI).rootIncludeChildrenHint
   let shouldCompactInsideSelfLoopNode := insideSelfLoopsActive && hasNoChildren && !hasExplicitSizeConstraints
     && (!hasExplicitPortConstraints || portConstraints.isSideFixed) && allPortsZeroSized
   let shouldCompactPassthroughNode := !insideSelfLoopsActive && !rootHint && !hasExplicitSizeConstraints
     && hasWestAndEastCenterZeroPorts && hasSinglePointChild
-    && (nodeWidth - 24.0).abs <= 1e-9 && (nodeHeight - 24.0).abs <= 1e-9
+    && (nodeWidth - TWENTY_FOUR).abs <= EPS9 && (nodeHeight - TWENTY_FOUR).abs <= EPS9
   let shouldCompactVerticalPassthroughNode := !insideSelfLoopsActive && !rootHint && !hasExplicitSizeConstraints
     && hasOnlyNorthOrSouthBoundaryZeroPorts && hasSinglePointChildCentered
-    && (nodeWidth - 64.0).abs <= 1e-9 && (nodeHeight - 24.0).abs <= 1e-9
-  if (shouldCompactInsideSelfLoopNode || shouldCompactPassthroughNode) && nodeWidth > 4.0 then
-    let delta := nodeWidth - 4.0
+    && (nodeWidth - SIXTY_FOUR).abs <= EPS9 && (nodeHeight - TWENTY_FOUR).abs <= EPS9
+  if (shouldCompactInsideSelfLoopNode || shouldCompactPassthroughNode) && nodeWidth > FOUR then
+    let delta := nodeWidth - FOUR
     modI fun s => { s with insideSelfLoopNodeXDelta := s.insideSelfLoopNodeXDelta.insert n delta }
     if let some p := node.parent then
       if shouldCompactPassthroughNode then
@@ -340,17 +349,17 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
       else if shouldCompactInsideSelfLoopNode then
         if (g.node p).children.size == 1 then
           modI fun s => { s with passthroughCompactedParentKeys := s.passthroughCompactedParentKeys.push p }
-    modAt path (·.set Key.width (.ofFloatElk 4.0))
-  if shouldCompactVerticalPassthroughNode && nodeHeight > 4.0 then
-    let delta := nodeHeight - 4.0
+    modAt path (·.set Key.width (.ofFloatElk FOUR))
+  if shouldCompactVerticalPassthroughNode && nodeHeight > FOUR then
+    let delta := nodeHeight - FOUR
     modI fun s => { s with compactedVerticalNodeYDelta := s.compactedVerticalNodeYDelta.insert n delta }
     if let some p := node.parent then
       modI fun s => { s with verticalCompactedParentKeys := s.verticalCompactedParentKeys.push p }
-    modAt path (·.set Key.height (.ofFloatElk 4.0))
+    modAt path (·.set Key.height (.ofFloatElk FOUR))
   if hasPortsAndPortLabelsSizeConstraints && portConstraints == .fixedOrder then
     if let some compensated ← recomputeFixedOrderVerticalPortSurroundingHeight n then
       let current := (((← objectAt path).get? Key.height).bind (·.getFloat?)).getD 0.0
-      if compensated > current + 1e-9 then
+      if compensated > current + EPS9 then
         modAt path (·.set Key.height (.ofFloatElk compensated))
 
 /-- `transfer_layout_port`. -/
@@ -525,7 +534,7 @@ def fixParentWidthsForCompactedPassthroughNodes : ImportM Unit := do
     if hasPorts then continue
     let some candidate := recomputeCompactedParentWidthCandidate parentObj | continue
     let some current := (parentObj.get? Key.width).bind (·.getFloat?) | continue
-    if candidate > 0.0 && candidate + 1e-9 < current then
+    if candidate > 0.0 && candidate + EPS9 < current then
       modAt path (·.set Key.width (.ofFloatElk candidate))
 
 /-- `fix_parent_heights_for_compacted_vertical_nodes`. -/
@@ -552,7 +561,7 @@ def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
     let mut cumulative := 0.0
     let mut total := 0.0
     for (i, originalY, delta) in sortedChildren do
-      if cumulative.abs > 1e-9 then
+      if cumulative.abs > EPS9 then
         modAt (childPrefix ++ #[.idx i]) (·.set Key.y (.ofFloatElk (originalY - cumulative)))
       if delta > 0.0 then
         cumulative := cumulative + delta
