@@ -57,14 +57,18 @@ ELK_TRACE_DIR=out/lean_trace .lake/build/bin/elk layout input.json -o out/lean.j
 python3 scripts/compare_model_parity_layouts.py out/oracle.json out/lean.json
 python3 scripts/compare_phase_traces.py out/oracle_trace out/lean_trace
 
-# whole corpus (script arrives in Phase 2)
+# whole corpus
 sh scripts/run_model_parity.sh external/elk-models tests/model_parity   # .json + .elkt (converted with `elk convert`; PARITY_INCLUDE_ELKT=0 to skip)
-sh scripts/run_phase_trace_parity.sh external/elk-models/<model>.elkt tests/tmp/trace_<model>   # one model: oracle vs elk-lean step traces
+sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus   # every model: oracle vs elk-lean step traces (strict order)
+sh scripts/run_phase_trace_parity.sh external/elk-models/<model>.elkt tests/tmp/trace_<model>   # one model
 ```
 
-Inputs: the 550 `realworld/*.json` models are used directly; `.elkt` models are
-converted to JSON by the `elk convert` command once the text format parser is
-ported (Phase 6). Until then the oracle side converts them.
+Inputs: the 550 `realworld/*.json` models are used directly; the 898 `.elkt` models are
+converted to JSON with `elk convert`. The 550 `.elkg` files are XMI copies of the realworld
+graphs; elk-rs does not read them either, so they are not compared. In trace mode the oracle
+runner forces the root algorithm to layered (`force_layered_algorithm`); `elk batch --trace-dir`
+and `elk layout --force-algorithm` do the same. Expected result: every compared model matches
+(one ticket model fails identically on both sides).
 
 ### C. Metadata equivalence
 
@@ -74,16 +78,35 @@ dependencies, supported features).
 
 ### D. Performance and memory
 
-- 26 synthetic scenarios of elk-rs `perf_benchmark` reproduced with the same LCG
-  graph generator; record machine model, chip, cores, RAM and OS version with
-  every measurement.
-- Memory: 1,000 repeated layouts of the same input must not grow RSS; run tests
-  with `LEAN_ABORT_ON_PANIC=1` to turn Lean panics into aborts.
+- `elk bench` runs the 26 synthetic scenarios of elk-rs `perf_benchmark` (same LCG graphs, same
+  CSV; `--dump-dir` writes the inputs for parity checks). Full comparison and gate:
+  ```sh
+  sh scripts/run_perf_benchmark.sh 20 3 tests/perf   # oracle rust_api/rust_native + lean_api, report.md
+  ```
+  `tests/perf/report.md` lists per-scenario times, the lean/rust ratio and the 5% regression
+  gate against `tests/perf/baseline_lean_api.csv` (refresh the baseline after an accepted
+  optimisation). Numbers are machine specific; the report records the machine.
+- Profiling (macOS): `sh scripts/perf/profile_bench.sh <scenario>`, then
+  `scripts/perf/sample_inclusive.py` / `sample_callers.py`; `scripts/perf/scan_generated_c.sh`
+  checks the generated C for known traps (see `PLAN.md` 7.1).
+- Memory: repeated layouts must not grow RSS, e.g.
+  ```sh
+  /usr/bin/time -l .lake/build/bin/elk bench --scenarios layered_medium,force_medium --iterations 50 --warmup 0 --output /dev/null
+  /usr/bin/time -l .lake/build/bin/elk bench --scenarios layered_medium,force_medium --iterations 500 --warmup 0 --output /dev/null
+  ```
+  (same maximum resident set size). Corpus runs must not print `PANIC`.
+
+### E. Embedding API (Phase 8)
+
+- `sh scripts/build_ffi.sh --check`: builds `.lake/build/ffi/libelklean.a` (C API
+  `plugins/org.eclipse.elk.ffi/include/elk_lean.h`) and a native smoke test whose layout must equal
+  `elk layout --sort-keys`, plus the metadata and error paths.
 
 ## 3. Release checklist
 1. `lake build` and `lake test` clean.
 2. Model parity and phase-step trace reports regenerated and recorded in
    `HISTORY.md` and the `AGENTS.md` snapshot.
 3. Metadata parity clean.
-4. Performance within 5% of the recorded baseline.
+4. Performance within 5% of the recorded baseline (`scripts/run_perf_benchmark.sh`), memory check
+   clean, FFI smoke test (`scripts/build_ffi.sh --check`) passing.
 5. `CHANGELOG.md` updated, tag `vX.Y.Z` (see `VERSIONING.md`).
