@@ -1,0 +1,258 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "DOWN",
+  "org.eclipse.elk.spacing.edgeNode": 15,
+  "org.eclipse.elk.aspectRatio": 1.0,
+  "org.eclipse.elk.mrtree.edgeRoutingMode": "MIDDLE_TO_MIDDLE",
+  "org.eclipse.elk.mrtree.weighting": "MODEL_ORDER"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 43.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 0
+   }
+  },
+  {
+   "id": "n1",
+   "width": 35.822,
+   "height": 70.214,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n2",
+   "width": 69.0,
+   "height": 59.8,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 2
+   }
+  },
+  {
+   "id": "n3",
+   "width": 67.0,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 2
+   }
+  },
+  {
+   "id": "n4",
+   "width": 25.0,
+   "height": 45.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 4
+   }
+  },
+  {
+   "id": "n5",
+   "width": 49.0,
+   "height": 57.297,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 4
+   }
+  },
+  {
+   "id": "n6",
+   "width": 32.4,
+   "height": 55.0
+  },
+  {
+   "id": "n7",
+   "width": 13.385,
+   "height": 30,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 5
+   }
+  },
+  {
+   "id": "n8",
+   "width": 75.0,
+   "height": 53.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n9",
+   "width": 57.132,
+   "height": 67.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 5
+   }
+  },
+  {
+   "id": "n10",
+   "width": 10.0,
+   "height": 51.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 3
+   }
+  },
+  {
+   "id": "n11",
+   "width": 0,
+   "height": 10
+  },
+  {
+   "id": "n12",
+   "width": 10,
+   "height": 37.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 4
+   }
+  },
+  {
+   "id": "n13",
+   "width": 49.7,
+   "height": 22.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3,
+    "org.eclipse.elk.mrtree.positionConstraint": 3,
+    "org.eclipse.elk.priority": 3
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n0"
+   ]
+  }
+ ]
+}

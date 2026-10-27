@@ -31,10 +31,17 @@ import Elk.Alg.MrTree.TreeLayoutPhases
 import Elk.Alg.MrTree.ComponentsProcessor
 import Elk.Alg.MrTree.ElkGraphImporter
 import Elk.Alg.MrTree.InteractiveMrTreeGraphVisitor
+import Elk.Alg.MrTree.P1Treeify
+import Elk.Alg.MrTree.P2Order
+import Elk.Alg.MrTree.P3Place
+import Elk.Alg.MrTree.P4Route
+import Elk.Alg.MrTree.MrTreeDriver
+import Elk.Alg.MrTree.TreeLayoutProvider
 import Elk.Alg.MrTree.Init
 /-!
-Root module of the `org.eclipse.elk.alg.mrtree` plugin (tree layout, `org.eclipse.elk.mrtree`).
-Ported so far: options and metadata (registered at initialisation, see `Elk.Alg.MrTree.Init`), the
-`TGraph` arena model, the importer, the components processor, the intermediate processors, `TreeUtil`
-and the phase enumeration. The phases (`p1treeify`..`p4route`), `MrTree` and the layout provider follow.
+Root module of the `org.eclipse.elk.alg.mrtree` plugin (tree layout, `org.eclipse.elk.mrtree`):
+options and metadata, the `TGraph` arena model, the importer, the components processor, the
+intermediate processors, `TreeUtil`, the phases (`P1Treeify`..`P4Route`), the `MrTree` driver
+(`MrTreeDriver`, with the phase factory) and the `TreeLayoutProvider`. The metadata and the provider
+are registered at initialisation (see `Elk.Alg.MrTree.Init`).
 -/

@@ -1,0 +1,125 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "RIGHT"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 65.1,
+   "height": 49.0
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 44.0
+  },
+  {
+   "id": "n2",
+   "width": 10.0,
+   "height": 45.0
+  },
+  {
+   "id": "n3",
+   "width": 30.1,
+   "height": 40.0
+  },
+  {
+   "id": "n4",
+   "width": 75.389,
+   "height": 52.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 2
+   }
+  },
+  {
+   "id": "n5",
+   "width": 27.0,
+   "height": 40.0
+  },
+  {
+   "id": "n6",
+   "width": 38.2,
+   "height": 15.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 1
+   }
+  },
+  {
+   "id": "n7",
+   "width": 64.688,
+   "height": 74.0
+  },
+  {
+   "id": "n8",
+   "width": 65.0,
+   "height": 22.469
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n8"
+   ]
+  }
+ ]
+}

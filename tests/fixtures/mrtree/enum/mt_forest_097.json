@@ -1,0 +1,435 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "DOWN",
+  "org.eclipse.elk.spacing.nodeNode": 20,
+  "org.eclipse.elk.spacing.edgeNode": 15,
+  "org.eclipse.elk.separateConnectedComponents": false,
+  "org.eclipse.elk.mrtree.edgeEndTextureLength": 0,
+  "org.eclipse.elk.mrtree.edgeRoutingMode": "MIDDLE_TO_MIDDLE",
+  "org.eclipse.elk.mrtree.weighting": "DESCENDANTS"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 1,
+   "height": 50.0
+  },
+  {
+   "id": "n1",
+   "width": 72.0,
+   "height": 30
+  },
+  {
+   "id": "n2",
+   "width": 45.3,
+   "height": 47.8
+  },
+  {
+   "id": "n3",
+   "width": 72.33,
+   "height": 0
+  },
+  {
+   "id": "n4",
+   "width": 6.8,
+   "height": 52.587
+  },
+  {
+   "id": "n5",
+   "width": 47.0,
+   "height": 1
+  },
+  {
+   "id": "n6",
+   "width": 30,
+   "height": 68.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 4
+   }
+  },
+  {
+   "id": "n7",
+   "width": 30,
+   "height": 49.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 4
+   }
+  },
+  {
+   "id": "n8",
+   "width": 33.2,
+   "height": 53.0
+  },
+  {
+   "id": "n9",
+   "width": 31.089,
+   "height": 77.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 0
+   }
+  },
+  {
+   "id": "n10",
+   "width": 36.2,
+   "height": 10
+  },
+  {
+   "id": "n11",
+   "width": 1,
+   "height": 27.37
+  },
+  {
+   "id": "n12",
+   "width": 5.8,
+   "height": 35.0
+  },
+  {
+   "id": "n13",
+   "width": 17.0,
+   "height": 6.0
+  },
+  {
+   "id": "n14",
+   "width": 0,
+   "height": 11.0
+  },
+  {
+   "id": "n15",
+   "width": 0,
+   "height": 26.0,
+   "layoutOptions": {
+    "org.eclipse.elk.priority": 1
+   }
+  },
+  {
+   "id": "n16",
+   "width": 18.0,
+   "height": 22.928
+  },
+  {
+   "id": "n17",
+   "width": 48.144,
+   "height": 30
+  },
+  {
+   "id": "n18",
+   "width": 11.0,
+   "height": 8.387
+  },
+  {
+   "id": "n19",
+   "width": 25.581,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 1
+   }
+  },
+  {
+   "id": "n20",
+   "width": 22.175,
+   "height": 8.8,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": -1
+   }
+  },
+  {
+   "id": "n21",
+   "width": 75.2,
+   "height": 61.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 1,
+    "org.eclipse.elk.priority": 3
+   }
+  },
+  {
+   "id": "n22",
+   "width": 13.775,
+   "height": 31.352
+  },
+  {
+   "id": "n23",
+   "width": 10,
+   "height": 0
+  },
+  {
+   "id": "n24",
+   "width": 1,
+   "height": 62.483
+  },
+  {
+   "id": "n25",
+   "width": 39.0,
+   "height": 67.0
+  },
+  {
+   "id": "n26",
+   "width": 16.0,
+   "height": 39.3
+  },
+  {
+   "id": "n27",
+   "width": 70.0,
+   "height": 64.0,
+   "layoutOptions": {
+    "org.eclipse.elk.priority": 2
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n14"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n14"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n17"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n19"
+   ],
+   "sections": [
+    {
+     "id": "s17",
+     "startPoint": {
+      "x": 1,
+      "y": 2
+     },
+     "endPoint": {
+      "x": 3,
+      "y": 4
+     },
+     "bendPoints": [
+      {
+       "x": 5,
+       "y": 6
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n19"
+   ],
+   "targets": [
+    "n20"
+   ]
+  },
+  {
+   "id": "e19",
+   "sources": [
+    "n17"
+   ],
+   "targets": [
+    "n21"
+   ]
+  },
+  {
+   "id": "e20",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n22"
+   ]
+  },
+  {
+   "id": "e21",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n23"
+   ]
+  },
+  {
+   "id": "e22",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n24"
+   ]
+  },
+  {
+   "id": "e23",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n25"
+   ]
+  },
+  {
+   "id": "e24",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n26"
+   ]
+  },
+  {
+   "id": "e25",
+   "sources": [
+    "n22"
+   ],
+   "targets": [
+    "n27"
+   ]
+  }
+ ]
+}

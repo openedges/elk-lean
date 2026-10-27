@@ -1,0 +1,89 @@
+{
+  "children": [
+    {
+      "height": 10,
+      "id": "n0",
+      "width": 10,
+      "x": 17,
+      "y": 32
+    },
+    {
+      "height": 20,
+      "id": "n1",
+      "width": 20,
+      "x": 12,
+      "y": 67
+    },
+    {
+      "height": 5,
+      "id": "n2",
+      "width": 30,
+      "x": 47,
+      "y": 34.5
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 5,
+      "x": 59.5,
+      "y": 62
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 22,
+            "y": 67
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 22,
+            "y": 42
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 62,
+            "y": 62
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 62,
+            "y": 39.5
+          }
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n3"
+      ]
+    }
+  ],
+  "height": 89,
+  "id": "root",
+  "layoutOptions": {
+    "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+    "org.eclipse.elk.separateConnectedComponents": false
+  },
+  "width": 84,
+  "x": 0,
+  "y": 0
+}

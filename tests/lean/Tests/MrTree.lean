@@ -11,10 +11,26 @@ import Elk.Alg.MrTree
 * `mrtree.import`: `ElkGraphImporter.importGraph`/`applyLayout` on a JSON graph;
 * `mrtree.components`: `ComponentsProcessor.split`/`pack`;
 * `mrtree.intermediate`: every intermediate processor on hand-built tree graphs;
-* `mrtree.treeutil`: `TreeUtil` and `InteractiveMrTreeGraphVisitor`.
+* `mrtree.treeutil`: `TreeUtil` and `InteractiveMrTreeGraphVisitor`;
+* `mrtree.p1treeify`, `mrtree.p2order`, `mrtree.p3place`, `mrtree.p4route`: the phases on hand-built
+  tree graphs;
+* `mrtree.graphSize`: port of elk-rs `tests/mrtree_graph_size_test.rs` (`graph_size_calculation_test`,
+  `components_graph_size_calculation_test`);
+* `mrtree.driver`: the processor chain of `MrTree` and the provider registration;
+* `mrtree.fixtures` (`tests/fixtures/mrtree/<name>.json` against `<name>.expected.json`): produced by
+  the stock elk-rs oracle (`model_parity_layout_runner`, commit eb586b6d): hand-written trees
+  (`hand_*`: every direction, apportion cases, explicit `treeLevel`s with multi-level and back edges,
+  compaction, edge end textures, components), random graphs (`mt_*`) and corpus models with the
+  algorithm forced to mrtree (`corpus_*`). The stock oracle registers the enum options
+  `weighting`, `edgeRoutingMode` and `searchOrder` without a parser, so they are ignored from JSON
+  (by the port too);
+* `mrtree.fixtures.enum` (`tests/fixtures/mrtree/enum/`): the same kind of models with the enum
+  options effective, produced by an elk-rs oracle build whose mrtree metadata provider additionally
+  registers enum parsers (the only change to elk-rs); `<name>.error` marks inputs on which both fail
+  (Rust panics in `NodePlacer::first_walk_soa` when a BFS treeification leaves a node with two
+  parents).
 
-The expected values are derived by hand from the Rust sources ("hand: …"); the elk-rs crate has no
-unit tests for these parts (its only test, `mrtree_graph_size_test.rs`, needs the full layout).
+The expected values of the unit tests are derived by hand from the Rust sources ("hand: …").
 -/
 namespace Tests.MrTree
 
@@ -584,8 +600,320 @@ def treeUtilTests : Suite := suite "mrtree.treeutil" do
   let ((), eg2) ← ElkM.run (InteractiveMrTreeGraphVisitor.setInteractiveOptions root2) eg2
   check "interactive visitor: other algorithm untouched" ((eg2.node root2).props.get? CoreOptions.INTERACTIVE).isNone
 
+/-! ### Phases -/
+
+/-- `dfs_treeifyer.rs`: DFS and BFS eliminations, the "earlier search start" case. -/
+def treeifyTests : Suite := suite "mrtree.p1treeify" do
+  -- 0 -> 1 -> 2 -> 0 and 0 -> 2 (edge order e01, e12, e20, e02)
+  let cyc : TArena × TGraphId × Array TNodeId × Array TEdgeId := Id.run do
+    let (a, g) := ({} : TArena).createGraph
+    let (a, n0) := mkNode a g 7 0 0 10 10
+    let (a, n1) := mkNode a g 8 0 0 10 10
+    let (a, n2) := mkNode a g 9 0 0 10 10
+    let (a, e01) := mkEdge a g n0 n1
+    let (a, e12) := mkEdge a g n1 n2
+    let (a, e20) := mkEdge a g n2 n0
+    let (a, e02) := mkEdge a g n0 n2
+    return (a, g, #[n0, n1, n2], #[e01, e12, e20, e02])
+  let (a, g, ns, es) := cyc
+  let ((), d) ← MrTreeM.run (P1Treeify.DFSTreeifyer.process g ProgressMonitor.null) a
+  -- hand: dfs(0) -> dfs(1) -> dfs(2); e20 closes the cycle, e02 leads into the visited 2
+  checkEq "dfs: REMOVABLE_EDGES" (d.graph g).internal.removableEdges #[es[2]!, es[3]!]
+  checkEq "dfs: ids are list indices" ((ns.map fun n => (d.node n).id)) #[0, 1, 2]
+  checkEq "dfs: outgoing of 0" (d.node ns[0]!).outgoingEdges #[es[0]!]
+  checkEq "dfs: children of 0" (d.node ns[0]!).directChildren #[ns[1]!]
+  checkEq "dfs: incoming of 2" (d.node ns[2]!).incomingEdges #[es[1]!]
+  checkEq "dfs: incoming of 0" (d.node ns[0]!).incomingEdges #[]
+  -- BFS (typed option): 2 is enqueued twice, so e20 is eliminated twice and e02 is kept
+  let a' := a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.SEARCH_ORDER .bfs }
+  let ((), b) ← MrTreeM.run (P1Treeify.DFSTreeifyer.process g ProgressMonitor.null) a'
+  checkEq "bfs: REMOVABLE_EDGES" (b.graph g).internal.removableEdges #[es[2]!, es[2]!]
+  checkEq "bfs: 2 keeps two parents" (b.node ns[2]!).incomingEdges #[es[1]!, es[3]!]
+  -- the untreeifyer re-inserts the removed edges
+  let b ← runProc Untreeifyer.processor d g
+  checkEq "untreeify: outgoing of 2" (b.node ns[2]!).outgoingEdges #[es[2]!]
+  checkEq "untreeify: outgoing of 0" (b.node ns[0]!).outgoingEdges #[es[0]!, es[3]!]
+  -- an edge into the start node of an earlier search is kept (mark 2 -> 1)
+  let (c, gc) := ({} : TArena).createGraph
+  let (c, m1) := mkNode c gc 0 0 0 10 10
+  let (c, m0) := mkNode c gc 1 0 0 10 10
+  let (c, f) := mkEdge c gc m0 m1
+  let ((), c) ← MrTreeM.run (P1Treeify.DFSTreeifyer.process gc ProgressMonitor.null) c
+  checkEq "dfs: edge into an earlier search start is kept" (c.graph gc).internal.removableEdges #[]
+  checkEq "dfs: kept edge" (c.node m0).outgoingEdges #[f]
+  check "configuration: DETREEIFYING_PROC after P3"
+    (P1Treeify.DFSTreeifyer.configuration.processorsAfter TreeLayoutPhases.p3NodePlacement
+      == #[IntermediateProcessorStrategy.detreeifyingProc])
+
+/-- `node_orderer.rs`: fan/descendants and constraint ordering. -/
+def orderTests : Suite := suite "mrtree.p2order" do
+  -- r -> a, b, x; b -> c, d (FAN preset by hand)
+  let (a, g) := ({} : TArena).createGraph
+  let (a, r) := mkNode a g 0 0 0 10 10
+  let (a, na) := mkNode a g 1 0 0 10 10
+  let (a, nb) := mkNode a g 2 0 0 10 10
+  let (a, nx) := mkNode a g 3 0 0 10 10
+  let (a, nc) := mkNode a g 4 0 0 10 10
+  let (a, nd) := mkNode a g 5 0 0 10 10
+  let (a, _) := mkEdge a g r na
+  let (a, _) := mkEdge a g r nb
+  let (a, _) := mkEdge a g r nx
+  let (a, _) := mkEdge a g nb nc
+  let (a, _) := mkEdge a g nb nd
+  let a := a.modifyNode r fun n => { n with internal.fan := 3 }
+  let a := a.modifyNode nb fun n => { n with internal.fan := 2 }
+  let (_, f) ← MrTreeM.run (P2Order.NodeOrderer.orderLevelFanDescendants .fan #[r] ProgressMonitor.null) a
+  -- hand: Rust sorts by ascending FAN, so a and x (FAN 0) count as inner nodes before b; the
+  -- children of every inner node are then sorted by decreasing POSITION
+  checkEq "fan: positions a, x, b, c, d"
+    (#[na, nx, nb, nc, nd].map fun n => (f.node n).internal.position) #[0, 1, 2, 0, 1]
+  checkEq "fan: children of r" (f.children r) #[nb, nx, na]
+  checkEq "fan: children of b" (f.children nb) #[nd, nc]
+  checkEq "fan: outgoing edge targets follow the children"
+    ((f.node r).outgoingEdges.filterMap fun e => (f.edge e).target) #[nb, nx, na]
+  -- constraints: a 2, b 0, e 0 (collision -> slot 1), c none, d 7 (out of bound -> last free slot)
+  let (c, gc) := ({} : TArena).createGraph
+  let (c, cr) := mkNode c gc 0 0 0 10 10
+  let mut c := c
+  let mut kids : Array TNodeId := #[]
+  for (i, pc) in #[(1, (2 : Int)), (2, 0), (3, 0), (4, -1), (5, 7)] do
+    let (c', k) := mkNode c gc i 0 0 10 10
+    let (c', _) := mkEdge c' gc cr k
+    c := c'.modifyNode k fun n => { n with props := n.props.set MrTreeOptions.POSITION_CONSTRAINT pc }
+    kids := kids.push k
+  c := c.modifyNode cr fun n => { n with internal.fan := 5 }
+  let ((), co) ← MrTreeM.run (P2Order.NodeOrderer.orderLevelConstraint false #[cr] ProgressMonitor.null) c
+  checkEq "constraint: positions a, b, e, c, d" (kids.map fun n => (co.node n).internal.position) #[2, 0, 1, 3, 4]
+  checkEq "constraint: children of r" (co.children cr) #[kids[1]!, kids[2]!, kids[0]!, kids[3]!, kids[4]!]
+  -- configuration
+  let (h, gh) := ({} : TArena).createGraph
+  let (some cfg, _) ← MrTreeM.run (P2Order.NodeOrderer.configuration gh) h
+    | report "configuration" false
+  checkEq "configuration: MODEL_ORDER" (cfg.processorsBefore TreeLayoutPhases.p2NodeOrdering).size 1
+  let h := h.modifyGraph gh fun x => { x with props := x.props.set MrTreeOptions.WEIGHTING .descendants }
+  let (some cfg, _) ← MrTreeM.run (P2Order.NodeOrderer.configuration gh) h
+    | report "configuration" false
+  check "configuration: DESCENDANTS adds FAN_PROC"
+    (cfg.processorsBefore TreeLayoutPhases.p2NodeOrdering == #[.rootProc, .fanProc])
+
+/-- `node_placer.rs`: the Reingold-Tilford pass on `r -> a, b` (r 10x20, a 30x5, b 8x40). -/
+def placeTests : Suite := suite "mrtree.p3place" do
+  let build (dir : Option Direction) : TArena × TGraphId × Array TNodeId := Id.run do
+    let (a, g) := ({} : TArena).createGraph
+    let a := a.modifyGraph g fun x =>
+      { x with props := (x.props.set MrTreeOptions.SPACING_NODE_NODE 20.0) }
+    let a := match dir with
+      | some d => a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.DIRECTION d }
+      | none => a
+    let (a, r) := mkNode a g 0 0 0 10 20
+    let (a, na) := mkNode a g 1 0 0 30 5
+    let (a, nb) := mkNode a g 2 0 0 8 40
+    let (a, _) := mkEdge a g r na
+    let (a, _) := mkEdge a g r nb
+    return (a, g, #[r, na, nb])
+  let (a, g, ns) := build none
+  let a ← runProc RootProcessor.processor a g
+  let ((), a) ← MrTreeM.run (P3Place.NodePlacer.process g ProgressMonitor.null) a
+  -- hand: prelim a 0, b 0 + 20 + (15 + 4) = 39, r 19.5 (rounds to 20); levels 20 and 40 high
+  check "DOWN: r" ((a.node ns[0]!).position == ⟨15.0, -10.0⟩)
+  check "DOWN: a" ((a.node ns[1]!).position == ⟨-15.0, 47.5⟩)
+  check "DOWN: b" ((a.node ns[2]!).position == ⟨35.0, 30.0⟩)
+  checkEq "UNDEFINED becomes DOWN on the graph" ((a.graph g).props.get MrTreeOptions.DIRECTION) (some Direction.down)
+  let (b, gb, nsb) := build (some .right)
+  let b ← runProc RootProcessor.processor b gb
+  let ((), b) ← MrTreeM.run (P3Place.NodePlacer.process gb ProgressMonitor.null) b
+  -- hand: half heights 10, 2.5, 20; prelim b 42.5 (rounds to 43), r 21.25; levels 10 and 30 wide
+  check "RIGHT: r" ((b.node nsb[0]!).position == ⟨-5.0, 11.0⟩)
+  check "RIGHT: a" ((b.node nsb[1]!).position == ⟨25.0, -2.5⟩)
+  check "RIGHT: b" ((b.node nsb[2]!).position == ⟨36.0, 23.0⟩)
+  checkEq "roundToI32 saturates" (P3Place.NodePlacer.roundToI32 1e300, P3Place.NodePlacer.roundToI32 (-2.5))
+    ((2147483647 : Int), (-3 : Int))
+  -- a non-leaf node whose children were all reached before (two parents): Rust panics
+  let (c, gc) := ({} : TArena).createGraph
+  let (c, c0) := mkNode c gc 0 0 0 10 10
+  let (c, c1) := mkNode c gc 1 0 0 10 10
+  let (c, c2) := mkNode c gc 2 0 0 10 10
+  let (c, _) := mkEdge c gc c0 c1
+  let (c, _) := mkEdge c gc c0 c2
+  let (c, _) := mkEdge c gc c1 c2
+  let c ← runProc RootProcessor.processor c gc
+  checkThrows "two parents: index out of bounds" do
+    let _ ← MrTreeM.run (P3Place.NodePlacer.process gc ProgressMonitor.null) c
+
+/-- `edge_router.rs`: middle-to-middle routes, `NONE`, the configuration. -/
+def routeTests : Suite := suite "mrtree.p4route" do
+  let (a, g) := ({} : TArena).createGraph
+  let (a, s) := mkNode a g 0 0 0 10 10
+  let (a, t) := mkNode a g 1 0 50 10 10
+  let (a, e) := mkEdge a g s t
+  let ((), m) ← MrTreeM.run (P4Route.EdgeRouter.middleToMiddleEdgeRoute e) a
+  let bps := (m.edge e).bendPoints
+  checkEq "middle to middle: two points" bps.size 2
+  check "middle to middle: source border" (bps[0]! == ⟨5.0, 10.0⟩)
+  checkFloat "middle to middle: target border" bps[1]!.y 50.0
+  let a1 := a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.EDGE_ROUTING_MODE .none }
+  let ((), n) ← MrTreeM.run (P4Route.EdgeRouter.process g ProgressMonitor.null) a1
+  checkEq "NONE: no bend points" (n.edge e).bendPoints.size 0
+  -- AVOID_OVERLAP with all nodes on level 0 routes middle to middle
+  let ((), o) ← MrTreeM.run (P4Route.EdgeRouter.process g ProgressMonitor.null) a
+  check "AVOID_OVERLAP on one level: middle to middle" ((o.edge e).bendPoints == bps)
+  -- an edge down one level: start points below the source, end points above the target
+  let a2 := setLevel a t 1
+  let a2 := a2.modifyNode s fun n => { n with internal.levelMax := 10.0 }
+  let a2 := a2.modifyNode t fun n => { n with internal.levelMin := 50.0 }
+  let a2 := a2.modifyGraph g fun x =>
+    { x with props := (x.props.set MrTreeOptions.SPACING_EDGE_NODE 3.0).set MrTreeOptions.EDGE_END_TEXTURE_LENGTH 0.0 }
+  let ((), v) ← MrTreeM.run (P4Route.EdgeRouter.process g ProgressMonitor.null) a2
+  -- hand: x = 0 + 10 * 0.5; start (5, 10), (5, 13); end: 50 - 0 > 50 is false, no bends case -> (5, 50)
+  check "AVOID_OVERLAP: level crossing edge"
+    ((v.edge e).bendPoints == #[⟨5.0, 10.0⟩, ⟨5.0, 13.0⟩, ⟨5.0, 50.0⟩])
+  check "configuration before P4"
+    (P4Route.EdgeRouter.configuration.processorsBefore TreeLayoutPhases.p4EdgeRouting
+      == #[.levelCoords, .compactionProc, .graphBoundsProc])
+
+/-- The `ElkGraph` root with the given layout options and `n` children of the given size. -/
+private def sizeGraph (w h : Float) (n : Nat) (opts : ElkGraph → NodeId → ElkGraph) :
+    ElkGraph × NodeId × Array NodeId := Id.run do
+  let (g, root) := ElkGraphUtil.createGraph
+  let mut g := (g.setNodeProp root CoreOptions.ALGORITHM MrTreeOptions.ALGORITHM_ID)
+  g := opts g root
+  let mut nodes := #[]
+  for _ in [0:n] do
+    let (g', c) := g.createNode (some root)
+    g := g'.modifyNode c fun x => { x with width := w, height := h }
+    nodes := nodes.push c
+  return (g, root, nodes)
+
+private def layoutEngine (g : ElkGraph) (root : NodeId) : IO ElkGraph := do
+  Elk.Api.ensureInitialized
+  let (_, g) ← ElkM.run (RecursiveGraphLayoutEngine.layout root ProgressMonitor.null) g
+  return g
+
+/-- `mrtree_graph_size_test.rs`: `graph_size_calculation_test`, `components_graph_size_calculation_test`. -/
+def graphSizeTests : Suite := suite "mrtree.graphSize" do
+  let cases : Array (Float × Float × Float × Float × Float × Float × Float) :=
+    #[(20.0, 20.0, 10.0, 10.0, 10.0, 10.0, 10.0), (15.0, 30.0, 7.0, 9.0, 11.0, 13.0, 15.0),
+      (25.0, 15.0, 0.0, 0.0, 0.0, 0.0, 20.0)]
+  for (w, h, pl, pr, pt, pb, sp) in cases do
+    let (g, root, ns) := sizeGraph w h 3 fun g r =>
+      (g.setNodeProp r CoreOptions.PADDING { top := pt, right := pr, bottom := pb, left := pl }).setNodeProp r
+        CoreOptions.SPACING_NODE_NODE sp
+    let (g, _) := ElkGraphUtil.createSimpleEdge g (.node ns[0]!) (.node ns[1]!)
+    let (g, _) := ElkGraphUtil.createSimpleEdge g (.node ns[0]!) (.node ns[2]!)
+    let g ← layoutEngine g root
+    checkFloat s!"graph width {w}x{h}" (g.node root).width (pl + w + sp + w + pr) 1.0e-4
+    checkFloat s!"graph height {w}x{h}" (g.node root).height (pt + h + sp + h + pb) 1.0e-4
+  for (w, h, _, _, _, _, _) in cases do
+    let (g, root, _) := sizeGraph w h 2 fun g r =>
+      ((g.setNodeProp r CoreOptions.PADDING (ElkPadding.ofAny 0.0)).setNodeProp r
+        CoreOptions.SPACING_NODE_NODE 0.0).setNodeProp r CoreOptions.ASPECT_RATIO 1000.0
+    let g ← layoutEngine g root
+    checkFloat s!"components graph width {w}x{h}" (g.node root).width (w + w) 1.0e-4
+    checkFloat s!"components graph height {w}x{h}" (g.node root).height h 1.0e-4
+
+/-- The processor chain of the driver and the provider registration. -/
+def driverTests : Suite := suite "mrtree.driver" do
+  Elk.Api.ensureInitialized
+  let (a, g, _) := tree
+  let (algorithm, _) ← MrTreeM.run (MrTree.updateModules g) a
+  checkEqR "MODEL_ORDER chain" (algorithm.map (·.name))
+    #["DFSTreeifyer", "RootProcessor", "NodeOrderer", "NodePlacer", "CompactionProcessor",
+      "LevelCoordinatesProcessor", "GraphBoundsProcessor", "Untreeifyer", "EdgeRouter"]
+  let a := a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.WEIGHTING .fan }
+  let (algorithm, _) ← MrTreeM.run (MrTree.updateModules g) a
+  checkEqR "FAN chain" (algorithm.map (·.name))
+    #["DFSTreeifyer", "RootProcessor", "FanProcessor", "NodeOrderer", "NodePlacer", "CompactionProcessor",
+      "LevelCoordinatesProcessor", "GraphBoundsProcessor", "Untreeifyer", "EdgeRouter"]
+  check "provider registered" (← LayoutProvider.isRegistered MrTreeOptions.ALGORITHM_ID)
+  check "phase order" ((ElkEnum.values : Array TreeLayoutPhases).map ElkEnum.javaName ==
+    #["P1_TREEIFICATION", "P2_NODE_ORDERING", "P3_NODE_PLACEMENT", "P4_EDGE_ROUTING"])
+  checkEqR "phase names" ((ElkEnum.values : Array TreeLayoutPhases).map fun p => (TreeLayoutPhases.createPhase p).name)
+    #["DFSTreeifyer", "NodeOrderer", "NodePlacer", "EdgeRouter"]
+  -- an empty graph lays out without error
+  match ← Elk.Api.layoutJson "{\"id\":\"root\",\"layoutOptions\":{\"algorithm\":\"mrtree\"},\"children\":[]}" "{}" with
+  | .ok _ => check "empty graph" true
+  | .error e => report "empty graph" false e
+
+/-! ### Fixtures -/
+
+/-- Fixture input names (`<name>.json` without `.expected.json`), sorted. -/
+private def fixtureNames (dir : System.FilePath) : IO (Array String) := do
+  let entries ← System.FilePath.readDir dir
+  let names := entries.filterMap fun e =>
+    if e.fileName.endsWith ".json" && !e.fileName.endsWith ".expected.json" then
+      some (e.fileName.dropEnd ".json".length).toString
+    else none
+  return stableSort names (fun a b => compare a b)
+
+/-- The first line where two texts differ (for short failure messages). -/
+private def firstDiff (a b : String) : String := Id.run do
+  let la := a.splitOn "\n"
+  let lb := b.splitOn "\n"
+  for i in [0:max la.length lb.length] do
+    let x := la[i]?.getD "<eof>"
+    let y := lb[i]?.getD "<eof>"
+    if x != y then return s!"line {i + 1}: expected {y.trimAscii}, got {x.trimAscii}"
+  return "identical"
+
+/-- Every `<name>.json` of `dir` lays out to `<name>.expected.json` byte for byte; with
+`<name>.error` instead of an expected file the layout must fail. -/
+private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit := do
+  let names ← fixtureNames dir
+  check s!"fixtures found in {dir}" (names.size >= minimum)
+  for name in names do
+    let input ← IO.FS.readFile (dir / s!"{name}.json")
+    let result ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true)
+    if ← (dir / s!"{name}.error").pathExists then
+      match result with
+      | .error _ => check s!"{name}: fails like the oracle" true
+      | .ok _ => report s!"{name}: fails like the oracle" false "layout succeeded"
+    else
+      let expected ← IO.FS.readFile (dir / s!"{name}.expected.json")
+      match result with
+      | .error e => report s!"{name}: layout" false e
+      | .ok actual => report s!"{name}: matches oracle" (actual == expected) (firstDiff actual expected)
+
+/-- `mrtree.fixtures`: `Elk.Api.layoutJson` reproduces the stock elk-rs output byte for byte. -/
+def fixtureTests : Suite := suite "mrtree.fixtures" do
+  Elk.Api.ensureInitialized
+  checkFixtures "tests/fixtures/mrtree" 40
+
+/-- Java-like registration of the three mrtree enum options (`weighting`, `edgeRoutingMode`,
+`searchOrder`) with choices and the lenient enum parser. Not part of the elk-rs provider (whose
+enum options have no parser); used to test the enum branches against an oracle build whose
+metadata provider registers the same parsers. -/
+def enumParserProvider : LayoutMetaDataProvider where
+  apply r :=
+    let withParser {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+        (name description : String) : Registry :=
+      r.registerOption
+        { id := property.id, type := .enum, defaultValue := property.default.map PropCodec.enc,
+          name, description, targets := EnumSet.of #[.parents], visibility := .visible,
+          choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+    let r := withParser r MrTreeOptions.WEIGHTING "Weighting of Nodes"
+      "Which weighting to use when computing a node order."
+    let r := withParser r MrTreeOptions.EDGE_ROUTING_MODE "Edge Routing Mode" "Chooses an edge routing algorithm."
+    withParser r MrTreeOptions.SEARCH_ORDER "Search Order"
+      "Which search order to use when computing a spanning tree."
+
+/-- Runs `action` with `enumParserProvider` installed, then restores the registry. -/
+def withEnumParsers {α : Type} (action : IO α) : IO α := do
+  let snapshot ← LayoutMetaDataService.getInstance
+  LayoutMetaDataService.registerLayoutMetaDataProvider enumParserProvider
+  try action finally LayoutMetaDataService.instanceRef.set snapshot
+
+/-- `mrtree.fixtures.enum`: with the enum parsers installed, the output equals the output of an
+elk-rs build whose mrtree metadata provider registers the same parsers (`<name>.error`: both fail,
+Rust with an index-out-of-bounds panic in `NodePlacer::first_walk_soa`). -/
+def enumFixtureTests : Suite := suite "mrtree.fixtures.enum" do
+  Elk.Api.ensureInitialized
+  let st ← get
+  let (_, st') ← withEnumParsers ((checkFixtures "tests/fixtures/mrtree/enum" 30).run st)
+  set st'
+
 def suites : Array Tests.Suite :=
   #[metaTests, graphTests, importTests, componentsTests, treeProcessorTests, placementProcessorTests,
-    treeUtilTests]
+    treeUtilTests, treeifyTests, orderTests, placeTests, routeTests, graphSizeTests, driverTests,
+    fixtureTests, enumFixtureTests]
 
 end Tests.MrTree
