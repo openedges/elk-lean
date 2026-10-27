@@ -3,7 +3,6 @@ import Elk.Alg.Layered.P5Edges.Orthogonal.HyperEdgeCycleDetector
 import Elk.Alg.Layered.P5Edges.Orthogonal.HyperEdgeSegmentSplitter
 import Elk.Alg.Layered.P5Edges.Orthogonal.Direction
 import Elk.Core.Util.ElkTrace
-import Elk.Core.Util.Sort
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.orthogonal.OrthogonalRoutingGenerator`
 
@@ -30,6 +29,11 @@ irrelevant; it is a `Std.HashMap LPortId Nat`.
 Random numbers: Rust clones the graph's `RANDOM` (an `Arc`-shared state, so the draws advance the
 graph's generator) or uses a fresh `Random::default()` (seed 0, not stored) when it is missing; the
 port does the same and writes the advanced generator back only in the first case.
+
+Performance notes: the loops over segment pairs and dependencies are tail-recursive pure functions
+that read the arena and thread only what they change (`SegmentGraph` updates are in place, see
+`HyperEdgeSegmentDependency`); `topologicalNumbering` keeps slots and weights in local arrays;
+`minimumDifference` sorts a `FloatArray` by the `total_cmp` key.
 -/
 namespace Elk.Alg.Layered.P5Edges.Orthogonal
 
@@ -107,73 +111,172 @@ def countConflicts (gen : OrthogonalRoutingGenerator) (posis1 posis2 : Array Flo
   else countConflictsFrom posis1 posis2 gen.criticalConflictThreshold gen.conflictThreshold 0 0
     posis1[0]! posis2[0]! 0
 
-/-- `createDependencyIfNecessary(he1, he2)` on segments `i1`, `i2`: critical dependencies for critical
-conflicts (returning their number), otherwise a regular dependency weighted by the difference of the
-two orderings' conflict and crossing penalties (two zero-weight dependencies on a tie with positive
-values). Degenerate segments (extent below `TOLERANCE`) get none. -/
-def createDependencyIfNecessary (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (i1 i2 : Nat) : SegmentGraph × Int := Id.run do
+/-- `countCrossings` loop with an unboxed count. -/
+private partial def crossingCount (posis : Array Float) (start stop : Float) (k : Nat) (crossings : UInt64) : UInt64 :=
+  if h : k < posis.size then
+    let pos := posis[k]
+    if pos > stop then crossings
+    else crossingCount posis start stop (k + 1) (if pos >= start then crossings + 1 else crossings)
+  else crossings
+
+/-- `CRITICAL_CONFLICTS_DETECTED` of `conflictCount`. -/
+private def CRITICAL_CONFLICTS : UInt64 := 0xFFFFFFFFFFFFFFFF
+
+/-- `countConflictsFrom` with an unboxed count (`CRITICAL_CONFLICTS` for a critical conflict). -/
+private partial def conflictCountFrom (posis1 posis2 : Array Float) (critical threshold : Float)
+    (i j : Nat) (pos1 pos2 : Float) (conflicts : UInt64) : UInt64 :=
+  if pos1 > pos2 - critical && pos1 < pos2 + critical then CRITICAL_CONFLICTS
+  else
+    let conflicts := if pos1 > pos2 - threshold && pos1 < pos2 + threshold then conflicts + 1 else conflicts
+    if pos1 <= pos2 && i + 1 < posis1.size then
+      conflictCountFrom posis1 posis2 critical threshold (i + 1) j posis1[i + 1]! pos2 conflicts
+    else if pos2 <= pos1 && j + 1 < posis2.size then
+      conflictCountFrom posis1 posis2 critical threshold i (j + 1) pos1 posis2[j + 1]! conflicts
+    else conflicts
+
+/-- `countConflicts` with an unboxed count (`CRITICAL_CONFLICTS` for a critical conflict). -/
+@[inline] private def conflictCount (critical threshold : Float) (posis1 posis2 : Array Float) : UInt64 :=
+  if h : 0 < posis1.size ∧ 0 < posis2.size then
+    conflictCountFrom posis1 posis2 critical threshold 0 0 posis1[0] posis2[0] 0
+  else 0
+
+/-- `CONFLICT_PENALTY` as `UInt64`. -/
+private def CONFLICT_PENALTY_U64 : UInt64 := CONFLICT_PENALTY.toNat.toUInt64
+/-- `CROSSING_PENALTY` as `UInt64`. -/
+private def CROSSING_PENALTY_U64 : UInt64 := CROSSING_PENALTY.toNat.toUInt64
+
+/-- The regular dependency (or zero-weight pair) of two non-degenerate segments without critical
+conflicts, from the orderings' penalties `CONFLICT_PENALTY * conflicts + CROSSING_PENALTY * crossings`
+(non-negative, so computed in `UInt64`). -/
+private def addRegularDependency (g : SegmentGraph) (i1 i2 : Nat) (depValue1 depValue2 : UInt64) : SegmentGraph :=
+  if depValue1 < depValue2 then g.addDependency false i1 i2 (depValue2 - depValue1).toNat
+  else if depValue1 > depValue2 then g.addDependency false i2 i1 (depValue1 - depValue2).toNat
+  else if depValue1 > 0 && depValue2 > 0 then
+    (g.addDependency false i1 i2 0).addDependency false i2 i1 0
+  else g
+
+/-- `createDependencyIfNecessary(he1, he2)` on segments `i1`, `i2`, without the critical dependency
+count: critical dependencies for critical conflicts, otherwise a regular dependency weighted by the
+difference of the two orderings' conflict and crossing penalties (two zero-weight dependencies on a
+tie with positive values). Degenerate segments (extent below `TOLERANCE`) get none. The segments are
+only read before the first dependency is added; the counts are unboxed `UInt64` values. -/
+def createDependency (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (i1 i2 : Nat) : SegmentGraph :=
   let he1 := g.segment i1
   let he2 := g.segment i2
-  if (he1.startPosition - he1.endPosition).abs < TOLERANCE || (he2.startPosition - he2.endPosition).abs < TOLERANCE then
-    return (g, 0)
-  let conflicts1 := gen.countConflicts he1.outgoingConnectionCoordinates he2.incomingConnectionCoordinates
-  let conflicts2 := gen.countConflicts he2.outgoingConnectionCoordinates he1.incomingConnectionCoordinates
-  let criticalConflictsDetected := conflicts1 == CRITICAL_CONFLICTS_DETECTED || conflicts2 == CRITICAL_CONFLICTS_DETECTED
-  let (depValue1, depValue2) : Int × Int :=
-    if criticalConflictsDetected then (0, 0)
+  let start1 := he1.startPosition
+  let end1 := he1.endPosition
+  let start2 := he2.startPosition
+  let end2 := he2.endPosition
+  if (start1 - end1).abs < TOLERANCE || (start2 - end2).abs < TOLERANCE then g
+  else
+    let critical := gen.criticalConflictThreshold
+    let threshold := gen.conflictThreshold
+    let conflicts1 := conflictCount critical threshold he1.outgoingConnectionCoordinates he2.incomingConnectionCoordinates
+    let conflicts2 := conflictCount critical threshold he2.outgoingConnectionCoordinates he1.incomingConnectionCoordinates
+    let critical1 := conflicts1 == CRITICAL_CONFLICTS
+    let critical2 := conflicts2 == CRITICAL_CONFLICTS
+    if critical1 || critical2 then
+      let g := if critical1 then g.addDependency true i2 i1 CRITICAL_DEPENDENCY_WEIGHT else g
+      if critical2 then g.addDependency true i1 i2 CRITICAL_DEPENDENCY_WEIGHT else g
     else
-      let crossings1 := countCrossings he1.outgoingConnectionCoordinates he2.startPosition he2.endPosition +
-        countCrossings he2.incomingConnectionCoordinates he1.startPosition he1.endPosition
-      let crossings2 := countCrossings he2.outgoingConnectionCoordinates he1.startPosition he1.endPosition +
-        countCrossings he1.incomingConnectionCoordinates he2.startPosition he2.endPosition
-      (CONFLICT_PENALTY * conflicts1 + CROSSING_PENALTY * crossings1,
-        CONFLICT_PENALTY * conflicts2 + CROSSING_PENALTY * crossings2)
-  let mut g := g
-  let mut criticalDependencyCount : Int := 0
-  if criticalConflictsDetected then
-    if conflicts1 == CRITICAL_CONFLICTS_DETECTED then
-      g := (g.createAndAddCritical i2 i1).1
-      criticalDependencyCount := criticalDependencyCount + 1
-    if conflicts2 == CRITICAL_CONFLICTS_DETECTED then
-      g := (g.createAndAddCritical i1 i2).1
-      criticalDependencyCount := criticalDependencyCount + 1
-  else if depValue1 < depValue2 then
-    g := (g.createAndAddRegular i1 i2 (depValue2 - depValue1)).1
-  else if depValue1 > depValue2 then
-    g := (g.createAndAddRegular i2 i1 (depValue1 - depValue2)).1
-  else if depValue1 > 0 && depValue2 > 0 then
-    g := (g.createAndAddRegular i1 i2 0).1
-    g := (g.createAndAddRegular i2 i1 0).1
-  return (g, criticalDependencyCount)
+      let crossings1 := crossingCount he1.outgoingConnectionCoordinates start2 end2 0 0 +
+        crossingCount he2.incomingConnectionCoordinates start1 end1 0 0
+      let crossings2 := crossingCount he2.outgoingConnectionCoordinates start1 end1 0 0 +
+        crossingCount he1.incomingConnectionCoordinates start2 end2 0 0
+      addRegularDependency g i1 i2 (CONFLICT_PENALTY_U64 * conflicts1 + CROSSING_PENALTY_U64 * crossings1)
+        (CONFLICT_PENALTY_U64 * conflicts2 + CROSSING_PENALTY_U64 * crossings2)
+
+/-- Number of critical dependencies among the dependencies `d, d + 1, …` of `g`, plus `count`. -/
+private partial def countCriticalFrom (g : SegmentGraph) (d : Nat) (count : Int) : Int :=
+  if d < g.dependencyCount then countCriticalFrom g (d + 1) (if g.depIsCritical d then count + 1 else count)
+  else count
+
+/-- `createDependencyIfNecessary(he1, he2)` on segments `i1`, `i2` (see `createDependency`), also
+returning the number of critical dependencies created. -/
+def createDependencyIfNecessary (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (i1 i2 : Nat) : SegmentGraph × Int :=
+  let before := g.dependencyCount
+  let g := gen.createDependency g i1 i2
+  (g, countCriticalFrom g before 0)
+
+/-- The pairwise loop of `routeEdges` from the pair `(i, j)` on: `createDependencyIfNecessary` for every
+pair of segments `i < j < n`, row by row. -/
+private partial def createDependenciesFrom (gen : OrthogonalRoutingGenerator) (n i j : Nat) (g : SegmentGraph) :
+    SegmentGraph :=
+  if j < n then createDependenciesFrom gen n i (j + 1) (gen.createDependency g i j)
+  else if i + 2 < n then createDependenciesFrom gen n (i + 1) (i + 2) g
+  else g
+
+/-- Rust `f64::total_cmp` as an unsigned key: the bit pattern with the sign bit flipped for
+non-negative values and all bits flipped for negative ones (NaNs ordered by sign and payload). -/
+@[inline] private def totalOrderKey (x : Float) : UInt64 :=
+  let bits := x.toBits
+  if bits >>> 63 != 0 then ~~~bits else bits ^^^ 0x8000000000000000
+
+/-- Merges the sorted runs `src[i:mid]` and `src[j:hi]` into `dst[k:hi]` (by `totalOrderKey`, left run
+first on ties). -/
+private partial def mergeRuns (src dst : FloatArray) (i j k mid hi : Nat) : FloatArray :=
+  if k < hi then
+    if i < mid && (j >= hi || totalOrderKey src[i]! <= totalOrderKey src[j]!) then
+      mergeRuns src (dst.set! k src[i]!) (i + 1) j (k + 1) mid hi
+    else
+      mergeRuns src (dst.set! k src[j]!) i (j + 1) (k + 1) mid hi
+  else dst
+
+/-- One bottom-up merge pass with run width `width`, from offset `lo` on. -/
+private partial def mergePass (src dst : FloatArray) (width lo : Nat) : FloatArray :=
+  if lo < src.size then
+    let mid := min (lo + width) src.size
+    let hi := min (lo + 2 * width) src.size
+    mergePass src (mergeRuns src dst lo mid lo mid hi) width hi
+  else dst
+
+/-- Bottom-up merge sort; the two buffers alternate between passes. -/
+private partial def mergeSortLoop (src dst : FloatArray) (width : Nat) : FloatArray :=
+  if width < src.size then
+    let dst := mergePass src dst width 0
+    mergeSortLoop dst src (2 * width)
+  else src
+
+/-- Sorts by `f64::total_cmp` (stable merge sort; elements with equal keys have the same bit pattern
+anyway, so every correct sort gives this array). -/
+private def sortTotal (xs : FloatArray) : FloatArray :=
+  mergeSortLoop xs (FloatArray.mk (Array.replicate xs.size 0.0)) 1
+
+/-- Scan of `minimumDifference` over the sorted `sorted[k:]` (`prev` = last distinct value, `distinct`
+= number of distinct values so far): skips bit-identical duplicates (Rust `dedup_by`), returns `NaN` at
+the first `NaN` gap, else the minimum gap (`f64::MAX` with fewer than two distinct values). -/
+private partial def minimumGapFrom (sorted : FloatArray) (k : Nat) (prev : Float) (distinct : Nat) (minDifference : Float) :
+    Float :=
+  if h : k < sorted.size then
+    let x := sorted[k]
+    if x.toBits == prev.toBits then minimumGapFrom sorted (k + 1) prev distinct minDifference
+    else
+      let diff := x - prev
+      if diff != diff then Float.nan
+      else minimumGapFrom sorted (k + 1) x (distinct + 1) (if diff < minDifference then diff else minDifference)
+  else if distinct < 2 then Float.maxValue else minDifference
+
+/-- `minimumDifference` of a `FloatArray`. -/
+private def minimumDifferenceOf (numbers : FloatArray) : Float :=
+  if numbers.size < 2 then Float.maxValue
+  else
+    let sorted := sortTotal numbers
+    minimumGapFrom sorted 1 sorted[0]! 1 Float.maxValue
 
 /-- `minimumDifference(numbers)`: the smallest gap between distinct values (sorted with `total_cmp`,
 duplicates by bit pattern removed); `f64::MAX` for fewer than two values, `NaN` if a gap is `NaN`. -/
-def minimumDifference (numbers : Array Float) : Float := Id.run do
-  if numbers.size < 2 then return Float.maxValue
-  let sorted := stableSort numbers Float.compareTotal
-  let mut distinct : Array Float := #[]
-  for x in sorted do
-    let isDuplicate : Bool := match distinct.back? with
-      | some y => y.toBits == x.toBits
-      | none => false
-    if !isDuplicate then distinct := distinct.push x
-  if distinct.size < 2 then return Float.maxValue
-  let mut minDifference := Float.maxValue
-  for i in [1:distinct.size] do
-    let diff := distinct[i]! - distinct[i - 1]!
-    if diff.isNaN then return Float.nan
-    if diff < minDifference then minDifference := diff
-  return minDifference
+def minimumDifference (numbers : Array Float) : Float :=
+  minimumDifferenceOf (numbers.foldl (·.push ·) (FloatArray.emptyWithCapacity numbers.size))
+
+/-- All incoming (`incoming`) or outgoing connection coordinates of the segments. -/
+private def collectCoordinates (g : SegmentGraph) (incoming : Bool) : FloatArray :=
+  g.segments.foldl (init := FloatArray.emptyWithCapacity (2 * g.segments.size)) fun acc seg =>
+    (if incoming then seg.incomingConnectionCoordinates else seg.outgoingConnectionCoordinates).foldl (·.push ·) acc
 
 /-- `minimumHorizontalSegmentDistance(edgeSegments)`: the smaller of the minimum differences of all
 incoming and of all outgoing connection coordinates (Rust `f64::min`). -/
-def minimumHorizontalSegmentDistance (g : SegmentGraph) : Float := Id.run do
-  let mut incoming : Array Float := #[]
-  let mut outgoing : Array Float := #[]
-  for seg in g.segments do
-    incoming := incoming ++ seg.incomingConnectionCoordinates
-    outgoing := outgoing ++ seg.outgoingConnectionCoordinates
-  return fmin (minimumDifference incoming) (minimumDifference outgoing)
+def minimumHorizontalSegmentDistance (g : SegmentGraph) : Float :=
+  fmin (minimumDifferenceOf (collectCoordinates g true)) (minimumDifferenceOf (collectCoordinates g false))
 
 /-- `createHyperEdgeSegments(nodes, portSide, hyperEdges, portToHyperEdgeSegmentMap)`: a new segment for
 every output port on `portSide` (node order, port order) that is not part of a segment yet. -/
@@ -193,7 +296,7 @@ def createHyperEdgeSegments (gen : OrthogonalRoutingGenerator) (a : LGraphArena)
 
 /-- The splitter with this generator's callbacks (Java `new HyperEdgeSegmentSplitter(this)`). -/
 def splitter (gen : OrthogonalRoutingGenerator) : HyperEdgeSegmentSplitter :=
-  { createDependencyIfNecessary := gen.createDependencyIfNecessary, countCrossings := countCrossings }
+  { createDependency := gen.createDependency, countCrossings := countCrossings }
 
 /-- `breakCriticalCycles(edgeSegments, random)`: splits segments to resolve the critical cycles. -/
 def breakCriticalCycles (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (random : Random) : SegmentGraph × Random :=
@@ -202,65 +305,119 @@ def breakCriticalCycles (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (r
 
 /-- `breakNonCriticalCycles(edgeSegments, random)` (public static; also used by the self-loop
 `RoutingSlotAssigner`): removes the zero-weight and reverses the other dependencies closing cycles. -/
-def breakNonCriticalCycles (g : SegmentGraph) (random : Random) : SegmentGraph × Random := Id.run do
-  let (cycleDependencies, g', random) := HyperEdgeCycleDetector.detectCycles g false random
-  let mut g := g'
-  for d in cycleDependencies do
-    if (g.dependency d).weight == 0 then g := g.removeDependency d
-    else g := g.reverseDependency d
-  return (g, random)
+def breakNonCriticalCycles (g : SegmentGraph) (random : Random) : SegmentGraph × Random :=
+  let (cycleDependencies, g, random) := HyperEdgeCycleDetector.detectCycles g false random
+  let g := cycleDependencies.foldl (init := g) fun g d =>
+    if g.depWeight d == 0 then g.removeDependency d else g.reverseDependency d
+  (g, random)
+
+/-- Working arrays of `topologicalNumbering` (per segment index) and its FIFO queue. -/
+private structure Numbering where
+  /-- `routing_slot`. -/
+  slot : Array Int
+  /-- `in_weight`. -/
+  inWeight : Array Int
+  /-- `out_weight`. -/
+  outWeight : Array Int
+  /-- The queue (`head` = front). -/
+  queue : Array Nat
+  head : Nat := 0
+  /-- `max_rank`. -/
+  maxRank : Int := -1
+
+/-- First pass over the outgoing dependencies `deps[k:]` of a dequeued source with slot `nodeSlot`:
+every target gets at least slot `nodeSlot + 1` and becomes a source when its last incoming dependency
+is processed. -/
+private partial def numberTargets (g : SegmentGraph) (deps : Array Nat) (nodeSlot : Int) (k : Nat) (st : Numbering) :
+    Numbering :=
+  if h : k < deps.size then
+    let targetCode := g.depTargetCode deps[k]
+    if targetCode != 0 then
+      let target := targetCode - 1
+      let newSlot := nodeSlot + 1
+      let current := st.slot[target]!
+      let slot := if current < newSlot then newSlot else current
+      let inWeight := st.inWeight[target]! - 1
+      let st := { st with slot := st.slot.set! target slot, inWeight := st.inWeight.set! target inWeight,
+                          maxRank := max st.maxRank slot }
+      let st := if inWeight == 0 then { st with queue := st.queue.push target } else st
+      numberTargets g deps nodeSlot (k + 1) st
+    else numberTargets g deps nodeSlot (k + 1) st
+  else st
+
+/-- Longest-path numbering from the queued sources. -/
+private partial def numberFromSources (g : SegmentGraph) (st : Numbering) : Numbering :=
+  if h : st.head < st.queue.size then
+    let node := st.queue[st.head]
+    let st := { st with head := st.head + 1 }
+    let nodeSlot := st.slot[node]!
+    numberFromSources g (numberTargets g (g.segment node).outgoingSegmentDependencies nodeSlot 0 st)
+  else st
+
+/-- Second pass over the incoming dependencies `deps[k:]` of a dequeued rightward target with slot
+`nodeSlot`: sources without incoming connections are pulled to at most slot `nodeSlot - 1` and queued
+when their last outgoing dependency is processed. -/
+private partial def pullSources (g : SegmentGraph) (deps : Array Nat) (nodeSlot : Int) (k : Nat) (st : Numbering) :
+    Numbering :=
+  if h : k < deps.size then
+    let sourceCode := g.depSourceCode deps[k]
+    if sourceCode != 0 && (g.segment (sourceCode - 1)).incomingConnectionCoordinates.isEmpty then
+      let source := sourceCode - 1
+      let newSlot := nodeSlot - 1
+      let current := st.slot[source]!
+      let slot := if current > newSlot then newSlot else current
+      let outWeight := st.outWeight[source]! - 1
+      let st := { st with slot := st.slot.set! source slot, outWeight := st.outWeight.set! source outWeight }
+      let st := if outWeight == 0 then { st with queue := st.queue.push source } else st
+      pullSources g deps nodeSlot (k + 1) st
+    else pullSources g deps nodeSlot (k + 1) st
+  else st
+
+/-- Pulls the predecessors of the queued rightward targets. -/
+private partial def pullFromTargets (g : SegmentGraph) (st : Numbering) : Numbering :=
+  if h : st.head < st.queue.size then
+    let node := st.queue[st.head]
+    let st := { st with head := st.head + 1 }
+    let nodeSlot := st.slot[node]!
+    pullFromTargets g (pullSources g (g.segment node).incomingSegmentDependencies nodeSlot 0 st)
+  else st
+
+/-- Stores the routing slots and weights of `topologicalNumbering` in the segments `i, i + 1, …`. -/
+private partial def writeNumbering (segments : Array HyperEdgeSegment) (st : Numbering) (i : Nat) :
+    Array HyperEdgeSegment :=
+  if i < segments.size then
+    writeNumbering (segments.modify i (HyperEdgeSegment.setNumberingData st.slot[i]! st.inWeight[i]! st.outWeight[i]!))
+      st (i + 1)
+  else segments
 
 /-- `topologicalNumbering(segments)`: routing slots by longest path from the sources; afterwards the
 segments with only outgoing connections and no outgoing dependencies ("rightward targets") are moved to
-the highest slot and their predecessors without incoming connections pulled after them. -/
+the highest slot and their predecessors without incoming connections pulled after them. Slots and
+in/out weights are computed in local arrays and stored in the segments at the end. -/
 def topologicalNumbering (g : SegmentGraph) : SegmentGraph := Id.run do
-  let mut g := g
+  let n := g.segments.size
+  let mut slots : Array Int := Array.emptyWithCapacity n
+  let mut inWeights : Array Int := Array.emptyWithCapacity n
+  let mut outWeights : Array Int := Array.emptyWithCapacity n
   let mut sources : Array Nat := #[]
   let mut rightwardTargets : Array Nat := #[]
-  for i in [0:g.segments.size] do
-    let seg := g.segment i
+  for h : i in [0:n] do
+    let seg := g.segments[i]
     let inWeight : Int := seg.incomingSegmentDependencies.size
     let outWeight : Int := seg.outgoingSegmentDependencies.size
-    g := g.modifySegment i fun s => { s with inDepWeight := inWeight, outDepWeight := outWeight }
+    slots := slots.push seg.routingSlot
+    inWeights := inWeights.push inWeight
+    outWeights := outWeights.push outWeight
     if inWeight == 0 then sources := sources.push i
     if outWeight == 0 && seg.incomingConnectionCoordinates.isEmpty then
       rightwardTargets := rightwardTargets.push i
-  let mut maxRank : Int := -1
-  let mut head := 0
-  while head < sources.size do
-    let node := sources[head]!
-    head := head + 1
-    let nodeSeg := g.segment node
-    let nodeSlot := nodeSeg.routingSlot
-    for d in nodeSeg.outgoingSegmentDependencies do
-      if let some target := (g.dependency d).target then
-        let newSlot := nodeSlot + 1
-        let tgt := g.segment target
-        let slot := if tgt.routingSlot < newSlot then newSlot else tgt.routingSlot
-        maxRank := max maxRank slot
-        let inWeight := tgt.inDepWeight - 1
-        g := g.modifySegment target fun s => { s with routingSlot := slot, inDepWeight := inWeight }
-        if inWeight == 0 then sources := sources.push target
-  if maxRank > -1 then
-    for node in rightwardTargets do
-      let rank := maxRank
-      g := g.modifySegment node fun s => { s with routingSlot := rank }
-    let mut targetsHead := 0
-    while targetsHead < rightwardTargets.size do
-      let node := rightwardTargets[targetsHead]!
-      targetsHead := targetsHead + 1
-      let nodeSeg := g.segment node
-      let nodeSlot := nodeSeg.routingSlot
-      for d in nodeSeg.incomingSegmentDependencies do
-        if let some source := (g.dependency d).source then
-          let src := g.segment source
-          if !src.incomingConnectionCoordinates.isEmpty then continue
-          let newSlot := nodeSlot - 1
-          let slot := if src.routingSlot > newSlot then newSlot else src.routingSlot
-          let outWeight := src.outDepWeight - 1
-          g := g.modifySegment source fun s => { s with routingSlot := slot, outDepWeight := outWeight }
-          if outWeight == 0 then rightwardTargets := rightwardTargets.push source
-  return g
+  let st := numberFromSources g { slot := slots, inWeight := inWeights, outWeight := outWeights, queue := sources }
+  let st := if st.maxRank > -1 then
+      let maxRank := st.maxRank
+      let slot := rightwardTargets.foldl (init := st.slot) fun slot node => slot.set! node maxRank
+      pullFromTargets g { st with slot := slot, queue := rightwardTargets, head := 0 }
+    else st
+  return { g with segments := writeNumbering g.segments st 0 }
 
 /-- Rust `{:?}` of a coordinate list (approximation used by the trace output only). -/
 private def showCoords (cs : Array Float) : String :=
@@ -305,14 +462,9 @@ def routeEdges (gen : OrthogonalRoutingGenerator) (graph : LGraphId) (sourceLaye
   gen.traceSegments "initial" g
   let gen := { gen with
     criticalConflictThreshold := CRITICAL_CONFLICT_THRESHOLD_FACTOR * minimumHorizontalSegmentDistance g }
-  let mut g := g
-  let mut criticalDependencyCount : Int := 0
-  let n := g.segments.size
-  for i in [0:n] do
-    for j in [i + 1:n] do
-      let (g', count) := gen.createDependencyIfNecessary g i j
-      g := g'
-      criticalDependencyCount := criticalDependencyCount + count
+  -- every dependency is created by this loop, so the critical ones are exactly those Rust counts
+  let mut g := createDependenciesFrom gen g.segments.size 0 1 g
+  let criticalDependencyCount := countCriticalFrom g 0 0
   let graphRandom ← LayeredM.graphRandom? graph
   let mut random := graphRandom.getD (Random.ofInt 0)
   if criticalDependencyCount >= 2 then
