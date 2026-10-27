@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 # ELK exceptions
 

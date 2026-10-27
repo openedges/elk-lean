@@ -16,8 +16,8 @@ open Elk.Graph Elk.Alg.Layered.Graph LayeredM
 /-- Rust `f64 as i32`: saturating, `NaN` → `0`. -/
 def floatToI32Sat (x : Float) : Int :=
   if x != x then 0
-  else if x >= 2147483647.0 then 2147483647
-  else if x <= -2147483648.0 then -2147483648
+  else if x >= (2147483647 : Float) then 2147483647
+  else if x <= -(2147483648 : Float) then -2147483648
   else x.toInt64.toInt
 
 namespace ARDCutIndexHeuristic

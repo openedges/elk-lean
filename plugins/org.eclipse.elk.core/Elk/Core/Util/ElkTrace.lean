@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 # `ElkTrace` (elk-rs `core::util::elk_trace`)
 

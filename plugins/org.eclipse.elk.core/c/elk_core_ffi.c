@@ -142,3 +142,43 @@ LEAN_EXPORT lean_obj_res elk_unix_time(void) {
     time_t t = time(NULL);
     return lean_usize_to_nat((size_t)(t < 0 ? 0 : t));
 }
+
+/* Fast paths of `Float.ofScientific` / `Float.ofNat` / `Float.ofInt` (see Elk/Core/Util/FastFloat.lean).
+ * Exactly the core fast path: a mantissa below 2^53 is exact as a double and 10^e (e <= 22) is
+ * exactly representable, so one IEEE division / multiplication gives the same correctly rounded
+ * result as the Lean implementation. NaN means "not handled" (the Lean wrapper falls back). */
+static const double elk_pow10_exact[23] = {
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
+    1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
+
+LEAN_EXPORT double elk_float_of_sci_fast(b_lean_obj_arg m, uint8_t s, b_lean_obj_arg e) {
+    if (lean_is_scalar(m) && lean_is_scalar(e)) {
+        size_t mv = lean_unbox(m);
+        size_t ev = lean_unbox(e);
+        if (mv < ((size_t)1 << 53) && ev <= 22) {
+            double dm = (double)(uint64_t)mv;
+            return s ? dm / elk_pow10_exact[ev] : dm * elk_pow10_exact[ev];
+        }
+    }
+    return NAN;
+}
+
+LEAN_EXPORT double elk_float_of_nat_fast(b_lean_obj_arg n) {
+    if (lean_is_scalar(n)) {
+        size_t v = lean_unbox(n);
+        if (v < ((size_t)1 << 53)) {
+            return (double)(uint64_t)v;
+        }
+    }
+    return NAN;
+}
+
+LEAN_EXPORT double elk_float_of_int_fast(b_lean_obj_arg i) {
+    if (lean_is_scalar(i)) {
+        int64_t v = lean_scalar_to_int64(i);
+        if (v > -((int64_t)1 << 53) && v < ((int64_t)1 << 53)) {
+            return (double)v;
+        }
+    }
+    return NAN;
+}

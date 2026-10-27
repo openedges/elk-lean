@@ -78,7 +78,7 @@ def new (_inLayerEdgeCount : Array Int) (_hasNorthSouthPorts : Array Bool) (port
 /-- Rust `set_port_position` (grows the array; invalid ids are ignored). -/
 private def setPosition (positions : Array Int) (a : LGraphArena) (p : LPortId) (v : Int) : Array Int :=
   let pid := portIdOf a p
-  if pid >= 4294967296 then positions
+  if pid >>> 32 != 0 then positions
   else
     let positions := if pid >= positions.size then positions ++ Array.replicate (pid + 1 - positions.size) 0 else positions
     positions.setIfInBounds pid v

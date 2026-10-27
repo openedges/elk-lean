@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 # Arena identifiers of the DisCo graph (`org.eclipse.elk.alg.disco.graph`)
 

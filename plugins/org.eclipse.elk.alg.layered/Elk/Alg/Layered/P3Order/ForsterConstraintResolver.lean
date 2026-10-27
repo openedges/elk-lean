@@ -104,7 +104,8 @@ def removeGroup (list : Array Nat) (target : Nat) : Array Nat × Bool :=
 /-- Grows `arr` with `v` to at least `n` entries (Rust `resize(n, v)` after a `>= len` check).
 Sizes beyond `u32` (ids wrapped from negative values) are ignored instead of aborting. -/
 def growTo {α : Type} (arr : Array α) (n : Nat) (v : α) : Array α :=
-  if n <= arr.size || n > 4294967296 then arr else arr ++ Array.replicate (n - arr.size) v
+  -- `n > 2^32` as `(n - 1) >>> 32 != 0` (no big `Nat` literal at run time)
+  if n <= arr.size || (n - 1) >>> 32 != 0 then arr else arr ++ Array.replicate (n - arr.size) v
 
 /-- Mutable state of one resolver operation (the Rust fields that change). -/
 structure ForsterData where

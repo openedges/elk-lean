@@ -73,8 +73,10 @@ namespace BarycenterPortDistributorState
 
 /-- Rust `x as i32` of a `usize`. -/
 @[inline] def toI32 (n : Nat) : Int :=
-  let m := n % 4294967296
-  if m >= 2147483648 then (m : Int) - 4294967296 else m
+  -- `n mod 2^32` reinterpreted as two's complement, without `Nat` literals above `2^32` (the C
+  -- backend parses those from strings with GMP on every evaluation)
+  let m := n.toUInt32
+  if m >= 2147483648 then -(((0 : UInt32) - m).toNat : Int) else (m.toNat : Int)
 
 /-- Rust `Vec::resize(n, 0.0)`. -/
 @[inline] def resizeFloats (arr : Array Float) (n : Nat) : Array Float :=
@@ -82,7 +84,7 @@ namespace BarycenterPortDistributorState
 
 /-- `ensure_port_capacity(port_id)`: grows both id-indexed arrays to `pid + 1`. -/
 def ensurePortCapacity (st : BarycenterPortDistributorState) (pid : Nat) : BarycenterPortDistributorState :=
-  if pid >= st.portRanks.size && pid < 4294967296 then
+  if pid >= st.portRanks.size && pid >>> 32 == 0 then
     { st with portRanks := resizeFloats st.portRanks (pid + 1), portBarycenter := resizeFloats st.portBarycenter (pid + 1) }
   else st
 
@@ -678,7 +680,7 @@ def updateNodePositions (snap : Option CrossMinSnapshot) (a : LGraphArena) (st :
           let nid := match snap with
             | some s => s.nodeId node
             | none => asUsize (a.node node).id
-          if nid >= positions.size && nid < 4294967296 then
+          if nid >= positions.size && nid >>> 32 == 0 then
             positions := positions ++ Array.replicate (nid + 1 - positions.size) 0
           positions := positions.setIfInBounds nid index
         return positions }

@@ -70,9 +70,6 @@ def new (lGraph : LGraphId) (parent : Option LNodeId) (hasParent crossMinDetermi
 
 /-! ## Node info table -/
 
-/-- An index beyond which Rust's `resize` could not allocate (negative ids cast to `usize`); such
-keys are ignored instead of growing the table. -/
-private def MAX_INDEX : Nat := 1 <<< 32
 
 /-- `layer_id(node)`/`node_id(node)`: `Layer.id as usize` (`0` without a layer) and `LNode.id as usize`. -/
 def nodeKey (a : LGraphArena) (n : LNodeId) : Nat × Nat :=
@@ -84,7 +81,10 @@ def nodeKey (a : LGraphArena) (n : LNodeId) : Nat × Nat :=
 
 /-- The growth part of `node_info_for(node)`: the table has a slot `[li][ni]` afterwards. -/
 def ensureSlot (info : Array (Array NodeInfo)) (li ni : Nat) : Array (Array NodeInfo) :=
-  if li >= MAX_INDEX || ni >= MAX_INDEX then info
+  -- indices from `2^32` on (negative ids cast to `usize`, which Rust's `resize` could not allocate)
+  -- are ignored instead of growing the table; tested by a shift because a `Nat` constant above
+  -- `2^32` is parsed from a string with GMP on every evaluation
+  if li >>> 32 != 0 || ni >>> 32 != 0 then info
   else
     let info := if info.size <= li then info ++ Array.replicate (li + 1 - info.size) #[] else info
     info.modify li fun row => if row.size <= ni then row ++ Array.replicate (ni + 1 - row.size) (default : NodeInfo) else row

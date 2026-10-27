@@ -55,7 +55,7 @@ namespace CrossingsCounter
 /-- Rust `set_port_position`: grows the array when `pid` is beyond its end. Ids that are not
 valid `i32` values (negative ids wrapped by `as usize`) are ignored (Rust would abort). -/
 def setPosition (positions : Array Int) (pid : Nat) (v : Int) : Array Int :=
-  if pid >= 4294967296 then positions
+  if pid >>> 32 != 0 then positions
   else
     let positions := if pid >= positions.size then positions ++ Array.replicate (pid + 1 - positions.size) 0 else positions
     positions.setIfInBounds pid v

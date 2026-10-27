@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 # Rust `slice::sort_by` (driftsort), exact port
 
@@ -314,7 +315,10 @@ size. -/
 
 /-- `drift.rs::merge_tree_scale_factor`: `ceil(2^62 / n)`. -/
 def mergeTreeScaleFactor (n : Nat) : UInt64 :=
-  UInt64.ofNat (((1 <<< 62) + n - 1) / n)
+  -- in `u64` like Rust (`n >= 1`, no overflow below `2^64`); a `Nat` `2^62` would be parsed from a
+  -- string with GMP on every call
+  let n := n.toUInt64
+  (((1 : UInt64) <<< 62) + n - 1) / n
 
 /-- `u64::leading_zeros`. -/
 def leadingZeros64 (x : UInt64) : Nat :=

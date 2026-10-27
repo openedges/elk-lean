@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 Bindings to `plugins/org.eclipse.elk.core/c/elk_core_ffi.c`.
 -/

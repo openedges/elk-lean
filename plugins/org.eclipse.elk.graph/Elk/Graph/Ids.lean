@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 # Arena identifiers (org.eclipse.elk.graph)
 

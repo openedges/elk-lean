@@ -1,3 +1,4 @@
+import Elk.Core.Util.FastFloat
 /-!
 # `.elkt` lexer (`org.eclipse.elk.graph.text`, `ElkGraph.xtext` terminals)
 
