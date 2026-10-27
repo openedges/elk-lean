@@ -145,6 +145,10 @@
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
 | F1. force/stress(`org.eclipse.elk.force`, `org.eclipse.elk.stress`) | `alg.force/src/**`(3.1K줄) | sonnet | high | 서브에이전트 F1(worktree) | 진행 중 |
+| F2. spore(`sporeOverlap`, `sporeCompaction`) | `alg.spore/src/**`(2.2K줄) | sonnet | high | 서브에이전트 F2(worktree) | 진행 중 |
+| F3. disco | `alg.disco/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F3(worktree) | 진행 중 |
+| F4. topdownpacking | `alg.topdownpacking/src/**`(1K줄) | sonnet | medium | 서브에이전트 F4(worktree) | 진행 중 |
+| F5. mrtree / radial / rectpacking / vertiflex | `alg.{mrtree,radial,rectpacking,vertiflex}/src/**`(6.5K/3.5K/4.9K/2.3K줄) | opus(mrtree·rectpacking)/sonnet | high | 대기 | |
 
 ### Phase 4 진행 메모 (2026-10-27): 파이프라인 첫 가동
 - `LayeredLayoutProvider`(import → `ElkLayered.doLayout`/`doCompoundLayout` → apply) 등록. `ELK_LEAN_SKIP_UNPORTED=1`이면 미이식 프로세서/phase가 `Unported_*` no-op으로 대체되어 첫 누락 지점까지 trace 비교 가능.
