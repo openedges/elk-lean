@@ -253,6 +253,13 @@ def finishBarycenter (c : BarycenterContext) (li ni : Nat) (nodeName : String) (
 @[inline] def resetVisit (d : BarycenterData) (li ni : Nat) : BarycenterData :=
   d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := floatZero, hasBarycenter := false }
 
+/-- Whether state `(li, ni)` exists. -/
+@[inline] def stateExists (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Bool :=
+  if h : li < states.size then
+    let row := states[li]
+    if h2 : ni < row.size then row[ni].isSome else false
+  else false
+
 /-- The far ends of a captured port in the sweep direction. -/
 @[inline] def farEnds (c : BarycenterContext) (s : CrossMinSnapshot) (pid : Nat) : Array Nat :=
   if c.forward then s.portPredecessors pid else s.portSuccessors pid
@@ -307,20 +314,42 @@ partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat)
     let pids := s.nodePorts flat
     -- `anyPortEndInLayer c s li pids 0` and `countPortEnds c s pids 0 0`, precomputed by the snapshot
     let endsInLayer := s.nodeEndFlag flat &&& (if c.forward then 1 else 2) != 0
-    let d := if endsInLayer then calcSnapPorts c s flat li ni pids 0 (resetVisit d li ni)
+    if !endsInLayer && s.nodeEndFlag flat &&& 4 == 0 && !c.randomTrace && d.random.mockDoubleSequence.isNone &&
+        stateExists d.states li ni then
+      -- no recursion and no associates: reset, the ranks of all far ends in order and
+      -- `finishBarycenter` (with `Random.nextFloat` inlined) in one update of the state
+      let sum := addPortEndRanks c s pids 0 floatZero
+      let degree : Int := 0 + (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
+      if degree > 0 then
+        match d with
+        | ⟨states, random, traces⟩ =>
+          let seed := (random.seed * Random.multiplier + Random.addend) &&& Random.mask
+          let raw := Float.toF32 ((seed >>> 24).toUInt32.toNat.toFloat / TWO_POW_24)
+          let ra := RANDOM_AMOUNT
+          let perturbation := Float.toF32 (Float.toF32 (Float.toF32 raw * ra) - Float.toF32 (ra / floatTwo))
+          let summedWeight := sum + perturbation
+          let barycenterValue := summedWeight / Float.ofInt degree
+          ⟨BarycenterState.updateIn states li ni fun st =>
+              { st with visited := true, degree, summedWeight, barycenterValue, hasBarycenter := true },
+            { random with seed }, traces⟩
       else
-        -- no recursion: the reset state accumulates the ranks of all far ends in order
-        let sum := addPortEndRanks c s pids 0 floatZero
-        let degree : Int := (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
         d.modifyState li ni fun st =>
-          { st with visited := true, degree := 0 + degree, summedWeight := sum, hasBarycenter := false }
-    -- the associates (read only for a node that has any, `nodeEndFlags` bit `2`)
-    let d := if s.nodeEndFlag flat &&& 4 == 0 then d
-      else match c.nodeOfFlat? flat with
-        | some node => calcSnapAssociates c s li ni (c.arena.node node).internal.barycenterAssociates 0 d
-        | none => d
-    let nodeName := if c.crossminTrace then ((c.nodeOfFlat? flat).map c.nodeLabel).getD "<unknown>" else ""
-    finishBarycenter c li ni nodeName d
+          { st with visited := true, degree, summedWeight := sum, hasBarycenter := false }
+    else
+      let d := if endsInLayer then calcSnapPorts c s flat li ni pids 0 (resetVisit d li ni)
+        else
+          -- no recursion: the reset state accumulates the ranks of all far ends in order
+          let sum := addPortEndRanks c s pids 0 floatZero
+          let degree : Int := (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
+          d.modifyState li ni fun st =>
+            { st with visited := true, degree := 0 + degree, summedWeight := sum, hasBarycenter := false }
+      -- the associates (read only for a node that has any, `nodeEndFlags` bit `2`)
+      let d := if s.nodeEndFlag flat &&& 4 == 0 then d
+        else match c.nodeOfFlat? flat with
+          | some node => calcSnapAssociates c s li ni (c.arena.node node).internal.barycenterAssociates 0 d
+          | none => d
+      let nodeName := if c.crossminTrace then ((c.nodeOfFlat? flat).map c.nodeLabel).getD "<unknown>" else ""
+      finishBarycenter c li ni nodeName d
 
 /-- The port loop of `calcSnap` over the captured ports `pids[i:]` of node `flat`. -/
 partial def calcSnapPorts (c : BarycenterContext) (s : CrossMinSnapshot) (flat li ni : Nat) (pids : Array Nat) (i : Nat)

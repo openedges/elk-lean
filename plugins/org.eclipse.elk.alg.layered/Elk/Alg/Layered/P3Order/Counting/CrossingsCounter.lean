@@ -403,7 +403,21 @@ private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Arr
     let ends := s.endIds
     let lo := s.endLo pid
     let hi := s.endHi pid
-    if anyEndAbove positions cur ends lo hi then
+    if hi == lo + 1 then
+      -- a single far end: `rank` then `add` of the same position (the general case ranks all far ends
+      -- before adding any)
+      let e := positions[ends[lo]!]?.getD 0
+      if e > cur then
+        let t := flushRemovals pend 0 np (n + 1).toUSize t
+        let x := asUsize e
+        let crossings := crossings + BinaryIndexedTree.rankPacked t n x
+        let t := if x < n then
+            let b := n + 1 + x
+            BinaryIndexedTree.incLoopPacked (t.set! b (t[b]! + 1)) (n + 1).toUSize (x + 1).toUSize
+          else t
+        countBetweenSnapLoop s positions pids (i + 1) n t pend 0 crossings
+      else countBetweenSnapLoop s positions pids (i + 1) n t pend np crossings
+    else if anyEndAbove positions cur ends lo hi then
       let t := flushRemovals pend 0 np (n + 1).toUSize t
       let crossings := rankEndsPacked positions t n cur ends lo hi crossings
       let t := addEndsPacked positions cur ends lo hi n t

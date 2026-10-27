@@ -787,20 +787,24 @@ partial def portKeys (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (
     portKeys a s useSnap bary ports (i + 1) (sides.push (keySide a s useSnap p)) (barys.push (bary.get! (keyIndex a s useSnap p)))
   else (sides, barys)
 
-/-- `sort_ports(node)` (`sortPortsLock`) with the keys read from the snapshot (`useSnap`, see
-`keySide`) or live. -/
-def sortPortsWith (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (st : BarycenterPortDistributorState)
-    (node : LNodeId) : Array LPortId :=
-  let ports := (a.node node).ports
-  let bary := st.portBarycenter
-  if ports.size < 2 then ports
-  else if portsSorted a s useSnap bary ports (ports.size > 16) then ports
+/-- The sorted list of `sortPortsWith`, or `none` when the current list `ports` is returned as it is. -/
+def sortPortsChanged? (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (bary : FloatArray)
+    (ports : Array LPortId) : Option (Array LPortId) :=
+  if ports.size < 2 then none
+  else if portsSorted a s useSnap bary ports (ports.size > 16) then none
   else
     let (sides, barys) := portKeys a s useSnap bary ports 0 (ByteArray.emptyWithCapacity ports.size)
       (FloatArray.emptyWithCapacity ports.size)
     let perm := keyedStableSort ports.size fun i j =>
       portKeyGreater (sides.get! i) (barys.get! i) (sides.get! j) (barys.get! j)
-    perm.map fun k => ports[k]!
+    some (perm.map fun k => ports[k]!)
+
+/-- `sort_ports(node)` (`sortPortsLock`) with the keys read from the snapshot (`useSnap`, see
+`keySide`) or live. -/
+def sortPortsWith (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (st : BarycenterPortDistributorState)
+    (node : LNodeId) : Array LPortId :=
+  let ports := (a.node node).ports
+  (sortPortsChanged? a s useSnap st.portBarycenter ports).getD ports
 
 /-- `sort_ports(node)` (lock path): the current ports sorted by (side, barycenter, index). The
 stable sort only ever compares an element with one that was before it in the input, so the index
@@ -1042,12 +1046,23 @@ private def distributePortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistr
   let st := distributePortsForSideSnap s a st node flat portIds .north nodeId layerIndex layerSize
   -- Rust `sort_ports(node)` runs while `distribute_ports` holds the snapshot taken out of
   -- `self.snapshot`, so its lock fallback sorts the *current* port order (index tie-break)
-  let sorted := sortPortsWith a s stable st node
   if stable then
-    let idempotent := sorted.size <= 16 || noNaNBarycenterFrom a s true st.portBarycenter sorted 0
-    setPortsSnap st flat s.nNodes node sorted (if idempotent then 2 else 1)
+    let ports := (a.node node).ports
+    match sortPortsChanged? a s true st.portBarycenter ports with
+    | some sorted =>
+      let idempotent := sorted.size <= 16 || noNaNBarycenterFrom a s true st.portBarycenter sorted 0
+      setPortsSnap st flat s.nNodes node sorted (if idempotent then 2 else 1)
+    | none =>
+      -- the list stays: written (with its side cache) only the first time; it is sorted again
+      -- unchanged (up to 16 ports in any case, beyond `portsSorted` excluded NaN)
+      let flag : UInt8 := 2
+      let old := sortedOnceFlag st flat
+      if old == 0 then
+        setPorts node ports
+        return markSortedOnce st flat s.nNodes flag
+      else return if old == flag then st else markSortedOnce st flat s.nNodes flag
   else
-    setPorts node sorted
+    setPorts node (sortPortsWith a s false st node)
     return st
 
 /-- `distribute_ports(node, side, layer_index, layer_size)` (lock path). -/
