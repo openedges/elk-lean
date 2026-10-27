@@ -168,6 +168,7 @@
 
 ### 성능 3차 (2026-10-28): 기준선 갱신
 - 병합본(`c898287`: FastFloat·파서·zmij·force/stress·P5·mrtree/rectpacking·P3·enum 정규화) 재측정, Apple M1 조용한 상태, 20회/워밍업 3회(`tests/perf/report.md`, 기준선 `baseline_lean_api.csv` 갱신): **lean/rust_api 기하평균 6.41배 → 1.66배**. 시나리오별: layered 1.35~2.84배(xlarge 2.84), force/stress 2.1~2.4배(1차 26~32배), mrtree 1.5배, radial 0.34~0.63배(elk-rs보다 빠름), rectpacking 2.2~2.5배, routing/crossmin 1.7~2.0배. 합성 26개 출력은 oracle과 1e-6 안에서 일치.
+- 코퍼스 1,447개(JSON API, 3회 평균): 총 시간 elk-lean 6.07 s vs rust_api 3.53 s(**1.72배**), 모델별 기하평균 1.58배, 최악 2.6배(`pn_countermachine_*`), 최대 모델(`de_trilateration`) 1.8~2.0배.
 - 남은 격차(프로파일): layered는 P3 Forster(`ExceptT/StateM` 할당)·`SweepCopy.ofArena`·P5 직교 라우팅, 모든 알고리즘 공통 `NodeMicroLayout`(1000노드당 2.5~3 ms), rectpacking 배치 스캔 O(n²), force/stress 쌍 루프 자체.
 
 ### 성능 2차 (2026-10-27~31): 공통 경로
