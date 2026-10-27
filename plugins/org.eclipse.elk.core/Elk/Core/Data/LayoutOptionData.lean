@@ -29,6 +29,32 @@ structure LayoutOptionDependency where
 /-- Parser for the string form of an option value. -/
 abbrev OptionParser := String → Option PropValue
 
+/-- Lower/upper bound of a numeric option: plain values are inclusive,
+`ExclusiveBounds.greaterThan/lessThan` are exclusive (Java `ExclusiveBounds`). -/
+inductive OptionBound where
+  | inclusive (v : PropValue)
+  | exclusive (v : PropValue)
+  deriving Inhabited
+
+namespace OptionBound
+def value : OptionBound → PropValue
+  | .inclusive v => v
+  | .exclusive v => v
+def isExclusive : OptionBound → Bool
+  | .exclusive _ => true
+  | .inclusive _ => false
+/-- `ExclusiveBounds.greaterThan(x)`. -/
+def greaterThan (x : Float) : OptionBound := .exclusive (.double x)
+/-- `ExclusiveBounds.lessThan(x)`. -/
+def lessThan (x : Float) : OptionBound := .exclusive (.double x)
+/-- Inclusive double bound. -/
+def atLeast (x : Float) : OptionBound := .inclusive (.double x)
+def atMost (x : Float) : OptionBound := .inclusive (.double x)
+/-- Inclusive integer bound. -/
+def atLeastInt (x : Int) : OptionBound := .inclusive (.int x)
+def atMostInt (x : Int) : OptionBound := .inclusive (.int x)
+end OptionBound
+
 structure LayoutOptionData where
   id : String
   group : String := ""
@@ -40,8 +66,8 @@ structure LayoutOptionData where
   targets : EnumSet LayoutOptionTarget := EnumSet.empty
   dependencies : Array LayoutOptionDependency := #[]
   visibility : LayoutOptionVisibility := .visible
-  lowerBound : Option PropValue := none
-  upperBound : Option PropValue := none
+  lowerBound : Option OptionBound := none
+  upperBound : Option OptionBound := none
   /-- Enum constant names (ENUM / ENUMSET), in ordinal order. -/
   choices : Array String := #[]
   /-- Parser for ENUM / ENUMSET / OBJECT values. -/
@@ -129,7 +155,7 @@ def marginsParser : OptionParser := fun s =>
 def mk' (id : String) (type : LayoutOptionType) (name description : String)
     (targets : Array LayoutOptionTarget) (defaultValue : Option PropValue := none)
     (group : String := "") (visibility : LayoutOptionVisibility := .visible)
-    (lowerBound upperBound : Option PropValue := none) (legacyIds : Array String := #[])
+    (lowerBound upperBound : Option OptionBound := none) (legacyIds : Array String := #[])
     (choices : Array String := #[]) (parser : Option OptionParser := none) : LayoutOptionData :=
   { id, group, legacyIds, defaultValue, type, name, description,
     targets := EnumSet.of targets, visibility, lowerBound, upperBound, choices, parser }

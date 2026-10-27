@@ -4,4 +4,7 @@ import Elk.Core.Util
 import Elk.Core.Math
 import Elk.Core.Options
 import Elk.Core.Data
+import Elk.Core.Labels
+import Elk.Core.Validation
+import Elk.Core.Init
 /-! Root module of the `org.eclipse.elk.core` plugin. Each package has its own aggregator module. -/
