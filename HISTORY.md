@@ -112,6 +112,7 @@
 | P3a. crossing counters + `CrossMinSnapshot` + greedyswitch | `p3order/counting/*`, `cross_min_snapshot.rs`, `intermediate/greedyswitch/*`(3.8K줄) + `tests/p3_order/counting/*`(4.8K줄) | opus | xhigh | 서브에이전트 P3a(worktree) | 완료(`merge P3a`, 184 검사): counting 5종 + `CrossMinSnapshot` + greedyswitch 5종. 스냅샷 경로 미이식(live arena 읽기, P3 중 동치). 카운터는 `LPort.id`/`LNode.id`(레이어 내 인덱스) 전제 |
 | P3b1. port distributors(barycenter node-relative/layer-total, greedy) + `ForsterConstraintResolver` | `p3order/{abstract_barycenter_port_distributor,barycenter_port_distributor,greedy_port_distributor,layer_total_port_distributor,node_relative_port_distributor,forster_constraint_resolver}.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P3b1(worktree) | 완료(`merge P3b1`, 227 검사): `SweepPortDistributor.create crossMinType (random : IO.Ref Random) numLayers`, 상태는 `IO.Ref`로 공유(Rust `Shared*` 대체), 스냅샷/락 두 경로 모두 이식, `BarycenterState`는 여기서 정의(heuristic이 재사용) |
 | P3b2. heuristics(barycenter, model-order barycenter, median) + `SweepCopy` + `RandomTrace` | `p3order/{barycenter_heuristic,model_order_barycenter_heuristic,median_heuristic,sweep_copy,random_trace}.rs`(1.95K줄) | opus | xhigh | 서브에이전트 P3b2(worktree) | 진행 중 |
+| P3c0. `InteractiveCrossingMinimizer` + `NoCrossingMinimizer` | `p3order/{interactive_crossing_minimizer,no_crossing_minimizer}.rs`(0.4K줄) | sonnet | high | 서브에이전트 P3c0(worktree) | 진행 중 |
 | P3c. `GraphInfoHolder` + `LayerSweepTypeDecider` + `LayerSweepCrossingMinimizer` + interactive/no-crossing minimizer | `p3order/{graph_info_holder,layer_sweep_type_decider,layer_sweep_crossing_minimizer,interactive_crossing_minimizer,no_crossing_minimizer}.rs`(3.2K줄) | opus | xhigh | P3b2 이후 | 대기 |
 | P4a. NetworkSimplexPlacer/Simple/Interactive/LinearSegments | `p4nodes/*.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P4a(worktree) | 완료(`merge P4a`, 90 검사): simple/interactive/linearSegments/networkSimplex 등록. 발견: elk-rs `ArenaSync` 수신 엣지 순서는 발견 순서(`LGraphArena.arenaIncomingEdges`로 재현, PORTING §15.1 정정), `Layer.id`=인덱스 전제 |
 | P4b. BK node placer | `p4nodes/bk/*`(2.4K줄) | opus | xhigh | 서브에이전트 P4b(worktree) | 완료(`merge P4b`, 133 검사): BK 7 파일, `NeighborhoodInformation.buildFor`가 `LNode.id`/`Layer.id` 기록 후 read-only 스냅샷으로 배치. oracle trace 재생(ptolemy flattened 294 모델, BK 667 step) 665 일치 — 2건은 같은 포트로 들어오는 두 엣지의 수신 순서를 trace가 담지 않아 재생 불가(`ELK_BK_ORACLE_TRACES`로 재실행 가능) |
@@ -129,7 +130,7 @@
 | I3b. `HierarchicalPortOrthogonalEdgeRouter` | `intermediate/hierarchical_port_orthogonal_edge_router.rs`(1K줄) | opus | 서브에이전트 I3b | 완료(69 검사, worktree 정리로 main에서 직접 작업): 6단계 Rust 순서 그대로, `OrthogonalRoutingGenerator.new .southToNorth/.northToSouth` 사용. Rust 우선: `restore_dummy`는 margin 미계산, 단일 레이어 중복 처리 안 함 |
 | I4. `HorizontalGraphCompactor`(alg.common compaction 사용) | `intermediate/horizontal_graph_compactor.rs`(2.1K줄) | opus | xhigh | 완료(`merge I4`, 2647 검사 중 oracle 재생 62건 전부 1e-9 이내 일치): `Intermediate/Compaction/*`(Java `intermediate.compaction`), CGraph 원점은 `CNodeId` 인덱스 배열. 스플라인 경로는 `SplineRouteAccess` 훅(P5b 후 연결). NS compaction의 포트 이동은 `IO.Ref` 로그 후 재생 |
 | I5b. wrapping(breaking point 4종 + `SingleEdgeGraphWrapper`) | `intermediate/{breaking_point_*,single_edge_graph_wrapper}.rs`(2.3K줄) | opus | high | 완료(`merge I5b`, 125 검사): breaking point 4종 + wrapper + GraphStats/ARD/MSD/CuttingUtils. `LNodeInternals.breakingPointInfo` 추가(값 복사, start 노드 id로 식별). **oracle 특이점**: elk-rs `BreakingPointInserter.applyCuts`는 삽입된 레이어를 포함해 인덱스를 세어 두 번째 이후 cut 위치가 Java와 다름(Rust 따름). TODO: `LEdgeInternals.splineRouteStart`(P5b 후), `BreakingPointProcessor`의 `joinAt` 사본 교체 |
-| P5c. `FinalSplineBendpointsCalculator` | `intermediate/final_spline_bendpoints_calculator.rs`(0.7K줄) | opus | high | 대기(P5b 이후) |
+| P5c. `FinalSplineBendpointsCalculator` + 스플라인 훅 연결(I4 `SplineRouteAccess`, I5b remover SPLINES 분기, I2b NubSpline 사본 제거) | `intermediate/final_spline_bendpoints_calculator.rs`(0.7K줄) | opus | 서브에이전트 P5c(worktree) | 진행 중 |
 
 
 #### Phase 2 (2차) 작업 할당표
@@ -140,7 +141,15 @@
 | CLI `elk convert` + `.elkt` 입력(`layout`) | elk-rs 없음(Java `ElkModelParityExportTest`가 EMF로 변환) | fable(주) | low | 주 에이전트 | 완료: `elk convert [-o] [--pretty] [--sort-keys] [--defaults] IN.elkt`, `layout`이 `.elkt`를 자동 변환. ticket 425 모델(box 강제)이 oracle과 바이트 일치 |
 
 
+### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
+| 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| F1. force/stress(`org.eclipse.elk.force`, `org.eclipse.elk.stress`) | `alg.force/src/**`(3.1K줄) | sonnet | high | 서브에이전트 F1(worktree) | 진행 중 |
+
 ### Phase 4 진행 메모 (2026-10-27): 파이프라인 첫 가동
 - `LayeredLayoutProvider`(import → `ElkLayered.doLayout`/`doCompoundLayout` → apply) 등록. `ELK_LEAN_SKIP_UNPORTED=1`이면 미이식 프로세서/phase가 `Unported_*` no-op으로 대체되어 첫 누락 지점까지 trace 비교 가능.
 - 첫 phase-step trace parity(`tests/tmp/smoke_layered.json`, 3노드 3엣지): step 0~4(`EdgeAndLayerConstraintEdgeReverser`, `GreedyCycleBreaker`, `LayerConstraintPreprocessor`, `NetworkSimplexLayerer`, `LayerConstraintPostprocessor`) **일치**. step 5부터는 P3 `LayerSweepCrossingMinimizer`(P3c)가 없어 그 phase 구성(`LONG_EDGE_SPLITTER`/`PORT_LIST_SORTER`/`IN_LAYER_CONSTRAINT_PROCESSOR`/`LONG_EDGE_JOINER`)이 빠져 드리프트. oracle의 greedy switch 단계도 `LayerSweepCrossingMinimizer`(CrossMinType) 인스턴스이므로 P3c가 `twoSided/oneSidedGreedySwitch` 상수도 등록해야 한다.
 - 도구: `elk batch --trace-dir`, `scripts/run_trace_parity.sh`(코퍼스 trace parity + `summarize_trace_report.py` 히스토그램), `scripts/run_phase_trace_parity.sh`(단일 모델).
+
+- **oracle 특이점(GraphTransformer)**: elk-rs `intermediate_processor_strategy.rs`는 `DirectionPreprocessor`에 `GraphTransformer::new(ToInputDirection)`, `DirectionPostprocessor`에 `ToInternalLtr`를 생성한다(Java와 반대). 이 때문에 `UP`(reading direction)·rotation 변형의 변환 순서가 Java와 다르며, Lean은 oracle을 따르도록 등록을 바꿨다(UP 모델 5건이 step 0에서 드리프트하던 원인). 두 노드 100×20 그래프로 oracle 값을 확인해 테스트로 고정.
+- 코퍼스 trace(2026-10-27, `ELK_LEAN_SKIP_UNPORTED=1`): 1442 모델 비교, 첫 드리프트 히스토그램 LongEdgeSplitter 1407(P3 phase 구성 부재), EdgeAndLayerConstraintEdgeReverser 18(계층 그래프: no-op P3가 hierarchy-aware가 아니어서 자식 그래프가 끝까지 실행됨), SelfLoopPreProcessor 8 / LabelDummyInserter 4(당시 미등록 spline 라우터의 구성 누락 — P5b 연결 후 해소), GraphTransformer 5(위 특이점, 수정됨).
