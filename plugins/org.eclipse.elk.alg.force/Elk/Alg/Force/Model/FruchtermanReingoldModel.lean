@@ -69,9 +69,9 @@ private structure Flat where
   radii : FloatArray
   /-- `PRIORITY` of every particle as a float (`priority as f64`, converted once). -/
   priorities : FloatArray
-  /-- Connection weights (`FGraph::get_connection as f64`, diagonal 0) stored transposed:
-  `connections[v * n + u] = get_connection(u, v)`, so the pair loop of `v` reads one row. -/
-  connections : FloatArray
+  /-- Connection weights (`FGraph::get_connection as f64`, diagonal 0) by row of the affected
+  particle: `connections[v][u] = get_connection(u, v)`, so the pair loop of `v` reads one row. -/
+  connections : Array FloatArray
 
 private def extractFlat (g : FGraph) : Flat := Id.run do
   let particles := g.particleIds
@@ -81,11 +81,12 @@ private def extractFlat (g : FGraph) : Flat := Id.run do
   for p in particles do
     radii := radii.push (g.arena.particleRadius p)
     priorities := priorities.push (Float.ofInt ((g.arena.particleProperties p).getD ForceOptions.PRIORITY 1))
-  let mut connections := FloatArray.mk (Array.replicate (n * n) 0.0)
-  for i in [0:n] do
-    for j in [0:n] do
-      if i == j then continue
-      connections := connections.set! (j * n + i) (Float.ofInt (g.getConnection particles[i]! particles[j]!))
+  let mut connections : Array FloatArray := Array.mkEmpty n
+  for j in [0:n] do
+    let mut row := FloatArray.emptyWithCapacity n
+    for i in [0:n] do
+      row := row.push (if i == j then 0.0 else Float.ofInt (g.getConnection particles[i]! particles[j]!))
+    connections := connections.push row
   return { particles, radii, priorities, connections }
 
 /-- Particle positions as flat coordinate arrays. -/
@@ -136,19 +137,53 @@ position as `vi` (returned as `stop`, `n` when there is none) so the caller can 
 continuing; `check = false` skips that test for `ui` itself (the pair the caller has just separated,
 whose force is computed unconditionally like in Rust).
 
-The loop invariants are parameters (`pxv`, `pyv`, `rv`: position and radius of `vi`; `row = vi * n`,
-the row of `vi` in the transposed connection matrix; `kk = k * k` and `kk0 = k * k * ZERO_FACTOR`, the
-two possible values of `repulsive`; `zero = 0.0`), so the body has no calls, literals or `Nat`
-arithmetic. Every float operation is the one of `repulsive`/`attractive`/`fmax` in the same order:
-`fmax (length - ru - rv) 0.0` is `d0` if `d0 > 0` and `0.0` otherwise (also for NaN), and `repulsive d k`
-is `k * k / d` exactly when `d > 0`. A tail-recursive function with unboxed parameters: a `for` loop
-would box the accumulators in its state tuple. -/
-private partial def scanForces (px py radii priorities connections : FloatArray) (n vi row : USize)
+The loop invariants are parameters (`pxv`, `pyv`, `rv`: position and radius of `vi`; `crow`: the
+connection row of `vi`; `kk = k * k` and `kk0 = k * k * ZERO_FACTOR`, the two possible values of
+`repulsive`; `zero = 0.0`), so the body has no calls, literals or `Nat` arithmetic. Every float
+operation is the one of `repulsive`/`attractive`/`fmax` in the same order: `fmax (length - ru - rv) 0.0`
+is `d0` if `d0 > 0` and `0.0` otherwise (also for NaN), and `repulsive d k` is `k * k / d` exactly when
+`d > 0`. A tail-recursive function with unboxed parameters: a `for` loop would box the accumulators in
+its state tuple. The size equalities make every load unchecked (`n` is `px.usize`). -/
+private partial def scanForcesU (px py radii priorities crow : FloatArray) (hy : py.size = px.size)
+    (hr : radii.size = px.size) (hp : priorities.size = px.size) (hc : crow.size = px.size)
+    (vi : USize) (pxv pyv rv k kk kk0 temperature zero : Float) (ui : USize) (check : Bool)
+    (ax ay : Float) : ScanResult :=
+  if h : ui < px.usize then
+    have hx : ui.toNat < px.size := FloatArray.usize_lt_size h
+    if ui == vi then
+      scanForcesU px py radii priorities crow hy hr hp hc vi pxv pyv rv k kk kk0 temperature zero
+        (ui + 1) true ax ay
+    else
+      let pxu := px.uget ui hx
+      let pyu := py.uget ui (by omega)
+      if check && pxu == pxv && pyu == pyv then ⟨ui, ax, ay⟩
+      else
+        let ddx := pxv - pxu
+        let ddy := pyv - pyu
+        let length := Float.sqrt (ddx * ddx + ddy * ddy)
+        if length == zero then
+          scanForcesU px py radii priorities crow hy hr hp hc vi pxv pyv rv k kk kk0 temperature zero
+            (ui + 1) true ax ay
+        else
+          let d0 := length - radii.uget ui (by omega) - rv
+          let d := if d0 > zero then d0 else zero
+          let repulsive := if d > zero then kk / d else kk0
+          let force := repulsive * priorities.uget ui (by omega)
+          let connection := crow.uget ui (by omega)
+          let force := if connection > zero then force - d * d / k * connection else force
+          let s := force * temperature / length
+          scanForcesU px py radii priorities crow hy hr hp hc vi pxv pyv rv k kk kk0 temperature zero
+            (ui + 1) true (ax + ddx * s) (ay + ddy * s)
+  else ⟨px.usize, ax, ay⟩
+
+/-- `scanForcesU` with checked loads (`0.0` out of bounds, like `get!`), for arrays of different
+sizes; the layout never builds those (all particle arrays have `n` entries). -/
+private partial def scanForcesChecked (px py radii priorities crow : FloatArray) (n vi : USize)
     (pxv pyv rv k kk kk0 temperature zero : Float) (ui : USize) (check : Bool) (ax ay : Float) :
     ScanResult :=
   if ui >= n then ⟨n, ax, ay⟩
   else if ui == vi then
-    scanForces px py radii priorities connections n vi row pxv pyv rv k kk kk0 temperature zero
+    scanForcesChecked px py radii priorities crow n vi pxv pyv rv k kk kk0 temperature zero
       (ui + 1) true ax ay
   else
     let pxu := fgetU px ui zero
@@ -159,18 +194,30 @@ private partial def scanForces (px py radii priorities connections : FloatArray)
       let ddy := pyv - pyu
       let length := Float.sqrt (ddx * ddx + ddy * ddy)
       if length == zero then
-        scanForces px py radii priorities connections n vi row pxv pyv rv k kk kk0 temperature zero
+        scanForcesChecked px py radii priorities crow n vi pxv pyv rv k kk kk0 temperature zero
           (ui + 1) true ax ay
       else
         let d0 := length - fgetU radii ui zero - rv
         let d := if d0 > zero then d0 else zero
         let repulsive := if d > zero then kk / d else kk0
         let force := repulsive * fgetU priorities ui zero
-        let connection := fgetU connections (row + ui) zero
+        let connection := fgetU crow ui zero
         let force := if connection > zero then force - d * d / k * connection else force
         let s := force * temperature / length
-        scanForces px py radii priorities connections n vi row pxv pyv rv k kk kk0 temperature zero
+        scanForcesChecked px py radii priorities crow n vi pxv pyv rv k kk kk0 temperature zero
           (ui + 1) true (ax + ddx * s) (ay + ddy * s)
+
+/-- The pair loop of `vi` from `ui` on (`scanForcesU` when all arrays have `n` entries). -/
+@[inline] private def scanForces (px py radii priorities crow : FloatArray) (n vi : USize)
+    (pxv pyv rv k kk kk0 temperature zero : Float) (ui : USize) (check : Bool) (ax ay : Float) :
+    ScanResult :=
+  if h : py.size = px.size ∧ radii.size = px.size ∧ priorities.size = px.size ∧ crow.size = px.size
+      ∧ px.usize = n then
+    scanForcesU px py radii priorities crow h.1 h.2.1 h.2.2.1 h.2.2.2.1 vi pxv pyv rv k kk kk0
+      temperature zero ui check ax ay
+  else
+    scanForcesChecked px py radii priorities crow n vi pxv pyv rv k kk kk0 temperature zero ui check
+      ax ay
 
 /-- Result of `forceRows`: the displacement arrays and, if a pair at the same position interrupted
 the rows, the particle `vi` whose row stopped together with its partial scan. -/
@@ -188,11 +235,11 @@ private structure RowsResult where
 row's particle: the displacement of each `vi` (accumulated from zero, the reset displacement) is
 stored in `dx`/`dy`. Returns at the first row that needs a separation, which the caller handles in
 the monad (bend points go through the arena) before resuming at the next row. -/
-private partial def forceRows (px py radii priorities connections : FloatArray) (n : USize)
-    (k kk kk0 temperature zero : Float) (vi : USize) (dx dy : FloatArray) : RowsResult :=
+private partial def forceRows (px py radii priorities : FloatArray) (connections : Array FloatArray)
+    (n : USize) (k kk kk0 temperature zero : Float) (vi : USize) (dx dy : FloatArray) : RowsResult :=
   if vi >= n then ⟨dx, dy, n, n, zero, zero⟩
   else
-    let r := scanForces px py radii priorities connections n vi (vi * n) (fgetU px vi zero)
+    let r := scanForces px py radii priorities connections[vi.toNat]! n vi (fgetU px vi zero)
       (fgetU py vi zero) (fgetU radii vi zero) k kk kk0 temperature zero 0 true zero zero
     if r.stop >= n then
       forceRows px py radii priorities connections n k kk kk0 temperature zero (vi + 1)
@@ -275,7 +322,7 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
               py := py.set! v nv.y
               if nu'.x != nv.x || nu'.y != nv.y then separated := true
           -- the separated pair's force is computed without a second same-position test
-          let r := scanForces px py radii priorities connections nu rows.vi (rows.vi * nu)
+          let r := scanForces px py radii priorities connections[v]! nu rows.vi
             (px.get! v) (py.get! v) (radii.get! v) k kk kk0 temperature zero stopU false ax ay
           ax := r.ax
           ay := r.ay
