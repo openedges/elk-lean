@@ -189,14 +189,13 @@ def allEdges (g : ElkGraph) (root : NodeId) : Array EdgeId :=
 /-- `firstEdgeSection(edge, resetSection, removeOtherSections)`: returns the
 first section, creating it if necessary. -/
 def firstEdgeSection (g : ElkGraph) (e : EdgeId) (resetSection removeOtherSections : Bool) : ElkGraph × SectionId :=
-  let g := if removeOtherSections then g.retainLastEdgeSection e else g
-  -- note: Java keeps the *first* section and removes the rest
   match (g.edge e).sections[0]? with
   | some s =>
+    -- Java: reset bend points and start/end location only, then drop the other sections
     let g := if resetSection then g.modifySection s fun x =>
-        { x with startX := 0, startY := 0, endX := 0, endY := 0, bendPoints := #[],
-                 outgoingShape := none, incomingShape := none, outgoingSections := #[], incomingSections := #[] }
+        { x with startX := 0, startY := 0, endX := 0, endY := 0, bendPoints := #[] }
       else g
+    let g := if removeOtherSections then g.retainFirstEdgeSection e else g
     (g, s)
   | none => g.createSection (some e)
 
