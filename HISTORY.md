@@ -175,6 +175,7 @@
 | PL3. layered P3 교차 최소화 성능 | Lean `P3Order/**`(elk-rs `p3_order/**`) | opus | xhigh | 서브에이전트 PL3(worktree) | 진행 중 |
 | PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 완료(`merge PT`): rectpacking 배치 스캔 unboxed 루프·SoA, mrtree `sortByFloat` 키 선계산·로컬 안정 정렬(NaN이면 `rustSortBy` 유지). 자체 구간 rectpacking 7.2→5.1 ms, mrtree 4.8→4.2 ms; 전체로는 4~9%(나머지는 공통 JSON·`NodeMicroLayout`). 무작위 그래프 600개 바이트 일치. 남은 공통 병목: `NodeMicroLayout`(노드 1000개당 2.5~3 ms), `applyVectorChain`, 특수화되지 않은 `stableSort`/`RustSort` |
 | PF1. P5 직교 라우팅, JSON 경로, force/stress 나머지 | Lean `P5Edges/Orthogonal/**`, `Elk/Json/*` | fable(주) | xhigh | 주 에이전트 | 진행 중: `c8cfb52`(P5 conflict/crossing 루프, `ofFloatElk`·`nextDouble` 정확 상수), `815e079`(FR 결과 구조체, stress 힙), `b532257`(JSON 파서 재작성) |
+| A1. Rust 복합 대입 결합 순서 점검(145곳) | elk-rs `a op= b ± c` 지점(스크래치 `compound_audit.tsv`) | sonnet | high | 서브에이전트 A1(worktree) | 진행 중 |
 
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
