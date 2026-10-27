@@ -71,7 +71,7 @@ import com.google.gson.JsonParser;
  * {@code <out_dir>/trace/<model>/step_NNN_<Processor>.json} ({@link ElkPhaseTraceExporter}).
  *
  * <p>Usage: {@code ElkJavaBaseline <models_dir> <out_dir> [--include a,b] [--exclude a,b]
- * [--limit N] [--seed S] [--force-algorithm ID] [--trace true] [--reverse true]}. {@code --reverse}
+ * [--limit N] [--seed S] [--force-algorithm ID] [--trace true] [--reverse true] [--shuffle SEED]}. {@code --reverse} / {@code --shuffle}
  * processes the models in reverse order: ELK iterates some {@code HashMap}/{@code HashSet}s of
  * objects without their own {@code hashCode} (self-loop port sides, partition members, ...), so its
  * result for such a model depends on the identity hash codes handed out before — i.e. on the run.
@@ -116,6 +116,7 @@ public final class ElkJavaBaseline {
         String forceAlgorithm = null;
         boolean trace = false;
         boolean reverse = false;
+        Long shuffleSeed = null;
         for (int i = 2; i + 1 < args.length; i += 2) {
             switch (args[i]) {
             case "--include":
@@ -139,6 +140,9 @@ public final class ElkJavaBaseline {
             case "--reverse":
                 reverse = Boolean.parseBoolean(args[i + 1]);
                 break;
+            case "--shuffle":
+                shuffleSeed = Long.parseLong(args[i + 1]);
+                break;
             default:
                 throw new IllegalArgumentException("unknown argument " + args[i]);
             }
@@ -153,6 +157,9 @@ public final class ElkJavaBaseline {
             // a second run in a different JVM context: identity hash codes (HashMap/HashSet order of
             // objects without their own hashCode) differ, which exposes ELK's context-dependent results
             Collections.reverse(models);
+        }
+        if (shuffleSeed != null) {
+            Collections.shuffle(models, new java.util.Random(shuffleSeed));
         }
         int ok = 0;
         int failed = 0;
