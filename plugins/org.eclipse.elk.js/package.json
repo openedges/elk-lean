@@ -1,0 +1,53 @@
+{
+  "name": "elk-lean",
+  "version": "0.12.0",
+  "private": true,
+  "description": "Eclipse Layout Kernel ported to pure Lean 4 (elk-lean) — elkjs-compatible API with a native Node.js addon and WASM fallback",
+  "license": "EPL-2.0 OR GPL-3.0-or-later",
+  "main": "js/index.js",
+  "browser": "js/index.browser.js",
+  "types": "typings/elk-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./typings/elk-api.d.ts",
+      "browser": "./js/index.browser.js",
+      "default": "./js/index.js"
+    },
+    "./js/*": "./js/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "js/",
+    "dist/wasm/",
+    "dist/wasm-node/",
+    "typings/",
+    "LICENSE.md",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "build:napi": "sh ../../scripts/build_napi.sh",
+    "test": "node --test test/",
+    "test:parity": "node test/parity/run.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "elk-lean-darwin-arm64": "0.12.0",
+    "elk-lean-darwin-x64": "0.12.0",
+    "elk-lean-linux-x64-gnu": "0.12.0",
+    "elk-lean-linux-x64-musl": "0.12.0",
+    "elk-lean-linux-arm64-gnu": "0.12.0",
+    "elk-lean-win32-x64-msvc": "0.12.0"
+  },
+  "keywords": [
+    "elk",
+    "elkjs",
+    "layout",
+    "graph",
+    "lean4",
+    "napi",
+    "wasm"
+  ]
+}

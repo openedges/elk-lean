@@ -1,0 +1,49 @@
+Notices for elk-lean (npm package)
+
+elk-lean is a pure Lean 4 port of the Eclipse Layout Kernel (ELK). This package
+provides an elkjs-compatible JavaScript API over the elk-lean engine (native
+Node.js addon, WASM fallback).
+
+  ELK project home: https://projects.eclipse.org/projects/modeling.elk
+
+Trademarks
+
+Eclipse Layout Kernel is a trademark of the Eclipse Foundation.
+
+Copyright
+
+Copyright (c) 2026 elk-lean contributors.
+
+The layout algorithms, option metadata and graph model are derived from the
+Eclipse Layout Kernel, Copyright (c) 2010-2025 Kiel University and others.
+The JavaScript API (js/elk-api.js, js/elk-worker.js), the TypeScript typings
+(typings/elk-api.d.ts, Copyright (c) 2019 TypeFox and others) and the tests
+ported from elkjs are derived from elkjs (https://github.com/kieler/elkjs),
+Copyright (c) 2017-2025 Kiel University and others. The package layout, the
+native/WASM loaders and the remaining tests are derived from elk-rs
+(https://github.com/openedges/elk-rs), Copyright (c) 2026 openedges.
+
+Declared Project Licenses
+
+This program and the accompanying materials are made available under the
+terms of the Eclipse Public License 2.0 which is available at
+http://www.eclipse.org/legal/epl-2.0.
+
+This Source Code may also be made available under the following Secondary
+Licenses when the conditions for such availability set forth in the Eclipse
+Public License v. 2.0 are satisfied: GPL-3.0 which is available at
+https://www.gnu.org/licenses/gpl-3.0-standalone.html.
+
+SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
+
+Source Code
+
+  https://github.com/eclipse-elk/elk (reference v0.12.0)
+  https://github.com/kieler/elkjs (reference 0.12.0)
+  https://github.com/openedges/elk-rs (reference v0.12.1)
+
+Third-party Content
+
+The native addon statically links the Lean 4 runtime and standard library
+(Apache License 2.0, https://github.com/leanprover/lean4), GMP (GNU LGPL v3)
+and libuv (MIT), as shipped with the Lean toolchain.
