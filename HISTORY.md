@@ -113,8 +113,21 @@
 | P3b/P3c. port distributors + forster(2.9K) → heuristics/type decider/sweep copy(3.0K) → GraphInfoHolder + LayerSweepCrossingMinimizer(2.5K) | `p3order/*` | opus | xhigh | P3a 이후 순차 | 대기 |
 | P4a. NetworkSimplexPlacer/Simple/Interactive/LinearSegments | `p4nodes/*.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P4a(worktree) | 진행 중 |
 | P4b. BK node placer | `p4nodes/bk/*`(2.4K줄) | opus | xhigh | 서브에이전트 P4b(worktree) | 진행 중 |
-| P5a/P5b. orthogonal(+polyline) / splines | `p5edges/**`(6.4K줄) | opus | xhigh | 대기 | 대기 |
-| I1~I8. intermediate 프로세서(≈14분할: 라벨, 셀프루프 2, 계층 포트, 수평 압축, wrapping, long edge/north-south, 제약/파티션/코멘트, graph transformer/end labels/spline bendpoints, model order 등) | `intermediate/**`(28K줄) | opus | xhigh | 대기 | 대기 |
+| P5a. `OrthogonalEdgeRouter`/`PolylineEdgeRouter` + `OrthogonalRoutingGenerator`·direction strategies | `p5edges/{orthogonal_edge_router,polyline_edge_router}.rs`, `p5edges/orthogonal/**`(3.3K줄) | opus | xhigh | 서브에이전트 P5a(worktree) | 진행 중 |
+| P5b. `SplineEdgeRouter` + `splines/*` | `p5edges/{spline_edge_router}.rs`, `p5edges/splines/**`(3.1K줄) | opus | xhigh | 대기 |
+| I6. intermediate long edge/hyperedge/north-south/port side·order/reversed edge restorer | `intermediate/{long_edge_*,hyperedge_dummy_merger,hypernode_processor,north_south_port_*,inverted_port_processor,port_side_processor,port_list_sorter,reversed_edge_restorer}.rs`(2.6K줄) | opus | xhigh | 서브에이전트 I6(worktree) | 진행 중 |
+| I7. intermediate 제약/파티션/코멘트/high-degree/node promotion | `intermediate/{edge_and_layer_constraint_edge_reverser,layer_constraint_*,in_layer_constraint_processor,partition_*,constraints_postprocessor,comment_*,high_degree_node_layering_processor,node_promotion}.rs`(2.9K줄) | opus | xhigh | 서브에이전트 I7(worktree) | 진행 중 |
+| I1. intermediate 라벨(dummy inserter/remover/switcher, management, side selector, end label post/sorter, layer size) | `intermediate/{label_dummy_*,label_management_processor,label_side_selector,end_label_postprocessor,end_label_sorter,layer_size_and_graph_height_calculator}.rs`(2.5K줄) | opus | xhigh | 서브에이전트 I1(worktree) | 진행 중 |
+| I3a. intermediate 계층 포트(constraint/dummy size/position, hierarchical node resizing, interactive external port) | `intermediate/{hierarchical_port_constraint_processor,hierarchical_port_dummy_size_processor,hierarchical_port_position_processor,hierarchical_node_resizing_processor,interactive_external_port_positioner}.rs`(1.5K줄) | opus | high | 서브에이전트 I3a(worktree) | 진행 중 |
+| I8. preserveorder 비교자 + `SortByInputModelProcessor` | `intermediate/preserveorder/*.rs`, `sort_by_input_model_processor.rs`(1.85K줄) | opus | xhigh | 서브에이전트 I8(worktree) | 진행 중 |
+| I5a. `GraphTransformer`/`AlternatingLayerUnzipper`/`SemiInteractiveCrossMinProcessor` | `intermediate/{graph_transformer,alternating_layer_unzipper,semi_interactive_cross_min_processor}.rs`(1.4K줄) | opus | high | 서브에이전트 I5a(worktree) | 진행 중 |
+| I1b. `LabelAndNodeSizeProcessor`(elk-rs 2.7K줄 확장판)/`InnermostNodeMarginCalculator`/`EndLabelPreprocessor`/`NodePlacementRepeater` — `LGraphAdapters`+nodespacing 의존 | `intermediate/{label_and_node_size_processor,innermost_node_margin_calculator,end_label_preprocessor,node_placement_repeater}.rs`(3.2K줄) | opus | xhigh | 대기(N3a·M1 이후) |
+| I2a. self loop 모델(`loops/*`) + pre/post processor + port restorer | `intermediate/loops/*.rs`, `self_loop_{preprocessor,postprocessor,port_restorer}.rs`(1.9K줄) | opus | high | 대기 |
+| I2b. self loop routing(`loops/routing/*`) + `SelfLoopRouter` | `intermediate/loops/routing/*.rs`, `self_loop_router.rs`(2.5K줄) | opus | xhigh | 대기(I2a 이후) |
+| I3b. `HierarchicalPortOrthogonalEdgeRouter` | `intermediate/hierarchical_port_orthogonal_edge_router.rs`(1K줄) | opus | high | 대기(P5a·M1 이후) |
+| I4. `HorizontalGraphCompactor`(alg.common compaction 사용) | `intermediate/horizontal_graph_compactor.rs`(2.1K줄) | opus | xhigh | 대기 |
+| I5b. wrapping(breaking point 4종 + `SingleEdgeGraphWrapper`) | `intermediate/{breaking_point_*,single_edge_graph_wrapper}.rs`(2.3K줄) | opus | high | 대기 |
+| P5c. `FinalSplineBendpointsCalculator` | `intermediate/final_spline_bendpoints_calculator.rs`(0.7K줄) | opus | high | 대기(P5b 이후) |
 
 
 #### Phase 2 (2차) 작업 할당표
