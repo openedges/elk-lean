@@ -1,0 +1,38 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "WEDGE_COMPACTION",
+  "sorter": "NONE",
+  "wedgeCriteria": "NODE_SIZE",
+  "optimizationCriteria": "EDGE_LENGTH",
+  "compactionStepSize": "1"
+ },
+ "children": [
+  {
+   "id": "n1",
+   "width": 13,
+   "height": 17
+  },
+  {
+   "id": "n0",
+   "width": 33,
+   "height": 40,
+   "layoutOptions": {
+    "position": "(34,-36)",
+    "org.eclipse.elk.radial.orderId": "2"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  }
+ ]
+}

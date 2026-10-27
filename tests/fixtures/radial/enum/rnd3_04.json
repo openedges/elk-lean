@@ -1,0 +1,152 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "WEDGE_COMPACTION",
+  "sorter": "NONE",
+  "wedgeCriteria": "NODE_SIZE",
+  "optimizationCriteria": "CROSSING_MINIMIZATION_BY_POSITION",
+  "radius": "150",
+  "spacing.nodeNode": "3",
+  "compactionStepSize": "5"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 61,
+   "height": 47
+  },
+  {
+   "id": "n1",
+   "width": 55,
+   "height": 10,
+   "layoutOptions": {
+    "position": "(-46,26)"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 40,
+   "height": 19,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "2"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 25,
+   "height": 59,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "4"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 34,
+   "height": 12
+  },
+  {
+   "id": "n5",
+   "width": 43,
+   "height": 15,
+   "layoutOptions": {
+    "position": "(35,-48)"
+   }
+  },
+  {
+   "id": "n6",
+   "width": 46,
+   "height": 16,
+   "layoutOptions": {
+    "position": "(-19,51)"
+   }
+  },
+  {
+   "id": "n7",
+   "width": 52,
+   "height": 34,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "1"
+   }
+  },
+  {
+   "id": "n8",
+   "width": 21,
+   "height": 11
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n8"
+   ]
+  }
+ ]
+}

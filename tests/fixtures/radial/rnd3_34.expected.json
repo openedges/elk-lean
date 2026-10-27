@@ -1,0 +1,91 @@
+{
+  "children": [
+    {
+      "height": 23,
+      "id": "n1",
+      "width": 57,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 11,
+      "id": "n2",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "4"
+      },
+      "width": 36,
+      "x": 22.5,
+      "y": 60.42640687119285
+    },
+    {
+      "height": 27,
+      "id": "n0",
+      "width": 10,
+      "x": 56.71320343559643,
+      "y": 31.213203435596427
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 46,
+            "y": 60.42640687119285
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 56.71320343559643,
+            "y": 49.71320343559643
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 52,
+            "y": 35
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 56.71320343559643,
+            "y": 39.71320343559643
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    }
+  ],
+  "height": 83.42640687119285,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "compactionStepSize": "1",
+    "compactor": "NONE",
+    "optimizationCriteria": "NONE",
+    "radius": "30",
+    "sorter": "ID",
+    "spacing.nodeNode": "0",
+    "wedgeCriteria": "LEAF_NUMBER"
+  },
+  "width": 81,
+  "x": 0,
+  "y": 0
+}

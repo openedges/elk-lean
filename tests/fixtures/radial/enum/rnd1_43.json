@@ -1,0 +1,115 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "RADIAL_COMPACTION",
+  "sorter": "NONE",
+  "wedgeCriteria": "LEAF_NUMBER",
+  "optimizationCriteria": "NONE"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 22,
+   "layoutOptions": {
+    "position": "(-43,-10)"
+   }
+  },
+  {
+   "id": "n1",
+   "width": 58,
+   "height": 17
+  },
+  {
+   "id": "n2",
+   "width": 64,
+   "height": 36,
+   "layoutOptions": {
+    "position": "(24,-49)"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 23,
+   "height": 36,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "1"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 59,
+   "height": 18
+  },
+  {
+   "id": "n5",
+   "width": 42,
+   "height": 44,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n6",
+   "width": 15,
+   "height": 34
+  }
+ ],
+ "edges": [
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ]
+}

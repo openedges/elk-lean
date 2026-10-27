@@ -1,0 +1,96 @@
+{
+  "children": [
+    {
+      "height": 46,
+      "id": "n0",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "1"
+      },
+      "width": 36,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 18,
+      "id": "n1",
+      "width": 26,
+      "x": 74.51117294089887,
+      "y": 81.60993604529699
+    },
+    {
+      "height": 45,
+      "id": "n2",
+      "layoutOptions": {
+        "position": "(51,51)"
+      },
+      "width": 10,
+      "x": 140.02234588179772,
+      "y": 123.71987209059404
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 78.20347375479517,
+            "y": 81.60993604529699
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 48,
+            "y": 52.40494581538091
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 140.02234588179772,
+            "y": 141.3851649196549
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 96.81887212700256,
+            "y": 99.60993604529699
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 180.71987209059404,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "compactionStepSize": "2",
+    "compactor": "NONE",
+    "optimizationCriteria": "CROSSING_MINIMIZATION_BY_POSITION",
+    "radius": "80",
+    "rotate": "true",
+    "rotation.outgoingEdgeAngles": "true",
+    "rotation.targetAngle": "-2.373",
+    "sorter": "ID",
+    "wedgeCriteria": "NODE_SIZE"
+  },
+  "width": 162.02234588179772,
+  "x": 0,
+  "y": 0
+}

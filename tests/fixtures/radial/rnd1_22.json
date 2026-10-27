@@ -1,0 +1,82 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "NONE",
+  "sorter": "NONE",
+  "wedgeCriteria": "LEAF_NUMBER",
+  "optimizationCriteria": "CROSSING_MINIMIZATION_BY_POSITION",
+  "centerOnRoot": "true",
+  "radius": "45",
+  "spacing.nodeNode": "30",
+  "compactionStepSize": "5"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 18,
+   "height": 19
+  },
+  {
+   "id": "n1",
+   "width": 28,
+   "height": 11
+  },
+  {
+   "id": "n2",
+   "width": 40,
+   "height": 50,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "4"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 11,
+   "height": 40
+  },
+  {
+   "id": "n4",
+   "width": 14,
+   "height": 58
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ]
+}

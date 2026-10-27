@@ -1,0 +1,227 @@
+{
+  "children": [
+    {
+      "height": 52,
+      "id": "n0",
+      "layoutOptions": {
+        "position": "(7,-13)"
+      },
+      "width": 29,
+      "x": 12,
+      "y": 73.08452130361228
+    },
+    {
+      "height": 17,
+      "id": "n1",
+      "layoutOptions": {
+        "position": "(-52,49)"
+      },
+      "width": 41,
+      "x": -70.08452130361228,
+      "y": 115.30588085360807
+    },
+    {
+      "height": 22,
+      "id": "n2",
+      "layoutOptions": {
+        "position": "(42,-3)"
+      },
+      "width": 51,
+      "x": -23.721359549995803,
+      "y": 12
+    },
+    {
+      "height": 21,
+      "id": "n3",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "0"
+      },
+      "width": 50,
+      "x": -71.13847995832748,
+      "y": 231.14556517375115
+    },
+    {
+      "height": 51,
+      "id": "n4",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "4",
+        "position": "(20,37)"
+      },
+      "width": 69,
+      "x": -142.18729087126786,
+      "y": 160.7267669060166
+    },
+    {
+      "height": 15,
+      "id": "n5",
+      "width": 12,
+      "x": -139.2807255607318,
+      "y": 99.95827430248336
+    },
+    {
+      "height": 14,
+      "id": "n6",
+      "layoutOptions": {
+        "position": "(-31,-4)"
+      },
+      "width": 42,
+      "x": -137.06104387013886,
+      "y": 19.44604134528481
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": -29.084521303612277,
+            "y": 117.1450270808335
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 12,
+            "y": 103.79585689898943
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 5.352757108566168,
+            "y": 34
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 18.052087897944432,
+            "y": 73.08452130361228
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": -46.445536399748256,
+            "y": 231.14556517375115
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": -49.33595180341451,
+            "y": 132.30588085360807
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "sections": [
+        {
+          "endPoint": {
+            "x": -83.95131534007706,
+            "y": 160.7267669060166
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": -57.49651314734254,
+            "y": 132.30588085360807
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n4"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e4",
+      "sections": [
+        {
+          "endPoint": {
+            "x": -127.28072556073181,
+            "y": 108.63019888589007
+          },
+          "id": "e4_s0",
+          "startPoint": {
+            "x": -70.08452130361228,
+            "y": 119.80180519363512
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n5"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e5",
+      "sections": [
+        {
+          "endPoint": {
+            "x": -111.28149965236204,
+            "y": 33.44604134528481
+          },
+          "id": "e5_s0",
+          "startPoint": {
+            "x": -55.38825356805556,
+            "y": 115.30588085360807
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n6"
+      ]
+    }
+  ],
+  "height": 198.16904260722458,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "centerOnRoot": "true",
+    "compactor": "RADIAL_COMPACTION",
+    "optimizationCriteria": "EDGE_LENGTH_BY_POSITION",
+    "radius": "80",
+    "sorter": "NONE",
+    "spacing.nodeNode": "30",
+    "wedgeCriteria": "NODE_SIZE"
+  },
+  "width": 53,
+  "x": 0,
+  "y": 0
+}

@@ -1,0 +1,90 @@
+{
+  "children": [
+    {
+      "height": 31,
+      "id": "n1",
+      "width": 47,
+      "x": 15.279435240878463,
+      "y": 110.97401749946152
+    },
+    {
+      "height": 27,
+      "id": "n2",
+      "width": 37,
+      "x": 22.55887048175684,
+      "y": 212.94803499892305
+    },
+    {
+      "height": 29,
+      "id": "n0",
+      "width": 49,
+      "x": 12,
+      "y": 12
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 38.42603095527189,
+            "y": 110.97401749946152
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 36.830604009115824,
+            "y": 41
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 40.75106674913177,
+            "y": 212.94803499892305
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 39.13283952648502,
+            "y": 141.97401749946152
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 251.94803499892305,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "compactor": "WEDGE_COMPACTION",
+    "optimizationCriteria": "EDGE_LENGTH",
+    "padding": "[top=9,left=0,bottom=28,right=6]",
+    "radius": "100",
+    "rotate": "true",
+    "rotation.computeAdditionalWedgeSpace": "true",
+    "rotation.targetAngle": "1.548",
+    "sorter": "POLAR_COORDINATE",
+    "wedgeCriteria": "LEAF_NUMBER"
+  },
+  "width": 74.27943524087846,
+  "x": 0,
+  "y": 0
+}

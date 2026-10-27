@@ -1,0 +1,313 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "WEDGE_COMPACTION",
+  "sorter": "NONE",
+  "wedgeCriteria": "NODE_SIZE",
+  "optimizationCriteria": "EDGE_LENGTH",
+  "centerOnRoot": "true",
+  "compactionStepSize": "5"
+ },
+ "children": [
+  {
+   "id": "n1",
+   "width": 16,
+   "height": 39,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 45,
+   "height": 56
+  },
+  {
+   "id": "n19",
+   "width": 37,
+   "height": 55,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n9",
+   "width": 32,
+   "height": 48
+  },
+  {
+   "id": "n3",
+   "width": 51,
+   "height": 39
+  },
+  {
+   "id": "n0",
+   "width": 21,
+   "height": 14
+  },
+  {
+   "id": "n7",
+   "width": 40,
+   "height": 57
+  },
+  {
+   "id": "n17",
+   "width": 38,
+   "height": 45,
+   "layoutOptions": {
+    "position": "(18,-53)"
+   }
+  },
+  {
+   "id": "n15",
+   "width": 15,
+   "height": 24
+  },
+  {
+   "id": "n16",
+   "width": 62,
+   "height": 56
+  },
+  {
+   "id": "n10",
+   "width": 38,
+   "height": 17,
+   "layoutOptions": {
+    "position": "(-34,-22)",
+    "org.eclipse.elk.radial.orderId": "5"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 60,
+   "height": 11
+  },
+  {
+   "id": "n13",
+   "width": 69,
+   "height": 51,
+   "layoutOptions": {
+    "position": "(-29,-41)",
+    "org.eclipse.elk.radial.orderId": "3"
+   }
+  },
+  {
+   "id": "n18",
+   "width": 32,
+   "height": 37
+  },
+  {
+   "id": "n11",
+   "width": 31,
+   "height": 30,
+   "layoutOptions": {
+    "position": "(-9,-6)"
+   }
+  },
+  {
+   "id": "n12",
+   "width": 65,
+   "height": 34,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n14",
+   "width": 34,
+   "height": 28
+  },
+  {
+   "id": "n6",
+   "width": 13,
+   "height": 43
+  },
+  {
+   "id": "n8",
+   "width": 51,
+   "height": 23
+  },
+  {
+   "id": "n5",
+   "width": 13,
+   "height": 27,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "5"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e4",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n19"
+   ]
+  },
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n15"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,183 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 50,
+   "height": 50
+  },
+  {
+   "id": "n1",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n2",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n3",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n4",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n5",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n6",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n7",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n8",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n9",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n10",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n11",
+   "width": 60,
+   "height": 40
+  },
+  {
+   "id": "n12",
+   "width": 60,
+   "height": 40
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n12"
+   ]
+  }
+ ]
+}

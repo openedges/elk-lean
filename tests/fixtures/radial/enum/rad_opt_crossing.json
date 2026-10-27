@@ -1,0 +1,99 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "optimizationCriteria": "CROSSING_MINIMIZATION_BY_POSITION",
+  "radius": "100"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30,
+   "layoutOptions": {
+    "position": "(20,50)"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 30,
+   "height": 30,
+   "layoutOptions": {
+    "position": "(-30,40)"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 30,
+   "height": 30,
+   "layoutOptions": {
+    "position": "(40,-20)"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 30,
+   "height": 30,
+   "layoutOptions": {
+    "position": "(-10,-30)"
+   }
+  },
+  {
+   "id": "n5",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  }
+ ]
+}

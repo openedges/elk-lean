@@ -1,0 +1,14 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 44,
+   "height": 22
+  }
+ ],
+ "edges": []
+}

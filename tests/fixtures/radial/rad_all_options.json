@@ -1,0 +1,194 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "sorter": "POLAR_COORDINATE",
+  "compactor": "WEDGE_COMPACTION",
+  "rotate": "true",
+  "centerOnRoot": "true",
+  "optimizationCriteria": "EDGE_LENGTH",
+  "wedgeCriteria": "LEAF_NUMBER",
+  "radius": "75",
+  "compactionStepSize": "2",
+  "rotation.targetAngle": "0.7",
+  "rotation.outgoingEdgeAngles": "true",
+  "spacing.nodeNode": "12"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n2",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n3",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n4",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n5",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n6",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n7",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n8",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n9",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n10",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n11",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n12",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n12"
+   ]
+  }
+ ]
+}

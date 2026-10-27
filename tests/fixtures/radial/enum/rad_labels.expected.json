@@ -1,0 +1,101 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "labels": [
+        {
+          "height": 12,
+          "text": "root node",
+          "width": 50,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "width": 30,
+      "x": 42,
+      "y": 42
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "labels": [
+        {
+          "height": 12,
+          "text": "x",
+          "width": 8,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "width": 30,
+      "x": 12,
+      "y": 72
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 30,
+      "x": 12,
+      "y": 12
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 42,
+            "y": 72
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 72
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 42,
+            "y": 42
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 42
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 114,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]",
+    "nodeSize.constraints": "[NODE_LABELS]"
+  },
+  "width": 104,
+  "x": 0,
+  "y": 0
+}
