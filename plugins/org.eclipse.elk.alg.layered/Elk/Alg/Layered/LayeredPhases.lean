@@ -47,12 +47,21 @@ def register (s : IntermediateProcessorStrategy) (p : LayeredProcessor) : IO Uni
 def isAvailable (s : IntermediateProcessorStrategy) : IO Bool := do
   return ((← registry.get)[ElkEnum.ordinal s]?.bind id).isSome
 
+/-- Development switch `ELK_LEAN_SKIP_UNPORTED=1`: unported processors/phases become no-ops
+(named `Unported_<Java name>`, which the trace comparison flags as the divergence step) instead of
+aborting the layout, so the pipeline can be traced up to the first missing piece. -/
+def skipUnported : IO Bool := do
+  return (← IO.getEnv "ELK_LEAN_SKIP_UNPORTED").isSome
+
 /-- `ILayoutProcessorFactory.create()`: the registered processor, or an
-`UnsupportedOperationException` naming the missing one. -/
+`UnsupportedOperationException` naming the missing one (a no-op with `ELK_LEAN_SKIP_UNPORTED`). -/
 def create (s : IntermediateProcessorStrategy) : IO LayeredProcessor := do
   match (← registry.get)[ElkEnum.ordinal s]?.bind id with
   | some p => return p
-  | none => throw (IO.userError s!"java.lang.UnsupportedOperationException: Layout processor {ElkEnum.javaName s} is not ported yet.")
+  | none =>
+    if ← skipUnported then
+      return { name := s!"Unported_{ElkEnum.javaName s}", process := fun _ _ => pure () }
+    throw (IO.userError s!"java.lang.UnsupportedOperationException: Layout processor {ElkEnum.javaName s} is not ported yet.")
 
 end Intermediate.IntermediateProcessorStrategy
 
@@ -78,7 +87,10 @@ def strategyFactory (phase : LayeredPhases) (enumName : String) (ordinal : Nat) 
     create := do
       match ((← phaseRegistry.get)[ElkEnum.ordinal phase]?.bind (·[ordinal]?)).bind id with
       | some create => create
-      | none => throw (IO.userError s!"java.lang.UnsupportedOperationException: Layout phase {enumName}.{javaName} is not ported yet.") }
+      | none =>
+        if ← Intermediate.IntermediateProcessorStrategy.skipUnported then
+          return noOpPhase s!"Unported_{enumName}.{javaName}"
+        throw (IO.userError s!"java.lang.UnsupportedOperationException: Layout phase {enumName}.{javaName} is not ported yet.") }
 
 end LayeredPhases
 
