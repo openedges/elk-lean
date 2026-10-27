@@ -1,7 +1,11 @@
-import Tests.Framework
-/-! Tests of `org.eclipse.elk.alg.common` (NodeSpacing). Owned by the NodeSpacing porting task. -/
+import Tests.AlgCommon.NodeSpacing.CellSystem
+import Tests.AlgCommon.NodeSpacing.AlgorithmCells
+import Tests.AlgCommon.NodeSpacing.AlgorithmPorts
+import Tests.AlgCommon.NodeSpacing.Calculators
+/-! Tests of `org.eclipse.elk.alg.common.nodespacing`: one file per porting task. -/
 namespace Tests.AlgCommon.NodeSpacing
 
-def suites : Array Tests.Suite := #[]
+def suites : Array Tests.Suite :=
+  CellSystem.suites ++ AlgorithmCells.suites ++ AlgorithmPorts.suites ++ Calculators.suites
 
 end Tests.AlgCommon.NodeSpacing
