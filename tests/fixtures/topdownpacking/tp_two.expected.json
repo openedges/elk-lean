@@ -1,0 +1,99 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h0_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h0_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            }
+          ],
+          "height": 60,
+          "id": "h0",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 120,
+          "x": 12,
+          "y": 10
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h1_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h1_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            },
+            {
+              "height": 10,
+              "id": "h1_l2",
+              "width": 16,
+              "x": 10,
+              "y": 3
+            }
+          ],
+          "height": 60,
+          "id": "h1",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 120,
+          "x": 140,
+          "y": 10
+        }
+      ],
+      "height": 84,
+      "id": "P",
+      "layoutOptions": {
+        "elk.algorithm": "org.eclipse.elk.topdownpacking",
+        "elk.padding": "[top=10,left=12,bottom=14,right=16]",
+        "elk.spacing.nodeNode": "8",
+        "elk.topdown.hierarchicalNodeAspectRatio": "2.0",
+        "elk.topdown.hierarchicalNodeWidth": "120",
+        "elk.topdown.nodeType": "PARALLEL_NODE",
+        "elk.topdownLayout": "true"
+      },
+      "width": 276,
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "height": 108,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.fixed",
+    "elk.topdown.nodeType": "ROOT_NODE",
+    "elk.topdownLayout": "true"
+  },
+  "width": 172,
+  "x": 0,
+  "y": 0
+}
