@@ -94,8 +94,8 @@ def recursiveEngineTests : Suite := suite "core.engine.RecursiveGraphLayoutEngin
     check "test_unknown_algorithm_id: names the algorithm" (has msg "Layout algorithm 'foo.Bar' not found for")
   | none => report "test_unknown_algorithm_id: throws" false "expected an exception"
   -- test_empty_algorithm_id: the default algorithm is resolved to layered.
-  -- TODO(phase4): layered has no provider yet, so the layout itself throws after the resolver ran;
-  -- the state survives the exception because `ElkM` is a `StateRefT`.
+  -- The layered provider runs the real pipeline; while P3 is unported the layout throws after the
+  -- resolver ran (the state survives the exception because `ElkM` is a `StateRefT`).
   let (g, root, _, _) := twoChildGraph none
   let (msg, g) ← ElkM.run (do
     try
@@ -104,8 +104,8 @@ def recursiveEngineTests : Suite := suite "core.engine.RecursiveGraphLayoutEngin
     catch e => return some (toString e)) g
   checkEq "test_empty_algorithm_id: resolved algorithm" ((g.node root).props.get CoreOptions.RESOLVED_ALGORITHM)
     (some "org.eclipse.elk.layered")
-  checkEq "test_empty_algorithm_id: layered unavailable (Lean)" msg
-    (some "org.eclipse.elk.core.UnsupportedConfigurationException: Layout algorithm 'org.eclipse.elk.layered' is not available in this build.")
+  check "test_empty_algorithm_id: layered provider exists (Lean)"
+    (msg.map (·.endsWith "is not available in this build.") != some true)
   -- (Lean) NO_LAYOUT: nothing is resolved or laid out, even for the default algorithm
   let (g, root, _, _) := twoChildGraph none
   let g := g.setNodeProp root CoreOptions.NO_LAYOUT true
@@ -339,7 +339,7 @@ private def fixtureNames (dir : System.FilePath) : IO (Array String) := do
 private def fixtureDir : System.FilePath := "tests/fixtures/core"
 
 /-- Fixtures whose oracle output needs `org.eclipse.elk.layered` (a nested node without an
-algorithm falls back to the default algorithm): skipped while layered has no provider.
+algorithm falls back to the default algorithm): skipped while the layered pipeline is incomplete.
 `box`: node `n4` has a child and no `elk.algorithm`. -/
 private def layeredFixtures : Array String := #["box"]
 
@@ -358,9 +358,9 @@ def fixtureTests : Suite := suite "core.engine.fixtures" do
       let expected ← IO.FS.readFile expectedPath
       match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
       | .error e =>
-        -- TODO(phase4): remove the entry once `org.eclipse.elk.layered` has a provider.
-        if layeredFixtures.contains name && has e "'org.eclipse.elk.layered' is not available" then
-          IO.println s!"SKIP core.engine.fixtures / {name}: needs the layered provider"
+        -- TODO(phase4): remove the entry once the layered pipeline is complete (P3 pending).
+        if layeredFixtures.contains name && has e "is not ported yet" then
+          IO.println s!"SKIP core.engine.fixtures / {name}: needs the complete layered pipeline"
         else
           report s!"{name}: layout" false e
       | .ok actual => checkEq s!"{name}: matches oracle" actual expected

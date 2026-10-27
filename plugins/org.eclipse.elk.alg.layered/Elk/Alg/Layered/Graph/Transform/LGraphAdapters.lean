@@ -40,15 +40,13 @@ Deviation: when a node is both a layer node passing the filter and a comment of 
 node, Rust has two adapters with different flags; the Lean record (keyed by node id) uses the
 layer node's settings.
 
-TODO(self-loop-holder): `InternalProperties.SELF_LOOP_HOLDER` is not a field of
-`LNodeInternals` yet, so the self-loop holder edges (Rust step 3 of `get_incoming_edges` /
-`get_outgoing_edges`: the `SelfLoopEdge`s of the port's `SelfLoopPort`) are not added; this is the
-Rust result for nodes without a holder. Add them in `portEdges` once the self-loop package is ported.
+Self-loop edges (Rust step 3 of `get_incoming_edges`/`get_outgoing_edges`): the `SelfLoopEdge`s of
+the port's `SelfLoopPort` in `LNodeInternals.selfLoopHolder` are appended after the dummy edges.
 -/
 namespace Elk.Alg.Layered.Graph.Transform
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Core.Util.Adapters
-open Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
+open Elk.Alg.Layered.Graph Elk.Alg.Layered.Options Elk.Alg.Layered.Intermediate.Loops LayeredM
 
 /-- The adapters of a layered graph: graph = `LGraphId`, elements by typed arena id. -/
 abbrev LAdapters := GraphAdapters LayeredM LGraphId LNodeId LPortId LLabelId LEdgeId
@@ -175,8 +173,13 @@ def portEdges (incoming transparent : Bool) (p : LPortId) : LayeredM (Array LEdg
     if let some dummy := pt.internal.portDummy then
       let a ← get
       edges := edges ++ (if incoming then a.nodeIncomingEdges dummy else a.nodeOutgoingEdges dummy)
-  -- 3. TODO(self-loop-holder): SELF_LOOP_HOLDER edges (no holder field yet; Rust adds nothing
-  --    for nodes without a holder)
+  -- 3. the self-loop edges of the port's `SelfLoopPort` (`SELF_LOOP_HOLDER` of the owner)
+  if let some owner := pt.owner then
+    if let some holder := (← getNode owner).internal.selfLoopHolder then
+      if let some slPortId := holder.slPortOf? p then
+        let slPort := holder.slPort slPortId
+        for sle in (if incoming then slPort.incomingSLEdges else slPort.outgoingSLEdges) do
+          edges := edges.push (holder.slEdge sle).lEdge
   return edges
 
 /-! ## Factory -/
