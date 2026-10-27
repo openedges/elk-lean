@@ -1,0 +1,213 @@
+{
+  "children": [
+    {
+      "height": 28,
+      "id": "n0",
+      "labels": [
+        {
+          "height": 8,
+          "text": "L",
+          "width": 10,
+          "x": 2,
+          "y": 2
+        }
+      ],
+      "width": 37,
+      "x": 130.72737947056186,
+      "y": 176.67942932349573
+    },
+    {
+      "height": 54,
+      "id": "n1",
+      "labels": [
+        {
+          "height": 8,
+          "text": "L",
+          "width": 10,
+          "x": 2,
+          "y": 2
+        }
+      ],
+      "width": 12,
+      "x": 93.48491964704125,
+      "y": 180.26024926466926
+    },
+    {
+      "height": 62,
+      "id": "n2",
+      "labels": [
+        {
+          "height": 8,
+          "text": "L",
+          "width": 10,
+          "x": 2,
+          "y": 2
+        }
+      ],
+      "ports": [
+        {
+          "height": 4,
+          "id": "n2_p0",
+          "width": 4,
+          "x": 12,
+          "y": 43
+        },
+        {
+          "height": 4,
+          "id": "n2_p1",
+          "width": 4,
+          "x": 2,
+          "y": 25
+        },
+        {
+          "height": 4,
+          "id": "n2_p2",
+          "width": 4,
+          "x": 5,
+          "y": 20
+        }
+      ],
+      "width": 14,
+      "x": 146.82370573789038,
+      "y": 90.40397046330222
+    },
+    {
+      "height": 20,
+      "id": "n3",
+      "width": 30,
+      "x": 167.38901935290895,
+      "y": 230.42188914701634
+    },
+    {
+      "height": 66,
+      "id": "n4",
+      "labels": [
+        {
+          "height": 8,
+          "text": "L",
+          "width": 10,
+          "x": 2,
+          "y": 2
+        }
+      ],
+      "width": 53,
+      "x": 14.952049852933854,
+      "y": 132.80819941173542
+    },
+    {
+      "height": 45,
+      "id": "n5",
+      "labels": [
+        {
+          "height": 8,
+          "text": "L",
+          "width": 10,
+          "x": 2,
+          "y": 2
+        }
+      ],
+      "ports": [
+        {
+          "height": 4,
+          "id": "n5_p0",
+          "width": 4,
+          "x": 42,
+          "y": 32
+        },
+        {
+          "height": 4,
+          "id": "n5_p1",
+          "width": 4,
+          "x": 23,
+          "y": 31
+        },
+        {
+          "height": 4,
+          "id": "n5_p2",
+          "width": 4,
+          "x": 28,
+          "y": 33
+        }
+      ],
+      "width": 42,
+      "x": 159.38901935290895,
+      "y": 275.9547589411237
+    },
+    {
+      "height": 46,
+      "id": "n6",
+      "width": 13,
+      "x": 126.14655952938833,
+      "y": 225.71229911760312
+    },
+    {
+      "height": 14,
+      "id": "n7",
+      "ports": [
+        {
+          "height": 4,
+          "id": "n7_p0",
+          "width": 4,
+          "x": 47,
+          "y": 5
+        }
+      ],
+      "width": 60,
+      "x": 44.613689735280936,
+      "y": 266.58352902936343
+    },
+    {
+      "height": 35,
+      "id": "n8",
+      "width": 8,
+      "x": 66.82370573789038,
+      "y": 16.403970463302215
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "layoutOptions": {
+        "org.eclipse.elk.edge.thickness": "5"
+      },
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 178.82370573789038,
+              "y": 390.40397046330224
+            }
+          ],
+          "endPoint": {
+            "x": 402.82370573789035,
+            "y": 479.40397046330224
+          },
+          "id": "s0",
+          "incomingShape": "n2_p0",
+          "outgoingShape": "n8",
+          "startPoint": {
+            "x": 378.82370573789035,
+            "y": 193.40397046330222
+          }
+        }
+      ],
+      "sources": [
+        "n2_p0"
+      ],
+      "targets": [
+        "n8"
+      ]
+    }
+  ],
+  "height": 521.4245982352063,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+    "org.eclipse.elk.polyomino.fill": "false"
+  },
+  "width": 438.5204985293385,
+  "x": 0,
+  "y": 0
+}

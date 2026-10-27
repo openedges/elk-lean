@@ -1,0 +1,94 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "elk.aspectRatio": "3.71",
+  "org.eclipse.elk.polyomino.fill": "false",
+  "org.eclipse.elk.polyomino.traversalStrategy": "MANHATTAN",
+  "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE_AND_SHAPE"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 198,
+   "y": 355,
+   "width": 65,
+   "height": 39,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 369,
+   "y": 276,
+   "width": 58,
+   "height": 62
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n0"
+   ],
+   "sections": [
+    {
+     "id": "s0",
+     "startPoint": {
+      "x": 363,
+      "y": 139
+     },
+     "endPoint": {
+      "x": 368,
+      "y": 406
+     },
+     "bendPoints": [
+      {
+       "x": 150,
+       "y": 314
+      },
+      {
+       "x": 462,
+       "y": 123
+      }
+     ]
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "1"
+   }
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n1"
+   ],
+   "labels": [
+    {
+     "text": "e",
+     "x": 237,
+     "y": 77,
+     "width": 12,
+     "height": 8
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "7"
+   }
+  }
+ ]
+}

@@ -1,0 +1,157 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "elk.aspectRatio": "1.19",
+  "elk.spacing.componentComponent": "35",
+  "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE_AND_SHAPE"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 48,
+   "y": 197,
+   "width": 16,
+   "height": 15,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 185,
+   "y": 166,
+   "width": 34,
+   "height": 28,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n1_p0",
+     "x": 29,
+     "y": 23,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n1_p1",
+     "x": 14,
+     "y": 15,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n1_p2",
+     "x": 29,
+     "y": 28,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "x_rp_WEST",
+   "sources": [
+    "rp_WEST"
+   ],
+   "targets": [
+    "n0"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_WEST",
+     "startPoint": {
+      "x": 0,
+      "y": 300
+     },
+     "endPoint": {
+      "x": 310,
+      "y": 92
+     },
+     "bendPoints": [
+      {
+       "x": 401,
+       "y": 386
+      },
+      {
+       "x": 429,
+       "y": 83
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "x_rp_EAST",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "rp_EAST"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_EAST",
+     "startPoint": {
+      "x": 594,
+      "y": 300
+     },
+     "endPoint": {
+      "x": 223,
+      "y": 316
+     },
+     "bendPoints": [
+      {
+       "x": 238,
+       "y": 368
+      },
+      {
+       "x": 135,
+       "y": 381
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "width": 600,
+ "height": 600,
+ "ports": [
+  {
+   "id": "rp_WEST",
+   "x": 0,
+   "y": 300,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "WEST"
+   }
+  },
+  {
+   "id": "rp_EAST",
+   "x": 594,
+   "y": 300,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "EAST"
+   }
+  }
+ ]
+}

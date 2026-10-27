@@ -1,0 +1,121 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "id": "b",
+      "x": 50,
+      "y": 0,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "id": "c",
+      "x": 100,
+      "y": 0,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "id": "d",
+      "x": 0,
+      "y": 80,
+      "width": 20,
+      "height": 20
+    }
+  ],
+  "edges": [
+    {
+      "id": "ab",
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 20,
+            "y": 10
+          },
+          "endPoint": {
+            "x": 50,
+            "y": 10
+          },
+          "bendPoints": []
+        }
+      ]
+    },
+    {
+      "id": "bc",
+      "sources": [
+        "b"
+      ],
+      "targets": [
+        "c"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 70,
+            "y": 10
+          },
+          "endPoint": {
+            "x": 100,
+            "y": 10
+          },
+          "bendPoints": []
+        }
+      ]
+    },
+    {
+      "id": "aa",
+      "sources": [
+        "d"
+      ],
+      "targets": [
+        "d"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 20,
+            "y": 90
+          },
+          "endPoint": {
+            "x": 10,
+            "y": 100
+          },
+          "bendPoints": [
+            {
+              "x": 30,
+              "y": 90
+            },
+            {
+              "x": 30,
+              "y": 110
+            },
+            {
+              "x": 10,
+              "y": 110
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

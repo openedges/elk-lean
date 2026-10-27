@@ -1,0 +1,331 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.spacing.componentComponent": "30",
+  "org.eclipse.elk.polyomino.highLevelSort": "CORNER_CASES_THAN_SINGLE_SIDE_LAST"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 113,
+   "y": 369,
+   "width": 76,
+   "height": 51
+  },
+  {
+   "id": "n1",
+   "x": 352,
+   "y": 171,
+   "width": 56,
+   "height": 8,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "x": 459,
+   "y": 151,
+   "width": 69,
+   "height": 16
+  },
+  {
+   "id": "n3",
+   "x": 329,
+   "y": 116,
+   "width": 69,
+   "height": 9
+  },
+  {
+   "id": "n4",
+   "x": 350,
+   "y": 286,
+   "width": 45,
+   "height": 34,
+   "ports": [
+    {
+     "id": "n4_p0",
+     "x": 2,
+     "y": 34,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n4_p1",
+     "x": 15,
+     "y": 24,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "x": 207,
+   "y": 466,
+   "width": 12,
+   "height": 39,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n6",
+   "x": 470,
+   "y": 100,
+   "width": 53,
+   "height": 59,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n6_p0",
+     "x": 48,
+     "y": 43,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "x": 298,
+   "y": 380,
+   "width": 22,
+   "height": 22,
+   "ports": [
+    {
+     "id": "n7_p0",
+     "x": 12,
+     "y": 6,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n8",
+   "x": 326,
+   "y": 186,
+   "width": 48,
+   "height": 62,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n6_p0"
+   ],
+   "targets": [
+    "n1"
+   ],
+   "sections": [
+    {
+     "id": "s0",
+     "startPoint": {
+      "x": 221,
+      "y": 217
+     },
+     "endPoint": {
+      "x": 500,
+      "y": 322
+     },
+     "bendPoints": [
+      {
+       "x": 260,
+       "y": 122
+      },
+      {
+       "x": 32,
+       "y": 231
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n2"
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "6"
+   }
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ],
+   "sections": [
+    {
+     "id": "s2",
+     "startPoint": {
+      "x": 3,
+      "y": 106
+     },
+     "endPoint": {
+      "x": 409,
+      "y": 228
+     },
+     "bendPoints": [
+      {
+       "x": 411,
+       "y": 362
+      },
+      {
+       "x": 245,
+       "y": 274
+      },
+      {
+       "x": 362,
+       "y": 305
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n6"
+   ],
+   "sections": [
+    {
+     "id": "s3",
+     "startPoint": {
+      "x": 16,
+      "y": 186
+     },
+     "endPoint": {
+      "x": 3,
+      "y": 251
+     },
+     "bendPoints": [
+      {
+       "x": 466,
+       "y": 273
+      },
+      {
+       "x": 161,
+       "y": 29
+      }
+     ]
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "3"
+   }
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n6"
+   ],
+   "sections": [
+    {
+     "id": "s4",
+     "startPoint": {
+      "x": 241,
+      "y": 169
+     },
+     "endPoint": {
+      "x": 136,
+      "y": 154
+     },
+     "bendPoints": []
+    }
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n4_p1"
+   ],
+   "sections": [
+    {
+     "id": "s5",
+     "startPoint": {
+      "x": 88,
+      "y": 243
+     },
+     "endPoint": {
+      "x": 51,
+      "y": 196
+     },
+     "bendPoints": [
+      {
+       "x": 159,
+       "y": 43
+      },
+      {
+       "x": 403,
+       "y": 496
+      },
+      {
+       "x": 264,
+       "y": 483
+      }
+     ]
+    }
+   ],
+   "labels": [
+    {
+     "text": "e",
+     "x": 311,
+     "y": 166,
+     "width": 12,
+     "height": 8
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "6"
+   }
+  }
+ ]
+}

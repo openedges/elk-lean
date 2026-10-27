@@ -1,0 +1,52 @@
+{
+  "children": [
+    {
+      "height": 50,
+      "id": "a",
+      "width": 50,
+      "x": 32.59002175023274,
+      "y": 24.33693478858686
+    },
+    {
+      "height": 50,
+      "id": "b",
+      "width": 50,
+      "x": 102.59002175023274,
+      "y": 24.33693478858686
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "ab",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 12.590021750232737,
+            "y": 4.336934788586858
+          },
+          "id": "ab_s0",
+          "startPoint": {
+            "x": 12.590021750232737,
+            "y": 4.336934788586858
+          }
+        }
+      ],
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    }
+  ],
+  "height": 112.67386957717372,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "width": 188.68004350046547,
+  "x": 0,
+  "y": 0
+}

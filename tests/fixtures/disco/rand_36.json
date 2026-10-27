@@ -1,0 +1,455 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "elk.aspectRatio": "2.47",
+  "elk.spacing.componentComponent": "25",
+  "elk.padding": "[top=13,left=1,bottom=10,right=17]"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 19,
+   "y": 38,
+   "width": 16,
+   "height": 13,
+   "ports": [
+    {
+     "id": "n0_p0",
+     "x": 10,
+     "y": 9,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n0_p1",
+     "x": 3,
+     "y": 9,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 409,
+   "y": 244,
+   "width": 70,
+   "height": 38,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "x": 435,
+   "y": 11,
+   "width": 79,
+   "height": 21,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n2_p0",
+     "x": 27,
+     "y": 8,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n2_p1",
+     "x": 41,
+     "y": 4,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "x": 13,
+   "y": 472,
+   "width": 46,
+   "height": 6,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n3_p0",
+     "x": 20,
+     "y": 4,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n3_p1",
+     "x": 34,
+     "y": 6,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n4",
+   "x": 233,
+   "y": 474,
+   "width": 27,
+   "height": 7,
+   "ports": [
+    {
+     "id": "n4_p0",
+     "x": 22,
+     "y": 0,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n4_p1",
+     "x": 7,
+     "y": 4,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "x": 3,
+   "y": 12,
+   "width": 22,
+   "height": 45,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n5_p0",
+     "x": 15,
+     "y": 21,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n5_p1",
+     "x": 12,
+     "y": 13,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n5_p2",
+     "x": 18,
+     "y": 20,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n6",
+   "x": 221,
+   "y": 15,
+   "width": 6,
+   "height": 53,
+   "ports": [
+    {
+     "id": "n6_p0",
+     "x": 0,
+     "y": 42,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n6_p1",
+     "x": 0,
+     "y": 15,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n6_p2",
+     "x": 5,
+     "y": 28,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "x": 99,
+   "y": 372,
+   "width": 63,
+   "height": 55
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n3_p0"
+   ],
+   "sections": [
+    {
+     "id": "s1",
+     "startPoint": {
+      "x": 428,
+      "y": 377
+     },
+     "endPoint": {
+      "x": 309,
+      "y": 225
+     },
+     "bendPoints": [
+      {
+       "x": 125,
+       "y": 50
+      },
+      {
+       "x": 232,
+       "y": 38
+      },
+      {
+       "x": 201,
+       "y": 102
+      }
+     ]
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "5"
+   }
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n4_p1"
+   ],
+   "targets": [
+    "n1"
+   ],
+   "sections": [
+    {
+     "id": "s2",
+     "startPoint": {
+      "x": 139,
+      "y": 422
+     },
+     "endPoint": {
+      "x": 183,
+      "y": 408
+     },
+     "bendPoints": [
+      {
+       "x": 171,
+       "y": 367
+      },
+      {
+       "x": 178,
+       "y": 166
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n4_p1"
+   ]
+  },
+  {
+   "id": "x_rp_WEST",
+   "sources": [
+    "rp_WEST"
+   ],
+   "targets": [
+    "n7"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_WEST",
+     "startPoint": {
+      "x": 0,
+      "y": 300
+     },
+     "endPoint": {
+      "x": 206,
+      "y": 397
+     },
+     "bendPoints": []
+    }
+   ]
+  },
+  {
+   "id": "x_rp_EAST",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "rp_EAST"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_EAST",
+     "startPoint": {
+      "x": 594,
+      "y": 300
+     },
+     "endPoint": {
+      "x": 286,
+      "y": 343
+     },
+     "bendPoints": [
+      {
+       "x": 429,
+       "y": 297
+      },
+      {
+       "x": 74,
+       "y": 218
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "x_rp_NORTH",
+   "sources": [
+    "rp_NORTH"
+   ],
+   "targets": [
+    "n7"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_NORTH",
+     "startPoint": {
+      "x": 300,
+      "y": 0
+     },
+     "endPoint": {
+      "x": 61,
+      "y": 144
+     },
+     "bendPoints": []
+    }
+   ]
+  },
+  {
+   "id": "x_rp_SOUTH",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "rp_SOUTH"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_SOUTH",
+     "startPoint": {
+      "x": 300,
+      "y": 594
+     },
+     "endPoint": {
+      "x": 184,
+      "y": 144
+     },
+     "bendPoints": [
+      {
+       "x": 447,
+       "y": 458
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "width": 600,
+ "height": 600,
+ "ports": [
+  {
+   "id": "rp_WEST",
+   "x": 0,
+   "y": 300,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "WEST"
+   }
+  },
+  {
+   "id": "rp_EAST",
+   "x": 594,
+   "y": 300,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "EAST"
+   }
+  },
+  {
+   "id": "rp_NORTH",
+   "x": 300,
+   "y": 0,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "NORTH"
+   }
+  },
+  {
+   "id": "rp_SOUTH",
+   "x": 300,
+   "y": 594,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "SOUTH"
+   }
+  }
+ ]
+}

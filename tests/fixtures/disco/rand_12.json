@@ -1,0 +1,160 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=3,left=1,bottom=8,right=8]"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 206,
+   "y": 106,
+   "width": 25,
+   "height": 23,
+   "ports": [
+    {
+     "id": "n0_p0",
+     "x": 13,
+     "y": 17,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n0_p1",
+     "x": 18,
+     "y": 6,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n0_p2",
+     "x": 20,
+     "y": 4,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 3,
+   "y": 204,
+   "width": 61,
+   "height": 58,
+   "ports": [
+    {
+     "id": "n1_p0",
+     "x": 57,
+     "y": 14,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n1_p1",
+     "x": 61,
+     "y": 24,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n1_p2",
+     "x": 30,
+     "y": 46,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "x": 106,
+   "y": 313,
+   "width": 51,
+   "height": 26
+  },
+  {
+   "id": "n3",
+   "x": 326,
+   "y": 422,
+   "width": 21,
+   "height": 66,
+   "ports": [
+    {
+     "id": "n3_p0",
+     "x": 5,
+     "y": 0,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n3_p1",
+     "x": 8,
+     "y": 9,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n3_p2",
+     "x": 16,
+     "y": 6,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n4",
+   "x": 89,
+   "y": 187,
+   "width": 33,
+   "height": 69,
+   "ports": [
+    {
+     "id": "n4_p0",
+     "x": 11,
+     "y": 64,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "x": 261,
+   "y": 449,
+   "width": 35,
+   "height": 72
+  },
+  {
+   "id": "n6",
+   "x": 263,
+   "y": 275,
+   "width": 47,
+   "height": 74,
+   "ports": [
+    {
+     "id": "n6_p0",
+     "x": 39,
+     "y": 67,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n6_p1",
+     "x": 9,
+     "y": 46,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n6_p2",
+     "x": 3,
+     "y": 23,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  }
+ ],
+ "edges": []
+}

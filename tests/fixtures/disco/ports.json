@@ -1,0 +1,193 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 50,
+      "ports": [
+        {
+          "id": "a1",
+          "x": 50,
+          "y": 10,
+          "width": 5,
+          "height": 5
+        },
+        {
+          "id": "a2",
+          "x": 50,
+          "y": 30,
+          "width": 5,
+          "height": 5
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "x": 120,
+      "y": 0,
+      "width": 50,
+      "height": 50,
+      "ports": [
+        {
+          "id": "b1",
+          "x": -5,
+          "y": 20,
+          "width": 5,
+          "height": 5
+        }
+      ]
+    },
+    {
+      "id": "c",
+      "x": 120,
+      "y": 80,
+      "width": 50,
+      "height": 50,
+      "ports": [
+        {
+          "id": "c1",
+          "x": -5,
+          "y": 20,
+          "width": 5,
+          "height": 5
+        }
+      ]
+    },
+    {
+      "id": "x",
+      "x": 400,
+      "y": 0,
+      "width": 30,
+      "height": 30,
+      "ports": [
+        {
+          "id": "x1",
+          "x": 30,
+          "y": 10,
+          "width": 5,
+          "height": 5
+        }
+      ]
+    },
+    {
+      "id": "y",
+      "x": 400,
+      "y": 80,
+      "width": 30,
+      "height": 30,
+      "ports": [
+        {
+          "id": "y1",
+          "x": -5,
+          "y": 10,
+          "width": 5,
+          "height": 5
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sources": [
+        "a1"
+      ],
+      "targets": [
+        "b1"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 55,
+            "y": 12
+          },
+          "endPoint": {
+            "x": 115,
+            "y": 22
+          },
+          "bendPoints": []
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "a2"
+      ],
+      "targets": [
+        "c1"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 55,
+            "y": 32
+          },
+          "endPoint": {
+            "x": 115,
+            "y": 102
+          },
+          "bendPoints": [
+            {
+              "x": 85,
+              "y": 32
+            },
+            {
+              "x": 85,
+              "y": 102
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "sources": [
+        "x1"
+      ],
+      "targets": [
+        "y1"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 435,
+            "y": 12
+          },
+          "endPoint": {
+            "x": 395,
+            "y": 92
+          },
+          "bendPoints": [
+            {
+              "x": 450,
+              "y": 12
+            },
+            {
+              "x": 450,
+              "y": 60
+            },
+            {
+              "x": 380,
+              "y": 60
+            },
+            {
+              "x": 380,
+              "y": 92
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

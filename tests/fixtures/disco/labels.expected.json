@@ -1,0 +1,107 @@
+{
+  "children": [
+    {
+      "height": 40,
+      "id": "a",
+      "labels": [
+        {
+          "height": 10,
+          "text": "A",
+          "width": 20,
+          "x": 5,
+          "y": 5
+        }
+      ],
+      "ports": [
+        {
+          "height": 6,
+          "id": "ap",
+          "labels": [
+            {
+              "height": 8,
+              "text": "p",
+              "width": 8,
+              "x": 8,
+              "y": 0
+            }
+          ],
+          "width": 6,
+          "x": 60,
+          "y": 15
+        }
+      ],
+      "width": 60,
+      "x": 11.475984325328483,
+      "y": 20.15866144177616
+    },
+    {
+      "height": 40,
+      "id": "b",
+      "ports": [
+        {
+          "height": 6,
+          "id": "bp",
+          "width": 6,
+          "x": -6,
+          "y": 15
+        }
+      ],
+      "width": 60,
+      "x": 151.47598432532848,
+      "y": 20.15866144177616
+    },
+    {
+      "height": 40,
+      "id": "c",
+      "width": 40,
+      "x": 160.48492700291277,
+      "y": 86.16760411936046
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "labels": [
+        {
+          "height": 10,
+          "text": "edge",
+          "width": 30,
+          "x": 91.47598432532848,
+          "y": 14.158661441776161
+        }
+      ],
+      "sections": [
+        {
+          "bendPoints": [],
+          "endPoint": {
+            "x": 145.47598432532848,
+            "y": 28.15866144177616
+          },
+          "id": "s",
+          "incomingShape": "ap",
+          "outgoingShape": "bp",
+          "startPoint": {
+            "x": 67.47598432532848,
+            "y": 28.15866144177616
+          }
+        }
+      ],
+      "sources": [
+        "ap"
+      ],
+      "targets": [
+        "bp"
+      ]
+    }
+  ],
+  "height": 162.0178853551686,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "width": 246.95196865065697,
+  "x": 0,
+  "y": 0
+}

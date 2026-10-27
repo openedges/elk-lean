@@ -1,0 +1,301 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "elk.aspectRatio": "1.88",
+  "elk.spacing.componentComponent": "15",
+  "org.eclipse.elk.polyomino.fill": "true",
+  "org.eclipse.elk.polyomino.traversalStrategy": "QUADRANTS_MANHATTAN"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 41,
+   "y": 362,
+   "width": 61,
+   "height": 48,
+   "ports": [
+    {
+     "id": "n0_p0",
+     "x": 45,
+     "y": 9,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n0_p1",
+     "x": 55,
+     "y": 43,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n0_p2",
+     "x": 37,
+     "y": 7,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 342,
+   "y": 5,
+   "width": 80,
+   "height": 49
+  },
+  {
+   "id": "n2",
+   "x": 248,
+   "y": 75,
+   "width": 38,
+   "height": 33,
+   "ports": [
+    {
+     "id": "n2_p0",
+     "x": 6,
+     "y": 14,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n2_p1",
+     "x": 24,
+     "y": 22,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n2_p2",
+     "x": 6,
+     "y": 6,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "x": 190,
+   "y": 127,
+   "width": 23,
+   "height": 33
+  },
+  {
+   "id": "n4",
+   "x": 369,
+   "y": 230,
+   "width": 18,
+   "height": 61,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "x": 184,
+   "y": 234,
+   "width": 21,
+   "height": 61,
+   "ports": [
+    {
+     "id": "n5_p0",
+     "x": 21,
+     "y": 54,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n5_p1",
+     "x": 11,
+     "y": 36,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n6",
+   "x": 388,
+   "y": 183,
+   "width": 49,
+   "height": 58,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "x": 153,
+   "y": 30,
+   "width": 68,
+   "height": 23,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n7_p0",
+     "x": 62,
+     "y": 15,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n7_p1",
+     "x": 59,
+     "y": 7,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n8",
+   "x": 455,
+   "y": 353,
+   "width": 73,
+   "height": 10,
+   "ports": [
+    {
+     "id": "n8_p0",
+     "x": 33,
+     "y": 0,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n8_p1",
+     "x": 10,
+     "y": 2,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n9",
+   "x": 80,
+   "y": 253,
+   "width": 11,
+   "height": 70
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n4"
+   ],
+   "sections": [
+    {
+     "id": "s0",
+     "startPoint": {
+      "x": 176,
+      "y": 320
+     },
+     "endPoint": {
+      "x": 340,
+      "y": 355
+     },
+     "bendPoints": [
+      {
+       "x": 110,
+       "y": 210
+      },
+      {
+       "x": 40,
+       "y": 11
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n6"
+   ],
+   "sections": [
+    {
+     "id": "s1",
+     "startPoint": {
+      "x": 275,
+      "y": 375
+     },
+     "endPoint": {
+      "x": 287,
+      "y": 298
+     },
+     "bendPoints": [
+      {
+       "x": 490,
+       "y": 486
+      },
+      {
+       "x": 222,
+       "y": 375
+      }
+     ]
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "6"
+   }
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n3"
+   ],
+   "sections": [
+    {
+     "id": "s2",
+     "startPoint": {
+      "x": 75,
+      "y": 416
+     },
+     "endPoint": {
+      "x": 497,
+      "y": 204
+     },
+     "bendPoints": [
+      {
+       "x": 258,
+       "y": 365
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

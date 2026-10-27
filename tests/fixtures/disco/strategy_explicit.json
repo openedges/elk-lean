@@ -1,0 +1,42 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+    "org.eclipse.elk.disco.componentCompaction.strategy": "POLYOMINO"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 0,
+      "y": 0,
+      "width": 30,
+      "height": 30
+    },
+    {
+      "id": "b",
+      "x": 100,
+      "y": 0,
+      "width": 30,
+      "height": 30
+    },
+    {
+      "id": "c",
+      "x": 0,
+      "y": 100,
+      "width": 30,
+      "height": 30
+    }
+  ],
+  "edges": [
+    {
+      "id": "ab",
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    }
+  ]
+}
