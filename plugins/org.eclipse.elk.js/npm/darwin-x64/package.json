@@ -1,0 +1,22 @@
+{
+  "name": "elk-lean-darwin-x64",
+  "version": "0.12.0",
+  "private": true,
+  "description": "elk-lean native Node.js addon for macOS x64 (Intel)",
+  "license": "EPL-2.0 OR GPL-3.0-or-later",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "elk-lean.darwin-x64.node",
+  "files": [
+    "elk-lean.darwin-x64.node",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
