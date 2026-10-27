@@ -151,8 +151,10 @@
 | C1. `Elk.Core.Util.RustSort`(Rust 1.97 `slice::sort_by` = insertion ≤20 + driftsort 정밀 이식, 비일관 비교자 재현) | `core/src/slice/sort/**`(std) | opus | high | 서브에이전트 C1(worktree) | 진행 중 |
 | F5. vertiflex | `alg.vertiflex/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F5(worktree) | 진행 중 |
 | F6. radial | `alg.radial/src/**`(3.5K줄) | sonnet | high | 서브에이전트 F6(worktree) | 진행 중 |
-| F7a/F7b. mrtree(그래프·importer·intermediate → p1~p4·provider) | `alg.mrtree/src/**`(6.5K줄) | opus | high | 대기 | |
-| F8a/F8b. rectpacking(util·options·p1 → p2·p3·provider) | `alg.rectpacking/src/**`(4.9K줄) | opus | high | 대기 | |
+| F7a. mrtree 기반(옵션·TGraph·importer·components·intermediate·TreeUtil) | `alg.mrtree/src/**` 일부(2.9K줄) | opus | high | 서브에이전트 F7a(worktree) | 진행 중 |
+| F7b. mrtree p1~p4·provider | `alg.mrtree/src/{p1treeify,p2order,p3place,p4route}/**`, `tree_layout_provider.rs`(2.6K줄) | opus | high | F7a 이후 | 대기 |
+| F8a. rectpacking 기반(옵션·util·intermediate·p1 폭 근사) | `alg.rectpacking/src/**` 일부(2.6K줄) | opus | high | 서브에이전트 F8a(worktree) | 진행 중 |
+| F8b. rectpacking p2 packing·p3 whitespace·provider | `alg.rectpacking/src/{p2packing,p3whitespaceelimination}/**`, provider(2.0K줄) | opus | high | F8a 이후 | 대기 |
 - **메타데이터 등록 순서**: `LayoutMetaDataService.addInitHook hook (rank)`로 import 순서와 무관하게 elk-rs `layout_api.rs` 순서(layered 10, disco 20, force 30, mrtree 40, radial 50, rectpacking 60, spore 70, stress 80, vertiflex 90)를 재현. elk-rs·elkjs가 등록하지 않는 topdownpacking(Java ELK에는 있음)은 rank 100으로 맨 뒤에 둔 Lean 확장.
 
 
