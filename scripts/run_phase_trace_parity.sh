@@ -17,5 +17,7 @@ esac
 rm -rf "$OUT/oracle_trace" "$OUT/lean_trace"
 sh "$HERE/scripts/oracle_layout.sh" "$INPUT" "$OUT/oracle.json" "$OUT/oracle_trace" > "$OUT/oracle.log" 2>&1 || echo "oracle failed: $(tail -1 "$OUT/oracle.log")"
 ELK_TRACE_DIR="$OUT/lean_trace" "$LEAN" layout "$INPUT" --pretty --sort-keys -o "$OUT/lean.json" > "$OUT/lean.log" 2>&1 || echo "elk-lean failed: $(tail -1 "$OUT/lean.log")"
-echo "oracle steps: $(ls "$OUT/oracle_trace" 2>/dev/null | wc -l | tr -d ' '), lean steps: $(ls "$OUT/lean_trace" 2>/dev/null | wc -l | tr -d ' ')"
-python3 "$HERE/scripts/compare_phase_traces.py" "$OUT/oracle_trace" "$OUT/lean_trace" "$@" || true
+# the oracle runner nests the steps under <trace_dir>/<model file name>/
+ORACLE_TRACE="$OUT/oracle_trace/$(basename "$INPUT")"
+echo "oracle steps: $(ls "$ORACLE_TRACE" 2>/dev/null | wc -l | tr -d ' '), lean steps: $(ls "$OUT/lean_trace" 2>/dev/null | wc -l | tr -d ' ')"
+python3 "$HERE/scripts/compare_phase_traces.py" "$ORACLE_TRACE" "$OUT/lean_trace" "$@" || true
