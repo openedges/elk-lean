@@ -17,8 +17,9 @@ open Elk.Graph Elk.Core.Util
 
 /-- `HyperEdgeSegmentSplitter` with its `routingGenerator` callbacks. -/
 structure HyperEdgeSegmentSplitter where
-  /-- `routingGenerator.createDependencyIfNecessary(he1, he2)` (returns the critical dependency count). -/
-  createDependencyIfNecessary : SegmentGraph → Nat → Nat → SegmentGraph × Int
+  /-- `routingGenerator.createDependencyIfNecessary(he1, he2)` (the splitter ignores the returned critical
+  dependency count). -/
+  createDependency : SegmentGraph → Nat → Nat → SegmentGraph
   /-- `OrthogonalRoutingGenerator.countCrossings(posis, start, end)`. -/
   countCrossings : Array Float → Float → Float → Int
 
@@ -113,13 +114,15 @@ def rateArea (sp : HyperEdgeSegmentSplitter) (g : SegmentGraph) (segment : Nat) 
   let mut rating : AreaRating := {}
   let seg := g.segment segment
   for d in seg.incomingSegmentDependencies do
-    if let some other := (g.dependency d).source then
-      let otherSeg := g.segment other
+    let sourceCode := g.depSourceCode d
+    if sourceCode != 0 then
+      let otherSeg := g.segment (sourceCode - 1)
       rating := sp.updateConsideringBothOrderings rating split otherSeg
       rating := sp.updateConsideringBothOrderings rating partner otherSeg
   for d in seg.outgoingSegmentDependencies do
-    if let some other := (g.dependency d).target then
-      let otherSeg := g.segment other
+    let targetCode := g.depTargetCode d
+    if targetCode != 0 then
+      let otherSeg := g.segment (targetCode - 1)
       rating := sp.updateConsideringBothOrderings rating split otherSeg
       rating := sp.updateConsideringBothOrderings rating partner otherSeg
   rating := { rating with dependencies := rating.dependencies + 2 }
@@ -204,8 +207,8 @@ def updateDependencies (sp : HyperEdgeSegmentSplitter) (g : SegmentGraph) (segme
   g := (g.createAndAddCritical splitCausing splitPartner).1
   for other in [0:g.segments.size] do
     if other != splitCausing && other != segment && other != splitPartner then
-      g := (sp.createDependencyIfNecessary g other segment).1
-      g := (sp.createDependencyIfNecessary g other splitPartner).1
+      g := sp.createDependency g other segment
+      g := sp.createDependency g other splitPartner
   return g
 
 /-- `split(segment, segments, freeAreas, criticalConflictThreshold)`. -/

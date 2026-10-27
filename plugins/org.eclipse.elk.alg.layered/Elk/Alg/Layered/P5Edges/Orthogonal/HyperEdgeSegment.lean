@@ -61,6 +61,10 @@ structure HyperEdgeSegment where
   splitPartner : Option Nat := none
   /-- `split_by` (segment index). -/
   splitBy : Option Nat := none
+  /-- Port-only field (not in Java/Rust): set by `recomputeExtent` when no connection coordinate is
+  `NaN`, so the sorted lists lie within `[startPosition, endPosition]` (used to skip the conflict and
+  crossing counting of segments far apart, see `OrthogonalRoutingGenerator.createDependency`). -/
+  extentBoundsCoordinates : Bool := false
   deriving Inhabited
 
 namespace HyperEdgeSegment
@@ -97,34 +101,89 @@ def isDummy (s : HyperEdgeSegment) : Bool := s.splitPartner.isSome && s.splitBy.
 unprocessed segments in `HyperEdgeCycleDetector` (Rust `sort_by_key(mark)`). -/
 def compareByMark (a b : HyperEdgeSegment) : Ordering := compare a.mark b.mark
 
+/-- Loop of `insertSorted` from index `idx` (tail recursive). -/
+private partial def insertSortedFrom (list : Array Float) (value : Float) (idx : Nat) : Array Float :=
+  if h : idx < list.size then
+    let existing := list[idx]
+    if (existing - value).abs < Float.epsilon then list
+    else if existing > value then list.insertIdx! idx value
+    else insertSortedFrom list value (idx + 1)
+  else list.push value
+
 /-- Rust `insert_sorted(list, value)`: inserts `value` before the first larger element; nothing is
 inserted when an element differs from `value` by less than `f64::EPSILON`. (Java compares the
 `float` value of the elements with `==`; elk-rs uses this `f64` epsilon test.) -/
-def insertSorted (list : Array Float) (value : Float) : Array Float := Id.run do
-  let mut insertAt := list.size
-  for idx in [0:list.size] do
-    let existing := list[idx]!
-    if (existing - value).abs < Float.epsilon then return list
-    if existing > value then
-      insertAt := idx
-      break
-  return list.insertIdx! insertAt value
+def insertSorted (list : Array Float) (value : Float) : Array Float :=
+  insertSortedFrom list value 0
+
+/-- Start half of Rust `recompute_extent_list(start, end, positions)`: `start` (NaN = unset) widened by
+the first element of the sorted `positions` (`f64::min`). -/
+@[inline] def extentStart (start : Float) (positions : Array Float) : Float :=
+  if h : 0 < positions.size then
+    let first := positions[0]
+    if start.isNaN then first else fmin start first
+  else start
+
+/-- End half of Rust `recompute_extent_list(start, end, positions)`: `stop` (NaN = unset) widened by the
+last element of the sorted `positions` (`f64::max`). -/
+@[inline] def extentEnd (stop : Float) (positions : Array Float) : Float :=
+  if h : 0 < positions.size then
+    let last := positions[positions.size - 1]
+    if stop.isNaN then last else fmax stop last
+  else stop
 
 /-- Rust `recompute_extent_list(start, end, positions)`: widens `[start, stop]` (NaN = unset) by the
 first and last element of the sorted `positions` (`f64::min`/`f64::max`). -/
 def recomputeExtentList (start stop : Float) (positions : Array Float) : Float × Float :=
-  match positions[0]?, positions.back? with
-  | some first, some last =>
-    let start := if start.isNaN then first else fmin start first
-    let stop := if stop.isNaN then last else fmax stop last
-    (start, stop)
-  | _, _ => (start, stop)
+  (extentStart start positions, extentEnd stop positions)
 
-/-- `recomputeExtent()`: start/end coordinate from the incoming and outgoing coordinates. -/
+/-- `recomputeExtent()`: start/end coordinate from the incoming and outgoing coordinates (also sets
+`extentBoundsCoordinates`: without `NaN`s the sorted lists' first and last elements are their
+extremes). -/
 def recomputeExtent (s : HyperEdgeSegment) : HyperEdgeSegment :=
-  let (start, stop) := recomputeExtentList Float.nan Float.nan s.incomingConnectionCoordinates
-  let (start, stop) := recomputeExtentList start stop s.outgoingConnectionCoordinates
-  { s with startPosition := start, endPosition := stop }
+  let start := extentStart (extentStart Float.nan s.incomingConnectionCoordinates) s.outgoingConnectionCoordinates
+  let stop := extentEnd (extentEnd Float.nan s.incomingConnectionCoordinates) s.outgoingConnectionCoordinates
+  let bounded := s.incomingConnectionCoordinates.all (fun x => x == x) &&
+    s.outgoingConnectionCoordinates.all (fun x => x == x)
+  { s with startPosition := start, endPosition := stop, extentBoundsCoordinates := bounded }
+
+/-! ### In-place updaters
+
+The functions below are the element updates of `SegmentGraph.modifySegment`. They are deliberately
+`@[noinline]`: when the update `fun s => { s with … }` is inlined into `Array.modify`, the Lean 4.35
+compiler tests the element for exclusivity *before* `Array.modify` swaps it out of the array, so the
+reuse always fails and every update allocates a fresh 17-field segment (and frees the old one). A
+non-inlined updater receives the swapped-out, unshared element and updates it in place. -/
+
+/-- `add_outgoing_dependency(dep)`: appends dependency `d` to the outgoing list. -/
+@[noinline] def pushOutgoingDependency (d : Nat) (s : HyperEdgeSegment) : HyperEdgeSegment :=
+  { s with outgoingSegmentDependencies := s.outgoingSegmentDependencies.push d }
+
+/-- `add_incoming_dependency(dep)`: appends dependency `d` to the incoming list. -/
+@[noinline] def pushIncomingDependency (d : Nat) (s : HyperEdgeSegment) : HyperEdgeSegment :=
+  { s with incomingSegmentDependencies := s.incomingSegmentDependencies.push d }
+
+/-- Rust `Vec::swap_remove(pos)` (`pos` in bounds): the last element moves into position `pos`. -/
+@[inline] def swapRemoveAt (list : Array Nat) (pos : Nat) : Array Nat :=
+  (list.set! pos list[list.size - 1]!).pop
+
+/-- `swap_remove(pos)` on the outgoing dependency list. -/
+@[noinline] def swapRemoveOutgoingAt (pos : Nat) (s : HyperEdgeSegment) : HyperEdgeSegment :=
+  { s with outgoingSegmentDependencies := swapRemoveAt s.outgoingSegmentDependencies pos }
+
+/-- `swap_remove(pos)` on the incoming dependency list. -/
+@[noinline] def swapRemoveIncomingAt (pos : Nat) (s : HyperEdgeSegment) : HyperEdgeSegment :=
+  { s with incomingSegmentDependencies := swapRemoveAt s.incomingSegmentDependencies pos }
+
+/-- Stores the results of a `HyperEdgeCycleDetector` run (mark and the four weights). -/
+@[noinline] def setCycleData (mark inWeight criticalInWeight outWeight criticalOutWeight : Int) (s : HyperEdgeSegment) :
+    HyperEdgeSegment :=
+  { s with mark := mark, inDepWeight := inWeight, criticalInDepWeight := criticalInWeight,
+           outDepWeight := outWeight, criticalOutDepWeight := criticalOutWeight }
+
+/-- Stores the results of `topologicalNumbering` (routing slot and the in/out weights). -/
+@[noinline] def setNumberingData (routingSlot inWeight outWeight : Int) (s : HyperEdgeSegment) : HyperEdgeSegment :=
+  { s with routingSlot := routingSlot, inDepWeight := inWeight, outDepWeight := outWeight }
 
 /-- Rust `get_port_position_on_hyper_node_arena` / `get_port_position_on_hyper_node`
 (Java `routingStrategy.getPortPositionOnHyperNode(port)`): the port's absolute anchor coordinate

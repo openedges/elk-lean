@@ -23,52 +23,41 @@ open BaseRoutingDirectionStrategy
 def portPositionOnHyperNode (a : LGraphArena) (port : LPortId) : Float :=
   HyperEdgeSegment.portPositionOnHyperNode a .westToEast port
 
-/-- The bend points of one edge leaving `segment` (Rust inner loop body of `calculate_bend_points`). -/
-private def routeEdge (g : SegmentGraph) (segment : HyperEdgeSegment) (edge : LEdgeId) (sourceY targetY segmentX startPos
-    edgeSpacing : Float) (created : Std.HashSet KVector) : LayeredM (Std.HashSet KVector) := do
-  let mut created := created
-  let mut currentX := segmentX
-  let mut currentSegment : Option HyperEdgeSegment := none
-  let bend : KVector := ⟨currentX, sourceY⟩
-  addBendPoint edge bend
-  created ← addJunctionPointIfNecessary created edge segment bend true
-  if let some partnerIdx := segment.splitPartner then
+/-- The bend and junction points of one edge leaving `segment` (Rust inner loop body of
+`calculate_bend_points`): the segment's slot on the source `y`, the detour over the split partner's
+slot when the segment was split, and the target `y`. -/
+private def routeEdge (g : SegmentGraph) (segment : HyperEdgeSegment) (sourceY targetY segmentX startPos
+    edgeSpacing : Float) (created : Std.HashSet KVector) : EdgeRoute :=
+  let r : EdgeRoute := { created }
+  let r := r.addPoint segment ⟨segmentX, sourceY⟩ true
+  match segment.splitPartner with
+  | some partnerIdx =>
     let splitPartner := g.segment partnerIdx
     let splitY := splitPartner.incomingConnectionCoordinates[0]?.getD sourceY
-    let bend : KVector := ⟨currentX, splitY⟩
-    addBendPoint edge bend
-    created ← addJunctionPointIfNecessary created edge segment bend true
-    currentX := startPos + splitPartner.routingSlot.toFloat * edgeSpacing
-    currentSegment := some splitPartner
-    let bend : KVector := ⟨currentX, splitY⟩
-    addBendPoint edge bend
-    created ← addJunctionPointIfNecessary created edge splitPartner bend true
-  let bend : KVector := ⟨currentX, targetY⟩
-  addBendPoint edge bend
-  match currentSegment with
-  | some splitPartner => created ← addJunctionPointIfNecessary created edge splitPartner bend true
-  | none => created ← addJunctionPointIfNecessary created edge segment bend true
-  return created
+    let r := r.addPoint segment ⟨segmentX, splitY⟩ true
+    let currentX := startPos + Float.ofInt splitPartner.routingSlot * edgeSpacing
+    let r := r.addPoint splitPartner ⟨currentX, splitY⟩ true
+    r.addPoint splitPartner ⟨currentX, targetY⟩ true
+  | none => r.addPoint segment ⟨segmentX, targetY⟩ true
 
 /-- `calculateBendPoints(segment, startPos, edgeSpacing)`: for every port of the segment (in order) and
-every outgoing edge whose end points differ by more than `TOLERANCE` in `y`: a bend point at the
-segment's slot on the source `y`, the detour over the split partner's slot when the segment was split,
-and a bend point on the target `y`. Dummy segments (split partners) add nothing. -/
+every outgoing edge whose end points differ by more than `TOLERANCE` in `y`, the points of
+`routeEdge`. Dummy segments (split partners) add nothing. -/
 def calculateBendPoints (g : SegmentGraph) (segmentIdx : Nat) (startPos edgeSpacing : Float) (scope : ArenaScope)
     (created : Std.HashSet KVector) : LayeredM (Std.HashSet KVector) := do
   let segment := g.segment segmentIdx
   if segment.isDummy then return created
   let mut created := created
-  let segmentX := startPos + segment.routingSlot.toFloat * edgeSpacing
+  let segmentX := startPos + Float.ofInt segment.routingSlot * edgeSpacing
   for port in segment.ports do
-    let (sourceAnchor, outgoingEdges, portInArena) ← sourcePortData scope port
+    let (sourceAnchor, outgoingEdges, portInArena) ← LayeredM.withArena (sourcePortData · scope port)
     let sourceY := sourceAnchor.y
     for edge in outgoingEdges do
-      let (isSelfLoop, targetAnchor) ← edgeTargetData portInArena port edge
+      let (isSelfLoop, targetAnchor) ← LayeredM.withArena (edgeTargetData · portInArena port edge)
       if isSelfLoop then continue
       let targetY := targetAnchor.y
       if (sourceY - targetY).abs > OrthogonalRoutingGenerator.TOLERANCE then
-        created ← routeEdge g segment edge sourceY targetY segmentX startPos edgeSpacing created
+        created ← applyRoute edge (routeEdge g segment sourceY targetY segmentX startPos edgeSpacing created)
   return created
 
 /-- The strategy (`new WestToEastRoutingStrategy()`). -/
