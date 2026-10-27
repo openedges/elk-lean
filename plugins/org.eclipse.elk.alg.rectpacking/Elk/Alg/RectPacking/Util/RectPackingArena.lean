@@ -200,32 +200,42 @@ its `(width, height)`: the first borrowed child (the notifying block or one of
 update (Rust "defer"). -/
 def notifyAboutNodeChange (row : RectRowId) (lockedChildFallback : Option (Float × Float))
     (self? : Option BlockId := none) : RectPackingM Unit := do
-  let r ← getRow row
-  let borrowed ← borrowedBlocks
-  let mut totalStackWidth : Float := 0.0
-  let mut newMaxHeight : Float := Float.negInf
-  let mut fallback := lockedChildFallback
-  let mut index := 0
-  for child in r.children do
-    let locked : Bool := self? == some child || borrowed.contains child
-    let mut childWidth : Float := 0.0
-    let mut childHeight : Float := 0.0
-    if locked then
-      match fallback with
-      | some (w, h) =>
-        childWidth := w
-        childHeight := h
-        fallback := none
-      | none => return
-    else
-      let b ← getBlock child
-      childWidth := b.width
-      childHeight := b.height
-    totalStackWidth := totalStackWidth + (childWidth + (if index > 0 then r.nodeNodeSpacing else 0.0))
-    newMaxHeight := fmax newMaxHeight childHeight
-    index := index + 1
-  if newMaxHeight == Float.negInf then newMaxHeight := 0.0
-  modifyRow row fun x => { x with width := totalStackWidth, height := newMaxHeight }
+  let a ← getThe RectPackingArena
+  let r := a.rows[row.idx]!
+  let (hasFallback, fallbackWidth, fallbackHeight) := match lockedChildFallback with
+    | some (w, h) => (true, w, h)
+    | none => (false, 0.0, 0.0)
+  let (hasSelf, selfIdx) := match self? with
+    | some b => (true, b.idx)
+    | none => (false, 0)
+  let res := notifyLoop a.blocks r.children a.borrowedBlocks hasSelf selfIdx r.nodeNodeSpacing 0
+    hasFallback fallbackWidth fallbackHeight 0.0 Float.negInf
+  match res with
+  | none => return
+  | some (totalStackWidth, newMaxHeight) =>
+    let newMaxHeight := if newMaxHeight == Float.negInf then 0.0 else newMaxHeight
+    modifyRow row fun x => { x with width := totalStackWidth, height := newMaxHeight }
+where
+  /-- The child loop (tail recursive, unboxed state; the arena is not modified while it runs).
+  `none` is the Rust "defer" (a second borrowed child). -/
+  notifyLoop (blocks : Array Block) (children borrowed : Array BlockId) (hasSelf : Bool) (selfIdx : Nat)
+      (nodeNodeSpacing : Float) (index : Nat) (hasFallback : Bool) (fallbackWidth fallbackHeight : Float)
+      (totalStackWidth newMaxHeight : Float) : Option (Float × Float) :=
+    if h : index < children.size then
+      let child := children[index]
+      let spacing := if index > 0 then nodeNodeSpacing else 0.0
+      if (hasSelf && child.idx == selfIdx) || borrowed.contains child then
+        if hasFallback then
+          notifyLoop blocks children borrowed hasSelf selfIdx nodeNodeSpacing (index + 1) false
+            fallbackWidth fallbackHeight (totalStackWidth + (fallbackWidth + spacing))
+            (fmax newMaxHeight fallbackHeight)
+        else none
+      else
+        let b := blocks[child.idx]!
+        notifyLoop blocks children borrowed hasSelf selfIdx nodeNodeSpacing (index + 1) hasFallback
+          fallbackWidth fallbackHeight (totalStackWidth + (b.width + spacing)) (fmax newMaxHeight b.height)
+    else some (totalStackWidth, newMaxHeight)
+  termination_by children.size - index
 
 /-- Rust drops the last strong reference to the row (it leaves the phase's `rows` vector and
 `rows_storage`): `Weak` upgrades of `Block.parent_row` fail from now on. -/

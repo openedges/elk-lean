@@ -148,6 +148,78 @@ def setLocation (b : BlockId) (x y : Float) : RectPackingM Unit := do
   let rows := blk.rows.map fun row => { row with x := row.x + xChange, y := row.y + yChange }
   setBlock b { blk with rows, x, y }
 
+/-- The size loop of `place_rects_in_internal` without placing (tail recursive, unboxed state):
+the final `(current_width, current_height)`. -/
+private def boundsLoop (g : ElkGraph) (children : Array NodeId) (nns width : Float) (i index : Nat)
+    (currentX currentWidth currentHeight maxHeightInRow widthInRow : Float) : Float × Float :=
+  if h : i < children.size then
+    let n := g.node children[i]
+    let rectWidth := n.width
+    let rectHeight := n.height
+    let newRow := currentX + rectWidth + (if index > 0 then nns else 0.0) > width && maxHeightInRow > 0.0
+    let currentX := if newRow then 0.0 else currentX
+    let currentWidth := if newRow then fmax currentWidth widthInRow else currentWidth
+    let currentHeight := if newRow then currentHeight + (maxHeightInRow + nns) else currentHeight
+    let maxHeightInRow := if newRow then 0.0 else maxHeightInRow
+    let widthInRow := if newRow then 0.0 else widthInRow
+    let index := if newRow then 0 else index
+    let spacing := if index > 0 then nns else 0.0
+    boundsLoop g children nns width (i + 1) (index + 1) (currentX + (rectWidth + spacing))
+      currentWidth currentHeight (fmax maxHeightInRow rectHeight) (widthInRow + (rectWidth + spacing))
+  else (fmax currentWidth widthInRow, currentHeight + maxHeightInRow)
+  termination_by children.size - i
+
+/-- Result of `placeLoop`. -/
+private structure PlaceResult where
+  graph : ElkGraph
+  rows : Array BlockRow
+  currentWidth : Float
+  currentHeight : Float
+
+/-- The placing loop of `place_rects_in_internal` on the (uniquely owned) graph: moves the
+rectangles like `BlockRow.addRectangle` and builds the block rows (tail recursive, unboxed
+state). -/
+private def placeLoop (g : ElkGraph) (children : Array NodeId) (bx nns width : Float)
+    (rows : Array BlockRow) (row : Nat) (i index : Nat)
+    (currentX currentY currentWidth currentHeight maxHeightInRow widthInRow : Float) : PlaceResult :=
+  if h : i < children.size then
+    let rect := children[i]
+    let n := g.node rect
+    let rectWidth := n.width
+    let rectHeight := n.height
+    let newRow := currentX + rectWidth + (if index > 0 then nns else 0.0) > width && maxHeightInRow > 0.0
+    let currentX := if newRow then 0.0 else currentX
+    let currentY := if newRow then currentY + (maxHeightInRow + nns) else currentY
+    let currentWidth := if newRow then fmax currentWidth widthInRow else currentWidth
+    let currentHeight := if newRow then currentHeight + (maxHeightInRow + nns) else currentHeight
+    let maxHeightInRow := if newRow then 0.0 else maxHeightInRow
+    let widthInRow := if newRow then 0.0 else widthInRow
+    let row := if newRow then row + 1 else row
+    let rows := if newRow then rows.push (BlockRow.new bx currentY nns) else rows
+    let index := if newRow then 0 else index
+    let spacing := if index > 0 then nns else 0.0
+    let widthInRow := widthInRow + (rectWidth + spacing)
+    let maxHeightInRow := fmax maxHeightInRow rectHeight
+    -- `BlockRow.addRectangle rows[row] rect`
+    let (g, rows) :=
+      if row < rows.size then
+        let r := rows[row]!
+        let offset := if r.rects.isEmpty then 0.0 else r.nodeNodeSpacing
+        let rx := r.x + r.width + offset
+        let ry := r.y
+        let g := g.modifyNode rect fun n => { n with x := rx, y := ry }
+        let rows := rows.modify row fun r =>
+          { r with height := fmax r.height rectHeight, width := r.width + (rectWidth + offset),
+                   rects := r.rects.push rect }
+        (g, rows)
+      else (g, rows)
+    placeLoop g children bx nns width rows row (i + 1) (index + 1) (currentX + (rectWidth + spacing))
+      currentY currentWidth currentHeight maxHeightInRow widthInRow
+  else
+    { graph := g, rows, currentWidth := fmax currentWidth widthInRow,
+      currentHeight := currentHeight + maxHeightInRow }
+  termination_by children.size - i
+
 /-- `place_rects_in_internal(width, place_rects)` on a block value: lays the children out in
 rows of at most `width` (a new row starts when the next rectangle would exceed the width and the
 current row is not empty). With `placeRects` the rectangles are moved, the block rows rebuilt and
@@ -155,42 +227,16 @@ the block's width/height set (the caller stores the block and notifies the paren
 nothing changes. Returns the updated block and the bounds `(x, y, width, height)`. -/
 def placeRectsInInternal (blk : Block) (width : Float) (placeRects : Bool) : ElkM (Block × ElkRectangle) := do
   let nns := blk.nodeNodeSpacing
-  let mut currentX : Float := 0.0
-  let mut currentY := blk.y
-  let mut currentWidth : Float := 0.0
-  let mut currentHeight : Float := 0.0
-  let mut maxHeightInRow : Float := 0.0
-  let mut widthInRow : Float := 0.0
-  let mut row := 0
-  let mut rows : Array BlockRow := if placeRects then #[BlockRow.new blk.x blk.y nns] else #[]
-  let mut index := 0
-  for rect in blk.children do
-    let n ← ElkM.getNode rect
-    let rectWidth := n.width
-    let rectHeight := n.height
-    if currentX + rectWidth + (if index > 0 then nns else 0.0) > width && maxHeightInRow > 0.0 then
-      currentX := 0.0
-      currentY := currentY + (maxHeightInRow + nns)
-      currentWidth := fmax currentWidth widthInRow
-      currentHeight := currentHeight + (maxHeightInRow + nns)
-      maxHeightInRow := 0.0
-      widthInRow := 0.0
-      if placeRects then
-        row := row + 1
-        rows := rows.push (BlockRow.new blk.x currentY nns)
-      index := 0
-    widthInRow := widthInRow + (rectWidth + (if index > 0 then nns else 0.0))
-    maxHeightInRow := fmax maxHeightInRow rectHeight
-    if placeRects then
-      if h : row < rows.size then
-        let r ← BlockRow.addRectangle rows[row] rect
-        rows := rows.set! row r
-    currentX := currentX + (rectWidth + (if index > 0 then nns else 0.0))
-    index := index + 1
-  currentWidth := fmax currentWidth widthInRow
-  currentHeight := currentHeight + maxHeightInRow
-  let blk := if placeRects then { blk with rows, width := currentWidth, height := currentHeight } else blk
-  return (blk, ElkRectangle.ofValues blk.x blk.y currentWidth currentHeight)
+  if placeRects then
+    let (rows, currentWidth, currentHeight) ← modifyGet fun g =>
+      let ⟨g, rows, currentWidth, currentHeight⟩ := placeLoop g blk.children blk.x nns width
+        #[BlockRow.new blk.x blk.y nns] 0 0 0 0.0 blk.y 0.0 0.0 0.0 0.0
+      ((rows, currentWidth, currentHeight), g)
+    let blk := { blk with rows, width := currentWidth, height := currentHeight }
+    return (blk, ElkRectangle.ofValues blk.x blk.y currentWidth currentHeight)
+  else
+    let (currentWidth, currentHeight) := boundsLoop (← get) blk.children nns width 0 0 0.0 0.0 0.0 0.0 0.0
+    return (blk, ElkRectangle.ofValues blk.x blk.y currentWidth currentHeight)
 
 /-- `place_rects_in_width_height(width, height, false)`: whether the children fit into
 `width × height` (computed on a copy, nothing moves). -/
