@@ -28,14 +28,9 @@ Slots: before phase 3 (`SORT_BY_INPUT_ORDER_OF_MODEL`), after `LongEdgeSplitter`
   also stores `null`).
 * The previous layer of layer `0` is a copy of its unsorted node list (Java uses the layer itself).
 
-## `TARGET_NODE_MODEL_ORDER` storage (TODO)
-Java/Rust store `TARGET_NODE_MODEL_ORDER` on the **node**, but `InternalProperties.lean` currently
-has the typed field on `LPortInternals`. Until the field is moved to `LNodeInternals`
-(`targetNodeModelOrder : Option (Array (LNodeId × Int)) := none`), `getTargetNodeModelOrder` /
-`setTargetNodeModelOrder` keep the cache in the node's property map under the Java property id
-`targetNode.modelOrder` (pairs flattened into an `intList`). The cache is semantically required:
-`LayerSweepCrossingMinimizer` calls `longEdgeTargetNodePreprocessing` again after
-`NorthSouthPortPreprocessor` changed the graph and must get the map computed here.
+## `TARGET_NODE_MODEL_ORDER` storage
+
+The map is the typed field `LNodeInternals.targetNodeModelOrder` (Java/Rust keep it on the node).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -44,30 +39,13 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Options Elk.Alg.Laye
 
 namespace SortByInputModelProcessor
 
-/-- Stand-in property for the node-level `InternalProperties.TARGET_NODE_MODEL_ORDER` (see the module
-doc; remove when `LNodeInternals.targetNodeModelOrder` exists). -/
-def TARGET_NODE_MODEL_ORDER_STANDIN : Property (Array Int) := Property.mk' "targetNode.modelOrder"
-
-/-- Flattens `(node, order)` pairs into `[node.idx, order, …]`. -/
-def encodeTargetNodeModelOrder (m : Array (LNodeId × Int)) : Array Int :=
-  m.foldl (fun acc (n, o) => (acc.push (n.idx : Int)).push o) #[]
-
-/-- Inverse of `encodeTargetNodeModelOrder`. -/
-def decodeTargetNodeModelOrder (flat : Array Int) : Array (LNodeId × Int) := Id.run do
-  let mut out : Array (LNodeId × Int) := #[]
-  let mut i := 0
-  while i + 1 < flat.size do
-    out := out.push (⟨(flat[i]!).toNat⟩, flat[i + 1]!)
-    i := i + 2
-  return out
-
-/-- `node.getProperty(InternalProperties.TARGET_NODE_MODEL_ORDER)` (`none` = not set). -/
+/-- `node.getProperty(InternalProperties.TARGET_NODE_MODEL_ORDER)`. -/
 def getTargetNodeModelOrder (node : LNodeId) : LayeredM (Option (Array (LNodeId × Int))) := do
-  return ((← getNode node).props.get? TARGET_NODE_MODEL_ORDER_STANDIN).map decodeTargetNodeModelOrder
+  return (← getNode node).internal.targetNodeModelOrder
 
 /-- `node.setProperty(InternalProperties.TARGET_NODE_MODEL_ORDER, map)`. -/
 def setTargetNodeModelOrder (node : LNodeId) (m : Array (LNodeId × Int)) : LayeredM Unit :=
-  modifyNode node fun n => { n with props := n.props.set TARGET_NODE_MODEL_ORDER_STANDIN (encodeTargetNodeModelOrder m) }
+  modifyNode node fun n => { n with internal := { n.internal with targetNodeModelOrder := some m } }
 
 /-- Rust `insertion_sort(layer, comparator)`: insertion sort with the stateful node comparator (an
 element moves left while `compare(left, element) > 0`), then `clearTransitiveOrdering`. -/

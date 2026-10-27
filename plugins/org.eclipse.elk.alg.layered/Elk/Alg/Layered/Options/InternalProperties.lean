@@ -8,6 +8,7 @@ import Elk.Alg.Layered.Options.GraphProperties
 import Elk.Alg.Layered.Compound.CrossHierarchyEdge
 import Elk.Alg.Layered.Options.Spacings
 import Elk.Alg.Layered.Intermediate.Loops.SelfLoopHolder
+import Elk.Alg.Common.NodeSpacing.CellSystem.Cell
 /-!
 # `org.eclipse.elk.alg.layered.options.InternalProperties`
 
@@ -75,6 +76,12 @@ structure LGraphInternals where
 
 /-- Internal properties set on `LNode`s. -/
 structure LNodeInternals where
+  /-- `END_LABELS` (`endLabels`): per port the label cell holding its end labels (insertion order),
+  set by `EndLabelPreprocessor` and consumed by `EndLabelPostprocessor`. -/
+  endLabels : Option (Array (LPortId × Elk.Alg.Common.NodeSpacing.CellSystem.Cell LLabelId)) := none
+  /-- `TARGET_NODE_MODEL_ORDER` (`targetNode.modelOrder`): long edge target node → minimal edge model
+  order, cached by `SortByInputModelProcessor` (Java/Rust keep it on the node). -/
+  targetNodeModelOrder : Option (Array (LNodeId × Int)) := none
   /-- `ORIGIN`. -/
   origin : Option Origin := none
   /-- `COMPOUND_NODE` (`compoundNode`, `false`). -/
@@ -159,8 +166,6 @@ structure LPortInternals where
   portRatioOrPosition : Float := 0.0
   /-- `LONG_EDGE_TARGET_NODE` (`longEdgeTargetNode`). -/
   longEdgeTargetNode : Option LNodeId := none
-  /-- `TARGET_NODE_MODEL_ORDER` (`targetNode.modelOrder`), cached map node → model order. -/
-  targetNodeModelOrder : Option (Array (LNodeId × Int)) := none
   /-- `MAX_EDGE_THICKNESS` (`maxEdgeThickness`, `0.0`). -/
   maxEdgeThickness : Float := 0.0
   /-- `MODEL_ORDER` (`modelOrder`). -/

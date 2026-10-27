@@ -22,14 +22,6 @@ not change the result and the Lean port uses the stored (port insertion) order.
 port re-reads the sizes from the arena (`LabelCell.layoutPositions`) and writes the positions to the
 `LLabel`s (`LLabelAdapter::set_position`).
 
-TODO(end-labels): `LNodeInternals` has no `END_LABELS` field yet (its value type needs the cell
-system, see the module doc of `InternalProperties`). `endLabelsOf`/`clearEndLabels` are the only
-accessors of the property; once the field
-`endLabels : Option (Array (LPortId × Elk.Alg.Common.NodeSpacing.CellSystem.Cell LLabelId)) := none`
-exists they become `(← getNode n).internal.endLabels` and
-`modifyNode n fun x => { x with internal := { x.internal with endLabels := none } }`. Until then the
-processor finds no end labels (exactly like a graph without end labels) and `processNode` is the
-entry point used by the tests.
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -43,12 +35,14 @@ namespace EndLabelPostprocessor
 abbrev EndLabelMap := Array (LPortId × CellSystem.Cell LLabelId)
 
 /-- `node.getProperty(InternalProperties.END_LABELS)` (`none` = not set).
-TODO(end-labels): read `(← getNode node).internal.endLabels` once the field exists. -/
-def endLabelsOf (_node : LNodeId) : LayeredM (Option EndLabelMap) := pure none
+-/
+def endLabelsOf (node : LNodeId) : LayeredM (Option EndLabelMap) := do
+  return (← getNode node).internal.endLabels
 
 /-- `node.setProperty(InternalProperties.END_LABELS, null)`.
-TODO(end-labels): clear `internal.endLabels` once the field exists. -/
-def clearEndLabels (_node : LNodeId) : LayeredM Unit := pure ()
+-/
+def clearEndLabels (node : LNodeId) : LayeredM Unit :=
+  modifyNode node fun x => { x with internal := { x.internal with endLabels := none } }
 
 /-- Rust `label_cell.cell_rectangle().move_by(node_pos); label_cell.apply_label_layout()` for one end
 label cell: offsets the cell rectangle by the node position and writes the label positions (label

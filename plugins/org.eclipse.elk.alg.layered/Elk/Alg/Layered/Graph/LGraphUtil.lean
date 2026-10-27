@@ -128,7 +128,7 @@ def findMaxNonDummyNodeWidth (layer : LayerId) (direction : Direction) (respectN
   for n in (← getLayer layer).nodes do
     let nd ← getNode n
     if nd.type == .normal then
-      let width := if respectNodeMargins then nd.size.x + nd.margin.left + nd.margin.right else nd.size.x
+      let width := if respectNodeMargins then nd.size.x + (nd.margin.left + nd.margin.right) else nd.size.x
       if width > maxWidth then maxWidth := width
   return maxWidth
 
