@@ -1,5 +1,6 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Core.Util.Java
+import Elk.Alg.Layered.Intermediate.EndLabelPreprocessor
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.LabelSideSelector`
 
@@ -23,9 +24,9 @@ dummy's first incoming (else first outgoing) edge (Java: of the `ORIGIN` edge); 
 spacing is read once from the graph (`2.0` when not stored).
 
 The Rust `VecDeque`s are arrays (`push_back` = `push`, `front`/`back` = first/last element).
-`gatherLabels` is a private copy of elk-rs `end_label_preprocessor::gather_labels` (with its side
-effects: `END_LABEL_EDGE` of the gathered labels and `MAX_EDGE_THICKNESS` of the port); it is to be
-replaced by the `EndLabelPreprocessor` port once that processor is in the tree.
+The end labels of a port are gathered with `EndLabelPreprocessor.gatherLabels` (elk-rs
+`end_label_preprocessor::gather_labels`, with its side effects: `END_LABEL_EDGE` of the gathered
+labels and `MAX_EDGE_THICKNESS` of the port).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -33,52 +34,6 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Uti
   Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
 
 namespace LabelSideSelector
-
-/-- Rust `end_label_preprocessor::NO_INCIDENT_EDGE_THICKNESS`. -/
-private def NO_INCIDENT_EDGE_THICKNESS : Float := -1.0
-
-/-- Copy of elk-rs `end_label_preprocessor::gather_labels_from_port(port, target_list)`: appends the
-end labels of the port's connected edges (tail labels of outgoing, head labels of incoming edges;
-`END_LABEL_EDGE` is set when missing) and returns the maximum incident edge thickness. -/
-private def gatherLabelsFromPort (port : LPortId) (targetList : Array LLabelId) : LayeredM (Float × Array LLabelId) := do
-  let mut maxEdgeThickness := NO_INCIDENT_EDGE_THICKNESS
-  let mut target := targetList
-  let edges := (← getPort port).connectedEdges
-  for edge in edges do
-    let ed ← getEdge edge
-    let edgeThickness := ed.props.getD CoreOptions.EDGE_THICKNESS 0.0
-    let isSource := ed.source == some port
-    maxEdgeThickness := fmax maxEdgeThickness edgeThickness
-    for label in ed.labels do
-      let placement := (← getLabel label).props.getD LayeredOptions.EDGE_LABELS_PLACEMENT EdgeLabelPlacement.center
-      let isEndLabel := if isSource then placement == .tail else placement == .head
-      if isEndLabel then
-        modifyLabel label fun l =>
-          if l.internal.endLabelEdge.isNone then { l with internal := { l.internal with endLabelEdge := some edge } }
-          else l
-        target := target.push label
-  return (maxEdgeThickness, target)
-
-/-- Copy of elk-rs `end_label_preprocessor::gather_labels(port)`: the end labels of the port and of
-the ports of its `PORT_DUMMY` that originate from it; `none` if no edge is incident (the port then
-contributes nothing), otherwise the (possibly empty) list. Sets `MAX_EDGE_THICKNESS` when labels were
-found. -/
-private def gatherLabels (port : LPortId) : LayeredM (Option (Array LLabelId)) := do
-  let (thickness0, labels0) ← gatherLabelsFromPort port #[]
-  let mut maxEdgeThickness := thickness0
-  let mut labels := labels0
-  if let some dummyNode := (← getPort port).internal.portDummy then
-    let dummyPorts := (← getNode dummyNode).ports
-    for dummyPort in dummyPorts do
-      if (← getPort dummyPort).internal.origin == some (.lPort port) then
-        let (t, ls) ← gatherLabelsFromPort dummyPort labels
-        labels := ls
-        maxEdgeThickness := fmax maxEdgeThickness t
-  if !labels.isEmpty then
-    let m := maxEdgeThickness
-    modifyPort port fun p => { p with internal := { p.internal with maxEdgeThickness := m } }
-  if maxEdgeThickness != NO_INCIDENT_EDGE_THICKNESS then return some labels
-  return none
 
 /-- Rust `get_origin_edge_thickness(label_dummy)`: `EDGE_THICKNESS` of the first incoming edge, else
 of the first outgoing edge, else `0`. -/
@@ -258,7 +213,7 @@ def smartForRegularNode (node : LNodeId) (defaultSide : LabelSide) : LayeredM Un
           smartForRegularNodePortEndLabels endLabelQueue cps defaultSide
       endLabelQueue := #[]
       currentPortSide := some portSide
-    if let some portEndLabels ← gatherLabels port then
+    if let some portEndLabels ← EndLabelPreprocessor.gatherLabels port then
       endLabelQueue := endLabelQueue.push portEndLabels
   if !endLabelQueue.isEmpty then
     if let some cps := currentPortSide then
