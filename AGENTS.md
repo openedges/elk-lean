@@ -75,16 +75,17 @@
 - 부동소수점 출력은 `Float.toShortest`(C shim), 파싱은 `strtod` 바인딩. Java 의미론이 다른 연산은 `Elk.Core.Util.Java` 헬퍼 사용.
 - `import Lean` 금지(런타임 바이너리에 컴파일러가 링크됨). 매크로는 `Init` 수준 API만 사용한다.
 
-## 현재 핵심 스냅샷 (2026-10-27, Phase 3 완료·Phase 4 진행 중)
+## 현재 핵심 스냅샷 (2026-10-27, Phase 4 막바지·Phase 5 병렬 진행)
 - **버전**: elk-lean `0.12.0`(미공개), 레퍼런스 ELK/elkjs `0.12.0`, oracle elk-rs `0.12.1`(`../elk-rs` HEAD `eb586b6d`).
 - **툴체인**: Lean `v4.35.0` / Lake 5.0 (`~/.elan/bin`, 셸 PATH 미수정: `export PATH=$HOME/.elan/bin:$PATH`). Node 24·Rust 1.97.1은 `../elk-rs`에서 `mise exec --`로 사용.
 - **서브모듈 고정**: `external/elk` → `32331291`(v0.12.0), `external/elkjs` → `ff5771d7`(0.12.0), `external/elk-models` → `ac5af2ba`, `external/elk-live` → `cbf63a24`.
 - **oracle**: `.reference/elk-rs-target/release/model_parity_layout_runner`, `perf_benchmark`(`scripts/build_oracle.sh`로 재빌드).
-- **완료**: Phase 0~3 — graph/core·JSON·ELK Text·`RecursiveGraphLayoutEngine`·fixed/random/box, alg.common 전체(networksimplex·compaction·polyomino·geometry·overlaps·spore·utils·nodespacing N1~N3b). Phase 4(layered): 옵션/그래프 모델/importer·transferrer/`ElkLayered`/`LayeredLayoutProvider`(등록 완료), P1(9종)·P2(9종)·P4(BK+4종)·P5a(orthogonal/polyline)·components/compound·P3a(counting/greedyswitch)·intermediate 49/59 프로세서 완료.
-- **진행 중**: P3b(port distributors·heuristics·sweep)→P3c(`LayerSweepCrossingMinimizer`), P5b(splines)→P5c, I1b(`LabelAndNodeSizeProcessor` 등), I2b(self-loop routing), I3b(`HierarchicalPortOrthogonalEdgeRouter`).
-- **빌드 상태**: `lake build` 859 jobs 성공(경고 0), `lake test` 7879 통과/0 실패(2 skip: box fixture, BK oracle replay).
-- **Parity**: 코어 프로바이더 fixture 17개 중 16개 oracle과 바이트 일치(`box.json`은 layered 완성 대기). layered phase-step trace: `ELK_LEAN_SKIP_UNPORTED=1`로 미이식 단계를 no-op 처리해 비교 — smoke 모델 step 0~4 일치, P3 phase 미이식으로 step 5부터 드리프트. 모델 parity 코퍼스 1448개(`.json` 550 + `.elkt` 898 변환) 파이프라인 가동.
-- **다음 우선순위**: P3b/P3c → 전체 파이프라인 가동 → 코퍼스 trace parity(`scripts/run_trace_parity.sh`)로 프로세서별 drift 제거 → 모델 parity → 성능 게이트.
+- **완료**: Phase 0~3 전부. Phase 4(layered): 옵션/그래프 모델/importer·transferrer/`ElkLayered`/`LayeredLayoutProvider`, P1(9)·P2(9)·P4(BK+4)·P5(orthogonal/polyline/splines + final spline bendpoints)·components/compound·wrapping·self loops, P3 counting/greedyswitch/port distributors/Forster/interactive/none, intermediate 57/59 프로세서.
+- **진행 중**: P3b2(heuristics·SweepCopy) → P3c(`GraphInfoHolder`·`LayerSweepTypeDecider`·`LayerSweepCrossingMinimizer`, 마지막 미이식 phase). Phase 5: force/stress, spore, disco, topdownpacking 병렬.
+- **빌드 상태**: `lake build` 963 jobs 성공(경고 0), `lake test` 8956 통과/0 실패(2 skip: box fixture, BK oracle replay).
+- **Parity**: 코어 fixture 17개 중 16개 바이트 일치(`box.json`은 P3 대기). layered phase-step trace(`--strict-order`, `ELK_LEAN_SKIP_UNPORTED=1`로 P3 stand-in 사용): `examples/hierarchy/hierarchicalEdges.elkt` 22/22 단계 일치, self-loop 모델 28/29(미이식이던 FinalSplineBendpointsCalculator만 차이) — 나머지 드리프트는 P3 부재에서 시작.
+- **다음 우선순위**: P3c → 코퍼스 trace parity(`scripts/run_trace_parity.sh`)로 프로세서별 drift 제거 → 모델 parity → 성능 게이트 → Phase 5 나머지(mrtree, radial, rectpacking, vertiflex) → Phase 8.
+- **작업 위치 규칙**: 서브에이전트는 worktree에서만 작업한다. worktree가 사라지면 메인 체크아웃으로 옮기지 말고 보고하게 한다(공유 체크아웃에서의 동시 작업은 커밋 범위 혼동을 일으킨다).
 
 ## 기본 실행 명령
 - 빌드/테스트: `lake build && lake test`
