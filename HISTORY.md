@@ -86,8 +86,25 @@
 | K1. networksimplex | `alg.common/networksimplex/*.rs`(1.65K줄) + `tests/all/network_simplex_test.rs` | opus | xhigh | 서브에이전트 K1(worktree) | 진행 중 |
 | K2. compaction(oned/options/scanline) + polyomino | `alg.common/compaction/**`, `polyomino/**`(2.6K줄) + `one_dimensional_compactor_test.rs`, `two_bit_grid_test.rs` | opus | high | 서브에이전트 K2(worktree) | 진행 중 |
 | K3. geometry(Point/TEdge/TTriangle/Tree/BowyerWatson/NaiveMinST/RectilinearConvexHull) + overlaps + spore + utils | 해당 `*.rs`(≈1.9K줄) + `rectilinear_convex_hull_test.rs` | opus | high | 서브에이전트 K3(worktree) | 진행 중 |
-| F2. `GraphAdapters` 레코드 + `ElkGraphAdapters`; `Elk.Core.Alg`(assembler/processor configuration) | `core/util/adapters/*`, `core/alg/*`(1.6K줄) | fable(주) | high | 주 에이전트 | 진행 중 |
-| N1~N3. nodespacing(cellsystem → 내부 알고리즘 → 계산기) | `alg.common/nodespacing/**`(8.5K줄) + `nodespacing_test.rs` 등 4.3K줄 | opus | xhigh | F2 이후 할당 | 대기 |
+| F2. `GraphAdapters` 레코드 + `ElkGraphAdapters`; `Elk.Core.Alg`(assembler/processor configuration) | `core/util/adapters/*`, `core/alg/*`(1.6K줄) | fable(주) | high | 주 에이전트 | 완료(`0bf1391`): 클로저 레코드 `GraphAdapters m G N P L E`(raw `PropValue` 접근 + typed 헬퍼, 어댑터별 volatile id), `LayoutProcessor/LayoutPhase/LayoutProcessorConfiguration/AlgorithmAssembler`(IO.Ref 핸들, 캐시, ElkTrace 트레이스) |
+| L. core alg/adapters 테스트 이식 | `core/tests/all/{algorithm_assembler,layout_processor_configuration,elk_graph_adapters}_test.rs` + `alg_test_util.rs`(0.6K줄) | sonnet | medium | 서브에이전트 L(worktree) | 완료(`20bcd64`): 25/25 이식 + 빌드 순서·PortComparator 추가 검사, 차이 없음 |
+| N1. nodespacing cellsystem + NodeContext/PortContext/NodeLabelLocation + NodeLabelAndSizeUtilities | `nodespacing/cellsystem/mod.rs`, `internal/*.rs`, `internal/algorithm/node_label_and_size_utilities.rs`(2.8K줄) | opus | xhigh | 서브에이전트 N1(worktree) | 진행 중 |
+| N2a/N2b/N3. nodespacing 내부 알고리즘(셀/라벨/노드 크기, 포트 배치) → 계산기(NodeLabelAndSizeCalculator, NodeDimensionCalculation, NodeMarginCalculator, NodeMicroLayout) + 테스트 | `internal/algorithm/*`(3.2K줄), `node_*_calculat*.rs`(4.6K줄), `tests/all/*`(4.3K줄) | opus | xhigh | N1 이후 할당(N2a‖N2b → N3) | 대기 |
+
+### Phase 4 착수 — layered 기반 (2026-10-27)
+- 설계(`PORTING.md` §15): 단일 arena `LGraphArena` + typed id, `LayeredM := StateRefT LGraphArena IO`, 공개 옵션은 `props : PropertyMap`, `InternalProperties`는 요소별 `internal` typed 필드, `PROCESSORS`는 상태 밖, elk-rs `LArena/ArenaSync`(CSR 사본)는 포팅하지 않고 순회 순서만 재현, trace recorder 스키마 동일.
+- 서브패키지 집계 모듈/테스트 자리(`Elk/Alg/Layered/{Options,Graph}.lean`, `Tests/Layered/*.lean`)를 미리 등록.
+
+#### Phase 4 작업 할당표
+| 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| M-opts. layered 옵션 열거형 36개 + `LayeredOptions`(297 상수) + `LayeredMetaDataProvider` + `LayeredSpacings` | `layered/options/*.rs`(≈4.4K줄, 기계적; 이름 불일치를 피하려 단일 담당) | opus | high | 서브에이전트 M-opts(worktree) | 진행 중 |
+| M0. 그래프 모델(ids/arena/LayeredM/LNode·LPort·LEdge·LLabel·Layer·LGraph), `InternalProperties` typed 필드, `Spacings`, `LGraphUtil`, `Tarjan`, `TraceRecorder` | `layered/graph/*.rs`(arena 제외 ≈3.3K줄), `options/{internal_properties,spacings}.rs`, `trace_recorder.rs` | fable(주) | max | 주 에이전트 | 진행 중 |
+| M1. `ElkGraphImporter`/`ElkGraphTransformer`/`LGraphAdapters` | `graph/transform/{elk_graph_importer,elk_graph_transformer,l_graph_adapters}.rs`(2.9K줄) | opus | xhigh | M0 이후 | 대기 |
+| M2. `ElkGraphLayoutTransferrer` | `graph/transform/elk_graph_layout_transferrer.rs`(1.3K줄) | opus | xhigh | M0 이후 | 대기 |
+| M3. `GraphConfigurator`/`ElkLayered`/`LayeredLayoutProvider`/`IntermediateProcessorStrategy`/`LayeredPhases`/components/compound | `graph_configurator.rs`, `elk_layered.rs`, `layered_layout_provider.rs`, `intermediate/intermediate_processor_strategy.rs`, `components/*`, `compound/*`(≈7K줄) | fable(주)+opus | xhigh | M0 이후 | 대기 |
+| P1~P5, intermediate | `p1cycles`(2K), `p2layers`(2.5K), `p3order`(10.6K, 4분할), `p4nodes`(5.3K, 2분할), `p5edges`(6.4K, 3분할), `intermediate`(28K, ≈10분할) | opus | xhigh | M0/M3 이후 병렬 | 대기 |
+
 
 #### Phase 2 (2차) 작업 할당표
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |

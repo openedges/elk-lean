@@ -1,0 +1,1 @@
+/-! Aggregator of `org.eclipse.elk.alg.layered.options` (public options, option enums, metadata provider). Owned by the M-opts task; `InternalProperties`/`Spacings` are added by the graph-model task. Add submodule imports here. -/
