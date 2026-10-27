@@ -58,7 +58,8 @@ python3 scripts/compare_model_parity_layouts.py out/oracle.json out/lean.json
 python3 scripts/compare_phase_traces.py out/oracle_trace out/lean_trace
 
 # whole corpus (script arrives in Phase 2)
-sh scripts/run_model_parity.sh external/elk-models tests/model_parity
+sh scripts/run_model_parity.sh external/elk-models tests/model_parity   # .json + .elkt (converted with `elk convert`; PARITY_INCLUDE_ELKT=0 to skip)
+sh scripts/run_phase_trace_parity.sh external/elk-models/<model>.elkt tests/tmp/trace_<model>   # one model: oracle vs elk-lean step traces
 ```
 
 Inputs: the 550 `realworld/*.json` models are used directly; `.elkt` models are

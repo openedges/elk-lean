@@ -1,0 +1,21 @@
+#!/bin/sh
+# Phase-step trace parity for one model: elk-rs oracle traces vs elk-lean traces.
+#   sh scripts/run_phase_trace_parity.sh <model.json|model.elkt> <out_dir> [compare options…]
+# Writes <out_dir>/oracle_trace/step_NNN_*.json, <out_dir>/lean_trace/…, the two layouts and
+# runs compare_phase_traces.py (first divergence step, tolerance 0.001).
+set -eu
+HERE=$(cd "$(dirname "$0")/.." && pwd)
+MODEL=$1
+OUT=$2
+shift 2
+LEAN=${ELK_LEAN_BIN:-"$HERE/.lake/build/bin/elk"}
+mkdir -p "$OUT"
+INPUT=$MODEL
+case "$MODEL" in
+  *.elkt) INPUT="$OUT/input.json"; "$LEAN" convert "$MODEL" -o "$INPUT" ;;
+esac
+rm -rf "$OUT/oracle_trace" "$OUT/lean_trace"
+sh "$HERE/scripts/oracle_layout.sh" "$INPUT" "$OUT/oracle.json" "$OUT/oracle_trace" > "$OUT/oracle.log" 2>&1 || echo "oracle failed: $(tail -1 "$OUT/oracle.log")"
+ELK_TRACE_DIR="$OUT/lean_trace" "$LEAN" layout "$INPUT" --pretty --sort-keys -o "$OUT/lean.json" > "$OUT/lean.log" 2>&1 || echo "elk-lean failed: $(tail -1 "$OUT/lean.log")"
+echo "oracle steps: $(ls "$OUT/oracle_trace" 2>/dev/null | wc -l | tr -d ' '), lean steps: $(ls "$OUT/lean_trace" 2>/dev/null | wc -l | tr -d ' ')"
+python3 "$HERE/scripts/compare_phase_traces.py" "$OUT/oracle_trace" "$OUT/lean_trace" "$@" || true

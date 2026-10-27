@@ -1,5 +1,6 @@
 #!/bin/sh
-# Whole-corpus model parity: elk-rs oracle vs elk-lean on the `.json` models.
+# Whole-corpus model parity: elk-rs oracle vs elk-lean on the `.json` and `.elkt` models
+# (`.elkt` converted with `elk convert` into <out_dir>/elkt_json; set PARITY_INCLUDE_ELKT=0 to skip).
 #   sh scripts/run_model_parity.sh <models_dir> <out_dir> [--limit N] [--filter SUBSTR]
 # Outputs: <out_dir>/inputs.tsv, oracle/, oracle.tsv, lean/, lean.tsv, merged.tsv,
 #          report.md, diff_details.tsv
@@ -11,7 +12,9 @@ shift 2
 RUNNER=${ORACLE_RUNNER:-"$HERE/.reference/elk-rs-target/release/model_parity_layout_runner"}
 LEAN=${ELK_LEAN_BIN:-"$HERE/.lake/build/bin/elk"}
 mkdir -p "$OUT"
-python3 "$HERE/scripts/make_json_manifest.py" "$MODELS" "$OUT/inputs.tsv" "$@"
+ELKT_ARGS=""
+if [ "${PARITY_INCLUDE_ELKT:-1}" = "1" ]; then ELKT_ARGS="--include-elkt --elk-bin $LEAN --elkt-cache $OUT/elkt_json"; fi
+python3 "$HERE/scripts/make_json_manifest.py" "$MODELS" "$OUT/inputs.tsv" $ELKT_ARGS "$@"
 if [ ! -f "$OUT/oracle.tsv" ] || [ "${PARITY_REFRESH_ORACLE:-0}" = "1" ]; then
   echo "== oracle (elk-rs) =="
   "$RUNNER" --input-manifest "$OUT/inputs.tsv" --output-manifest "$OUT/oracle.tsv" \
