@@ -18,95 +18,112 @@ namespace Calculations
 /-- `height_lpr_or_lpb(drawing_height, y, height)`: `max(drawing_height, y + height)`. -/
 @[inline] def heightLprOrLpb (drawingHeight y height : Float) : Float := fmax drawingHeight (y + height)
 
-/-- The geometry of the placed rectangles in placement order, interleaved in one float array
-(`x, y, width, height` of rectangle `i` at `4i .. 4i+3`). The width approximation scans all
-placed rectangles for every candidate (`calculate_y_for_lpr` / `calculate_x_for_lpb`), so the scan
-reads unboxed contiguous values instead of the `ElkNode`s (performance; the values are those of
-the nodes). -/
+/-- An index below `a.usize` is in bounds. -/
+theorem usize_lt_size {a : FloatArray} {i : USize} (h : i < a.usize) : i.toNat < a.size := by
+  have h1 : i.toNat < a.usize.toNat := (USize.lt_iff_toNat_lt).mp h
+  have h2 : a.usize.toNat ≤ a.size := by
+    simp only [FloatArray.usize, Nat.toUSize]
+    exact Nat.mod_le _ _
+  omega
+
+/-- `FloatArray.push` adds one element. -/
+theorem size_push (a : FloatArray) (v : Float) : (a.push v).size = a.size + 1 := by
+  cases a; simp [FloatArray.push, FloatArray.size]
+
+/-- The borders of the placed rectangles in placement order: right border `x + width` and bottom
+border `y + height` of rectangle `i` at index `i`. The width approximation scans all placed
+rectangles for every candidate (`calculate_y_for_lpr` / `calculate_x_for_lpb`) and only ever uses
+these two sums (computed once here, the same float operations), so the scan reads unboxed contiguous
+values instead of the `ElkNode`s. -/
 structure PlacedRects where
-  data : FloatArray := .empty
-  deriving Inhabited
+  right : FloatArray := .empty
+  bottom : FloatArray := .empty
+  hsize : right.size = bottom.size := by rfl
+
+instance : Inhabited PlacedRects := ⟨{}⟩
 
 namespace PlacedRects
 
-/-- Appends the current geometry of a rectangle. -/
+/-- Appends the borders of a rectangle with the given geometry. -/
 @[inline] def push (p : PlacedRects) (x y width height : Float) : PlacedRects :=
-  { data := ((p.data.push x).push y |>.push width).push height }
+  { right := p.right.push (x + width), bottom := p.bottom.push (y + height)
+    hsize := by rw [size_push, size_push, p.hsize] }
 
-/-- The geometry of the given rectangles. -/
+/-- The borders of the given rectangles. -/
 def ofNodes (g : ElkGraph) (rects : Array NodeId) : PlacedRects :=
   rects.foldl (init := {}) fun p r => let n := g.node r; p.push n.x n.y n.width n.height
 
 end PlacedRects
 
-/-- Loop of `calculateYForLprSoA` (tail recursive, unboxed state; `i` steps by 4). -/
-private def yForLprLoop (d : FloatArray) (x lastPlacedY nodeNodeSpacing : Float) (i : Nat)
-    (found : Bool) (closestNeighborBottomBorder : Float) : Float :=
-  if h : i + 3 < d.size then
-    let placedRectBottomBorder := d[i + 1] + d[i + 3]
-    let passesConstraint := x < d[i] + d[i + 2] + nodeNodeSpacing
-    if passesConstraint && (!found ||
-        lastPlacedY - placedRectBottomBorder < lastPlacedY - closestNeighborBottomBorder) then
-      yForLprLoop d x lastPlacedY nodeNodeSpacing (i + 4) true placedRectBottomBorder
-    else
-      yForLprLoop d x lastPlacedY nodeNodeSpacing (i + 4) found closestNeighborBottomBorder
-  else if !found then 0.0 else closestNeighborBottomBorder + nodeNodeSpacing
-  termination_by d.size - i
+/-! The scans of `calculate_y_for_lpr` and `calculate_x_for_lpb` share one shape: over the placed
+rectangles in order, the rectangles that pass the constraint `v < a[i] + spacing` (`a`: the right
+borders for LPR, the bottom borders for LPB) are candidates, and the first candidate wins until a
+later one has a strictly smaller distance `last - b[i]` (`b`: the bottom borders for LPR, the right
+borders for LPB). The result is the closest border plus spacing, or `0` without candidates.
 
-/-- `calculate_y_for_lpr` on the placed rectangle geometry (`lastPlacedY`: y of the last placed
+The scan jumps from one taken candidate to the next: `nextTaken` returns the index of the next
+rectangle that passes the constraint and is strictly closer than the current closest border; the
+first candidate is taken unconditionally (`nextCandidate`). Between two takes the distance is loop
+invariant, so the inner loops carry no float state and the (rare) takes are branches instead of a
+select chain. Tail recursive with unboxed parameters and `USize` indices; the index proofs make the
+loads unchecked. -/
+
+/-- The index of the first rectangle `≥ i` that passes the constraint (`a.usize` if none). -/
+private partial def nextCandidate (a : FloatArray) (v spacing : Float) (i : USize) : USize :=
+  if h : i < a.usize then
+    if v < a.uget i (usize_lt_size h) + spacing then i else nextCandidate a v spacing (i + 1)
+  else i
+
+/-- The index of the first rectangle `≥ i` that passes the constraint and whose distance
+`last - b[j]` is strictly smaller than `dist` (`a.usize` if none). -/
+private partial def nextTaken (a b : FloatArray) (hab : a.size = b.size) (v last spacing dist : Float)
+    (i : USize) : USize :=
+  if h : i < a.usize then
+    have ha : i.toNat < a.size := usize_lt_size h
+    have hb : i.toNat < b.size := hab ▸ ha
+    if v < a.uget i ha + spacing && last - b.uget i hb < dist then i
+    else nextTaken a b hab v last spacing dist (i + 1)
+  else i
+
+/-- The scan after a taken candidate (`closest` = its border, `dist` = `last - closest`), from
+`i` on. -/
+private partial def closestFound (a b : FloatArray) (hab : a.size = b.size) (v last spacing : Float)
+    (i : USize) (closest dist : Float) : Float :=
+  let j := nextTaken a b hab v last spacing dist i
+  if h : j < a.usize then
+    have hb : j.toNat < b.size := hab ▸ usize_lt_size h
+    let border := b.uget j hb
+    closestFound a b hab v last spacing (j + 1) border (last - border)
+  else closest + spacing
+
+/-- The whole scan (see above; `zero = 0.0`). -/
+private def closestScan (a b : FloatArray) (hab : a.size = b.size) (v last spacing zero : Float) :
+    Float :=
+  let j := nextCandidate a v spacing 0
+  if h : j < a.usize then
+    have hb : j.toNat < b.size := hab ▸ usize_lt_size h
+    let border := b.uget j hb
+    closestFound a b hab v last spacing (j + 1) border (last - border)
+  else zero
+
+/-- `calculate_y_for_lpr` on the placed rectangle borders (`lastPlacedY`: y of the last placed
 rectangle). -/
 @[inline] def calculateYForLprSoA (x : Float) (placed : PlacedRects) (lastPlacedY nodeNodeSpacing : Float) :
     Float :=
-  yForLprLoop placed.data x lastPlacedY nodeNodeSpacing 0 false 0.0
+  closestScan placed.right placed.bottom placed.hsize x lastPlacedY nodeNodeSpacing 0.0
 
-/-- Loop of `calculateXForLpbSoA` (tail recursive, unboxed state; `i` steps by 4). -/
-private def xForLpbLoop (d : FloatArray) (y lastPlacedX nodeNodeSpacing : Float) (i : Nat)
-    (found : Bool) (closestNeighborRightBorder : Float) : Float :=
-  if h : i + 3 < d.size then
-    let placedRectRightBorder := d[i] + d[i + 2]
-    let passesConstraint := y < d[i + 1] + d[i + 3] + nodeNodeSpacing
-    if passesConstraint && (!found ||
-        lastPlacedX - placedRectRightBorder < lastPlacedX - closestNeighborRightBorder) then
-      xForLpbLoop d y lastPlacedX nodeNodeSpacing (i + 4) true placedRectRightBorder
-    else
-      xForLpbLoop d y lastPlacedX nodeNodeSpacing (i + 4) found closestNeighborRightBorder
-  else if !found then 0.0 else closestNeighborRightBorder + nodeNodeSpacing
-  termination_by d.size - i
-
-/-- `calculate_x_for_lpb` on the placed rectangle geometry (`lastPlacedX`: x of the last placed
+/-- `calculate_x_for_lpb` on the placed rectangle borders (`lastPlacedX`: x of the last placed
 rectangle). -/
 @[inline] def calculateXForLpbSoA (y : Float) (placed : PlacedRects) (lastPlacedX nodeNodeSpacing : Float) :
     Float :=
-  xForLpbLoop placed.data y lastPlacedX nodeNodeSpacing 0 false 0.0
+  closestScan placed.bottom placed.right placed.hsize.symm y lastPlacedX nodeNodeSpacing 0.0
 
-/-- Loop of `calculateLprAndLpbSoA`: both scans in one pass (tail recursive, unboxed state). -/
-private def lprLpbLoop (d : FloatArray) (x lastPlacedY y lastPlacedX nodeNodeSpacing : Float) (i : Nat)
-    (foundY : Bool) (closestNeighborBottomBorder : Float)
-    (foundX : Bool) (closestNeighborRightBorder : Float) : Float × Float :=
-  if h : i + 3 < d.size then
-    let px := d[i]
-    let py := d[i + 1]
-    let pw := d[i + 2]
-    let ph := d[i + 3]
-    let placedRectBottomBorder := py + ph
-    let takeY := x < px + pw + nodeNodeSpacing && (!foundY ||
-        lastPlacedY - placedRectBottomBorder < lastPlacedY - closestNeighborBottomBorder)
-    let placedRectRightBorder := px + pw
-    let takeX := y < py + ph + nodeNodeSpacing && (!foundX ||
-        lastPlacedX - placedRectRightBorder < lastPlacedX - closestNeighborRightBorder)
-    lprLpbLoop d x lastPlacedY y lastPlacedX nodeNodeSpacing (i + 4)
-      (foundY || takeY) (if takeY then placedRectBottomBorder else closestNeighborBottomBorder)
-      (foundX || takeX) (if takeX then placedRectRightBorder else closestNeighborRightBorder)
-  else
-    (if !foundY then 0.0 else closestNeighborBottomBorder + nodeNodeSpacing,
-     if !foundX then 0.0 else closestNeighborRightBorder + nodeNodeSpacing)
-  termination_by d.size - i
-
-/-- `(calculate_y_for_lpr(x, ..), calculate_x_for_lpb(y, ..))` in one pass over the placed
-rectangle geometry (`lastPlacedX`/`lastPlacedY`: position of the last placed rectangle). -/
+/-- `(calculate_y_for_lpr(x, ..), calculate_x_for_lpb(y, ..))` over the placed rectangle borders
+(`lastPlacedX`/`lastPlacedY`: position of the last placed rectangle). -/
 @[inline] def calculateLprAndLpbSoA (x y : Float) (placed : PlacedRects) (lastPlacedX lastPlacedY nodeNodeSpacing : Float) :
     Float × Float :=
-  lprLpbLoop placed.data x lastPlacedY y lastPlacedX nodeNodeSpacing 0 false 0.0 false 0.0
+  (calculateYForLprSoA x placed lastPlacedY nodeNodeSpacing,
+   calculateXForLpbSoA y placed lastPlacedX nodeNodeSpacing)
 
 /-- `calculate_y_for_lpr(x, placed_rects, last_placed, node_node_spacing)`: the y below the
 closest placed rectangle above `x` (whose right border plus spacing lies right of `x`): its bottom

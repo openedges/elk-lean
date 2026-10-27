@@ -244,24 +244,35 @@ def fitsInWidthHeight (blk : Block) (width height : Float) : ElkM Bool := do
   let (_, bounds) ← placeRectsInInternal blk width false
   return bounds.width <= width && bounds.height <= height
 
+/-- The size `(width, height)` of the children of the block value laid out in `width` (the bounds
+of `place_rects_in_internal(width, false)`, nothing moves). -/
+@[inline] def boundsIn (g : ElkGraph) (blk : Block) (width : Float) : Float × Float :=
+  boundsLoop g blk.children blk.nodeNodeSpacing width 0 0 0.0 0.0 0.0 0.0 0.0
+
+/-- The binary search loop of `width_for_target_height` (pure, on the graph value: the layout of a
+copy moves nothing). -/
+private partial def searchWidth (g : ElkGraph) (blk : Block) (height upperBound lowerBound viableWidth
+    newWidth : Float) : Float :=
+  if lowerBound + 1.0 < upperBound then
+    let (w, h) := boundsIn g blk newWidth
+    if w <= newWidth && h <= height then
+      searchWidth g blk height newWidth lowerBound newWidth ((newWidth - lowerBound) / 2.0 + lowerBound)
+    else
+      searchWidth g blk height upperBound newWidth viableWidth ((upperBound - newWidth) / 2.0 + newWidth)
+  else viableWidth
+
 /-- `width_for_target_height(height)`: the smallest width (binary search between `minWidth` and
 `width`, step > 1) for which the children fit into the height. -/
 def widthForTargetHeight (b : BlockId) (height : Float) : RectPackingM Float := do
   let blk ← getBlock b
   if blk.maxHeight <= height then return blk.minWidth
-  if ← fitsInWidthHeight blk blk.minWidth height then return blk.minWidth
-  let mut upperBound := blk.width
-  let mut lowerBound := blk.minWidth
-  let mut viableWidth := blk.width
-  let mut newWidth := (upperBound - lowerBound) / 2.0 + lowerBound
-  while lowerBound + 1.0 < upperBound do
-    if ← fitsInWidthHeight blk newWidth height then
-      viableWidth := newWidth
-      upperBound := newWidth
-    else
-      lowerBound := newWidth
-    newWidth := (upperBound - lowerBound) / 2.0 + lowerBound
-  return viableWidth
+  let g ← getThe ElkGraph
+  let (w, h) := boundsIn g blk blk.minWidth
+  if w <= blk.minWidth && h <= height then return blk.minWidth
+  let upperBound := blk.width
+  let lowerBound := blk.minWidth
+  return searchWidth g blk height upperBound lowerBound blk.width
+    ((upperBound - lowerBound) / 2.0 + lowerBound)
 
 /-- `height_for_target_width(width)`: the height of the children laid out in `width` (on a copy). -/
 def heightForTargetWidth (b : BlockId) (width : Float) : RectPackingM Float := do

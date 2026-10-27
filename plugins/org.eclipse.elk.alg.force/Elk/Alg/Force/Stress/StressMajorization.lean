@@ -25,69 +25,109 @@ namespace Elk.Alg.Force.Stress
 
 open Elk.Graph Elk.Core.Util Elk.Alg.Force.Graph Elk.Alg.Force.Options
 
-/-- An entry of the Dijkstra priority queue (elk-rs `State`). -/
-private structure HeapEntry where
-  cost : Float
-  position : Nat
-  deriving Inhabited
+/-! The Dijkstra priority queue (elk-rs `BinaryHeap<State>`) is a binary heap stored flat in a
+`FloatArray` with an explicit entry count `cnt`: entry `i < cnt` is `(h[2i], h[2i+1])` =
+(cost, position), slots past `cnt` are stale. Positions are node indices (exact as floats), so entries
+need no allocation and the comparisons are the same as on the `State` records. -/
 
-/-- `State::cmp(a, b) == Greater`: `a` is popped before `b` (lower cost first; on a tie the higher
-position first). -/
-private def popsBefore (a b : HeapEntry) : Bool :=
-  match Float.comparePartial b.cost a.cost with
-  | .gt => true
-  | .lt => false
-  | .eq => a.position > b.position
+/-- `State::cmp(a, b) == Greater`: `(ac, ap)` is popped before `(bc, bp)` (lower cost first; on a tie
+the higher position first). `Float.comparePartial bc ac` spelled out: `.lt` → false, `.gt` → true,
+otherwise (equal or NaN) the positions decide. -/
+@[inline] private def popsBefore (ac ap bc bp : Float) : Bool :=
+  if bc < ac then false else if bc > ac then true else ap > bp
+
+/-- Swaps the heap entries `i` and `j`. -/
+@[inline] private def heapSwap (h : FloatArray) (i j : USize) (zero : Float) : FloatArray :=
+  let ci := fgetU h (2 * i) zero
+  let pi := fgetU h (2 * i + 1) zero
+  let cj := fgetU h (2 * j) zero
+  let pj := fgetU h (2 * j + 1) zero
+  fsetU (fsetU (fsetU (fsetU h (2 * i) cj) (2 * i + 1) pj) (2 * j) ci) (2 * j + 1) pi
+
+/-- `popsBefore` of the heap entries `i` and `j`. -/
+@[inline] private def entryBefore (h : FloatArray) (i j : USize) (zero : Float) : Bool :=
+  popsBefore (fgetU h (2 * i) zero) (fgetU h (2 * i + 1) zero) (fgetU h (2 * j) zero)
+    (fgetU h (2 * j + 1) zero)
 
 /-- Restores the heap property upwards from `i` (tail recursive: the heap array stays unshared and is
 swapped in place). -/
-private partial def siftUp (h : Array HeapEntry) (i : Nat) : Array HeapEntry :=
+private partial def siftUp (h : FloatArray) (i : USize) (zero : Float) : FloatArray :=
   if i == 0 then h
   else
     let p := (i - 1) / 2
-    if popsBefore h[i]! h[p]! then siftUp (h.swapIfInBounds i p) p else h
+    if entryBefore h i p zero then siftUp (heapSwap h i p zero) p zero else h
 
-/-- Restores the heap property downwards from `i` (same comparisons, in the same order, as the
-`while` loop it replaces). -/
-private partial def siftDown (h : Array HeapEntry) (i : Nat) : Array HeapEntry :=
-  let n := h.size
+/-- Restores the heap property downwards from `i` in a heap of `n` entries (same comparisons, in the
+same order, as the `while` loop it replaces). -/
+private partial def siftDown (h : FloatArray) (n i : USize) (zero : Float) : FloatArray :=
   let l := 2 * i + 1
   let r := l + 1
-  let best := if l < n && popsBefore h[l]! h[i]! then l else i
-  let best := if r < n && popsBefore h[r]! h[best]! then r else best
-  if best == i then h else siftDown (h.swapIfInBounds i best) best
+  let best := if l < n && entryBefore h l i zero then l else i
+  let best := if r < n && entryBefore h r best zero then r else best
+  if best == i then h else siftDown (heapSwap h i best zero) n best zero
 
-private def heapPush (heap : Array HeapEntry) (e : HeapEntry) : Array HeapEntry :=
-  siftUp (heap.push e) heap.size
+/-- Pushes the entry `(cost, position)` onto a heap of `cnt` entries (which then has `cnt + 1`). -/
+@[inline] private def heapPush (heap : FloatArray) (cnt : USize) (cost position zero : Float) :
+    FloatArray :=
+  let heap := if 2 * cnt < heap.usize then fsetU (fsetU heap (2 * cnt) cost) (2 * cnt + 1) position
+    else (heap.push cost).push position
+  siftUp heap cnt zero
 
-/-- Removes the top entry (`heap[0]`) of a non-empty heap. -/
-private def heapRemoveTop (heap : Array HeapEntry) : Array HeapEntry :=
-  let last := heap[heap.size - 1]!
-  let rest := heap.pop
-  if rest.isEmpty then rest else siftDown (rest.set! 0 last) 0
+/-- Removes the top entry (entry 0) of a heap of `cnt > 0` entries (which then has `cnt - 1`). -/
+private def heapRemoveTop (heap : FloatArray) (cnt : USize) (zero : Float) : FloatArray :=
+  let rest := cnt - 1
+  if rest == 0 then heap
+  else
+    let lastCost := fgetU heap (2 * rest) zero
+    let lastPos := fgetU heap (2 * rest + 1) zero
+    siftDown (fsetU (fsetU heap 0 lastCost) 1 lastPos) rest 0 zero
+
+/-- State of the relaxation loop: distances, heap and heap entry count. -/
+private structure RelaxState where
+  dist : FloatArray
+  heap : FloatArray
+  cnt : USize
+  deriving Inhabited
+
+/-- The relaxation loop of `dijkstra_flat` over the adjacency list of `position` (from entry `k`):
+unvisited neighbours whose distance improves get the new distance and a heap entry. -/
+private partial def relax (row : Array (Nat × Float)) (visited : Array Bool) (position k : Nat)
+    (zero : Float) (dist heap : FloatArray) (cnt : USize) : RelaxState :=
+  if h : k < row.size then
+    let (otherId, edgeLen) := row[k]
+    if visited[otherId]! then relax row visited position (k + 1) zero dist heap cnt
+    else
+      let next := dist.get! position + edgeLen
+      if next < dist.get! otherId then
+        relax row visited position (k + 1) zero (dist.set! otherId next)
+          (heapPush heap cnt next otherId.toFloat zero) (cnt + 1)
+      else relax row visited position (k + 1) zero dist heap cnt
+  else ⟨dist, heap, cnt⟩
 
 /-- `dijkstra_flat`: shortest path distances from `source` over the adjacency lists. -/
 private def dijkstra (adj : Array (Array (Nat × Float))) (n source : Nat) : FloatArray := Id.run do
+  let zero : Float := 0.0
   let mut dist := FloatArray.emptyWithCapacity n
-  let mut heap : Array HeapEntry := Array.mkEmpty n
+  let mut heap := FloatArray.emptyWithCapacity (4 * n)
+  let mut cnt : USize := 0
   for i in [0:n] do
     let d := if i == source then 0.0 else Float.posInf
     dist := dist.push d
-    heap := heapPush heap { cost := d, position := i }
+    heap := heapPush heap cnt d i.toFloat zero
+    cnt := cnt + 1
   let mut visited : Array Bool := Array.replicate n false
-  while !heap.isEmpty do
-    let top := heap[0]!
-    heap := heapRemoveTop heap
-    let position := top.position
+  while cnt != 0 do
+    let cost := fgetU heap 0 zero
+    let position := (fgetU heap 1 zero).toUInt64.toNat
+    heap := heapRemoveTop heap cnt zero
+    cnt := cnt - 1
     if visited[position]! then continue
     visited := visited.set! position true
-    if top.cost > dist.get! position then continue
-    for (otherId, edgeLen) in adj[position]! do
-      if visited[otherId]! then continue
-      let next := dist.get! position + edgeLen
-      if next < dist.get! otherId then
-        dist := dist.set! otherId next
-        heap := heapPush heap { cost := next, position := otherId }
+    if cost > dist.get! position then continue
+    let r := relax adj[position]! visited position 0 zero dist heap cnt
+    dist := r.dist
+    heap := r.heap
+    cnt := r.cnt
   return dist
 
 /-- elk-rs `StressMajorization`: the matrices and options computed by `initialize`. -/
@@ -138,58 +178,96 @@ def init (graph : FGraph) : StressMajorization := Id.run do
 def done (m : StressMajorization) (count : Int) (prevStress curStress : Float) : Bool :=
   prevStress == 0.0 || ((prevStress - curStress) / prevStress) < m.epsilon || count >= m.iterationLimit
 
-/-- `compute_stress_soa`: the stress `sum w[i][j] * (|p_i - p_j| - apsp[i][j])^2` over all pairs. -/
-def computeStress (m : StressMajorization) (posX posY : FloatArray) (nodeIds : Array Nat) (n : Nat) : Float :=
+/-- The distance and weight matrices in node list order, flat: `a[i * n + j] = apsp[id_i][id_j]` and
+`w[i * n + j] = w[id_i][id_j]` (`id_i` = arena `nodeId` of the `i`-th node), read once per `execute`
+so the loops below index rows directly. -/
+private def permuted (m : StressMajorization) (nodeIds : Array Nat) (n : Nat) : FloatArray × FloatArray :=
   Id.run do
-    let mut stress := 0.0
+    let mut a := FloatArray.emptyWithCapacity (n * n)
+    let mut w := FloatArray.emptyWithCapacity (n * n)
     for i in [0:n] do
       let ui := nodeIds[i]!
-      for j in [i + 1:n] do
+      let aRow := m.apsp[ui]!
+      let wRow := m.w[ui]!
+      for j in [0:n] do
         let uj := nodeIds[j]!
-        let dx := posX.get! i - posX.get! j
-        let dy := posY.get! i - posY.get! j
-        let eucDist := Float.sqrt (dx * dx + dy * dy)
-        let eucDisplacement := eucDist - (m.apsp[ui]!).get! uj
-        stress := stress + (m.w[ui]!).get! uj * eucDisplacement * eucDisplacement
-    return stress
+        a := a.push (aRow.get! uj)
+        w := w.push (wRow.get! uj)
+    return (a, w)
+
+/-- The pairs `(i, j)`, `j = j0, …, n - 1`, of `compute_stress_soa`, accumulated onto `stress` in loop
+order (`row = i * n`, `(xi, yi)` = position of `i`). Tail recursive with unboxed parameters. -/
+private partial def stressRow (a w posX posY : FloatArray) (n row : USize) (xi yi zero : Float)
+    (j : USize) (stress : Float) : Float :=
+  if j >= n then stress
+  else
+    let dx := xi - fgetU posX j zero
+    let dy := yi - fgetU posY j zero
+    let eucDist := Float.sqrt (dx * dx + dy * dy)
+    let eucDisplacement := eucDist - fgetU a (row + j) zero
+    stressRow a w posX posY n row xi yi zero (j + 1)
+      (stress + fgetU w (row + j) zero * eucDisplacement * eucDisplacement)
+
+/-- The rows `i, i + 1, …, n - 1` of `compute_stress_soa`. -/
+private partial def stressRows (a w posX posY : FloatArray) (n : USize) (zero : Float) (i : USize)
+    (stress : Float) : Float :=
+  if i >= n then stress
+  else
+    stressRows a w posX posY n zero (i + 1)
+      (stressRow a w posX posY n (i * n) (fgetU posX i zero) (fgetU posY i zero) zero (i + 1) stress)
+
+/-- `compute_stress_soa`: the stress `sum w[i][j] * (|p_i - p_j| - apsp[i][j])^2` over all pairs
+`i < j` (matrices in node list order, see `permuted`). -/
+def computeStress (a w posX posY : FloatArray) (n : Nat) : Float :=
+  stressRows a w posX posY n.toUSize 0.0 0 0.0
+
+/-- The three sums of `compute_new_position_soa`; the float fields are stored unboxed. -/
+private structure PositionSums where
+  weightSum : Float
+  xDisp : Float
+  yDisp : Float
+  deriving Inhabited
 
 /-- The sums of `compute_new_position_soa` over `j, j + 1, …, n - 1` (skipping `nodeIdx`), accumulated
-onto `(weightSum, xDisp, yDisp)` in loop order. Tail recursive with unboxed `Float` parameters (a
-`for` loop would box the three accumulators in its state tuple on every iteration). -/
-private partial def newPositionSums (apspRow wRow posX posY : FloatArray) (nodeIds : Array Nat)
-    (nodeIdx n : Nat) (ux uy : Float) (useX useY : Bool) (j : Nat) (weightSum xDisp yDisp : Float) :
-    Float × Float × Float :=
-  if j >= n then (weightSum, xDisp, yDisp)
+onto `(weightSum, xDisp, yDisp)` in loop order (`row = nodeIdx * n`). Tail recursive with unboxed
+`Float` parameters (a `for` loop would box the three accumulators in its state tuple on every
+iteration). -/
+private partial def newPositionSums (a w posX posY : FloatArray) (n nodeIdx row : USize)
+    (ux uy zero : Float) (useX useY : Bool) (j : USize) (weightSum xDisp yDisp : Float) : PositionSums :=
+  if j >= n then ⟨weightSum, xDisp, yDisp⟩
   else if j == nodeIdx then
-    newPositionSums apspRow wRow posX posY nodeIds nodeIdx n ux uy useX useY (j + 1) weightSum xDisp yDisp
+    newPositionSums a w posX posY n nodeIdx row ux uy zero useX useY (j + 1) weightSum xDisp yDisp
   else
-    let vId := nodeIds[j]!
-    let vx := posX.get! j
-    let vy := posY.get! j
-    let wij := wRow.get! vId
+    let vx := fgetU posX j zero
+    let vy := fgetU posY j zero
+    let wij := fgetU w (row + j) zero
     let weightSum := weightSum + wij
     let dx := ux - vx
     let dy := uy - vy
     let eucDist := Float.sqrt (dx * dx + dy * dy)
-    let d := apspRow.get! vId
-    let xDisp := if eucDist > 0.0 && useX then xDisp + wij * (vx + d * dx / eucDist) else xDisp
-    let yDisp := if eucDist > 0.0 && useY then yDisp + wij * (vy + d * dy / eucDist) else yDisp
-    newPositionSums apspRow wRow posX posY nodeIds nodeIdx n ux uy useX useY (j + 1) weightSum xDisp yDisp
+    let d := fgetU a (row + j) zero
+    let xDisp := if eucDist > zero && useX then xDisp + wij * (vx + d * dx / eucDist) else xDisp
+    let yDisp := if eucDist > zero && useY then yDisp + wij * (vy + d * dy / eucDist) else yDisp
+    newPositionSums a w posX posY n nodeIdx row ux uy zero useX useY (j + 1) weightSum xDisp yDisp
 
-/-- `compute_new_position_soa`: the new position of node `nodeIdx` (weighted average of the positions
-suggested by all other nodes, restricted by `DIMENSION`). -/
-def computeNewPosition (m : StressMajorization) (posX posY : FloatArray) (nodeIds : Array Nat)
-    (nodeIdx n : Nat) : Float × Float :=
-  let uId := nodeIds[nodeIdx]!
-  let ux := posX.get! nodeIdx
-  let uy := posY.get! nodeIdx
-  let (weightSum, xDisp, yDisp) :=
-    newPositionSums (m.apsp[uId]!) (m.w[uId]!) posX posY nodeIds nodeIdx n ux uy
-      (m.dim != Dimension.y) (m.dim != Dimension.x) 0 0.0 0.0 0.0
-  match m.dim with
-  | .x => (xDisp / weightSum, uy)
-  | .y => (ux, yDisp / weightSum)
-  | .xy => (xDisp / weightSum, yDisp / weightSum)
+/-- One Gauss-Seidel sweep of `execute` from node `i` on: every non-fixed node gets the new position
+of `compute_new_position_soa` (weighted average of the positions suggested by all other nodes,
+restricted by `DIMENSION`), later nodes see the updated positions of earlier ones. -/
+private partial def sweep (a w : FloatArray) (fixed : Array Bool) (dim : Dimension) (n : USize)
+    (zero : Float) (i : USize) (posX posY : FloatArray) : FloatArray × FloatArray :=
+  if i >= n then (posX, posY)
+  else if fixed[i.toNat]! then sweep a w fixed dim n zero (i + 1) posX posY
+  else
+    let ux := fgetU posX i zero
+    let uy := fgetU posY i zero
+    let useX := match dim with | .y => false | _ => true
+    let useY := match dim with | .x => false | _ => true
+    let s := newPositionSums a w posX posY n i (i * n) ux uy zero useX useY 0 zero zero zero
+    let (nx, ny) : Float × Float := match dim with
+      | .x => (s.xDisp / s.weightSum, uy)
+      | .y => (ux, s.yDisp / s.weightSum)
+      | .xy => (s.xDisp / s.weightSum, s.yDisp / s.weightSum)
+    sweep a w fixed dim n zero (i + 1) (fsetU posX i nx) (fsetU posY i ny)
 
 /-- `StressMajorization::execute(graph)`: iterates until `done`, then stores the positions in the
 graph (nodes with `StressOptions.FIXED` keep their position). -/
@@ -206,17 +284,17 @@ def execute (m : StressMajorization) (graph : FGraph) : FGraph := Id.run do
     posY := posY.push pos.y
     nodeIds := nodeIds.push (graph.arena.nodeId[nid.idx]!)
     fixed := fixed.push ((graph.arena.nodeProperties[nid.idx]!).getD StressOptions.FIXED false)
+  let (a, w) := m.permuted nodeIds n
+  let nu := n.toUSize
   let mut count : Int := 0
-  let mut prevStress := m.computeStress posX posY nodeIds n
+  let mut prevStress := computeStress a w posX posY n
   let mut curStress := Float.posInf
   while true do
     if count > 0 then prevStress := curStress
-    for i in [0:n] do
-      if fixed[i]! then continue
-      let (nx, ny) := m.computeNewPosition posX posY nodeIds i n
-      posX := posX.set! i nx
-      posY := posY.set! i ny
-    curStress := m.computeStress posX posY nodeIds n
+    let (posX', posY') := sweep a w fixed m.dim nu 0.0 0 posX posY
+    posX := posX'
+    posY := posY'
+    curStress := computeStress a w posX posY n
     if m.done count prevStress curStress then break
     count := count + 1
   let mut arena := graph.arena
