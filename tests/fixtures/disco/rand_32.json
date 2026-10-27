@@ -1,0 +1,314 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "elk.aspectRatio": "3.9",
+  "elk.spacing.componentComponent": "25",
+  "elk.padding": "[top=3,left=8,bottom=2,right=15]"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 400,
+   "y": 81,
+   "width": 74,
+   "height": 59
+  },
+  {
+   "id": "n1",
+   "x": 454,
+   "y": 184,
+   "width": 32,
+   "height": 12,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n1_p0",
+     "x": 8,
+     "y": 8,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n1_p1",
+     "x": 23,
+     "y": 4,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "x": 369,
+   "y": 446,
+   "width": 71,
+   "height": 8,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "x": 321,
+   "y": 128,
+   "width": 38,
+   "height": 37,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n3_p0",
+     "x": 14,
+     "y": 25,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n4",
+   "x": 493,
+   "y": 70,
+   "width": 75,
+   "height": 21,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n4_p0",
+     "x": 71,
+     "y": 9,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n4_p1",
+     "x": 13,
+     "y": 14,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "x": 26,
+   "y": 231,
+   "width": 69,
+   "height": 64,
+   "ports": [
+    {
+     "id": "n5_p0",
+     "x": 49,
+     "y": 49,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n5_p1",
+     "x": 45,
+     "y": 26,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n5_p2",
+     "x": 12,
+     "y": 23,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n6",
+   "x": 176,
+   "y": 127,
+   "width": 74,
+   "height": 65
+  },
+  {
+   "id": "n7",
+   "x": 102,
+   "y": 439,
+   "width": 35,
+   "height": 26
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n2"
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "1"
+   }
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n3"
+   ],
+   "sections": [
+    {
+     "id": "s1",
+     "startPoint": {
+      "x": 126,
+      "y": 269
+     },
+     "endPoint": {
+      "x": 201,
+      "y": 249
+     },
+     "bendPoints": [
+      {
+       "x": 469,
+       "y": 222
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n5_p1"
+   ],
+   "sections": [
+    {
+     "id": "s2",
+     "startPoint": {
+      "x": 219,
+      "y": 0
+     },
+     "endPoint": {
+      "x": 461,
+      "y": 475
+     },
+     "bendPoints": [
+      {
+       "x": 9,
+       "y": 309
+      },
+      {
+       "x": 132,
+       "y": 182
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n7"
+   ],
+   "sections": [
+    {
+     "id": "s3",
+     "startPoint": {
+      "x": 475,
+      "y": 175
+     },
+     "endPoint": {
+      "x": 386,
+      "y": 63
+     },
+     "bendPoints": [
+      {
+       "x": 47,
+       "y": 267
+      },
+      {
+       "x": 61,
+       "y": 34
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n0"
+   ],
+   "sections": [
+    {
+     "id": "s4",
+     "startPoint": {
+      "x": 462,
+      "y": 253
+     },
+     "endPoint": {
+      "x": 488,
+      "y": 291
+     },
+     "bendPoints": [
+      {
+       "x": 300,
+       "y": 155
+      }
+     ]
+    }
+   ],
+   "labels": [
+    {
+     "text": "e",
+     "x": 476,
+     "y": 221,
+     "width": 12,
+     "height": 8
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "3"
+   }
+  }
+ ]
+}

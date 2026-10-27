@@ -1,0 +1,62 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 10,
+      "y": 10,
+      "width": 30,
+      "height": 20
+    },
+    {
+      "id": "b",
+      "x": 60,
+      "y": 10,
+      "width": 40,
+      "height": 25
+    },
+    {
+      "id": "c",
+      "x": 10,
+      "y": 100,
+      "width": 40,
+      "height": 25
+    },
+    {
+      "id": "d",
+      "x": 300,
+      "y": 10,
+      "width": 20,
+      "height": 25
+    }
+  ],
+  "edges": [
+    {
+      "id": "ab",
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 40,
+            "y": 20
+          },
+          "endPoint": {
+            "x": 60,
+            "y": 22
+          },
+          "bendPoints": []
+        }
+      ]
+    }
+  ]
+}

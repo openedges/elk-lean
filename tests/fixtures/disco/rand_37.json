@@ -1,0 +1,205 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "elk.aspectRatio": "4.0",
+  "elk.spacing.componentComponent": "49",
+  "org.eclipse.elk.polyomino.highLevelSort": "CORNER_CASES_THAN_SINGLE_SIDE_LAST"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 339,
+   "y": 55,
+   "width": 61,
+   "height": 68,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n0_p0",
+     "x": 37,
+     "y": 31,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n0_p1",
+     "x": 40,
+     "y": 17,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 78,
+   "y": 336,
+   "width": 5,
+   "height": 70,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "x": 377,
+   "y": 17,
+   "width": 48,
+   "height": 54,
+   "ports": [
+    {
+     "id": "n2_p0",
+     "x": 24,
+     "y": 26,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0_p1"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "x_rp_WEST",
+   "sources": [
+    "rp_WEST"
+   ],
+   "targets": [
+    "n1"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_WEST",
+     "startPoint": {
+      "x": 0,
+      "y": 300
+     },
+     "endPoint": {
+      "x": 110,
+      "y": 426
+     },
+     "bendPoints": [
+      {
+       "x": 497,
+       "y": 177
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "x_rp_EAST",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "rp_EAST"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_EAST",
+     "startPoint": {
+      "x": 594,
+      "y": 300
+     },
+     "endPoint": {
+      "x": 382,
+      "y": 461
+     },
+     "bendPoints": [
+      {
+       "x": 487,
+       "y": 261
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "x_rp_NORTH",
+   "sources": [
+    "rp_NORTH"
+   ],
+   "targets": [
+    "n2"
+   ],
+   "sections": [
+    {
+     "id": "x_rp_NORTH",
+     "startPoint": {
+      "x": 300,
+      "y": 0
+     },
+     "endPoint": {
+      "x": 393,
+      "y": 209
+     },
+     "bendPoints": [
+      {
+       "x": 477,
+       "y": 384
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "width": 600,
+ "height": 600,
+ "ports": [
+  {
+   "id": "rp_WEST",
+   "x": 0,
+   "y": 300,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "WEST"
+   }
+  },
+  {
+   "id": "rp_EAST",
+   "x": 594,
+   "y": 300,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "EAST"
+   }
+  },
+  {
+   "id": "rp_NORTH",
+   "x": 300,
+   "y": 0,
+   "width": 6,
+   "height": 6,
+   "layoutOptions": {
+    "elk.port.side": "NORTH"
+   }
+  }
+ ]
+}

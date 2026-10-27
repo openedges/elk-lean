@@ -1,0 +1,34 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 20,
+      "y": 20,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "id": "b",
+      "x": 90,
+      "y": 20,
+      "width": 50,
+      "height": 50
+    }
+  ],
+  "edges": [
+    {
+      "id": "ab",
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    }
+  ]
+}

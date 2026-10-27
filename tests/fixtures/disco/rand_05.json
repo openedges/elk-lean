@@ -1,0 +1,128 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "elk.aspectRatio": "0.4",
+  "elk.spacing.componentComponent": "28",
+  "elk.padding": "[top=14,left=15,bottom=6,right=10]",
+  "org.eclipse.elk.polyomino.fill": "true",
+  "org.eclipse.elk.polyomino.traversalStrategy": "QUADRANTS_JITTER"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 210,
+   "y": 448,
+   "width": 56,
+   "height": 73
+  },
+  {
+   "id": "n1",
+   "x": 281,
+   "y": 338,
+   "width": 43,
+   "height": 50,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ],
+   "ports": [
+    {
+     "id": "n1_p0",
+     "x": 23,
+     "y": 13,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n1_p1",
+     "x": 2,
+     "y": 42,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "x": 152,
+   "y": 395,
+   "width": 79,
+   "height": 10,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "x": 44,
+   "y": 151,
+   "width": 38,
+   "height": 34
+  },
+  {
+   "id": "n4",
+   "x": 500,
+   "y": 182,
+   "width": 31,
+   "height": 55
+  },
+  {
+   "id": "n5",
+   "x": 136,
+   "y": 405,
+   "width": 74,
+   "height": 11
+  },
+  {
+   "id": "n6",
+   "x": 306,
+   "y": 242,
+   "width": 40,
+   "height": 58,
+   "ports": [
+    {
+     "id": "n6_p0",
+     "x": 38,
+     "y": 6,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "n6_p1",
+     "x": 1,
+     "y": 23,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "x": 282,
+   "y": 408,
+   "width": 55,
+   "height": 41
+  },
+  {
+   "id": "n8",
+   "x": 351,
+   "y": 428,
+   "width": 64,
+   "height": 73
+  }
+ ],
+ "edges": []
+}

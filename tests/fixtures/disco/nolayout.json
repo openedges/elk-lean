@@ -1,0 +1,77 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 30
+    },
+    {
+      "id": "b",
+      "x": 80,
+      "y": 0,
+      "width": 50,
+      "height": 30
+    },
+    {
+      "id": "c",
+      "x": 0,
+      "y": 70,
+      "width": 50,
+      "height": 30
+    },
+    {
+      "id": "d",
+      "x": 200,
+      "y": 200,
+      "width": 80,
+      "height": 60
+    },
+    {
+      "id": "e",
+      "x": 220,
+      "y": 20,
+      "width": 20,
+      "height": 20
+    }
+  ],
+  "edges": [
+    {
+      "id": "bc",
+      "sources": [
+        "b"
+      ],
+      "targets": [
+        "c"
+      ],
+      "sections": [
+        {
+          "id": "s",
+          "startPoint": {
+            "x": 105,
+            "y": 30
+          },
+          "endPoint": {
+            "x": 25,
+            "y": 70
+          },
+          "bendPoints": [
+            {
+              "x": 105,
+              "y": 50
+            },
+            {
+              "x": 25,
+              "y": 50
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "children": [
+    {
+      "height": 0,
+      "id": "a",
+      "width": 0,
+      "x": 5.51453420338458,
+      "y": 5.51453420338458
+    },
+    {
+      "height": 0,
+      "id": "b",
+      "width": 0,
+      "x": 5.51453420338458,
+      "y": 5.51453420338458
+    },
+    {
+      "height": 10,
+      "id": "c",
+      "width": 10,
+      "x": 0.20817119208543744,
+      "y": 0.20817119208543744
+    }
+  ],
+  "edges": [],
+  "height": 34.416342384170875,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "elk.spacing.componentComponent": "0",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "width": 34.416342384170875,
+  "x": 0,
+  "y": 0
+}

@@ -1,0 +1,44 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "3.39",
+  "elk.spacing.componentComponent": "48",
+  "org.eclipse.elk.polyomino.traversalStrategy": "SPIRAL"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "x": 335,
+   "y": 428,
+   "width": 59,
+   "height": 25,
+   "labels": [
+    {
+     "text": "L",
+     "x": 2,
+     "y": 2,
+     "width": 10,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": 385,
+   "y": 36,
+   "width": 70,
+   "height": 55,
+   "ports": [
+    {
+     "id": "n1_p0",
+     "x": 0,
+     "y": 37,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  }
+ ],
+ "edges": []
+}

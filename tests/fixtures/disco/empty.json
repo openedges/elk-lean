@@ -1,0 +1,9 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+  },
+  "children": [],
+  "edges": []
+}
