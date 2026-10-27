@@ -140,17 +140,19 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
   let portLabelsPlacement ← a.node.getPropertyD node CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
   let portLabelsTreatAsGroup ← a.node.getPropertyD node CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
   let nodeLabelPlacement ← a.node.getPropertyD node CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty
-  -- Copy spacings for convenience
-  let nodeLabelsPadding := (← a.getIndividualOrInherited node CoreOptions.NODE_LABELS_PADDING).getD {}
-  let nodeLabelSpacing := (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_NODE).getD 0.0
-  let labelLabelSpacing := (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_LABEL).getD 0.0
-  let portPortSpacing := (← a.getIndividualOrInherited node CoreOptions.SPACING_PORT_PORT).getD 0.0
+  -- Copy spacings for convenience (`getIndividualOrInherited`, the node's individual spacings and
+  -- graph read once)
+  let spacings ← a.spacingSource node
+  let nodeLabelsPadding := (← a.getIndividualOrInheritedFrom spacings CoreOptions.NODE_LABELS_PADDING).getD {}
+  let nodeLabelSpacing := (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_NODE).getD 0.0
+  let labelLabelSpacing := (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_LABEL).getD 0.0
+  let portPortSpacing := (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_PORT_PORT).getD 0.0
   let portLabelSpacingHorizontal :=
-    (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD 0.0
+    (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD 0.0
   let portLabelSpacingVertical :=
-    (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD 0.0
+    (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD 0.0
   let surroundingPortMargins :=
-    (← a.getIndividualOrInherited node CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
+    (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
   let labelCellSpacing := 2.0 * labelLabelSpacing
   -- Port alignment per side
   let portAlignmentDefault ← a.node.getPropertyD node CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
@@ -163,7 +165,7 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
   -- Node minimum size
   let nodeSizeMinimum ← a.node.getPropertyD node CoreOptions.NODE_SIZE_MINIMUM KVector.zero
   -- NODE_SIZE_FIXED_GRAPH_SIZE comes from the parent graph
-  let nodeSizeFixedGraphSize ← match ← a.getGraph node with
+  let nodeSizeFixedGraphSize ← match spacings.graph with
     | some g => a.graph.getPropertyD g CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
     | none => pure false
   -- Create main cells (the others will be created later by the algorithm phases)
@@ -187,9 +189,11 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
 
 /-! ### Cell system access -/
 
-/-- Updates the cell arena. -/
+/-- Updates the cell arena (taken out of the context first, so that `f` can update it in place). -/
 @[inline] def modifyCells (ctx : NodeContext N P L) (f : CellArena L → CellArena L) : NodeContext N P L :=
-  { ctx with cells := f ctx.cells }
+  let cells := ctx.cells
+  let ctx : NodeContext N P L := { ctx with cells := {} }
+  { ctx with cells := f cells }
 
 /-- elk-rs `NodeContext::inside_node_label_container()`: the center cell of the middle row if it
 is a grid (created by `NodeLabelCellCreator`), else `none`. -/
@@ -248,7 +252,10 @@ def setPortContextsOf (ctx : NodeContext N P L) (side : PortSide) (pcs : Array (
 /-- Updates the contexts of one side in place (elk-rs `port_contexts.get_mut(&side)`). -/
 def modifyPortContextsOf (ctx : NodeContext N P L) (side : PortSide)
     (f : Array (PortContext P L) → Array (PortContext P L)) : NodeContext N P L :=
-  { ctx with portContexts := ctx.portContexts.modify (ElkEnum.ordinal side) f }
+  -- take the arrays out of the context so that `modify` and `f` update them in place
+  let pcs := ctx.portContexts
+  let ctx : NodeContext N P L := { ctx with portContexts := #[] }
+  { ctx with portContexts := pcs.modify (ElkEnum.ordinal side) f }
 
 /-- Updates the `i`-th context of one side (ignored if out of range). -/
 def modifyPortContext (ctx : NodeContext N P L) (side : PortSide) (i : Nat)

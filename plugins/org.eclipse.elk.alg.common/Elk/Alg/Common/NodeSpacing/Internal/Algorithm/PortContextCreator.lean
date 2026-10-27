@@ -52,15 +52,12 @@ def computeLabelsNextToPort (a : GraphAdapters m G N P L E) (ctx : NodeContext N
   else
     return false
 
-/-- `PortContextCreator.createPortContext(nodeContext, port, imPortLabels)` (elk-rs
-`create_port_context`): extracts the port's data into a new `PortContext`, creates the port label
-cell (gap `labelLabelSpacing`, one label per port label, in label order) if `imPortLabels` holds
-and port labels are not fixed, and appends the context to its side. The port's volatile id must
-already be set. -/
-def createPortContext (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
-    (imPortLabels : Bool) : m (NodeContext N P L) := do
+/-- `createPortContext` for a port whose side the caller has read already. The port's labels and
+their sizes are read once (Java/elk-rs read them again for the label cell; adapter reads have no
+side effects). -/
+def createPortContextOnSide (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
+    (portSide : PortSide) (imPortLabels : Bool) : m (NodeContext N P L) := do
   let portSize ← a.port.getSize port
-  let portSide ← a.portSide port
   let portPosition ← a.port.getPosition port
   let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET 0.0
   let hasPortBorderOffset ← a.port.hasProp port CoreOptions.PORT_BORDER_OFFSET
@@ -73,17 +70,28 @@ def createPortContext (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) 
   let volatileId ← a.port.getVolatileId port
   let pc : PortContext P L := PortContext.new port portSize portSide volatileId portPosition
     portBorderOffset hasPortBorderOffset hasCompoundConnections
-  let mut pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions }
-  let mut ctx := ctx
+  let pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions }
   -- If the port has labels and if port labels are to be placed, we need to remember them
   if imPortLabels && !PortLabelPlacement.isFixed ctx.portLabelsPlacement then
-    let (cells, labelCell) := ctx.cells.createLabel ctx.labelLabelSpacing
+    -- take the arena out of the context so that it is updated in place
+    let cells := ctx.cells
+    let ctx := { ctx with cells := {} }
+    let (cells, labelCell) := cells.createLabel ctx.labelLabelSpacing
     let mut cells := cells
-    for label in (← a.portLabels port) do
-      cells := cells.addLabel labelCell label (← a.label.getSize label)
-    ctx := { ctx with cells }
-    pc := { pc with portLabelCell := some labelCell }
+    for i in [0:labels.size] do
+      if h : i < labels.size then
+        cells := cells.addLabel labelCell labels[i] (labelSizes.getD i {})
+    return { ctx with cells }.addPortContext { pc with portLabelCell := some labelCell }
   return ctx.addPortContext pc
+
+/-- `PortContextCreator.createPortContext(nodeContext, port, imPortLabels)` (elk-rs
+`create_port_context`): extracts the port's data into a new `PortContext`, creates the port label
+cell (gap `labelLabelSpacing`, one label per port label, in label order) if `imPortLabels` holds
+and port labels are not fixed, and appends the context to its side. The port's volatile id must
+already be set. -/
+def createPortContext (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
+    (imPortLabels : Bool) : m (NodeContext N P L) := do
+  createPortContextOnSide a ctx port (← a.portSide port) imPortLabels
 
 /-- `PortContextCreator.createPortContexts(nodeContext, ignoreInsidePortLabels)` (elk-rs
 `create_port_contexts`): assigns volatile ids `0, 1, …` to the node's ports in port order, creates
@@ -97,11 +105,12 @@ def createPortContexts [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) 
   let mut ctx := ctx
   let mut volatileId : Int := 0
   for port in (← a.nodePorts ctx.node) do
-    if (← a.portSide port) == .undefined then
+    let portSide ← a.portSide port
+    if portSide == .undefined then
       throwIllegalArgument
         "Label and node size calculator can only be used with ports that have port sides assigned."
     a.port.setVolatileId port volatileId
-    ctx ← createPortContext a ctx port imPortLabels
+    ctx ← createPortContextOnSide a ctx port portSide imPortLabels
     volatileId := volatileId + 1
   -- Java's TreeMultimap order: NORTH/EAST ascending, SOUTH/WEST descending by volatile id
   ctx := ctx.modifyPortContextsOf .south (·.reverse)

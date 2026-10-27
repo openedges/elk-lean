@@ -123,24 +123,49 @@ structure GraphAdapters (m : Type → Type) (G N P L E : Type) where
   /-- `EdgeAdapter.getLabels()`. -/
   edgeLabels : E → m (Array L)
 
+/-- The two lookup sources of `IndividualSpacings.getIndividualOrInherited(NodeAdapter, property)`
+for one node: its `SPACING_INDIVIDUAL` value (if the property is set and decodes) and its graph
+(`NodeAdapter.getGraph()`). Read once with `GraphAdapters.spacingSource` and used for several
+lookups with `GraphAdapters.getIndividualOrInheritedFrom`, it saves the repeated adapter reads of
+`getIndividualOrInherited` (no Java counterpart; the node's properties and graph must not change
+in between). -/
+structure SpacingSource (G : Type) where
+  /-- The node's individual spacings (`none` if `SPACING_INDIVIDUAL` is not set). -/
+  individual : Option IndividualSpacings
+  /-- The node's graph. -/
+  graph : Option G
+
 namespace GraphAdapters
 
 variable {m : Type → Type} {G N P L E : Type} [Monad m]
 
-/-- `IndividualSpacings.getIndividualOrInherited(NodeAdapter, property)`: the node's
-individual spacing if set, else the parent graph's value, else the property default. -/
-def getIndividualOrInherited {α : Type} [PropCodec α] (a : GraphAdapters m G N P L E) (n : N) (p : Property α) : m (Option α) := do
+/-- Reads the `SpacingSource` of a node: `SPACING_INDIVIDUAL` if the node has the property, and
+the node's graph. -/
+def spacingSource (a : GraphAdapters m G N P L E) (n : N) : m (SpacingSource G) := do
+  let individual ←
+    if ← a.node.hasProp n CoreOptions.SPACING_INDIVIDUAL then a.node.getProperty n CoreOptions.SPACING_INDIVIDUAL
+    else pure none
+  return { individual, graph := ← a.getGraph n }
+
+/-- `getIndividualOrInherited` on a `SpacingSource` read before: the individual spacing if set,
+else the graph's value, else the property default. -/
+def getIndividualOrInheritedFrom {α : Type} [PropCodec α] (a : GraphAdapters m G N P L E) (src : SpacingSource G)
+    (p : Property α) : m (Option α) := do
   let mut result : Option α := none
-  if ← a.node.hasProp n CoreOptions.SPACING_INDIVIDUAL then
-    if let some individual ← a.node.getProperty n CoreOptions.SPACING_INDIVIDUAL then
-      if individual.props.has p then
-        result := individual.props.get p
+  if let some individual := src.individual then
+    if individual.props.has p then
+      result := individual.props.get p
   if result.isNone then
-    if let some g ← a.getGraph n then
+    if let some g := src.graph then
       result ← a.graph.getProperty g p
   if result.isNone then
     result := p.default
   return result
+
+/-- `IndividualSpacings.getIndividualOrInherited(NodeAdapter, property)`: the node's
+individual spacing if set, else the parent graph's value, else the property default. -/
+def getIndividualOrInherited {α : Type} [PropCodec α] (a : GraphAdapters m G N P L E) (n : N) (p : Property α) : m (Option α) := do
+  a.getIndividualOrInheritedFrom (← a.spacingSource n) p
 
 end GraphAdapters
 
