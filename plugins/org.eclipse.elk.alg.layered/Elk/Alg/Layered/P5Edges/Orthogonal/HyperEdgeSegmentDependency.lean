@@ -105,9 +105,16 @@ place when `f` is not inlined (see `HyperEdgeSegment.pushOutgoingDependency`). -
 @[inline] def modifySegment (g : SegmentGraph) (i : Nat) (f : HyperEdgeSegment → HyperEdgeSegment) : SegmentGraph :=
   { g with segments := g.segments.modify i f }
 
+/-- Appends a segment (Rust `edge_segments.push(segment)`); its index is the previous number of
+segments. -/
+def pushSegment (g : SegmentGraph) (s : HyperEdgeSegment) : SegmentGraph :=
+  match g with
+  | ⟨segments, sources, targets, weights, criticals, sourcePositions, targetPositions⟩ =>
+    ⟨segments.push s, sources, targets, weights, criticals, sourcePositions, targetPositions⟩
+
 /-- Appends a segment (Rust `edge_segments.push(segment)`), returning its index. -/
 def addSegment (g : SegmentGraph) (s : HyperEdgeSegment) : SegmentGraph × Nat :=
-  ({ g with segments := g.segments.push s }, g.segments.size)
+  (g.pushSegment s, g.segments.size)
 
 /-- Size of the outgoing dependency list of segment `i` (`0` for an invalid index). -/
 @[inline] private def outgoingSize (g : SegmentGraph) (i : Nat) : Nat :=

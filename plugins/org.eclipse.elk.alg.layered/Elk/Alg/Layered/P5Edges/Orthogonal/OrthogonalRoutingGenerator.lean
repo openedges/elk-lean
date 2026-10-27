@@ -307,9 +307,13 @@ def createHyperEdgeSegments (gen : OrthogonalRoutingGenerator) (a : LGraphArena)
       if !portMap.contains port then
         let index := g.segments.size
         let (segment, m) := HyperEdgeSegment.addPortPositions a index (HyperEdgeSegment.new gen.routingDirection) port portMap
-        g := (g.addSegment segment).1
+        g := g.pushSegment segment
         portMap := m
   return (g, portMap)
+
+/-- Number of ports of `nodes` (capacity hint of the port map). -/
+private def portCount (a : LGraphArena) (nodes : Array LNodeId) : Nat :=
+  nodes.foldl (fun acc n => acc + (a.node n).ports.size) 0
 
 /-- The splitter with this generator's callbacks (Java `new HyperEdgeSegmentSplitter(this)`). -/
 def splitter (gen : OrthogonalRoutingGenerator) : HyperEdgeSegmentSplitter :=
@@ -474,7 +478,9 @@ def routeEdges (gen : OrthogonalRoutingGenerator) (graph : LGraphId) (sourceLaye
     | some s => pure s
     | none => withArena (ArenaScope.ofGraph · graph)
   let g ← withArena fun a =>
-    let (g, portMap) := gen.createHyperEdgeSegments a sourceLayerNodes gen.routingStrategy.sourcePortSide {} {}
+    -- (the map is only used for lookups, so its capacity does not matter)
+    let portMap := Std.HashMap.emptyWithCapacity (portCount a sourceLayerNodes + portCount a targetLayerNodes)
+    let (g, portMap) := gen.createHyperEdgeSegments a sourceLayerNodes gen.routingStrategy.sourcePortSide {} portMap
     (gen.createHyperEdgeSegments a targetLayerNodes gen.routingStrategy.targetPortSide g portMap).1
   gen.traceSegments "initial" g
   let gen := { gen with

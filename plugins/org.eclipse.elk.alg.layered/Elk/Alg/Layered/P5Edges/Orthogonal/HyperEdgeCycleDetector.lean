@@ -54,6 +54,23 @@ private structure State where
   /-- `next_source_mark`. -/
   nextSourceMark : Int
 
+/-- The dependency lists a run considers, per segment: the segments' outgoing and incoming lists, or
+(critical-only runs) their critical entries in list order. Every function below visits the
+dependencies in list order and skips the non-critical ones of a critical-only run, so iterating the
+filtered lists is the same. -/
+private structure Lists where
+  outgoing : Array (Array Nat)
+  incoming : Array (Array Nat)
+
+/-- The lists of a run on `g`. -/
+private def Lists.of (g : SegmentGraph) (criticalOnly : Bool) : Lists :=
+  if criticalOnly then
+    { outgoing := g.segments.map fun seg => seg.outgoingSegmentDependencies.filter g.depIsCritical
+      incoming := g.segments.map fun seg => seg.incomingSegmentDependencies.filter g.depIsCritical }
+  else
+    { outgoing := g.segments.map (·.outgoingSegmentDependencies)
+      incoming := g.segments.map (·.incomingSegmentDependencies) }
+
 /-- Sums of the weights of all and of the critical dependencies among `deps[k:]` (one pass). -/
 private partial def sumWeights (g : SegmentGraph) (deps : Array Nat) (k : Nat) (total critical : Int) : Int × Int :=
   if h : k < deps.size then
@@ -71,14 +88,14 @@ private structure Weights where
 
 /-- Appends the (critical) in/out weights of the segments `i, i + 1, …` (`in`/`out` = the critical
 weights when `criticalOnly`). -/
-private partial def collectWeights (g : SegmentGraph) (criticalOnly : Bool) (i : Nat) (w : Weights) : Weights :=
-  if h : i < g.segments.size then
-    let seg := g.segments[i]
-    let (inTotal, inCritical) := sumWeights g seg.incomingSegmentDependencies 0 0 0
-    let (outTotal, outCritical) := sumWeights g seg.outgoingSegmentDependencies 0 0 0
+private partial def collectWeights (g : SegmentGraph) (ls : Lists) (criticalOnly : Bool) (i : Nat) (w : Weights) :
+    Weights :=
+  if h : i < ls.outgoing.size then
+    let (inTotal, inCritical) := sumWeights g ls.incoming[i]! 0 0 0
+    let (outTotal, outCritical) := sumWeights g ls.outgoing[i] 0 0 0
     match w with
     | ⟨inWeight, criticalInWeight, outWeight, criticalOutWeight⟩ =>
-      collectWeights g criticalOnly (i + 1)
+      collectWeights g ls criticalOnly (i + 1)
         ⟨inWeight.push (if criticalOnly then inCritical else inTotal), criticalInWeight.push inCritical,
           outWeight.push (if criticalOnly then outCritical else outTotal), criticalOutWeight.push outCritical⟩
   else w
@@ -86,9 +103,9 @@ private partial def collectWeights (g : SegmentGraph) (criticalOnly : Bool) (i :
 /-- `initialize(segments, sources, sinks, criticalOnly)`: marks `-1, -2, …`, (critical) in/out
 weights, and the initial sinks (no outgoing weight) and sources (else no incoming weight), both in
 segment order. -/
-private def initializeState (g : SegmentGraph) (criticalOnly : Bool) : State :=
+private def initializeState (g : SegmentGraph) (ls : Lists) (criticalOnly : Bool) : State :=
   let n := g.segments.size
-  let ⟨inWeight, criticalInWeight, outWeight, criticalOutWeight⟩ := collectWeights g criticalOnly 0
+  let ⟨inWeight, criticalInWeight, outWeight, criticalOutWeight⟩ := collectWeights g ls criticalOnly 0
     ⟨Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n⟩
   let sinks := (Array.range n).filter fun i => outWeight[i]! == 0
   let sources := (Array.range n).filter fun i => outWeight[i]! != 0 && inWeight[i]! == 0
@@ -148,38 +165,38 @@ private partial def updateSources (g : SegmentGraph) (deps : Array Nat) (critica
 
 /-- `updateNeighbors(node, sources, sinks, criticalOnly)`: removes the node's (critical) dependency
 weights from its unmarked neighbours and queues neighbours that became sources or sinks. -/
-private def updateNeighbors (g : SegmentGraph) (st : State) (node : Nat) (criticalOnly : Bool) : State :=
-  if h : node < g.segments.size then
-    let seg := g.segments[node]
-    let st := updateTargets g seg.outgoingSegmentDependencies criticalOnly 0 st
-    updateSources g seg.incomingSegmentDependencies criticalOnly 0 st
+private def updateNeighbors (g : SegmentGraph) (ls : Lists) (st : State) (node : Nat) (criticalOnly : Bool) : State :=
+  if h : node < ls.outgoing.size then
+    let st := updateTargets g ls.outgoing[node] criticalOnly 0 st
+    updateSources g ls.incoming[node]! criticalOnly 0 st
   else st
 
 /-- Rust `remove_segment(unprocessed, segment)` followed by `segment.mark = mark` and
 `updateNeighbors(segment)`. -/
-private def processSegment (g : SegmentGraph) (st : State) (segment : Nat) (mark : Int) (criticalOnly : Bool) : State :=
+private def processSegment (g : SegmentGraph) (ls : Lists) (st : State) (segment : Nat) (mark : Int) (criticalOnly : Bool) :
+    State :=
   let st := if st.unprocessed[segment]! then
       { st with unprocessed := st.unprocessed.set! segment false, unprocessedCount := st.unprocessedCount - 1 }
     else st
   let st := { st with mark := st.mark.set! segment mark }
-  updateNeighbors g st segment criticalOnly
+  updateNeighbors g ls st segment criticalOnly
 
 /-- `while let Some(sink) = sinks.pop_front()`: processes the queued sinks (marks counting down). -/
-private partial def drainSinks (g : SegmentGraph) (criticalOnly : Bool) (st : State) : State :=
+private partial def drainSinks (g : SegmentGraph) (ls : Lists) (criticalOnly : Bool) (st : State) : State :=
   if h : st.sinksHead < st.sinks.size then
     let sink := st.sinks[st.sinksHead]
     let mark := st.nextSinkMark
     let st := { st with sinksHead := st.sinksHead + 1, nextSinkMark := mark - 1 }
-    drainSinks g criticalOnly (processSegment g st sink mark criticalOnly)
+    drainSinks g ls criticalOnly (processSegment g ls st sink mark criticalOnly)
   else st
 
 /-- `while let Some(source) = sources.pop_front()`: processes the queued sources (marks counting up). -/
-private partial def drainSources (g : SegmentGraph) (criticalOnly : Bool) (st : State) : State :=
+private partial def drainSources (g : SegmentGraph) (ls : Lists) (criticalOnly : Bool) (st : State) : State :=
   if h : st.sourcesHead < st.sources.size then
     let source := st.sources[st.sourcesHead]
     let mark := st.nextSourceMark
     let st := { st with sourcesHead := st.sourcesHead + 1, nextSourceMark := mark + 1 }
-    drainSources g criticalOnly (processSegment g st source mark criticalOnly)
+    drainSources g ls criticalOnly (processSegment g ls st source mark criticalOnly)
   else st
 
 /-- The max-outflow scan over `unprocessed` (entries `order[k:]`): the first segment with critical
@@ -207,32 +224,32 @@ private def compactOrder (order : Array Nat) (unprocessed : Array Bool) : Array 
   order.filter fun i => unprocessed[i]!
 
 /-- The main loop of `computeLinearOrderingMarks` (`while !unprocessed.is_empty()`). -/
-private partial def linearOrderingLoop (g : SegmentGraph) (criticalOnly : Bool) (st : State) (random : Random) :
-    State × Random :=
+private partial def linearOrderingLoop (g : SegmentGraph) (ls : Lists) (criticalOnly : Bool) (st : State)
+    (random : Random) : State × Random :=
   if st.unprocessedCount == 0 then (st, random)
   else
-    let st := drainSources g criticalOnly (drainSinks g criticalOnly st)
+    let st := drainSources g ls criticalOnly (drainSinks g ls criticalOnly st)
     -- drop the removed entries once they make up more than half of the scanned list
     let st := if st.order.size > 2 * st.unprocessedCount then
         { st with order := compactOrder st.order st.unprocessed }
       else st
     let maxSegments := maxOutflowSegments st criticalOnly 0 I32_MIN #[]
-    if maxSegments.isEmpty then linearOrderingLoop g criticalOnly st random
+    if maxSegments.isEmpty then linearOrderingLoop g ls criticalOnly st random
     else
       let (pick, random) := random.nextInt (maxSegments.size : Int)
       let maxNode := maxSegments[pick.toNat]!
       let mark := st.nextSourceMark
-      let st := processSegment g { st with nextSourceMark := mark + 1 } maxNode mark criticalOnly
-      linearOrderingLoop g criticalOnly st random
+      let st := processSegment g ls { st with nextSourceMark := mark + 1 } maxNode mark criticalOnly
+      linearOrderingLoop g ls criticalOnly st random
 
 /-- `computeLinearOrderingMarks(segments, sources, sinks, criticalOnly, random)`: the marks start at
 `n - 1` (sinks, counting down) and `n + 1` (sources, counting up, see `initializeState`); finally the
 marks below `n` are shifted by `n + 1`. -/
-private def computeLinearOrderingMarks (g : SegmentGraph) (st : State) (criticalOnly : Bool) (random : Random) :
-    State × Random :=
+private def computeLinearOrderingMarks (g : SegmentGraph) (ls : Lists) (st : State) (criticalOnly : Bool)
+    (random : Random) : State × Random :=
   let n := g.segments.size
   let markBase : Int := n
-  let (st, random) := linearOrderingLoop g criticalOnly st random
+  let (st, random) := linearOrderingLoop g ls criticalOnly st random
   let shiftBase : Int := (n : Int) + 1
   let mark := st.mark.map fun m => if m < markBase then m + shiftBase else m
   ({ st with mark := mark }, random)
@@ -260,10 +277,11 @@ private partial def writeBack (segments : Array HyperEdgeSegment) (st : State) (
 then outgoing-list order) that point from a higher to a lower linear-ordering mark. Returns them with
 the updated arena (marks, weights) and the advanced generator. -/
 def detectCycles (g : SegmentGraph) (criticalOnly : Bool) (random : Random) : Array Nat × SegmentGraph × Random :=
-  let st := initializeState g criticalOnly
-  let (st, random) := computeLinearOrderingMarks g st criticalOnly random
-  let result := g.segments.size.fold (init := #[]) fun i h result =>
-    collectBackward g st.mark st.mark[i]! g.segments[i].outgoingSegmentDependencies criticalOnly 0 result
+  let ls := Lists.of g criticalOnly
+  let st := initializeState g ls criticalOnly
+  let (st, random) := computeLinearOrderingMarks g ls st criticalOnly random
+  let result := ls.outgoing.size.fold (init := #[]) fun i h result =>
+    collectBackward g st.mark st.mark[i]! ls.outgoing[i] criticalOnly 0 result
   (result, { g with segments := writeBack g.segments st 0 }, random)
 
 end HyperEdgeCycleDetector
