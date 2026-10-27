@@ -658,7 +658,7 @@ def prepareResolver (nodes : Array LNodeId) (betweenNonDummies : Bool := false) 
   r.initAtLayerLevel 0 order
   for i in [0:nodes.size] do
     r.initAtNodeLevel 0 i order
-  r.barycenterStates.modify fun s => s.modify 0 fun l => l.mapIdx fun i o => o.map fun st => { st with barycenter := some i.toFloat }
+  r.barycenterStates.modify fun s => s.modify 0 fun l => l.mapIdx fun i o => o.map fun st => st.setBarycenter (some i.toFloat)
   return r
 
 /-- `assert_successor_constraints_respected(nodes)`: no successor precedes its node. -/

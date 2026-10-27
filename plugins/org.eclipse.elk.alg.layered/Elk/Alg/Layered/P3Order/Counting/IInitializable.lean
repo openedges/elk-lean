@@ -22,25 +22,40 @@ structure Initializable where
   initAtEdgeLevel : Nat → Nat → Nat → Nat → LEdgeId → Array (Array LNodeId) → LayeredM Unit := fun _ _ _ _ _ _ => pure ()
   /-- `initAfterTraversal()`. -/
   initAfterTraversal : LayeredM Unit := pure ()
+  /-- Lean only: `false` when `initAtPortLevel` is the no-op (the traversal then skips the call). -/
+  usesPortLevel : Bool := true
+  /-- Lean only: `false` when `initAtEdgeLevel` is the no-op. -/
+  usesEdgeLevel : Bool := true
 
 namespace Initializable
 
 /-- `IInitializable.init(initializables, order)`: the traversal (ports in node order, edges
-in `connectedEdges` order = incoming then outgoing). -/
+in `connectedEdges` order = incoming then outgoing). Initializables whose port or edge level is the
+no-op (`usesPortLevel`/`usesEdgeLevel`) are not called there, and the edge level is not traversed
+when none uses it. -/
 def init (initializables : Array Initializable) (order : Array (Array LNodeId)) : LayeredM Unit := do
+  let portInits := initializables.filter (·.usesPortLevel)
+  let edgeInits := initializables.filter (·.usesEdgeLevel)
   for h : layerIndex in [0:order.size] do
     let layerNodes := order[layerIndex]
     for i in initializables do i.initAtLayerLevel layerIndex order
     for h2 : nodeIndex in [0:layerNodes.size] do
       let node := layerNodes[nodeIndex]
       for i in initializables do i.initAtNodeLevel layerIndex nodeIndex order
+      if portInits.isEmpty && edgeInits.isEmpty then continue
       let ports := (← getNode node).ports
       for h3 : portIndex in [0:ports.size] do
         let port := ports[portIndex]
-        for i in initializables do i.initAtPortLevel layerIndex nodeIndex portIndex order
-        let edges := (← getPort port).connectedEdges
-        for h4 : edgeIndex in [0:edges.size] do
-          for i in initializables do i.initAtEdgeLevel layerIndex nodeIndex portIndex edgeIndex edges[edgeIndex] order
+        for i in portInits do i.initAtPortLevel layerIndex nodeIndex portIndex order
+        if edgeInits.isEmpty then continue
+        let pt ← getPort port
+        -- `connectedEdges` (incoming, then outgoing) without building the concatenation
+        let incoming := pt.incomingEdges
+        let outgoing := pt.outgoingEdges
+        for h4 : edgeIndex in [0:incoming.size] do
+          for i in edgeInits do i.initAtEdgeLevel layerIndex nodeIndex portIndex edgeIndex incoming[edgeIndex] order
+        for h4 : k in [0:outgoing.size] do
+          for i in edgeInits do i.initAtEdgeLevel layerIndex nodeIndex portIndex (incoming.size + k) outgoing[k] order
   for i in initializables do i.initAfterTraversal
 
 end Initializable

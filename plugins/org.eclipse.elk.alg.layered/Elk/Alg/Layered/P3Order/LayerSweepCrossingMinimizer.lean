@@ -199,14 +199,14 @@ def sortPortsByDummyPositionsInLastLayer (nodeOrder : Array (Array LNodeId)) (pa
   replaceHierarchicalPorts lastLayer parent onRightMostLayer
 
 /-- `sort_ports_by_dummy_positions_in_last_layer_snap(node_order, parent, on_right_most_layer,
-snapshot)`: the same on the flat node indices of a `SweepCopy` (the node type of the first dummy is
-the captured one). -/
-def sortPortsByDummyPositionsInLastLayerSnap (nodeOrder : Array (Array Nat)) (parent : LNodeId)
+snapshot)`: the same on the flat node indices of a `SweepCopy` (`SweepCopy.nodes`, mapped to flat
+indices here; the node type of the first dummy is the captured one). -/
+def sortPortsByDummyPositionsInLastLayerSnap (nodeOrder : Array (Array LNodeId)) (parent : LNodeId)
     (onRightMostLayer : Bool) (snapshot : CrossMinSnapshot) : LayeredM Unit := do
   let some lastLayer := nodeOrder[endIndex onRightMostLayer nodeOrder.size]? | return
   let some first := lastLayer[firstIndex onRightMostLayer lastLayer.size]? | return
-  if snapshot.nodeTypeOf first != .externalPort then return
-  replaceHierarchicalPorts (lastLayer.map snapshot.nodeRef) parent onRightMostLayer
+  if snapshot.nodeTypeOf (snapshot.nodeFlatIndex first) != .externalPort then return
+  replaceHierarchicalPorts (lastLayer.map fun n => snapshot.nodeRef (snapshot.nodeFlatIndex n)) parent onRightMostLayer
 
 /-- `sort_port_dummies_by_port_positions(parent_node, layer_close_to_edge, side)`: the `PORT_DUMMY`s of
 the parent's hierarchical ports on `side` in north-south/east-west order. -/
@@ -638,8 +638,8 @@ def setPortOrderOnParentGraph (index : Nat) : SweepM Unit := do
   if !h.hasExternalPorts then return
   let some best := best | return
   let some parent := h.parentNode | return
-  sortPortsByDummyPositionsInLastLayerSnap best.nodeIndices parent true h.snapshot
-  sortPortsByDummyPositionsInLastLayerSnap best.nodeIndices parent false h.snapshot
+  sortPortsByDummyPositionsInLastLayerSnap best.nodes parent true h.snapshot
+  sortPortsByDummyPositionsInLastLayerSnap best.nodes parent false h.snapshot
   setNodeProp parent LayeredOptions.PORT_CONSTRAINTS PortConstraints.fixedOrder
   if let some parentIndex := h.parentGraphIndex then
     markGraphDirtyForCrossingCount parentIndex
