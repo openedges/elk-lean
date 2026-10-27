@@ -305,7 +305,7 @@ def algorithms : Suite := suite "core.meta.algorithms" do
   check "layered random seed 1" (isInt (layered.defaultValueRaw "org.eclipse.elk.randomSeed") 1)
   check "layered node type default" (isVal (layered.defaultValueRaw "org.eclipse.elk.topdown.nodeType") TopdownNodeTypes.hierarchicalNode)
   check "layered knows noLayout" (layered.knowsOption "org.eclipse.elk.noLayout")
-  checkEq "layered nodeNode default 20 (option support)" (layered.defaultValueRaw "org.eclipse.elk.spacing.nodeNode") (some (.double 20.0))
+  check "layered nodeNode default 20 (option support)" (match layered.defaultValueRaw "org.eclipse.elk.spacing.nodeNode" with | some (.double d) => d == 20.0 | _ => false)
   check "layered knows nodeNode" (layered.knowsOption "org.eclipse.elk.spacing.nodeNode")
   -- typed default access
   check "layered typed edge routing default"
