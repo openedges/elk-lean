@@ -1,4 +1,5 @@
 import Elk.Core.Util.Ffi
+import Elk.Core.Util.FastFloat
 /-!
 # Java / Rust numeric semantics helpers
 
@@ -70,7 +71,10 @@ def Float.javaRound (x : Float) : Int :=
 @[inline] def Float.toF32 (x : Float) : Float := x.toFloat32.toFloat
 
 /-- `Float.ofInt`-style conversion used everywhere (`i as f64`). -/
-@[inline] def Int.toFloat (i : Int) : Float := Float.ofInt i
+@[inline] def Int.toFloat (i : Int) : Float :=
+  -- `FastFloat.ofInt` (not `Float.ofInt`): the compiler inlines this abbreviation after the `csimp`
+  -- pass, so a plain `Float.ofInt` here would call the core (GMP) conversion at every call site
+  FastFloat.ofInt i
 
 /-- Signed interpretation of the raw bits (Java `long`). Built from `UInt64` operations: the
 literal `2^64` and the intermediate `Nat`s of `b.toNat - 2^64` are GMP numbers. -/

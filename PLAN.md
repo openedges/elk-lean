@@ -215,7 +215,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 ### 7.1 Lean 성능 관용구 (프로파일로 확인된 함정, 2026-10-27)
 측정·분석 도구: `elk bench`(시나리오별 시간), `sh scripts/perf/profile_bench.sh <scenario>`(macOS `sample`), `scripts/perf/sample_inclusive.py`(단계별 포함 시간), `scripts/perf/sample_callers.py`(할당·배열 복사 호출자), `sh scripts/perf/scan_generated_c.sh [경로]`(생성 C 정적 검사). 모든 최적화는 출력 비트 일치가 조건이다(`lake test`, 코퍼스 model parity, layered는 strict trace parity).
 
-1. **Float 변환·리터럴**: 코어 `Float.ofScientific`/`ofNat`/`ofInt`/`Nat.toFloat`는 호출마다 GMP 문자열 파싱을 한다. `Elk.Core.Util.FastFloat`의 `@[csimp]`·고우선 인스턴스가 모든 모듈에서 이를 비트 동일한 빠른 경로로 바꾼다(leaf 모듈이 import). 새 leaf 모듈을 만들면 `import Elk.Core.Util.FastFloat`를 넣는다.
+1. **Float 변환·리터럴**: 코어 `Float.ofScientific`/`ofNat`/`ofInt`/`Nat.toFloat`는 호출마다 GMP 문자열 파싱을 한다. `Elk.Core.Util.FastFloat`의 `@[csimp]`·고우선 인스턴스가 모든 모듈에서 이를 비트 동일한 빠른 경로로 바꾼다(leaf 모듈이 import). 새 leaf 모듈을 만들면 `import Elk.Core.Util.FastFloat`를 넣는다. 코어의 `Nat.toFloat`/`Int.toFloat`는 `Float.ofNat`/`Float.ofInt`의 abbrev라 csimp 뒤에 인라인되어 느린 경로가 드러나므로 둘 다 별도 csimp 보조정리로 잡는다(`(i : Int).toFloat` 호출 5개 모듈이 GMP 경로였음). 생성 C에서 `l_Float_ofInt(`·`l_Float_ofNat(`·`l_Float_ofScientific(` 호출이 `FastFloat.c` 밖에 없어야 한다(`scan_generated_c.sh`).
 2. **2^32 이상 `Nat`/`Int` 리터럴 금지(런타임 경로)**: C 백엔드가 `lean_cstr_to_nat("…")`로 매번 파싱한다. `UInt32`/`UInt64` 연산, 시프트(`n >>> 32 != 0`)로 쓴다.
 3. **`for` 루프의 가변 상태**: 가변 변수가 2개 이상이면 상태가 `MProd`로 묶여 반복마다 분해·재구성되고 `Float`는 박싱된다(`lean_box_float` 할당). 핫 루프는 상태를 인자로 받는 꼬리 재귀 `partial def`로 쓴다(`Float`/`UInt*`/`Bool` 인자는 unboxed, 결과 튜플은 끝에서 한 번). 예: `FruchtermanReingoldModel.scanForces`, `StressMajorization.newPositionSums`.
 4. **변환·조회는 루프 밖으로**: `Float.ofInt`, 속성 조회(`getD`), `HashMap` 조회는 루프 전에 `FloatArray`/`Array`로 미리 만든다. id로 인덱싱하는 배열이 해시맵보다 빠르다.
@@ -223,7 +223,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 6. **작은 할당 줄이기**: 핫 경로에서 `Option`/튜플/`KVector` 반환을 피하고(인자로 분해), 작은 도우미에는 `@[inline]`을 붙인다. `Array`에서 원소를 꺼내 고칠 때는 `modify`(소유권 이전)를 쓴다.
 7. **NaN 판정**: `Float.isNaN`/`isFinite`/`isInf`도 FastFloat가 인라인 비교로 바꾼다(코어는 out-of-line C 호출). 핫 루프에서는 `x != x`가 가장 확실하다.
 8. **루프 안의 Float 리터럴**: 컴파일러가 추출하지 못한 리터럴은 반복마다 `FastFloat.ofScientificImpl`을 부른다 → 최상위 `def` 상수(단순 load)로 뺀다.
-9. **`Int`와 리터럴 `0` 비교**는 평가마다 `lean_obj_once` 전역 초기화를 거친다 → `Int` 생성자 매칭(`.ofNat`/`.negSucc`)이나 `UInt`/`Nat` 비교로 바꾼다.
+9. **`Int`와 리터럴 `0` 비교**는 평가마다 `lean_obj_once`(전역 `Int` 상수의 초기화 검사)를 거친다. `Int` 생성자 매칭(`.ofNat`/`.negSucc`)도 Lean 4.35에서는 같은 `lean_int_dec_lt(x, lean_obj_once(0))`로 컴파일되므로 대안이 아니다(PL5·주 에이전트가 생성 C로 확인). 핫 경로는 값을 `UInt64`/`Nat`로 바꾸거나 부호를 별도 `Bool`로 들고 다닌다.
 10. **열거형 `BEq`**(derived)는 `ctorIdx`를 거치는 out-of-line 호출 → 핫 경로는 `match`나 `UInt8` 비교.
 11. **중첩 구조체의 배열 필드를 루프/분기 안에서 `{ d with f := d.f.modify … }`로 갱신**하면 바깥·안쪽 배열이 복사될 수 있다(참조가 남는 경우). `match d with | ⟨a, b, …⟩ => ⟨…⟩`로 분해해 필드를 유일 소유로 유지한다(PL3 `BarycenterData`/`ForsterData`).
 12. **전역 `stableSort`/`rustSortBy`는 특수화되지 않아** 비교마다 클로저 호출·박싱이 든다 → 핫 경로는 키를 미리 뽑아 전용 정렬(같은 비교 순서)로 처리한다(PL3 삽입 정렬, PT 키 정렬).

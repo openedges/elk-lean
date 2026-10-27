@@ -89,6 +89,11 @@ def ofInt (i : Int) : Float := Float.ofInt i
 the compiler would otherwise inline after the `csimp` pass). -/
 @[csimp] theorem natToFloat_eq : @Nat.toFloat = @ofNat := rfl
 
+/-- Compiled code calls `FastFloat.ofInt` for the core `Int.toFloat` (`(i : Int).toFloat`, an
+abbreviation of `Float.ofInt` inlined after the `csimp` pass like `Nat.toFloat`; without this lemma
+those call sites keep the core GMP conversion). -/
+@[csimp] theorem intToFloat_eq : @_root_.Int.toFloat = @ofInt := rfl
+
 /-- `Float.isNaN` as an inline comparison (`x != x` holds exactly for NaN); the core function is an
 out-of-line C call (`lean_float_isnan`) that showed up in profiles of `fmax`/`fmin`. -/
 def isNaNImpl (x : Float) : Bool := x != x
