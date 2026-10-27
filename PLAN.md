@@ -211,6 +211,17 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 - 메모리: 순환 없음 → 누수 없음. 큰 중간 구조(trace 스냅샷, SoA)는 프로세서 종료 시 해제.
 - 측정 후 결정: 프로파일(`perf`/Instruments)에서 상위 항목만 최적화하고 elk-rs와 동일한 벤치마크 표로 기록한다.
 
+### 7.1 Lean 성능 관용구 (프로파일로 확인된 함정, 2026-10-27)
+측정·분석 도구: `elk bench`(시나리오별 시간), `sh scripts/perf/profile_bench.sh <scenario>`(macOS `sample`), `scripts/perf/sample_inclusive.py`(단계별 포함 시간), `scripts/perf/sample_callers.py`(할당·배열 복사 호출자), `sh scripts/perf/scan_generated_c.sh [경로]`(생성 C 정적 검사). 모든 최적화는 출력 비트 일치가 조건이다(`lake test`, 코퍼스 model parity, layered는 strict trace parity).
+
+1. **Float 변환·리터럴**: 코어 `Float.ofScientific`/`ofNat`/`ofInt`/`Nat.toFloat`는 호출마다 GMP 문자열 파싱을 한다. `Elk.Core.Util.FastFloat`의 `@[csimp]`·고우선 인스턴스가 모든 모듈에서 이를 비트 동일한 빠른 경로로 바꾼다(leaf 모듈이 import). 새 leaf 모듈을 만들면 `import Elk.Core.Util.FastFloat`를 넣는다.
+2. **2^32 이상 `Nat`/`Int` 리터럴 금지(런타임 경로)**: C 백엔드가 `lean_cstr_to_nat("…")`로 매번 파싱한다. `UInt32`/`UInt64` 연산, 시프트(`n >>> 32 != 0`)로 쓴다.
+3. **`for` 루프의 가변 상태**: 가변 변수가 2개 이상이면 상태가 `MProd`로 묶여 반복마다 분해·재구성되고 `Float`는 박싱된다(`lean_box_float` 할당). 핫 루프는 상태를 인자로 받는 꼬리 재귀 `partial def`로 쓴다(`Float`/`UInt*`/`Bool` 인자는 unboxed, 결과 튜플은 끝에서 한 번). 예: `FruchtermanReingoldModel.scanForces`, `StressMajorization.newPositionSums`.
+4. **변환·조회는 루프 밖으로**: `Float.ofInt`, 속성 조회(`getD`), `HashMap` 조회는 루프 전에 `FloatArray`/`Array`로 미리 만든다. id로 인덱싱하는 배열이 해시맵보다 빠르다.
+5. **모나드 안의 내부 루프**: `StateRefT` 위의 반복은 반복마다 클로저 호출이 생긴다. 필요한 배열을 한 번 꺼내 순수 함수로 계산하고 결과를 한 번에 쓴다. 상태 전체를 바인딩(`let g ← get`)한 채 수정하면 배열 복사(`lean_copy_expand_array`)가 생긴다.
+6. **작은 할당 줄이기**: 핫 경로에서 `Option`/튜플/`KVector` 반환을 피하고(인자로 분해), 작은 도우미에는 `@[inline]`을 붙인다. `Array`에서 원소를 꺼내 고칠 때는 `modify`(소유권 이전)를 쓴다.
+7. **NaN 판정**: `Float.isNaN`/`isFinite`/`isInf`도 FastFloat가 인라인 비교로 바꾼다(코어는 out-of-line C 호출).
+
 ## 8. 배포 설계
 - **CLI**: `elk layout [-f json|elkt] [-a <algorithm>] [-o out] [--pretty] [--sort-keys] [--trace-dir DIR] [--lenient] input`, `elk convert`, `elk algorithms|options|categories`, `elk --version`.
 - **FFI**: `@[export elk_layout_json] (graph options : String) : String`(오류는 JSON `{"error": "..."}`), `elk_known_layout_algorithms/options/categories`, `elk_init`(모듈 initializer + `ensureInitialized`).
