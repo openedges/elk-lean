@@ -33,6 +33,22 @@ def create (crossMinType : CrossMinType) (random : IO.Ref Random) (numLayers : N
   else
     return (← LayerTotalPortDistributor.new numLayers).toSweepPortDistributor
 
+/-- elk-rs `graph_info_holder.rs` `create_port_distributors(cross_min_type, random, num_layers)`:
+the sweep view and, for `BARYCENTER`, the barycenter view of the same distributor (state shared
+through `IO.Ref`s); the greedy distributor for `TWO_SIDED_GREEDY_SWITCH` has no barycenter view.
+Draws `random.nextBoolean()` exactly like `create`. -/
+def createWithBarycenter (crossMinType : CrossMinType) (random : IO.Ref Random) (numLayers : Nat) :
+    BaseIO (SweepPortDistributor × Option BarycenterPortDistributor) := do
+  if crossMinType == .twoSidedGreedySwitch then
+    return ((← GreedyPortDistributor.new).toSweepPortDistributor, none)
+  let needsBarycenter := crossMinType == .barycenter
+  if ← random.modifyGet (·.nextBoolean) then
+    let d ← NodeRelativePortDistributor.new numLayers
+    return (d.toSweepPortDistributor, if needsBarycenter then some d.toBarycenterPortDistributor else none)
+  else
+    let d ← LayerTotalPortDistributor.new numLayers
+    return (d.toSweepPortDistributor, if needsBarycenter then some d.toBarycenterPortDistributor else none)
+
 end SweepPortDistributor
 
 end Elk.Alg.Layered.P3Order

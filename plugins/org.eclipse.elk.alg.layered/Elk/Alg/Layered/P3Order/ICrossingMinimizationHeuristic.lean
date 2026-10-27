@@ -1,10 +1,11 @@
 import Elk.Alg.Layered.P3Order.Counting.IInitializable
+import Elk.Alg.Layered.P3Order.CrossMinSnapshot
 /-!
 # `org.eclipse.elk.alg.layered.p3order.ICrossingMinimizationHeuristic`
 
-A heuristic is created for one graph (`new graph …`), captures its `LGraphId`, keeps its
-mutable state behind `IO.Ref`s and draws random numbers from the graph's generator
-(`LGraphUtil.drawRandom`), which is what the shared Java/Rust `Random` instance amounts to.
+A heuristic is created for one graph, keeps its mutable state behind `IO.Ref`s and draws random
+numbers from the caller's `IO.Ref Random` (captured by `toHeuristic`), which is what the shared
+Java/Rust `Random` instance amounts to.
 The node order is passed in and returned (Java mutates the arrays in place).
 -/
 namespace Elk.Alg.Layered.P3Order
@@ -28,5 +29,8 @@ structure CrossingMinimizationHeuristic where
   resetSweepIteration : LayeredM Unit := pure ()
   /-- elk-rs `increment_sweep_iteration()`. -/
   incrementSweepIteration : LayeredM Unit := pure ()
+  /-- elk-rs `set_snapshot` of the barycenter heuristics (`GraphInfoHolder` downcasts to call it;
+  the other heuristics ignore it). -/
+  setSnapshot : CrossMinSnapshot → BaseIO Unit := fun _ => pure ()
 
 end Elk.Alg.Layered.P3Order

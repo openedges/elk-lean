@@ -330,6 +330,7 @@ def toHeuristic (h : ModelOrderBarycenterHeuristic) (random : IO.Ref Random) : C
   minimizeCrossings := fun order freeLayerIndex forwardSweep isFirstSweep =>
     h.minimizeCrossings order freeLayerIndex forwardSweep isFirstSweep random
   isDeterministic := pure false
+  setSnapshot := h.setSnapshot
 
 end ModelOrderBarycenterHeuristic
 

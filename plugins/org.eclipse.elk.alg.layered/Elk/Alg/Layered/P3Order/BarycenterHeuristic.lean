@@ -513,6 +513,7 @@ def toHeuristic (h : BarycenterHeuristic) (random : IO.Ref Random) : CrossingMin
   isDeterministic := pure false
   resetSweepIteration := h.sweepIteration.set 0
   incrementSweepIteration := h.sweepIteration.modify (· + 1)
+  setSnapshot := h.setSnapshot
 
 end BarycenterHeuristic
 
