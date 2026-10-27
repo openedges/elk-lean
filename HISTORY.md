@@ -153,6 +153,17 @@
 - Apple M1 8GB, 20회/워밍업 3회 기준 lean/rust_api 기하평균 **6.41배**. force·stress 26~32배, layered 5.7~8배(small 1.8배), mrtree·rectpacking 4~5배, radial 1.3~2.3배.
 - 1차 원인(생성 C 확인): `for` 루프의 가변 Float가 2개 이상이면 루프 상태가 `MProd`로 묶여 반복마다 `lean_box_float` 할당이 일어난다(예: stress `computeNewPosition`). Float 1개 상태는 unboxed `double`로 컴파일된다.
 
+### 성능 최적화·Phase 8 작업 할당표 (2026-10-27)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| PF0. 전역 Float 변환(`FastFloat` csimp), 큰 리터럴 제거, force/stress 루프 | 코어 `Init/Data/OfScientific.lean`, `fruchterman_reingold_model.rs`, `stress_majorization.rs` | fable(주) | xhigh | 주 에이전트 | 완료(`67f906b`, `779b9fa`): force_xlarge 4670→348 ms, stress_xlarge 5429→592 ms, 코퍼스 parity 유지 |
+| Z1. JSON 실수 출력 zmij C 포팅 | zmij 1.0.19 `src/lib.rs`(serde_json 1.0.149) | opus | xhigh | 서브에이전트 Z1(worktree) | 진행 중 |
+| N1. NAPI 애드온 + elkjs 호환 npm 패키지 | elk-rs `plugins/org.eclipse.elk.{napi,js}` | opus | high | 서브에이전트 N1(worktree) | 진행 중 |
+| W1. WASM 빌드(emscripten) | elk-rs `plugins/org.eclipse.elk.wasm`, Lean 런타임 | opus | xhigh | 서브에이전트 W1(worktree) | 진행 중 |
+| PL3. layered P3 교차 최소화 성능 | Lean `P3Order/**`(elk-rs `p3_order/**`) | opus | xhigh | 서브에이전트 PL3(worktree) | 진행 중 |
+| PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 진행 중 |
+| PF1. P5 직교 라우팅, JSON transfer, force/stress 나머지 | Lean `P5Edges/Orthogonal/**`, `Elk/Json/*` | fable(주) | xhigh | 주 에이전트 | 진행 중 |
+
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
