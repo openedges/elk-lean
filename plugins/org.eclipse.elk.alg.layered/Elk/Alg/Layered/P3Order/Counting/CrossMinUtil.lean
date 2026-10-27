@@ -15,12 +15,6 @@ open Elk.Core.Options Elk.Alg.Layered.Graph
 every evaluation, a global constant is a plain load. -/
 def floatZero : Float := 0.0
 
-/-- `1.0` as a global (see `floatZero`). -/
-def floatOne : Float := 1.0
-
-/-- `2.0` as a global (see `floatZero`). -/
-def floatTwo : Float := 2.0
-
 /-- Rust `f64::min` with inline NaN tests (`x != x`; `Float.isNaN` is an out-of-line call). -/
 @[inline] def fminInline (a b : Float) : Float :=
   if a != a then b else if b != b then a else if a < b then a else b

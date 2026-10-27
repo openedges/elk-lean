@@ -139,12 +139,6 @@ def ensurePortCapacity (st : BarycenterPortDistributorState) (pid : Nat) : Baryc
     if h2 : nodeIndex < positions.size then positions[nodeIndex] else nodeIndex
   else nodeIndex
 
-/-- Ensures capacity for the largest of `pids` (the snapshot rank paths). -/
-def ensureForAll (st : BarycenterPortDistributorState) (pids : Array Nat) : BarycenterPortDistributorState :=
-  match pids[0]? with
-  | some first => st.ensurePortCapacity (pids.foldl max first)
-  | none => st
-
 end BarycenterPortDistributorState
 
 open BarycenterPortDistributorState
@@ -244,7 +238,8 @@ counted. -/
       outputs := countWithSuccessors s ports 0 0,
       maxIdPlusOne := if h : 0 < ports.size then maxPortIdFrom s ports 1 (s.portId ports[0]) + 1 else 0 }
 
-/-- `ensure_port_capacity` for the largest captured id of the node's ports (`ensureForAll`). -/
+/-- `ensure_port_capacity` for the largest captured id of the node's ports (Rust `ensure_port_capacity`
+of the maximum id). -/
 @[inline] def ensureForCounts (k : RankCounts) (st : BarycenterPortDistributorState) : BarycenterPortDistributorState :=
   if k.maxIdPlusOne == 0 then st else st.ensurePortCapacity (k.maxIdPlusOne - 1)
 
@@ -290,11 +285,6 @@ number of input ports with predecessors, resp. output ports with successors). -/
   | .layerTotal, .input => k.inputs.toFloat
   | .layerTotal, .output => k.outputs.toFloat
   | .layerTotal, .undefined => 0.0
-
-/-- The rank consumed by a node in the snapshot path. -/
-def consumedRankSnap (strategy : PortRankStrategy) (s : CrossMinSnapshot) (node : LNodeId) (ports : Array LPortId)
-    (portType : PortType) : Float :=
-  consumedRankOf strategy (rankCounts s node ports) portType
 
 /-- `calculate_port_ranks_node_relative`, lock path (live ports, `ports_by_type`). -/
 def ranksNodeRelativeLock (a : LGraphArena) (node : LNodeId) (st : BarycenterPortDistributorState)
