@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 /-! Test suites for the layout engine and the core providers (ported from elk-rs
 `plugins/org.eclipse.elk.core/tests/all`): `recursive_graph_layout_engine_test.rs`,
@@ -363,7 +364,7 @@ def fixtureTests : Suite := suite "core.engine.fixtures" do
           IO.println s!"SKIP core.engine.fixtures / {name}: needs the complete layered pipeline"
         else
           report s!"{name}: layout" false e
-      | .ok actual => checkEq s!"{name}: matches oracle" actual expected
+      | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
 
 def suites : Array Tests.Suite :=
   #[recursiveEngineTests, recursiveEngineIntegrationTests, fixedLayoutProviderTests, issueTests,

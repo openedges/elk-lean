@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.RectPacking
 /-!
@@ -825,7 +826,7 @@ private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit :
       let expected ← IO.FS.readFile expectedFile
       match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
       | .error e => report s!"{name}: layout" false e
-      | .ok actual => checkEq s!"{name}: matches oracle" actual expected
+      | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
     else
       -- no oracle output: elk-rs panics (e.g. NONE packing + a whitespace eliminator)
       match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with

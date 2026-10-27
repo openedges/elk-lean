@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.TopdownPacking
 /-!
@@ -230,7 +231,7 @@ def fixtureTests : Suite := suite "topdownpacking.fixtures" do
     let expected ← IO.FS.readFile (fixtureDir / s!"{name}.expected.json")
     match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
     | .error e => report s!"{name}: layout" false e
-    | .ok actual => checkEq s!"{name}: matches oracle" actual expected
+    | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
 
 def suites : Array Tests.Suite := #[metadataTests, packingTests, layoutTests, fixtureTests]
 

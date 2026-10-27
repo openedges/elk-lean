@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.VertiFlex
 /-!
@@ -304,7 +305,7 @@ def fixtureTests : Suite := suite "vertiflex.fixtures" do
       | .error e => report s!"{name}: layout" false e
       | .ok actual =>
         dumpActual name actual
-        checkEq s!"{name}: matches oracle" actual expected
+        checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
   check "error fixtures found" (errors >= 5)
   check "bend fixtures found" (bends >= 10)
 

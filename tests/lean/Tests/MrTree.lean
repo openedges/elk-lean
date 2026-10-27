@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.MrTree
 /-!
@@ -871,7 +872,7 @@ private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit :
       let expected ← IO.FS.readFile (dir / s!"{name}.expected.json")
       match result with
       | .error e => report s!"{name}: layout" false e
-      | .ok actual => report s!"{name}: matches oracle" (actual == expected) (firstDiff actual expected)
+      | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
 
 /-- `mrtree.fixtures`: `Elk.Api.layoutJson` reproduces the stock elk-rs output byte for byte. -/
 def fixtureTests : Suite := suite "mrtree.fixtures" do

@@ -20,13 +20,18 @@ def printer : Suite := suite "json.printer" do
   checkEq "float 1e21" (Value.ofFloat 1e21).render "1e+21"
   checkEq "float 3e-6" (Value.ofFloat 3e-6).render "3e-6"
   checkEq "float f64::MAX" (Value.ofFloat 1.7976931348623157e308).render "1.7976931348623157e+308"
-  checkEq "elk number: 2^64 saturates to u64::MAX" (Value.ofFloatElk 18446744073709551616.0).render "18446744073709551615"
-  checkEq "elk number: 2^63 via u64" (Value.ofFloatElk 9223372036854775808.0).render "9223372036854775808"
+  -- value-preserving like ELK Java: integers only for exactly integral values inside i64
+  checkEq "elk number: 2^64 stays a float" (Value.ofFloatElk 18446744073709551616.0).render "1.8446744073709552e+19"
+  checkEq "elk number: 2^63 stays a float" (Value.ofFloatElk 9223372036854775808.0).render "9.223372036854776e+18"
+  checkEq "elk number: 2^62 integer" (Value.ofFloatElk 4611686018427387904.0).render "4611686018427387904"
+  checkEq "elk number: -0.0 stays a float" (Value.ofFloatElk (-0.0)).render "-0.0"
   checkEq "elk number: -1e19 stays a float" (Value.ofFloatElk (-1e19)).render "-1e+19"
   checkEq "elk number: f64::MAX stays a float" (Value.ofFloatElk 1.7976931348623157e308).render "1.7976931348623157e+308"
-  checkEq "elk number 12" (Value.ofFloatElk 12.0000001).render "12"
+  checkEq "elk number 12.0000001 is not snapped" (Value.ofFloatElk 12.0000001).render "12.0000001"
+  checkEq "elk number 99.99999999999999 is not snapped" (Value.ofFloatElk 99.99999999999999).render "99.99999999999999"
+  checkEq "elk number 12" (Value.ofFloatElk 12.0).render "12"
   checkEq "elk number 27.5" (Value.ofFloatElk 27.5).render "27.5"
-  checkEq "elk number nan" (Value.ofFloatElk (0.0 / 0.0)).render "0"
+  checkEq "elk number nan renders null" (Value.ofFloatElk (0.0 / 0.0)).render "null"
   checkEq "control escape" (Value.str "a\x01b").render "\"a\\u0001b\""
   checkEq "unicode kept" (Value.str "é→").render "\"é→\""
 
@@ -40,7 +45,7 @@ def parserStrict : Suite := suite "json.parser" do
     check "int" (xs[0]! == .num (.int 1))
     check "float kept" (xs[1]! == .num (.float 2.0))
     checkEq "1e2 render" xs[2]!.render "100.0"
-    -- serde_json: `-0` is `ParserNumber::F64(-0.0)` and serialises as `-0.0`
+    -- `-0` is read as `-0.0` like ELK Java (`Double.parseDouble`)
     checkEq "-0 render" xs[3]!.render "-0.0"
     checkEq "u64" xs[4]!.render "18446744073709551615"
     checkEq "big" xs[5]!.render "9223372036854775808"

@@ -31,28 +31,21 @@ def toInt? : Number → Option Int
   | .int i => some i
   | .float f => if f.isFinite && f == f.floor then some f.toIntTrunc else none
 
-/-- `2^64` (`u64::MAX as f64`) as an exact bit pattern: a literal such as `18446744073709551616.0`
-has a mantissa above `2^53` and would take the slow `Float.ofScientific` path at run time whenever
-the compiler does not hoist it (see `Elk.Core.Util.FastFloat`). -/
-private def TWO_POW_64 : Float := Float.ofBits 0x43F0000000000000
-
-/-- `2^63` (`i64::MAX as f64`, `-(i64::MIN as f64)`) as an exact bit pattern. -/
+/-- `2^63` as an exact bit pattern (a literal such as `9223372036854775808.0` has a mantissa above
+`2^53` and would take the slow `Float.ofScientific` path whenever the compiler does not hoist it,
+see `Elk.Core.Util.FastFloat`). -/
 private def TWO_POW_63 : Float := Float.ofBits 0x43E0000000000000
 
-/-- elk-rs `f64_to_number`: finite values within `1e-6` of an integer become
-integers, non-finite values become `0`. Used for all layout results. -/
+/-- A layout result as a JSON number, value-preserving like ELK Java (whose Gson output prints the
+double itself): exactly integral values within the `i64` range become integers (rendered without
+`.0`); `-0.0` and every other value stay floats. Non-finite values stay floats and render as `null`
+(elkjs' `JSON.stringify`; Java's lenient Gson would print `NaN`/`Infinity`). elk-rs instead snaps
+values within `1e-6` of an integer and writes non-finite values as `0` — not followed, because
+the result reference is ELK Java. -/
 def ofFloatElk (x : Float) : Number :=
-  if x.isFinite then
-    let r := x.round
-    if (x - r).abs <= 1e-6 then
-      -- `rounded as u64` for `0 <= rounded <= u64::MAX as f64` (= 2^64, saturating), else
-      -- `rounded as i64` within `[i64::MIN as f64, i64::MAX as f64]`, else the float itself
-      if r >= 0.0 && r <= TWO_POW_64 then
-        .int (if r >= TWO_POW_64 then 18446744073709551615 else (r.toUInt64.toNat : Int))
-      else if r >= -TWO_POW_63 && r <= TWO_POW_63 then .int r.toIntTrunc
-      else .float x
-    else .float x
-  else .int 0
+  if x.isFinite && x == x.round && x.toBits != 0x8000000000000000 && x.abs < TWO_POW_63 then
+    .int x.toInt64.toInt
+  else .float x
 
 /-- Rust `Display` of the underlying value (elk-rs `number_to_string`). -/
 def toRustString : Number → String

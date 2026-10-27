@@ -204,88 +204,10 @@ private partial def startsWithAt (bs : ByteArray) (i : Nat) (lit : ByteArray) (k
     i + k < bs.size && byteAt bs (i + k) == byteAt lit k && startsWithAt bs i lit (k + 1)
   else true
 
-/-- serde_json `POW10`: `1e0 … 1e308` as correctly rounded doubles (the Rust literals). -/
-private def POW10 : FloatArray := Id.run do
-  let mut a := FloatArray.emptyWithCapacity 309
-  for i in [0:309] do a := a.push (strtodUnchecked s!"1e{i}")
-  return a
-
-/-- serde_json `overflow!(a * 10 + d, u64::MAX)`. -/
-@[inline] private def u64Overflows (a : UInt64) (d : UInt64) : Bool :=
-  a >= 1844674407370955161 && (a > 1844674407370955161 || d > 5)
-
-/-- `i32::saturating_add`/`saturating_sub` result clamp. -/
-@[inline] private def satI32 (x : Int) : Int :=
-  if x > 2147483647 then 2147483647 else if x < -2147483648 then -2147483648 else x
-
-/-- serde_json `f64_from_parts` (default features, no `float_roundtrip`): `significand as f64`
-multiplied or divided by one `POW10` entry, i.e. two roundings for long mantissas. `none` is
-serde's `NumberOutOfRange`. -/
-private partial def f64FromParts (positive : Bool) (f : Float) (exponent : Int) : Option Float :=
-  -- `exponent.wrapping_abs() as usize`: `i32::MIN` stays negative, i.e. a huge index
-  let idx := if exponent == -2147483648 then 309 else exponent.natAbs
-  if idx < 309 then
-    let pow := POW10.get! idx
-    if exponent >= 0 then
-      let g := f * pow
-      if g.isInf then none else some (if positive then g else -g)
-    else
-      let g := f / pow
-      some (if positive then g else -g)
-  else if f == 0.0 then some (if positive then f else -f)
-  else if exponent >= 0 then none
-  else f64FromParts positive (f / POW10.get! 308) (exponent + 308)
-
-/-- Accumulates the digits `bs[i:j]` into a `u64` significand like serde_json: stops at the first
-digit that would overflow and returns its index (`j` when none did). -/
-private partial def accumulateU64 (bs : ByteArray) (i j : Nat) (sig : UInt64) : UInt64 × Nat :=
-  if i < j then
-    let d := (byteAt bs i - 48).toUInt64
-    if u64Overflows sig d then (sig, i) else accumulateU64 bs (i + 1) j (sig * 10 + d)
-  else (sig, j)
-
-/-- The value serde_json 1.0.149 (default features) gives the validated strict-mode lexeme with
-sign `neg`, integer digits `bs[intStart:intEnd]`, optional fraction digits `frac` and optional
-exponent `(negative, digits start, digits end)`; `none` for `NumberOutOfRange`.
-* integers without fraction/exponent that fit `u64` stay integers (`u64`, or `i64` when negative);
-  `-0` and negative values below `i64::MIN` become floats (`ParserNumber::F64`);
-* otherwise all digits go into a `u64` significand; digits after an overflow are dropped (integer
-  digits counting into the exponent, `parse_long_integer`; fraction digits ignored,
-  `parse_decimal_overflow`), and the value is `f64_from_parts(significand, exponent)`;
-* an exponent beyond `i32` gives `±0.0`, or an error for a positive exponent and non-zero
-  significand (`parse_exponent_overflow`). -/
-private def serdeNumber (bs : ByteArray) (neg : Bool) (intStart intEnd : Nat) (frac : Option (Nat × Nat))
-    (exp : Option (Bool × Nat × Nat)) : Option Number := Id.run do
-  let positive := !neg
-  let (sig, stop) := accumulateU64 bs intStart intEnd 0
-  -- `parse_long_integer`: every integer digit from the overflowing one on counts into the exponent
-  let mut exponent : Int := (intEnd - stop : Nat)
-  let mut sig := sig
-  if stop == intEnd && frac.isNone && exp.isNone then
-    if positive then return some (.int sig.toNat)
-    -- `(significand as i64).wrapping_neg()`: `-0` and values above `2^63` become floats
-    if sig == 0 then return some (.float (-0.0))
-    if sig <= 9223372036854775808 then return some (.int (-(sig.toNat : Int)))
-    return some (.float (-sig.toFloat))
-  if let some (fs, fe) := frac then
-    let (sig', fstop) := accumulateU64 bs fs fe sig
-    sig := sig'
-    exponent := exponent - ((fstop - fs : Nat) : Int)
-  if let some (expNeg, es, ee) := exp then
-    let mut e : Int := 0
-    for k in [es:ee] do
-      let d : Int := (byteAt bs k - 48).toNat
-      -- `overflow!(exp * 10 + digit, i32::MAX)`
-      if e >= 214748364 && (e > 214748364 || d > 7) then
-        if sig != 0 && !expNeg then return none
-        return some (.float (if positive then 0.0 else -0.0))
-      e := e * 10 + d
-    exponent := satI32 (if expNeg then exponent - e else exponent + e)
-  return (f64FromParts positive sig.toFloat exponent).map .float
-
-/-- Parses a number lexeme starting at `start`. Strict mode computes the value exactly like the
-oracle's serde_json (`serdeNumber`); lenient mode (elk-rs: the `json5` crate, i.e. Rust
-`str::parse`) rounds correctly through `strtod`. -/
+/-- Parses a number lexeme starting at `start`. Values follow ELK Java's JSON input (Gson numbers read
+with `Double.parseDouble`): floats are correctly rounded (`strtod`), integers stay exact, and `-0` is
+`-0.0` (what Java computes with). elk-rs' serde_json, which reads long mantissas with two roundings,
+is not followed: the result reference is ELK Java. -/
 private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Number := Id.run do
   let mut pos := start
   -- sign
@@ -305,19 +227,14 @@ private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Num
     return fail pos "invalid number: leading zero"
   let intStart := pos
   pos := skipDigits bs pos
-  let intEnd := pos
-  let intDigits := intEnd - intStart
+  let intDigits := pos - intStart
   let mut isFloat := false
-  let mut frac : Option (Nat × Nat) := none
-  let mut exp : Option (Bool × Nat × Nat) := none
   -- fraction
   if isAt bs pos 46 then
     let nextIsDigit := pos + 1 < bs.size && isDigit (byteAt bs (pos + 1))
     if nextIsDigit || (lenient && intDigits > 0) then
       isFloat := true
-      let fs := pos + 1
-      pos := skipDigits bs fs
-      frac := some (fs, pos)
+      pos := skipDigits bs (pos + 1)
     else return fail pos "invalid number"
   if intDigits == 0 && !isFloat then return fail pos "invalid number"
   -- exponent
@@ -326,24 +243,17 @@ private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Num
     if x == 101 || x == 69 then
       isFloat := true
       pos := pos + 1
-      let mut expNeg := false
       if pos < bs.size then
         let y := byteAt bs pos
-        if y == 43 || y == 45 then
-          expNeg := y == 45
-          pos := pos + 1
+        if y == 43 || y == 45 then pos := pos + 1
       let expStart := pos
       pos := skipDigits bs pos
       if pos == expStart then return fail pos "invalid exponent"
-      exp := some (expNeg, expStart, pos)
   let neg := byteAt bs start == 45
-  if !lenient then
-    match serdeNumber bs neg intStart intEnd frac exp with
-    | some n => return .ok n pos
-    | none => return fail pos "number out of range"
-  -- lenient: plain integers of at most 18 digits (always within `i64`) without building the lexeme
+  -- plain integers of at most 18 digits (always within `i64`) without building the lexeme
   if !isFloat && intDigits <= 18 then
     let v := digitsValue bs intStart pos 0
+    if neg && v == 0 then return .ok (.float (-0.0)) pos
     return .ok (.int (if neg then -(v : Int) else (v : Int))) pos
   let lexeme := String.fromUTF8! (bs.extract start pos)
   let lexeme := if lexeme.startsWith "+" then (lexeme.drop 1).toString else lexeme
@@ -483,8 +393,8 @@ partial def parseObjectMembers (bs : ByteArray) (lenient : Bool) (i : Nat) (kvs 
 
 end
 
-/-- The strict-mode value of a complete number lexeme (serde_json semantics), `none` when the
-lexeme is not a strict JSON number or is out of range. Used by tests. -/
+/-- The strict-mode value of a complete number lexeme, `none` when the lexeme is not a strict JSON
+number. Used by tests. -/
 def strictNumber? (lexeme : String) : Option Number :=
   let bs := lexeme.toUTF8
   if bs.size == 0 then none

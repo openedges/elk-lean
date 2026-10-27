@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.Spore
 /-! Tests of `org.eclipse.elk.alg.spore` (SPOrE overlap removal and compaction).
@@ -594,9 +595,10 @@ def fixtureTests : Suite := suite "spore.fixtures" do
           IO.FS.writeFile (System.FilePath.mk dir / s!"{name}.lean.json") actual
         let alts ← alternatives fixtureDir name
         if alts.isEmpty then
-          checkEq s!"{name}: matches oracle" actual expected
+          checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
         else
-          check s!"{name}: matches one of the {alts.size + 1} oracle outcomes" (actual == expected || alts.contains actual)
+          check s!"{name}: matches one of the {alts.size + 1} oracle outcomes"
+            ((#[expected] ++ alts).any (jsonEquivalent actual · ELK_RS_FIXTURE_TOL))
 
 def suites : Array Tests.Suite :=
   #[optionsSuite, metaSuite, graphSuite, costSuite, spanningTreeSuite, executionSuite, importerSuite,

@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.Force
 /-!
@@ -431,7 +432,7 @@ private def runFixtures (dir : System.FilePath) (dumpDir : Option String) : Test
         if let some d := dumpDir then
           IO.FS.createDirAll d
           IO.FS.writeFile (System.FilePath.mk d / s!"{name}.json") actual
-        checkEq s!"{name}: matches oracle" actual expected
+        checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
 
 /-- `force.fixtures`: `Elk.Api.layoutJson` on every fixture must reproduce the oracle output. -/
 def fixtureTests : Suite := suite "force.fixtures" do

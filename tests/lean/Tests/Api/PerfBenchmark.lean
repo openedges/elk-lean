@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 /-!
 Test suites for `Elk.Api.PerfBenchmark` (elk-rs `perf_benchmark.rs`, `rust_api` engine).
@@ -33,7 +34,7 @@ def layout : Suite := suite "api.perf.layout" do
     let input ← IO.FS.readFile (fixtureDir / s!"{n}.input.json")
     let expected ← IO.FS.readFile (fixtureDir / s!"{n}.oracle.json")
     match ← layoutJson input "{}" (pretty := true) (sortKeys := true) with
-    | .ok out => check s!"{n} layout byte-identical to the oracle" (out == expected)
+    | .ok out => checkJson s!"{n} layout equals the reference" out expected (tol := ELK_RS_FIXTURE_TOL)
     | .error e => check s!"{n} layout: {e}" false
 
 def format : Suite := suite "api.perf.format" do
