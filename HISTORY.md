@@ -153,6 +153,11 @@
 - Apple M1 8GB, 20회/워밍업 3회 기준 lean/rust_api 기하평균 **6.41배**. force·stress 26~32배, layered 5.7~8배(small 1.8배), mrtree·rectpacking 4~5배, radial 1.3~2.3배.
 - 1차 원인(생성 C 확인): `for` 루프의 가변 Float가 2개 이상이면 루프 상태가 `MProd`로 묶여 반복마다 `lean_box_float` 할당이 일어난다(예: stress `computeNewPosition`). Float 1개 상태는 unboxed `double`로 컴파일된다.
 
+### 바이트 단위 parity 달성 (2026-10-31)
+- Z1·PT 보고로 드러난 두 원인: (1) oracle의 serde_json(기본 기능, `float_roundtrip` 없음)은 실수 입력을 `u64` 가수 → `as f64` → `POW10` 곱/나눗셈으로 읽어 17자리 입력에서 정확 반올림과 1 ulp 다르다 → strict 모드 파서가 같은 알고리즘을 따른다(`-0` → `-0.0`, 범위 초과는 오류 포함). (2) `LGraphUtil.getExternalPortPosition`이 Rust `+=` 오른쪽 식을 왼쪽부터 더했다(계층 ptolemy 26개 그래프의 포트 y 1 ulp).
+- `scripts/compare_bytes.sh`(`elk layout --pretty --sort-keys` vs oracle 파일): 코퍼스 1,447/1,447 바이트 일치(이전 1,395). 허용오차 비교(1e-6, trace 1e-3)가 가리던 차이이므로 이후 parity 보고에 바이트 비교를 포함한다.
+- 남은 점검 대상: Rust 복합 대입(`a += b + c`)을 평탄한 합으로 옮긴 곳이 더 있을 수 있다(코퍼스에서는 더 드러나지 않음).
+
 ### 성능 2차 (2026-10-27~31): 공통 경로
 - **CSE가 리터럴 상수 추출을 막는 문제**: 컴파일러가 `true`·작은 `Nat` 인자를 같은 값의 변수로 치환하면 `Float.ofScientific m s e` 호출이 closed term으로 추출되지 않아 매번 실행된다. 가수가 `2^53` 이상인 리터럴(`18446744073709551616.0`, `9007199254740992.0` 등)은 빠른 경로 밖이라 GMP 모델 경로를 탄다. `Number.ofFloatElk`(모든 좌표)와 `Random.nextDouble`을 `Float.ofBits` 최상위 상수로 바꿨다. 빠른 경로 밖 리터럴은 이제 최상위 상수에만 남아 있다(초기화 시 1회).
 - **구조체 갱신**: `{ s with a := s.a.set! i v }`는 `s`가 유일하면 배열을 옮겨 제자리 수정한다(생성 C 확인). 복사는 `s`나 원소가 공유될 때만 생긴다 → 일괄 치환하지 않고 프로파일의 `lean_copy_expand_array` 호출자만 고친다(예: stress 힙).
@@ -164,11 +169,11 @@
 | 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
 | PF0. 전역 Float 변환(`FastFloat` csimp), 큰 리터럴 제거, force/stress 루프 | 코어 `Init/Data/OfScientific.lean`, `fruchterman_reingold_model.rs`, `stress_majorization.rs` | fable(주) | xhigh | 주 에이전트 | 완료(`67f906b`, `779b9fa`): force_xlarge 4670→348 ms, stress_xlarge 5429→592 ms, 코퍼스 parity 유지 |
-| Z1. JSON 실수 출력 zmij C 포팅 | zmij 1.0.19 `src/lib.rs`(serde_json 1.0.149) | opus | xhigh | 서브에이전트 Z1(worktree) | 진행 중 |
+| Z1. JSON 실수 출력 zmij C 포팅 | zmij 1.0.19 `src/lib.rs`(serde_json 1.0.149) | opus | xhigh | 서브에이전트 Z1(worktree) | 완료(`merge Z1`, 한도로 1회 중단 후 재개): zmij f64 경로 C 포팅(`__int128` 없는 대체 경로 포함), 실제 zmij와 2,668만 개 double 차분 0건(release·no-int128·UBSan+ASan), 기존 출력이 틀리던 2의 거듭제곱 92개 수정, `Float.toShortest` 출력 유지, 문자열 이스케이프 개선. JSON 출력 비중 layered_large 9.7%→0.7%, force_large 15.7%→1.1%. 하네스는 스크래치(`zmij_harness`)에 보존 |
 | N1. NAPI 애드온 + elkjs 호환 npm 패키지 | elk-rs `plugins/org.eclipse.elk.{napi,js}` | opus | high | 서브에이전트 N1(worktree) | 완료(`merge N1`, 사용량 한도로 1회 중단 후 재개): Node-API C 애드온(`elk_napi.c`, worker_threads 지원·프로세스 전역 뮤텍스, Lean 런타임이 덮어쓰는 SIGSEGV/SIGBUS 핸들러 복원), `scripts/build_napi.sh`, npm 패키지(`plugins/org.eclipse.elk.js`, elkjs API·worker·typings·플랫폼 패키지 템플릿, WASM 백엔드는 스텁), `node:test` 51개 통과. 애드온 vs CLI 바이트 비교: JSON 550/550, elkt 897/898(나머지 1건은 양쪽 동일 실패). 참고: elkjs 0.12.0과는 JSON 530/550, elkt 778/898 일치(Ptolemy 모델 드리프트 — elk-rs/elk-lean 대 elkjs 차이, Java 기준값 없음). 남은 일: Linux/Windows 빌드, 게시, GMP(LGPL) 정적 링크 검토 |
 | W1. WASM 빌드(emscripten) | elk-rs `plugins/org.eclipse.elk.wasm`, Lean 런타임 | opus | xhigh | 서브에이전트 W1(worktree) | 진행 중 |
 | PL3. layered P3 교차 최소화 성능 | Lean `P3Order/**`(elk-rs `p3_order/**`) | opus | xhigh | 서브에이전트 PL3(worktree) | 진행 중 |
-| PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 진행 중 |
+| PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 완료(`merge PT`): rectpacking 배치 스캔 unboxed 루프·SoA, mrtree `sortByFloat` 키 선계산·로컬 안정 정렬(NaN이면 `rustSortBy` 유지). 자체 구간 rectpacking 7.2→5.1 ms, mrtree 4.8→4.2 ms; 전체로는 4~9%(나머지는 공통 JSON·`NodeMicroLayout`). 무작위 그래프 600개 바이트 일치. 남은 공통 병목: `NodeMicroLayout`(노드 1000개당 2.5~3 ms), `applyVectorChain`, 특수화되지 않은 `stableSort`/`RustSort` |
 | PF1. P5 직교 라우팅, JSON 경로, force/stress 나머지 | Lean `P5Edges/Orthogonal/**`, `Elk/Json/*` | fable(주) | xhigh | 주 에이전트 | 진행 중: `c8cfb52`(P5 conflict/crossing 루프, `ofFloatElk`·`nextDouble` 정확 상수), `815e079`(FR 결과 구조체, stress 힙), `b532257`(JSON 파서 재작성) |
 
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)

@@ -61,6 +61,7 @@ python3 scripts/compare_phase_traces.py out/oracle_trace out/lean_trace
 sh scripts/run_model_parity.sh external/elk-models tests/model_parity   # .json + .elkt (converted with `elk convert`; PARITY_INCLUDE_ELKT=0 to skip)
 sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus   # every model: oracle vs elk-lean step traces (strict order)
 sh scripts/run_phase_trace_parity.sh external/elk-models/<model>.elkt tests/tmp/trace_<model>   # one model
+sh scripts/compare_bytes.sh tests/model_parity   # byte identity of every model against the oracle files of that run
 ```
 
 Inputs: the 550 `realworld/*.json` models are used directly; the 898 `.elkt` models are
@@ -68,7 +69,8 @@ converted to JSON with `elk convert`. The 550 `.elkg` files are XMI copies of th
 graphs; elk-rs does not read them either, so they are not compared. In trace mode the oracle
 runner forces the root algorithm to layered (`force_layered_algorithm`); `elk batch --trace-dir`
 and `elk layout --force-algorithm` do the same. Expected result: every compared model matches
-(one ticket model fails identically on both sides).
+and is byte-identical (`compare_bytes.sh`; the tolerance-based comparisons hide 1-ulp drifts), one
+ticket model fails identically on both sides.
 
 ### C. Metadata equivalence
 
