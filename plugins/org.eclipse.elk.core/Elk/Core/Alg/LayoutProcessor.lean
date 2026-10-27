@@ -19,6 +19,9 @@ structure LayoutProcessor (m : Type → Type) (G : Type) where
   /-- `isHierarchyAware()` (Rust default `false`). -/
   isHierarchyAware : Bool := false
 
+instance {m : Type → Type} {G : Type} [Pure m] : Inhabited (LayoutProcessor m G) :=
+  ⟨{ name := "", process := fun _ _ => pure () }⟩
+
 /-- `ILayoutProcessorFactory<G>`: creates a processor from an enum constant `F`
 (`IntermediateProcessorStrategy` in layered). Creation runs in `IO` so tests can count it. -/
 abbrev LayoutProcessorFactory (m : Type → Type) (G F : Type) := F → IO (LayoutProcessor m G)

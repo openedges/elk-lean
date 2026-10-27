@@ -106,7 +106,9 @@
 | M3a. `ElkLayered`/`LayeredLayoutProvider` | `elk_layered.rs`, `layered_layout_provider.rs`(1.1K줄) | fable(주) | xhigh | M3b 이후 | 대기 |
 | M3b. components + compound | `components/*`, `compound/*`(4.4K줄) | opus | xhigh | 서브에이전트 M3b(worktree) | 진행 중 |
 | M1. `ElkGraphImporter`/`ElkGraphTransformer`/`LGraphAdapters` | (위 참조; `NodeLabelAndSizeCalculator`에 의존) | opus | xhigh | N3 이후 | 대기 |
-| P1~P5, intermediate | `p1cycles`(2K), `p2layers`(2.5K), `p3order`(10.6K, 4분할), `p4nodes`(5.3K, 2분할), `p5edges`(6.4K, 3분할), `intermediate`(28K, ≈10분할) | opus | xhigh | M0/M3 이후 병렬 | 대기 |
+| P1. cycle breakers 9종 + `GroupModelOrderCalculator` | `p1cycles/*`(2K줄) | opus | high | 서브에이전트 P1(worktree) | 진행 중 |
+| P2. layerers 9종(NetworkSimplexLayerer 포함) | `p2layers/*`(2.5K줄) | opus | xhigh | 서브에이전트 P2(worktree) | 진행 중 |
+| P3~P5, intermediate | `p3order`(10.6K, 3분할: counting/holder, sweep+heuristics, port distributors/forster), `p4nodes`(5.3K, 2분할), `p5edges`(6.4K, 3분할), `intermediate`(28K, ≈10분할) | opus | xhigh | P1/P2 병합 후 순차 병렬 | 대기 |
 
 
 #### Phase 2 (2차) 작업 할당표
