@@ -369,7 +369,6 @@ def clearEdgeSections (g : ElkGraph) (e : EdgeId) : ElkGraph :=
   let g := secs.foldl (fun acc s => acc.modifySection s fun x => { x with parent := none }) g
   g.modifyEdge e fun x => { x with sections := #[] }
 
-/-- Keeps only the last section of the edge (used when resetting layout). -/
 /-- Keeps only the first edge section (Java `firstEdgeSection(…, removeOtherSections = true)`);
 the removed sections are detached (`parent := none`). -/
 def retainFirstEdgeSection (g : ElkGraph) (e : EdgeId) : ElkGraph :=
