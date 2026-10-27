@@ -50,6 +50,10 @@ def suite : Suite := Tests.suite "core.util.FastFloat" do
   checkEq "literal 0.1" (0.1 : Float).toBits (coreOfScientific 1 true 1).toBits
   checkEq "literal 2.5e10" (2.5e10 : Float).toBits (coreOfScientific 25 false 9).toBits
   checkEq "Nat.toFloat" (12345 : Nat).toFloat.toBits (coreOfNat 12345).toBits
+  -- exact constants that replace literals outside the fast-path domain
+  checkEq "Random.TWO_POW_53" Random.TWO_POW_53.toBits (coreOfScientific 90071992547409920 true 1).toBits
+  checkEq "2^64 bits" (Float.ofBits 0x43F0000000000000).toBits (coreOfScientific 184467440737095516160 true 1).toBits
+  checkEq "2^63 bits" (Float.ofBits 0x43E0000000000000).toBits (coreOfScientific 92233720368547758080 true 1).toBits
 
 def suites : Array Suite := #[suite]
 

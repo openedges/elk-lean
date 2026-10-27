@@ -74,39 +74,38 @@ def new (direction : RoutingDirection) (edgeSpacing : Float) (debugPrefix : Opti
     criticalConflictThreshold := 0.0
     debugPrefix := debugPrefix }
 
+/-- Loop of `countCrossings` from index `k` (tail recursive, no boxed loop state). -/
+private partial def countCrossingsFrom (posis : Array Float) (start stop : Float) (k : Nat) (crossings : Int) : Int :=
+  if h : k < posis.size then
+    let pos := posis[k]
+    if pos > stop then crossings
+    else countCrossingsFrom posis start stop (k + 1) (if pos >= start then crossings + 1 else crossings)
+  else crossings
+
 /-- `countCrossings(posis, start, end)`: how many of the sorted `posis` lie in `[start, end]`. -/
-def countCrossings (posis : Array Float) (start stop : Float) : Int := Id.run do
-  let mut crossings : Int := 0
-  for pos in posis do
-    if pos > stop then break
-    else if pos >= start then crossings := crossings + 1
-  return crossings
+def countCrossings (posis : Array Float) (start stop : Float) : Int :=
+  countCrossingsFrom posis start stop 0 0
+
+/-- Merge loop of `countConflicts` at indices `i`, `j` (values `pos1`, `pos2`); tail recursive with
+unboxed `Float` parameters (a `while` loop would box its six-variable state on every step). -/
+private partial def countConflictsFrom (posis1 posis2 : Array Float) (critical threshold : Float)
+    (i j : Nat) (pos1 pos2 : Float) (conflicts : Int) : Int :=
+  if pos1 > pos2 - critical && pos1 < pos2 + critical then CRITICAL_CONFLICTS_DETECTED
+  else
+    let conflicts := if pos1 > pos2 - threshold && pos1 < pos2 + threshold then conflicts + 1 else conflicts
+    if pos1 <= pos2 && i + 1 < posis1.size then
+      countConflictsFrom posis1 posis2 critical threshold (i + 1) j posis1[i + 1]! pos2 conflicts
+    else if pos2 <= pos1 && j + 1 < posis2.size then
+      countConflictsFrom posis1 posis2 critical threshold i (j + 1) pos1 posis2[j + 1]! conflicts
+    else conflicts
 
 /-- `countConflicts(posis1, posis2)`: merges the two sorted coordinate lists and counts pairs closer than
 the conflict threshold; `CRITICAL_CONFLICTS_DETECTED` as soon as a pair is closer than the critical
 threshold. Like Java/Rust, when one list is exhausted on equal values the other may still advance. -/
-def countConflicts (gen : OrthogonalRoutingGenerator) (posis1 posis2 : Array Float) : Int := Id.run do
-  let mut conflicts : Int := 0
-  if !posis1.isEmpty && !posis2.isEmpty then
-    let mut i := 0
-    let mut j := 0
-    let mut pos1 := posis1[0]!
-    let mut pos2 := posis2[0]!
-    let mut hasMore := true
-    while hasMore do
-      if pos1 > pos2 - gen.criticalConflictThreshold && pos1 < pos2 + gen.criticalConflictThreshold then
-        return CRITICAL_CONFLICTS_DETECTED
-      else if pos1 > pos2 - gen.conflictThreshold && pos1 < pos2 + gen.conflictThreshold then
-        conflicts := conflicts + 1
-      if pos1 <= pos2 && i + 1 < posis1.size then
-        i := i + 1
-        pos1 := posis1[i]!
-      else if pos2 <= pos1 && j + 1 < posis2.size then
-        j := j + 1
-        pos2 := posis2[j]!
-      else
-        hasMore := false
-  return conflicts
+def countConflicts (gen : OrthogonalRoutingGenerator) (posis1 posis2 : Array Float) : Int :=
+  if posis1.isEmpty || posis2.isEmpty then 0
+  else countConflictsFrom posis1 posis2 gen.criticalConflictThreshold gen.conflictThreshold 0 0
+    posis1[0]! posis2[0]! 0
 
 /-- `createDependencyIfNecessary(he1, he2)` on segments `i1`, `i2`: critical dependencies for critical
 conflicts (returning their number), otherwise a regular dependency weighted by the difference of the

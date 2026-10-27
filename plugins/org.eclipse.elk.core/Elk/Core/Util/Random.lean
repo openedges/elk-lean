@@ -91,6 +91,10 @@ def nextBoolean (r : Random) : Bool × Random :=
     let (v, r) := r.next 1
     (v != 0, r)
 
+/-- `2^53` as an exact bit pattern (the literal `9007199254740992.0` lies outside the fast
+`Float.ofScientific` domain and is not always hoisted by the compiler). -/
+def TWO_POW_53 : Float := Float.ofBits 0x4340000000000000
+
 /-- `nextDouble()`: `((next(26) << 27) + next(27)) * 2^-53` (honours the mock sequence). -/
 def nextDouble (r : Random) : Float × Random :=
   match r.mockDoubleSequence with
@@ -101,7 +105,7 @@ def nextDouble (r : Random) : Float × Random :=
     let (hi, r) := r.next 26
     let (lo, r) := r.next 27
     let n : UInt64 := (hi.toUInt64 <<< 27) + lo.toUInt64
-    (n.toFloat / 9007199254740992.0, r)
+    (n.toFloat / TWO_POW_53, r)
 
 /-- `nextFloat()` as a double carrying only single precision (`next(24) / 2^24` in `float`);
 with the mock sequence it is the mocked double rounded to single precision. -/
