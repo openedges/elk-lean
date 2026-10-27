@@ -1,4 +1,5 @@
 import Elk.Alg.Layered.Intermediate.Wrapping.BreakingPointInserter
+import Elk.Alg.Layered.P5Edges.Splines.SplineEdgeRouter
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.wrapping.BreakingPointRemover`
 
@@ -10,9 +11,10 @@ of the split edges to the original edge:
 node --nodeStartEdge--> startMarker --startEndEdge--> endMarker --e--> node
 ```
 
-* `SPLINES`: the spline segments and edge chains are joined (`s1 ++ reverse(s2) ++ s3`, the
-  segments of `s2` get `inverseOrder`) and stored on the original edge, which becomes its own
-  `SPLINE_SURVIVING_EDGE`; the bend points are left untouched (Rust; Java clears them).
+* `SPLINES`: the spline segments (`SPLINE_ROUTE_START`) and edge chains (`SPLINE_EDGE_CHAIN`) are
+  joined (`s1 ++ reverse(s2) ++ s3`; the segments of `s2` get `inverseOrder` in the graph's segment
+  table) and stored on the original edge, which becomes its own `SPLINE_SURVIVING_EDGE`; both are
+  removed from the two dummy edges; the bend points are left untouched (Rust; Java clears them).
 * `POLYLINE`: `nodeStartEdge` bends, the start dummy position, the reversed `startEndEdge` bends,
   the end dummy position, the original bends.
 * otherwise (orthogonal): as polyline without the two dummy positions.
@@ -24,10 +26,9 @@ always true, so the joined chain is always stored. The original edge gets the so
 
 Slots: after phase 5; after `LongEdgeJoiner`, before `HorizontalGraphCompactor`.
 
-TODO(internal-field): `InternalProperties.SPLINE_ROUTE_START` (and `SplineSegment.inverseOrder`)
-are not modelled yet (the splines package is not ported); for `SPLINES` only the edge chains and
-the surviving edge are transferred. Requested field once `SplineSegment` exists:
-`splineRouteStart : Array SplineSegmentId := #[]` in `LEdgeInternals`.
+`SPLINE_ROUTE_START` is `LEdgeInternals.splineRouteStart` (ids into the processed graph's
+`LGraphInternals.splineSegments`, Rust `SplineSegmentRef`s); a missing list counts as empty (Rust
+`unwrap_or_default`) and the original edge always gets `some` joined list.
 -/
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
@@ -36,25 +37,33 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Math Elk.Core.Option
 
 namespace BreakingPointRemover
 
-/-- The `SPLINES` branch of `remove` (see the module doc and its TODO). -/
-private def joinSplineRoutes (bp : BreakingPointInfo) : LayeredM Unit := do
+/-- The `SPLINES` branch of `remove` (see the module doc): `graph` owns the segment table. -/
+private def joinSplineRoutes (graph : LGraphId) (bp : BreakingPointInfo) : LayeredM Unit := do
+  let s1 := ((← getEdge bp.nodeStartEdge).internal.splineRouteStart).getD #[]
+  let s2 := ((← getEdge bp.startEndEdge).internal.splineRouteStart).getD #[]
+  let s3 := ((← getEdge bp.originalEdge).internal.splineRouteStart).getD #[]
   let e1 := (← getEdge bp.nodeStartEdge).internal.splineEdgeChain
   let e2 := (← getEdge bp.startEndEdge).internal.splineEdgeChain
   let e3 := (← getEdge bp.originalEdge).internal.splineEdgeChain
-  -- TODO(internal-field): SPLINE_ROUTE_START s1 ++ reverse(s2) (inverseOrder := true) ++ s3
+  for segment in s2 do
+    P5Edges.Splines.modifySplineSegment graph segment fun x => { x with inverseOrder := true }
+  let joinedSegments := s1 ++ s2.reverse ++ s3
   let joinedEdges := e1 ++ e2.reverse ++ e3
   let originalEdge := bp.originalEdge
   modifyEdge originalEdge fun e => { e with internal := { e.internal with
-    splineEdgeChain := joinedEdges, splineSurvivingEdge := some originalEdge } }
-  modifyEdge bp.nodeStartEdge fun e => { e with internal := { e.internal with splineEdgeChain := #[] } }
-  modifyEdge bp.startEndEdge fun e => { e with internal := { e.internal with splineEdgeChain := #[] } }
+    splineRouteStart := some joinedSegments, splineEdgeChain := joinedEdges,
+    splineSurvivingEdge := some originalEdge } }
+  modifyEdge bp.nodeStartEdge fun e => { e with internal := { e.internal with
+    splineRouteStart := none, splineEdgeChain := #[] } }
+  modifyEdge bp.startEndEdge fun e => { e with internal := { e.internal with
+    splineRouteStart := none, splineEdgeChain := #[] } }
 
 /-- `remove(graph, bpi)`: restores the original edge of `bp` and removes the dummies, then
 continues with `bp.prev`. -/
-partial def remove (bp : BreakingPointInfo) (edgeRouting : EdgeRouting) : LayeredM Unit := do
+partial def remove (graph : LGraphId) (bp : BreakingPointInfo) (edgeRouting : EdgeRouting) : LayeredM Unit := do
   let mut newBends : KVectorChain := #[]
   match edgeRouting with
-  | .splines => joinSplineRoutes bp
+  | .splines => joinSplineRoutes graph bp
   | .polyline =>
     newBends := newBends ++ (← getEdge bp.nodeStartEdge).bendPoints
     newBends := newBends.push (← getNode bp.start).position
@@ -85,7 +94,7 @@ partial def remove (bp : BreakingPointInfo) (edgeRouting : EdgeRouting) : Layere
   setNodeLayer bp.start none
   if let some prevStart := bp.prev then
     if let some prev ← BreakingPointInfo.get? prevStart then
-      remove prev edgeRouting
+      remove graph prev edgeRouting
 
 /-- `process(graph, monitor)`: `EDGE_ROUTING` falls back to `ORTHOGONAL` (Rust `unwrap_or`). -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
@@ -97,7 +106,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       if !(← BreakingPointInfo.isEnd node) then continue
       let some bpInfo ← BreakingPointInfo.get? node | continue
       if bpInfo.next.isNone then
-        remove bpInfo edgeRouting
+        remove graph bpInfo edgeRouting
   monitor.done
 
 /-- The `BreakingPointRemover` processor. -/

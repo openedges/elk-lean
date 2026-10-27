@@ -37,7 +37,9 @@ router places the nodes horizontally (`LGraphUtil.placeNodesHorizontally`) and s
 Rust stores `SPLINE_ROUTE_START: Vec<SplineSegmentRef>` on each start edge; the segments must
 outlive the phase. The Lean port appends the router's segment table to the graph
 (`LGraphInternals.splineSegments`) and stores the ids on the edge
-(`LEdgeInternals.splineRouteStart`); `route` starts its table at the graph's current table.
+(`LEdgeInternals.splineRouteStart`); `route` starts its table at the graph's current table. The
+later processors (`BreakingPointRemover`, `HorizontalGraphCompactor`,
+`FinalSplineBendpointsCalculator`) access that table with `getSplineSegment`/`modifySplineSegment`.
 `SPLINE_NS_PORT_Y_COORD` is a *port* property in Java/Rust (set by `NorthSouthPortPostprocessor`)
 and is read through `splineNsPortYCoordOf`.
 
@@ -89,6 +91,18 @@ def absoluteAnchorY (a : LGraphArena) (port : LPortId) : Float :=
 
 /-- `port.getProperty(InternalProperties.SPLINE_NS_PORT_Y_COORD)` (`LPortInternals.splineNsPortYCoord`). -/
 def splineNsPortYCoordOf (p : LPort) : Option Float := p.internal.splineNsPortYCoord
+
+/-- Reads the spline segment `id` of `graph`'s persisted segment table
+(`LGraphInternals.splineSegments`, Rust `SplineSegmentRef::lock`). -/
+def getSplineSegment (graph : LGraphId) (id : SplineSegmentId) : LayeredM SplineSegment := do
+  return (← getGraph graph).internal.splineSegments[id.idx]!
+
+/-- Updates the spline segment `id` of `graph`'s segment table in place (Rust: mutation through the
+shared `SplineSegmentRef`); out-of-range ids are ignored. -/
+def modifySplineSegment (graph : LGraphId) (id : SplineSegmentId) (f : SplineSegment → SplineSegment) :
+    LayeredM Unit :=
+  modifyGraph graph fun g =>
+    { g with internal := { g.internal with splineSegments := g.internal.splineSegments.modify id.idx f } }
 
 namespace SplineSegment
 

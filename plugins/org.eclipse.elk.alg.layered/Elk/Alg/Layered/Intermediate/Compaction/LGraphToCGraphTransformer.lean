@@ -37,11 +37,11 @@ of a `CGraph`, and the application of the compacted positions back to the `LGrap
   `Std.HashMap LNodeId CNodeId` (`nodeToCNode`, lookups only). Loops that iterate a Rust
   `HashMap` with order-independent effects (`apply_self_loop_label_offsets`,
   `apply_external_port_positions`) iterate the `CNode`s in arena order.
-* Spline segments belong to the `p5edges.splines` package, which is not ported yet. The
-  transformer reads them through `SplineRouteAccess` (segment handles are `Nat`s, e.g. the index
-  of a future spline segment arena); `SplineRouteAccess.unavailable` reports no routes.
-  TODO(p5edges.splines): provide the real access (`LEdge` `SPLINE_ROUTE_START`, `SplineSegment`
-  fields) and use it in `HorizontalGraphCompactor.processor`.
+* Spline segments belong to the `p5edges.splines` package (which imports the layered phases, so
+  this module stays independent of it). The transformer reads them through `SplineRouteAccess`
+  (segment handles are `Nat`s: the `SplineSegmentId.idx` of the graph's segment table);
+  `HorizontalGraphCompactor.splineRouteAccess` is the real access used by the processor,
+  `SplineRouteAccess.unavailable` reports no routes.
 
 ## Differences to Java (Rust followed)
 * the last regular segment of an outgoing edge compares the *last* bend point with the target
@@ -100,7 +100,7 @@ structure SplineRouteAccess where
 
 namespace SplineRouteAccess
 
-/-- No spline routes (the `p5edges.splines` package is not ported yet). -/
+/-- No spline routes. -/
 def unavailable : SplineRouteAccess :=
   { routeStart := fun _ => pure none, segment := fun _ => pure {}, modifyBoundingBox := fun _ _ => pure () }
 

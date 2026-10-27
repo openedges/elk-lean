@@ -461,6 +461,34 @@ def splineTests : Suite := suite "layered.intermediate.compaction.splines" do
   checkFloat "splines LEFT: last straight segment centred (hand: 55 - 80/2)" segs[2]!.boundingBox.x 15.0
   checkFloat "splines LEFT: graph width (hand: 80)" (a.graph g).size.x 80.0
   checkFiniteLayout "compaction_left_splines_quadratic (scanline variant)" a nodes
+  -- the same chain stored like the spline router does (graph segment table + SPLINE_ROUTE_START),
+  -- compacted by the registered processor (real `splineRouteAccess`): same results
+  let ((g, nodes, e), a) ← LayeredM.run (do
+      let g ← mkGraph (graphProps .left (routing := .splines))
+      let l0 ← addLayer g #[box 0 0 20 20]
+      let l1 ← addLayer g #[box 200 0 20 20]
+      let p0 ← addPort l0[0]! .east
+      let p1 ← addPort l1[0]! .west
+      let e ← addEdge p0 p1
+      let segs : Array P5Edges.Splines.SplineSegment := #[
+        { edges := #[e], isStraight := true, initialSegment := true, boundingBox := ⟨20, 5, 40, 10⟩, sourceNode := some l0[0]! },
+        { edges := #[e], boundingBox := ⟨80, 0, 20, 20⟩ },
+        { edges := #[e], isStraight := true, lastSegment := true, boundingBox := ⟨120, 5, 80, 10⟩, targetNode := some l1[0]! }]
+      modifyGraph g fun x => { x with internal := { x.internal with splineSegments := segs } }
+      modifyEdge e fun x => { x with internal := { x.internal with splineRouteStart := some #[⟨0⟩, ⟨1⟩, ⟨2⟩] } }
+      runProcessor g
+      return (g, l0 ++ l1, e))
+  let segs := (a.graph g).internal.splineSegments
+  checkFloat "splines LEFT (stored segments): n1 at 60" (a.node nodes[1]!).position.x 60.0
+  checkFloat "splines LEFT (stored segments): curved segment moved" segs[1]!.boundingBox.x 30.0
+  checkFloat "splines LEFT (stored segments): initial straight segment centred" segs[0]!.boundingBox.x 5.0
+  checkFloat "splines LEFT (stored segments): last straight segment centred" segs[2]!.boundingBox.x 15.0
+  checkEq "splines LEFT (stored segments): route start kept" ((a.edge e).internal.splineRouteStart.map (·.size)) (some 3)
+  let (view, _) ← LayeredM.run (do
+      let g ← mkGraph (graphProps .left (routing := .splines))
+      modifyGraph g fun x => { x with internal := { x.internal with splineSegments := #[{ lastSegment := true, rank := 3 }] } }
+      (HorizontalGraphCompactor.splineRouteAccess g).segment 0)
+  check "splineRouteAccess.segment reads the graph table" (view.lastSegment && !view.initialSegment)
   -- unavailable spline access: the nodes are still compacted
   let ((_, nodes), a) ← LayeredM.run (do
       let (g, nodes) ← buildG1 (graphProps .right (routing := .splines))
