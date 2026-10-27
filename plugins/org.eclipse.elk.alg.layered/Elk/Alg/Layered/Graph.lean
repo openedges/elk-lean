@@ -13,5 +13,6 @@ import Elk.Alg.Layered.Graph.LGraphArena
 import Elk.Alg.Layered.Graph.LGraphQueries
 import Elk.Alg.Layered.Graph.Monad
 import Elk.Alg.Layered.Graph.Tarjan
+import Elk.Alg.Layered.Graph.LGraphUtil
 /-! Aggregator of `org.eclipse.elk.alg.layered.graph` (arena model, ids, LayeredM, LGraphUtil). Owned by the main agent.
 `Options.InternalProperties` (typed internal fields) is imported here because the element structures depend on it. -/

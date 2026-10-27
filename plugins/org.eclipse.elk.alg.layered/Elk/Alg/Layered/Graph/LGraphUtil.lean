@@ -328,7 +328,7 @@ def createPort (node : LNodeId) (endPoint : Option KVector) (portType : PortType
       | .undefined => defaultSide
     modifyPort port fun pt => pt.setSide side
   let portSide := (← getPort port).side
-  let northSouth := match direction with
+  let northSouth : Bool := match direction with
     | .left | .right => portSide == .north || portSide == .south
     | .up | .down => portSide == .east || portSide == .west
     | .undefined => false

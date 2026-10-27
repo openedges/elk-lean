@@ -1,0 +1,27 @@
+import Elk.Graph
+/-!
+# `org.eclipse.elk.alg.layered.intermediate.IntermediateProcessorStrategy`
+
+The enumeration of intermediate processors in Java ordinal order (which is also the order
+processors are sorted in within one slot of the processor configuration). The processors
+themselves register with `IntermediateProcessorStrategy.register` (see `LayeredPhases`).
+-/
+namespace Elk.Alg.Layered.Intermediate
+
+/-- `IntermediateProcessorStrategy` (59 constants, Java ordinal order). -/
+elk_enum IntermediateProcessorStrategy :=
+  directionPreprocessor commentPreprocessor edgeAndLayerConstraintEdgeReverser interactiveExternalPortPositioner
+  partitionPreprocessor labelDummyInserter selfLoopPreprocessor layerConstraintPreprocessor partitionMidprocessor
+  highDegreeNodeLayerProcessor nodePromotion layerConstraintPostprocessor partitionPostprocessor
+  hierarchicalPortConstraintProcessor semiInteractiveCrossminProcessor breakingPointInserter longEdgeSplitter
+  portSideProcessor invertedPortProcessor portListSorter sortByInputOrderOfModel northSouthPortPreprocessor
+  breakingPointProcessor oneSidedGreedySwitch twoSidedGreedySwitch selfLoopPortRestorer alternatingLayerUnzipper
+  singleEdgeGraphWrapper inLayerConstraintProcessor endNodePortLabelManagementProcessor labelAndNodeSizeProcessor
+  innermostNodeMarginCalculator selfLoopRouter commentNodeMarginCalculator endLabelPreprocessor labelDummySwitcher
+  centerLabelManagementProcessor labelSideSelector hyperedgeDummyMerger hierarchicalPortDummySizeProcessor
+  nodePlacementRepeater layerSizeAndGraphHeightCalculator hierarchicalPortPositionProcessor constraintsPostprocessor
+  commentPostprocessor hypernodeProcessor hierarchicalPortOrthogonalEdgeRouter longEdgeJoiner selfLoopPostprocessor
+  breakingPointRemover northSouthPortPostprocessor horizontalCompactor labelDummyRemover finalSplineBendpointsCalculator
+  endLabelSorter reversedEdgeRestorer endLabelPostprocessor hierarchicalNodeResizer directionPostprocessor
+
+end Elk.Alg.Layered.Intermediate

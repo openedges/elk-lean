@@ -456,7 +456,7 @@ node ^size
     let texts := (g.node a).labels.map fun l => (g.label l).text
     checkEq "escaped text" texts #["x\ny\t\"q\" A", "single"]
   -- the root can carry layout, properties and labels
-  withGraph "root layout" "layout [ size: 5, 6 ]\ndirection: LEFT\nlabel \"title\"\nnode a" fun root g => do
+  withGraph "root layout" "layout [ size: 5, 6 ]\nelk.direction: LEFT\nlabel \"title\"\nnode a" fun root g => do
     checkFloat "root width" (g.node root).width 5.0
     checkEq "root direction" (g.getNodeProp root CoreOptions.DIRECTION) (some Direction.left)
     checkEq "root label" (g.node root).labels.size 1
@@ -474,7 +474,7 @@ org.eclipse.elk.padding: "[top=1,left=2,bottom=3,right=4]"
 unknown.option: 5
 elk.direction: NOT_A_DIRECTION
 node n {
-  elk.^elk.direction: 'UP'
+  elk.^direction: 'UP'
   priority: null
 }
 "# fun root g => do
@@ -498,7 +498,7 @@ node n {
       | _ => false)
   | .error e => report "keepUnknownOptions" false e
   -- duplicate keys: last one wins
-  withGraph "duplicate key" "elk.direction: DOWN\ndirection: UP" fun root g => do
+  withGraph "duplicate key" "elk.direction: DOWN\nelk.direction: UP" fun root g => do
     checkEq "last wins" (g.getNodeProp root CoreOptions.DIRECTION) (some Direction.up)
     checkEq "one entry" (g.node root).props.size 1
 
