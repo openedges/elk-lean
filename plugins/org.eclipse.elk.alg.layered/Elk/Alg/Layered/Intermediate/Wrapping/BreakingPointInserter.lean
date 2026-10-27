@@ -38,15 +38,13 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Options Elk.Alg.Laye
 
 namespace BreakingPointInfo
 
-/-- `node.getProperty(InternalProperties.BREAKING_POINT_INFO)`.
-TODO(internal-field): `(← getNode node).internal.breakingPointInfo`. -/
+/-- `node.getProperty(InternalProperties.BREAKING_POINT_INFO)`. -/
 def get? (node : LNodeId) : LayeredM (Option BreakingPointInfo) := do
-  return (← getNode node).props.get BREAKING_POINT_INFO
+  return (← getNode node).internal.breakingPointInfo
 
-/-- Stores `info` on one node (`node.setProperty(BREAKING_POINT_INFO, info)`).
-TODO(internal-field): `modifyNode node fun n => { n with internal.breakingPointInfo := some info }`. -/
+/-- Stores `info` on one node (`node.setProperty(BREAKING_POINT_INFO, info)`). -/
 def setOn (node : LNodeId) (info : BreakingPointInfo) : LayeredM Unit :=
-  modifyNode node fun n => { n with props := n.props.set BREAKING_POINT_INFO info }
+  modifyNode node fun n => { n with internal := { n.internal with breakingPointInfo := some info } }
 
 /-- Writes the (mutated) shared info to both of its markers (see the module doc of
 `BreakingPointInfo`). -/

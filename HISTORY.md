@@ -126,7 +126,7 @@
 | I2b. self loop routing(`loops/routing/*`) + `SelfLoopRouter` | `intermediate/loops/routing/*.rs`, `self_loop_router.rs`(2.5K줄) | opus | xhigh | 대기(I2a 이후) |
 | I3b. `HierarchicalPortOrthogonalEdgeRouter` | `intermediate/hierarchical_port_orthogonal_edge_router.rs`(1K줄) | opus | high | 대기(P5a·M1 이후) |
 | I4. `HorizontalGraphCompactor`(alg.common compaction 사용) | `intermediate/horizontal_graph_compactor.rs`(2.1K줄) | opus | xhigh | 대기 |
-| I5b. wrapping(breaking point 4종 + `SingleEdgeGraphWrapper`) | `intermediate/{breaking_point_*,single_edge_graph_wrapper}.rs`(2.3K줄) | opus | high | 대기 |
+| I5b. wrapping(breaking point 4종 + `SingleEdgeGraphWrapper`) | `intermediate/{breaking_point_*,single_edge_graph_wrapper}.rs`(2.3K줄) | opus | high | 완료(`merge I5b`, 125 검사): breaking point 4종 + wrapper + GraphStats/ARD/MSD/CuttingUtils. `LNodeInternals.breakingPointInfo` 추가(값 복사, start 노드 id로 식별). **oracle 특이점**: elk-rs `BreakingPointInserter.applyCuts`는 삽입된 레이어를 포함해 인덱스를 세어 두 번째 이후 cut 위치가 Java와 다름(Rust 따름). TODO: `LEdgeInternals.splineRouteStart`(P5b 후), `BreakingPointProcessor`의 `joinAt` 사본 교체 |
 | P5c. `FinalSplineBendpointsCalculator` | `intermediate/final_spline_bendpoints_calculator.rs`(0.7K줄) | opus | high | 대기(P5b 이후) |
 
 

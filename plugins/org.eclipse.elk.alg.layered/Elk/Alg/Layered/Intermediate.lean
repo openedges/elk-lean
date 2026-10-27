@@ -4,6 +4,7 @@ import Elk.Alg.Layered.Intermediate.EdgePortProcessors
 import Elk.Alg.Layered.Intermediate.SelfLoopProcessors
 import Elk.Alg.Layered.Intermediate.ConstraintProcessors
 import Elk.Alg.Layered.Intermediate.ModelOrderProcessors
+import Elk.Alg.Layered.Intermediate.WrappingProcessors
 import Elk.Alg.Layered.Intermediate.LabelProcessors
 import Elk.Alg.Layered.Intermediate.HierarchicalPortProcessors
 import Elk.Alg.Layered.Intermediate.GreedySwitch

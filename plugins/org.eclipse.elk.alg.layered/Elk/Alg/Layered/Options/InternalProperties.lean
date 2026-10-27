@@ -9,6 +9,7 @@ import Elk.Alg.Layered.Compound.CrossHierarchyEdge
 import Elk.Alg.Layered.Options.Spacings
 import Elk.Alg.Layered.Intermediate.Loops.SelfLoopHolder
 import Elk.Alg.Common.NodeSpacing.CellSystem.Cell
+import Elk.Alg.Layered.Intermediate.Wrapping.BreakingPointInfo
 /-!
 # `org.eclipse.elk.alg.layered.options.InternalProperties`
 
@@ -76,6 +77,9 @@ structure LGraphInternals where
 
 /-- Internal properties set on `LNode`s. -/
 structure LNodeInternals where
+  /-- `BREAKING_POINT_INFO` (`breakingPoint.info`): the breaking point this dummy starts or ends
+  (`BreakingPointInserter`/`Processor`/`Remover`). -/
+  breakingPointInfo : Option Intermediate.Wrapping.BreakingPointInfo := none
   /-- `END_LABELS` (`endLabels`): per port the label cell holding its end labels (insertion order),
   set by `EndLabelPreprocessor` and consumed by `EndLabelPostprocessor`. -/
   endLabels : Option (Array (LPortId × Elk.Alg.Common.NodeSpacing.CellSystem.Cell LLabelId)) := none

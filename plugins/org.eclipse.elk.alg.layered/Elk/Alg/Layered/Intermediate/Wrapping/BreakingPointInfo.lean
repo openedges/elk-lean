@@ -29,7 +29,7 @@ the info as a **value** on both marker nodes and identifies an info by its `star
 
 `LNodeInternals` has no `breakingPointInfo` field yet. Until it is added the value is stored in
 the node's `props` under the Java property id `breakingPoint.info`, encoded as an `intList`
-(`BREAKING_POINT_INFO` below). All accesses go through `BreakingPointInfo.get?`/`write` in
+(`LNodeInternals.breakingPointInfo`). All accesses go through `BreakingPointInfo.get?`/`write` in
 `BreakingPointInserter`, so switching to the typed field only changes those two functions.
 Requested field: `breakingPointInfo : Option BreakingPointInfo := none` in `LNodeInternals`
 (this module only imports `Elk.Graph` and `Graph.Ids`, so `InternalProperties` can import it).
@@ -70,43 +70,6 @@ namespace BreakingPointInfo
 `BreakingPointInfo::new`). -/
 def new (start endNode : LNodeId) (nodeStartEdge startEndEdge originalEdge : LEdgeId) : BreakingPointInfo :=
   { start, endNode, nodeStartEdge, startEndEdge, originalEdge }
-
-private def encOpt (v : Option Nat) : Int := match v with
-  | some i => (i : Int)
-  | none => -1
-
-private def decOpt (v : Int) : Option Nat := if v < 0 then none else some v.toNat
-
-private def encode (b : BreakingPointInfo) : Array Int :=
-  #[(b.start.idx : Int), (b.endNode.idx : Int), (b.nodeStartEdge.idx : Int),
-    (b.startEndEdge.idx : Int), (b.originalEdge.idx : Int), encOpt (b.startInLayerDummy.map (·.idx)),
-    encOpt (b.startInLayerEdge.map (·.idx)), encOpt (b.endInLayerDummy.map (·.idx)),
-    encOpt (b.endInLayerEdge.map (·.idx)), encOpt (b.prev.map (·.idx)), encOpt (b.next.map (·.idx))]
-
-private def decode (xs : Array Int) : Option BreakingPointInfo :=
-  if xs.size != 11 then none
-  else
-    let n (i : Nat) : LNodeId := ⟨(xs[i]!).toNat⟩
-    let e (i : Nat) : LEdgeId := ⟨(xs[i]!).toNat⟩
-    some { start := n 0, endNode := n 1, nodeStartEdge := e 2, startEndEdge := e 3,
-           originalEdge := e 4
-           startInLayerDummy := (decOpt xs[5]!).map (⟨·⟩)
-           startInLayerEdge := (decOpt xs[6]!).map (⟨·⟩)
-           endInLayerDummy := (decOpt xs[7]!).map (⟨·⟩)
-           endInLayerEdge := (decOpt xs[8]!).map (⟨·⟩)
-           prev := (decOpt xs[9]!).map (⟨·⟩)
-           next := (decOpt xs[10]!).map (⟨·⟩) }
-
-/-- Encoding of the props-based storage stub (see the module doc). -/
-instance : PropCodec BreakingPointInfo where
-  enc b := .intList (encode b)
-  dec
-    | .intList xs => decode xs
-    | _ => none
-
-/-- `InternalProperties.BREAKING_POINT_INFO` (Java id `breakingPoint.info`, no default).
-TODO(internal-field): replace by `LNodeInternals.breakingPointInfo`. -/
-def BREAKING_POINT_INFO : Property BreakingPointInfo := Property.mk' "breakingPoint.info"
 
 end BreakingPointInfo
 

@@ -74,7 +74,7 @@ def countType (a : LGraphArena) (b : Built) (t : NodeType) : Nat :=
   (a.graph b.graph).layers.foldl (fun c l => c + ((a.layer l).nodes.filter fun n => (a.node n).type == t).size) 0
 
 def infoOf (a : LGraphArena) (n : LNodeId) : Option BreakingPointInfo :=
-  (a.node n).props.get BreakingPointInfo.BREAKING_POINT_INFO
+  (a.node n).internal.breakingPointInfo
 
 def srcNode (a : LGraphArena) (e : LEdgeId) : Option LNodeId := (a.edge e).source.bind fun p => (a.port p).owner
 def tgtNode (a : LGraphArena) (e : LEdgeId) : Option LNodeId := (a.edge e).target.bind fun p => (a.port p).owner
@@ -87,9 +87,9 @@ def noEmptyLayers (a : LGraphArena) (b : Built) : Bool :=
 def infoTests : Suite := suite "layered.wrapping.BreakingPointInfo" do
   let i : BreakingPointInfo := { BreakingPointInfo.new ⟨3⟩ ⟨4⟩ ⟨5⟩ ⟨6⟩ ⟨7⟩ with
     startInLayerDummy := some ⟨8⟩, endInLayerEdge := some ⟨0⟩, prev := some ⟨1⟩ }
-  let m := PropertyMap.empty.set BreakingPointInfo.BREAKING_POINT_INFO i
-  check "props stub round-trips the info" (m.get BreakingPointInfo.BREAKING_POINT_INFO == some i)
-  check "unset info is none" ((PropertyMap.empty.get BreakingPointInfo.BREAKING_POINT_INFO).isNone)
+  let internals : LNodeInternals := { breakingPointInfo := some i }
+  check "typed field round-trips the info" (internals.breakingPointInfo == some i)
+  check "unset info is none" (({} : LNodeInternals).breakingPointInfo.isNone)
 
 /-! ## GraphStats -/
 
