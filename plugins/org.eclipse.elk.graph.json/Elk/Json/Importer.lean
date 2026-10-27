@@ -58,7 +58,7 @@ def transformProperties (obj : Value) (props : PropertyMap) : ImportM PropertyMa
   match (← getI).defaults with
   | some g =>
     let (opts, g') ← g.effectiveOptions obj
-    modI fun s => { s with defaults := some g' }
+    modI (·.setDefaults g')
     let mut props := props
     for (k, v) in opts do
       props ← setOption props k (← JsonAdapter.stringVal v)
@@ -90,28 +90,20 @@ def readShapeLayout (obj : Value) : ImportM (Option Float × Option Float × Opt
 
 def registerNode (n : NodeId) (obj : Value) (path : JsonPath) : ImportM Unit := do
   let id ← JsonAdapter.getId obj
-  modI fun s => { s with nodeIdMap := s.nodeIdMap.insert id n, nodeIds := tableSet s.nodeIds n.idx id,
-                         nodePath := tableSet s.nodePath n.idx path }
+  modI (·.addNode id n path)
 
 def registerPort (p : PortId) (obj : Value) (path : JsonPath) : ImportM Unit := do
   let id ← JsonAdapter.getId obj
-  modI fun s => { s with portIdMap := s.portIdMap.insert id p, portIds := tableSet s.portIds p.idx id,
-                         portPath := tableSet s.portPath p.idx path }
+  modI (·.addPort id p path)
 
 def registerEdge (e : EdgeId) (obj : Value) (path : JsonPath) : ImportM Unit := do
   let id ← JsonAdapter.getId obj
   let containing := ((← getG).edge e).containingNode
-  modI fun s =>
-    let s := { s with edgeIdMap := s.edgeIdMap.insert id e, edgeIds := tableSet s.edgeIds e.idx id,
-                      edgePath := tableSet s.edgePath e.idx path }
-    match containing with
-    | some c => { s with edgeOriginalParent := tableSet s.edgeOriginalParent e.idx c }
-    | none => s
+  modI (·.addEdge id e path containing)
 
 def registerSection (sec : SectionId) (obj : Value) (path : JsonPath) : ImportM Unit := do
   let id ← JsonAdapter.getId obj
-  modI fun s => { s with sectionIdMap := s.sectionIdMap.insert id sec, sectionIds := tableSet s.sectionIds sec.idx id,
-                         sectionPath := tableSet s.sectionPath sec.idx path }
+  modI (·.addSection id sec path)
 
 /-- `shape_by_id`: node or port with the given id. -/
 def shapeById (id : JsonId) : ImportM ConnectableId := do
@@ -135,7 +127,7 @@ def transformLabels (obj : Value) (parent : ElementId) (path : JsonPath) : Impor
     if JsonAdapter.hasKey labelObj "id" then
       if let some ident ← JsonAdapter.idSave labelObj then
         modG (·.modifyLabel l fun x => { x with identifier := some ident })
-    modI fun s => { s with labelPath := tableSet s.labelPath l.idx labelPath }
+    modI (·.addLabelPath l labelPath)
     let props ← transformProperties labelObj ((← getG).label l).props
     let (x, y, w, h) ← readShapeLayout labelObj
     modG (·.modifyLabel l fun lb => { lb with props, x := upd lb.x x, y := upd lb.y y, width := upd lb.width w, height := upd lb.height h })

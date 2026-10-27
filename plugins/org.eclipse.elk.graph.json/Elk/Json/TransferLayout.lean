@@ -15,12 +15,6 @@ open ImportM
 
 namespace JsonImporter
 
-/-- Updates the transfer tables (taken out of the state first, so they stay uniquely referenced). -/
-@[inline] def modifyTables (s : ImporterState) (f : TransferTables → TransferTables) : ImporterState :=
-  let t := s.tables
-  let s := { s with tables := {} }
-  { s with tables := f t }
-
 /-- Whether `s.toUpper` contains `sub` (upper-case ASCII). `String.toUpper` only maps ASCII
 letters, so a byte-wise search with ASCII case folding is equivalent (and allocates nothing). -/
 private def containsUpper (s sub : String) : Bool :=
@@ -73,7 +67,7 @@ def parsePortConstraintsLayoutOption (v : Value) : Option PortConstraints :=
   | _ => none
 
 @[inline] def modAt (path : JsonPath) (f : Value → Value) : ImportM Unit :=
-  modI fun s => { s with model := s.model.modifyAtFrom path 0 f }
+  modI (·.modifyModel (·.modifyAtFrom path 0 f))
 
 @[inline] def getAt (path : JsonPath) : ImportM (Option Value) := do
   return (← getI).model.getAtFrom path 0
@@ -122,10 +116,9 @@ def edgeCoordsMode (el : ElementId) : ImportM EdgeCoords := do
   let t := (← getI).tables
   return t.edgeCoords.getD (t.index el) .container
 
-/-- `record_coordinate_modes`: resolves `INHERIT` through the JSON parent chain. -/
-def recordCoordinateModes (el : ElementId) : ImportM Unit := do
-  let parent ← jsonParent el
-  let props := (← getG).props el
+/-- Coordinate modes of an element with properties `props` and JSON parent `parent`
+(`record_coordinate_modes`: `INHERIT` resolves through the JSON parent chain). -/
+def coordinateModes (props : PropertyMap) (parent : Option ElementId) : ImportM (ShapeCoords × EdgeCoords) := do
   let mut shapeMode := (props.get? CoreOptions.JSON_SHAPE_COORDS).getD .inherit
   if shapeMode == .inherit then
     shapeMode ← match parent with
@@ -136,13 +129,20 @@ def recordCoordinateModes (el : ElementId) : ImportM Unit := do
     edgeMode ← match parent with
       | some p => edgeCoordsMode p
       | none => pure .container
-  let sm := shapeMode
-  let em := edgeMode
-  modI fun s => modifyTables s fun t =>
-    let i := t.index el
-    { t with shapeCoords := t.shapeCoords.set! i sm, edgeCoords := t.edgeCoords.set! i em }
+  return (shapeMode, edgeMode)
 
-private def recordGlobal (el : ElementId) (parent : Option ElementId) (x y : Float) : ImportM Unit := do
+/-- `record_coordinate_modes`: resolves `INHERIT` through the JSON parent chain. -/
+def recordCoordinateModes (el : ElementId) : ImportM Unit := do
+  let parent ← jsonParent el
+  let (sm, em) ← coordinateModes ((← getG).props el) parent
+  let i := (← getI).tables.index el
+  modI (·.modifyTables (·.setModes i sm em))
+
+/-- The global coordinates (`record_global_coords_*`) and the coordinate modes
+(`record_coordinate_modes`) of a node, port or label, in one state update. `parent` is both the
+element's parent and its JSON parent (they coincide for shapes). The two records touch different
+entries, so recording them together keeps the reference order's results. -/
+def recordShape (el : ElementId) (parent : Option ElementId) (x y : Float) (props : PropertyMap) : ImportM Unit := do
   let ancestor ← match parent with
     | some p => shapeAncestor p
     | none => pure none
@@ -152,21 +152,11 @@ private def recordGlobal (el : ElementId) (parent : Option ElementId) (x y : Flo
   let dy ← match ancestor with
     | some a => globalY a
     | none => pure 0.0
-  modI fun s => modifyTables s fun t =>
-    let i := t.index el
-    { t with globalX := t.globalX.set! i (x + dx), globalY := t.globalY.set! i (y + dy) }
-
-def recordGlobalCoordsNode (n : NodeId) : ImportM Unit := do
-  let node := (← getG).node n
-  recordGlobal (.node n) (node.parent.map ElementId.node) node.x node.y
-
-def recordGlobalCoordsPort (p : PortId) : ImportM Unit := do
-  let port := (← getG).port p
-  recordGlobal (.port p) (port.parent.map ElementId.node) port.x port.y
-
-def recordGlobalCoordsLabel (l : LabelId) : ImportM Unit := do
-  let label := (← getG).label l
-  recordGlobal (.label l) label.parent label.x label.y
+  let (sm, em) ← coordinateModes props parent
+  let gx := x + dx
+  let gy := y + dy
+  let i := (← getI).tables.index el
+  modI (·.modifyTables (·.setShape i gx gy sm em))
 
 /-- `adjust_edge_x`. -/
 def adjustEdgeX (e : EdgeId) (x : Float) : ImportM Float := do
@@ -292,11 +282,10 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
     ((layoutOptions.bind fun lo => lookup lo CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE.id "insideSelfLoops.activate").bind parseBoolLayoutOption).getD false
   let portConstraints :=
     ((layoutOptions.bind fun lo => lookup lo CoreOptions.PORT_CONSTRAINTS.id "portConstraints").bind parsePortConstraintsLayoutOption).getD .undefined
-  recordGlobalCoordsNode n
-  recordCoordinateModes (.node n)
-  let parent ← jsonParent (.node n)
   let g ← getG
   let node := g.node n
+  let parent := node.parent.map ElementId.node
+  recordShape (.node n) parent node.x node.y node.props
   transferXywh node.x node.y node.width node.height path parent
   let nodeWidth := (Number.ofFloatElk node.width).toFloat
   let nodeHeight := (Number.ofFloatElk node.height).toFloat
@@ -368,10 +357,9 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
 def transferLayoutPort (p : PortId) : ImportM Unit := do
   let some path := tableGet? (← getI).portPath p.idx | throwJsonImport "Port did not exist in input."
   let _ ← objectAt path
-  recordGlobalCoordsPort p
-  recordCoordinateModes (.port p)
-  let parent ← jsonParent (.port p)
   let port := (← getG).port p
+  let parent := port.parent.map ElementId.node
+  recordShape (.port p) parent port.x port.y port.props
   transferXywh port.x port.y port.width port.height path parent
   if let some parentNode := port.parent then
     let st ← getI
@@ -479,10 +467,9 @@ where
 def transferLayoutLabel (l : LabelId) : ImportM Unit := do
   let some path := tableGet? (← getI).labelPath l.idx | throwJsonImport "Label did not exist in input."
   let _ ← objectAt path
-  recordGlobalCoordsLabel l
-  recordCoordinateModes (.label l)
-  let parent ← jsonParent (.label l)
   let label := (← getG).label l
+  let parent := label.parent
+  recordShape (.label l) parent label.x label.y label.props
   transferXywh label.x label.y label.width label.height path parent
 
 /-- `recompute_compacted_parent_width_candidate`. -/
