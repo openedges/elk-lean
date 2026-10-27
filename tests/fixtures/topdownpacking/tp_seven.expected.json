@@ -1,0 +1,283 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h0_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h0_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h0",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 60,
+          "x": 12,
+          "y": 12
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h1_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h1_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            },
+            {
+              "height": 10,
+              "id": "h1_l2",
+              "width": 16,
+              "x": 10,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h1",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 60,
+          "x": 72,
+          "y": 12
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h2_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h2_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            },
+            {
+              "height": 10,
+              "id": "h2_l2",
+              "width": 16,
+              "x": 10,
+              "y": 3
+            },
+            {
+              "height": 11,
+              "id": "h2_l3",
+              "width": 19,
+              "x": 15,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h2",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 60,
+          "x": 132,
+          "y": 12
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h3_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h3_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h3",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 60,
+          "x": 12,
+          "y": 47.294117647058826
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h4_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h4_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            },
+            {
+              "height": 10,
+              "id": "h4_l2",
+              "width": 16,
+              "x": 10,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h4",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 60,
+          "x": 72,
+          "y": 47.294117647058826
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h5_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h5_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            },
+            {
+              "height": 10,
+              "id": "h5_l2",
+              "width": 16,
+              "x": 10,
+              "y": 3
+            },
+            {
+              "height": 11,
+              "id": "h5_l3",
+              "width": 19,
+              "x": 15,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h5",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 60,
+          "x": 132,
+          "y": 47.294117647058826
+        },
+        {
+          "children": [
+            {
+              "height": 8,
+              "id": "h6_l0",
+              "width": 10,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "height": 9,
+              "id": "h6_l1",
+              "width": 13,
+              "x": 5,
+              "y": 3
+            }
+          ],
+          "height": 35.294117647058826,
+          "id": "h6",
+          "layoutOptions": {
+            "elk.algorithm": "org.eclipse.elk.fixed",
+            "elk.nodeSize.fixedGraphSize": "true",
+            "elk.padding": "[top=4,left=4,bottom=4,right=4]",
+            "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+            "elk.topdownLayout": "true"
+          },
+          "width": 180,
+          "x": 12,
+          "y": 82.58823529411765
+        }
+      ],
+      "height": 129.88235294117646,
+      "id": "P",
+      "layoutOptions": {
+        "elk.algorithm": "org.eclipse.elk.topdownpacking",
+        "elk.spacing.nodeNode": "0",
+        "elk.topdown.hierarchicalNodeAspectRatio": "1.7",
+        "elk.topdown.hierarchicalNodeWidth": "60",
+        "elk.topdown.nodeType": "PARALLEL_NODE",
+        "elk.topdownLayout": "true"
+      },
+      "width": 204,
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "height": 83.29411764705883,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.fixed",
+    "elk.topdown.nodeType": "ROOT_NODE",
+    "elk.topdownLayout": "true"
+  },
+  "width": 108,
+  "x": 0,
+  "y": 0
+}
