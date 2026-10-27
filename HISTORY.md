@@ -188,6 +188,11 @@
 | PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 완료(`merge PT`): rectpacking 배치 스캔 unboxed 루프·SoA, mrtree `sortByFloat` 키 선계산·로컬 안정 정렬(NaN이면 `rustSortBy` 유지). 자체 구간 rectpacking 7.2→5.1 ms, mrtree 4.8→4.2 ms; 전체로는 4~9%(나머지는 공통 JSON·`NodeMicroLayout`). 무작위 그래프 600개 바이트 일치. 남은 공통 병목: `NodeMicroLayout`(노드 1000개당 2.5~3 ms), `applyVectorChain`, 특수화되지 않은 `stableSort`/`RustSort` |
 | PF1. P5 직교 라우팅, JSON 경로, force/stress 나머지 | Lean `P5Edges/Orthogonal/**`, `Elk/Json/*` | fable(주) | xhigh | 주 에이전트 | 진행 중: `c8cfb52`(P5 conflict/crossing 루프, `ofFloatElk`·`nextDouble` 정확 상수), `815e079`(FR 결과 구조체, stress 힙), `b532257`(JSON 파서 재작성) |
 | A1. Rust 복합 대입 결합 순서 점검(145곳) | elk-rs `a op= b ± c` 지점(스크래치 `compound_audit.tsv`) | sonnet | high | 서브에이전트 A1(worktree) | 완료(`merge A1`): 145곳 전수 대조, 6곳 수정(topdownpacking 배치 2, self-loop 라벨 2, random provider 2), 나머지 ok/int. 코퍼스·합성 출력 변화 없음(해당 경로의 값에서만 드러날 차이) |
+| PL3b. P3 잔여(Forster 무할당, `SweepCopy.ofArena`, side-cache 검증, 포트 정렬) | Lean `P3Order/**` | opus | xhigh | 서브에이전트 PL3b(worktree) | 진행 중 |
+| PL5. P5 직교 라우팅 성능 | Lean `P5Edges/Orthogonal/**`(elk-rs `p5edges/orthogonal/**`) | opus | xhigh | 서브에이전트 PL5(worktree) | 진행 중 |
+| PN. `NodeMicroLayout`/nodespacing 공통 경로 성능 | Lean `Alg/Common/NodeSpacing/**`, `Core/Util/Adapters/**` | opus | xhigh | 서브에이전트 PN(worktree) | 진행 중 |
+| PF2. force/stress 쌍 루프·rectpacking 스캔 2차 | Lean `Alg/Force/**`, `Alg/RectPacking/**` | opus | high | 서브에이전트 PF2(worktree) | 진행 중 |
+| PJ. JSON import/transfer·엔진 고정 비용(소형 모델) | Lean `Elk/Json/**`, `Core/{Data,Alg}`, `Graph/Properties` | opus | high | 서브에이전트 PJ(worktree) | 진행 중 |
 
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
