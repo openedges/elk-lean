@@ -112,7 +112,8 @@ def bound (v : KVector) (lowx lowy highx highy : Float) : KVector :=
 def wiggle (v : KVector) (random : Random) (amount : Float) : KVector × Random :=
   let (dx, random) := random.nextDouble
   let (dy, random) := random.nextDouble
-  (⟨v.x + dx * amount - amount / 2.0, v.y + dy * amount - amount / 2.0⟩, random)
+  -- Rust/Java: `x += r * amount - amount / 2` (the offset is computed first, then added)
+  (⟨v.x + (dx * amount - amount / 2.0), v.y + (dy * amount - amount / 2.0)⟩, random)
 
 private def isDelim (c : Char) (delims : String) : Bool := delims.any (· == c)
 

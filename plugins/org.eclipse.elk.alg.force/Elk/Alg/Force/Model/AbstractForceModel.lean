@@ -20,9 +20,7 @@ is added to the displacement of `v`; all positions are updated afterwards, so th
 one iteration are computed from the positions at the start of the iteration. The accumulation therefore
 happens in a local array (starting from the arena displacement, which is zero).
 
-`KVector.wiggle` is re-implemented as `wiggle` because Rust (`x += r * a - a / 2`) and Java add the
-whole offset to the coordinate, while `Elk.Core.Math.KVector.wiggle` adds the two terms one after the
-other, which rounds differently.
+`wiggle` delegates to `Elk.Core.Math.KVector.wiggle` (Rust/Java rounding `x + (r * a - a / 2)`).
 -/
 namespace Elk.Alg.Force.Model
 
@@ -36,11 +34,10 @@ structure AbstractForceModel where
   random : Random := {}
   dispBound : Float := 0.0
 
-/-- `KVector::wiggle(random, amount)` with the Rust/Java rounding: `x + (r * amount - amount / 2)`. -/
-def wiggle (v : KVector) (random : Random) (amount : Float) : KVector × Random :=
-  let (dx, random) := random.nextDouble
-  let (dy, random) := random.nextDouble
-  (⟨v.x + (dx * amount - amount / 2.0), v.y + (dy * amount - amount / 2.0)⟩, random)
+/-- `KVector::wiggle(random, amount)` (`Elk.Core.Math.KVector.wiggle`, Rust/Java rounding
+`x + (r * amount - amount / 2)`). -/
+@[inline] def wiggle (v : KVector) (random : Random) (amount : Float) : KVector × Random :=
+  KVector.wiggle v random amount
 
 namespace AbstractForceModel
 

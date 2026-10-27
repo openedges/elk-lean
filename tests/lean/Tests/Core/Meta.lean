@@ -64,15 +64,15 @@ def countDependencies (ds : Array LayoutOptionData) : Nat :=
 
 def counts : Suite := suite "core.meta.counts" do
   let s ← LayoutMetaDataService.getInstance
-  checkEq "option count (core 95 + layered 89 + topdownpacking 2)" s.optionDataList.size 186
-  checkEq "option order size" s.optionOrder.size 186
+  checkEq "option count (core 95 + layered 89 + topdownpacking 2 + force 5 + stress 5 + disco 4)" s.optionDataList.size 200
+  checkEq "option order size" s.optionOrder.size 200
   checkEq "category count" s.categoryDataList.size 8
-  checkEq "algorithm count" s.algorithmDataList.size 5
+  checkEq "algorithm count" s.algorithmDataList.size 8
   checkEq "dependency count" (countDependencies s.optionDataList) 10
   checkEq "legacy options (layered Java ids)" s.legacyOptions.size 89
   checkEqR "algorithm order" s.algorithmOrder
     #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.layered",
-      "org.eclipse.elk.topdownpacking"]
+      "org.eclipse.elk.topdownpacking", "org.eclipse.elk.force", "org.eclipse.elk.stress", "org.eclipse.elk.disco"]
   checkEqR "category order" s.categoryOrder
     #["org.eclipse.elk.layered", "org.eclipse.elk.orthogonal", "org.eclipse.elk.force",
       "org.eclipse.elk.circle", "org.eclipse.elk.tree", "org.eclipse.elk.planar",
@@ -347,14 +347,15 @@ def categories : Suite := suite "core.meta.categories" do
   let other ← LayoutMetaDataService.getCategoryData ""
   checkEq "backup category name" (other.map (·.name)) (some "Other")
   checkEqR "backup category members" ((other.map (·.layouters)).getD #[])
-    #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.topdownpacking"]
+    #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.topdownpacking",
+      "org.eclipse.elk.disco"]
   let radial ← LayoutMetaDataService.getCategoryData "org.eclipse.elk.radial"
   checkEq "radial description"
     (radial.map (·.description))
     (some "Radial layout algorithms usually position the nodes of the graph on concentric circles.")
   let force ← LayoutMetaDataService.getCategoryData "org.eclipse.elk.force"
   checkEq "force name" (force.map (·.name)) (some "Force")
-  checkEq "force has no members" ((force.map (·.layouters.size)).getD 99) 0
+  checkEqR "force members" ((force.map (·.layouters)).getD #[]) #["org.eclipse.elk.force", "org.eclipse.elk.stress"]
 
 /-- Provider machinery on a private (non-global) service: legacy ids, dependencies and option
 support with unknown ids being ignored. -/
