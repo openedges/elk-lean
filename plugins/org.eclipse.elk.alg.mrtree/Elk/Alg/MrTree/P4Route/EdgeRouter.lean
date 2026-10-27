@@ -182,11 +182,76 @@ def buildEdgeMaps (a : TArena) (edges : Array TEdgeId) (nd : NodeDataMap) (direc
       em := { em with incoming := em.incoming.insert target ((em.incoming.getD target #[]).push edge) }
   return em
 
-/-- `sort_by` with a `partial_cmp` comparator (Rust panics on an order violation). -/
+/-- Whether the keys are in non-decreasing order (no key is NaN). -/
+private def keysSorted (keys : FloatArray) (i : Nat) : Bool :=
+  if h : i + 1 < keys.size then
+    if keys[i] <= keys[i + 1] then keysSorted keys (i + 1) else false
+  else true
+  termination_by keys.size - i
+
+/-- Whether some key is NaN. -/
+private def keysHaveNaN (keys : FloatArray) (i : Nat) : Bool :=
+  if h : i < keys.size then
+    if keys[i].isNaN then true else keysHaveNaN keys (i + 1)
+  else false
+  termination_by keys.size - i
+
+/-- Merges the sorted index runs `src[i..iEnd)` and `src[j..jEnd)` into `dst` from `k` on; an
+element of the right run goes first only if its key is strictly smaller (stable). -/
+private partial def mergeRuns (keys : FloatArray) (src dst : Array Nat) (i iEnd j jEnd k : Nat) :
+    Array Nat :=
+  if i < iEnd then
+    if j < jEnd then
+      let a := src[i]!
+      let b := src[j]!
+      if keys.get! b < keys.get! a then
+        mergeRuns keys src (dst.set! k b) i iEnd (j + 1) jEnd (k + 1)
+      else
+        mergeRuns keys src (dst.set! k a) (i + 1) iEnd j jEnd (k + 1)
+    else mergeRuns keys src (dst.set! k src[i]!) (i + 1) iEnd j jEnd (k + 1)
+  else if j < jEnd then mergeRuns keys src (dst.set! k src[j]!) i iEnd (j + 1) jEnd (k + 1)
+  else dst
+
+/-- One bottom-up merge pass with run width `w`, from `lo` on. -/
+private partial def mergePass (keys : FloatArray) (src dst : Array Nat) (w lo : Nat) : Array Nat :=
+  let n := src.size
+  if lo < n then
+    let mid := min (lo + w) n
+    let hi := min (lo + 2 * w) n
+    mergePass keys src (mergeRuns keys src dst lo mid mid hi lo) w (lo + 2 * w)
+  else dst
+
+/-- Bottom-up merge passes until one run covers everything. -/
+private partial def mergeAll (keys : FloatArray) (src dst : Array Nat) (w : Nat) : Array Nat :=
+  if w < src.size then
+    let merged := mergePass keys src dst w 0
+    mergeAll keys merged src (2 * w)
+  else src
+
+/-- The indices `0 .. keys.size` stably sorted by their keys (no key is NaN): a stable merge sort,
+so the permutation equals that of every stable sort with the comparator
+`Float.comparePartial`. -/
+private def sortIndicesByKeys (keys : FloatArray) : Array Nat :=
+  let idx := Array.range keys.size
+  mergeAll keys idx (Array.replicate keys.size 0) 1
+
+/-- `sort_by` with a `partial_cmp` comparator on `key` (Rust panics on an order violation). The
+keys are computed once per element (`key` is pure). Without NaN keys the comparator is a total
+preorder, for which every stable sort (Rust `sort_by` included) yields the same permutation: the
+input is returned as is when it is already sorted, otherwise it is sorted with a local stable merge
+sort on the keys (`sortIndicesByKeys`). With
+a NaN key (inconsistent comparator) the exact Rust algorithm (`rustSortBy`, element size 8) runs. -/
 private def sortByFloat {α : Type} [Inhabited α] (xs : Array α) (key : α → Float) : MrTreeM (Array α) :=
-  match rustSortBy xs fun x y => Float.comparePartial (key x) (key y) with
-  | .ok s => pure s
-  | .error e => throw (IO.userError e)
+  let keys : FloatArray := xs.foldl (init := FloatArray.emptyWithCapacity xs.size) fun ks x => ks.push (key x)
+  if keysHaveNaN keys 0 then
+    let keyed := xs.map fun x => (key x, x)
+    match rustSortBy keyed fun x y => Float.comparePartial x.1 y.1 with
+    | .ok s => pure (s.map (·.2))
+    | .error e => throw (IO.userError e)
+  else if keysSorted keys 0 then
+    pure xs
+  else
+    pure ((sortIndicesByKeys keys).map fun i => xs[i]!)
 
 /-- `build_level_nodes(nodes, nd, direction)`: the nodes of every level, sorted by position. -/
 def buildLevelNodes (nodes : Array TNodeId) (nd : NodeDataMap) (direction : Direction) :
