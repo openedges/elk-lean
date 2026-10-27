@@ -1,14 +1,15 @@
 import Elk.Core.Options.CoreOptions
+import Elk.Core.Data.LayoutMetaDataService
 /-!
 # `org.eclipse.elk.core.options.BoxLayouterOptions`
 
-Option constants of the box layouter. The metadata registration
-(`ILayoutMetaDataProvider.apply`) is part of the metadata port
-(`core_options_meta.rs`), not of this file.
+Option constants of the box layouter and its `ILayoutMetaDataProvider`
+(`metaDataProvider`), which re-registers the box packing mode option
+(elk-rs `impl ILayoutMetaDataProvider for BoxLayouterOptions`).
 -/
 namespace Elk.Core.Options
 
-open Elk Elk.Graph Elk.Core.Math
+open Elk Elk.Graph Elk.Core.Math Elk.Core.Data
 
 namespace BoxLayouterOptions
 
@@ -35,6 +36,19 @@ def ASPECT_RATIO : Property Float := CoreOptions.ASPECT_RATIO
 def NODE_SIZE_MINIMUM : Property KVector := CoreOptions.NODE_SIZE_MINIMUM
 /-- `BoxLayouterOptions.BOX_PACKING_MODE`. -/
 def BOX_PACKING_MODE : Property PackingMode := CoreOptions.BOX_PACKING_MODE
+
+/-- `BoxLayouterOptions.apply(registry)`: registers `BOX_PACKING_MODE` (enum, parents only,
+default `SIMPLE`; name, description and group are intentionally empty like in elk-rs, where
+this registration replaces the one of `CoreOptions`). -/
+def metaDataProvider : LayoutMetaDataProvider where
+  apply r :=
+    r.registerOption
+      { id := BOX_PACKING_MODE.id
+        type := .enum
+        targets := EnumSet.of #[.parents]
+        defaultValue := BOX_PACKING_MODE.default.map PropCodec.enc
+        choices := LayoutOptionData.enumChoices PackingMode
+        parser := some (LayoutOptionData.enumParser PackingMode) }
 
 end BoxLayouterOptions
 
