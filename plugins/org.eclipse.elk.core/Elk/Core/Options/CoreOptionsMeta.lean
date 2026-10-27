@@ -1,0 +1,455 @@
+import Elk.Core.Data
+import Elk.Core.Options
+/-!
+# `org.eclipse.elk.core.options.CoreOptions` (metadata provider)
+
+Port of `core_options_meta.rs` (`impl ILayoutMetaDataProvider for CoreOptions`), the Rust
+counterpart of the generated `CoreOptions.apply(ILayoutMetaDataRegistry)` of the Java
+`CoreOptions` class (see also `Core.melk`).
+
+The Rust helper structure is kept: an `OptionMeta` record (name, description, targets,
+visibility, group, bounds) and the helpers `registerOption`, `registerEnumOption` and
+`registerEnumSetOption` which build a `LayoutOptionData` from a `Property` (id and default
+value) plus its `OptionMeta`. The registration is split into one `register*` function per
+section, applied in the same order as Rust (`register_categories` first,
+`register_dependencies` last).
+
+Deviations from the Rust semantics:
+* The parser of the `IndividualSpacings` object option returns `none`
+  (TODO(IndividualSpacings): the Java/Rust parser needs the `LayoutMetaDataService` at parse
+  time to resolve the option ids; see `LayoutMetaDataService.parseIndividualSpacings`).
+* Enum choices come from the `ElkEnum` instance of the property type instead of an explicit
+  variants list (the lists coincide with the enum declarations).
+-/
+namespace Elk.Core.Options
+
+open Elk Elk.Graph Elk.Core.Data Elk.Core.Math Elk.Core.Util
+
+namespace CoreOptionsMeta
+
+/-! ### Targets (`TARGET_*` constants) -/
+
+/-- `TARGET_PARENTS`. -/
+def targetParents : Array LayoutOptionTarget := #[.parents]
+/-- `TARGET_NODES`. -/
+def targetNodes : Array LayoutOptionTarget := #[.nodes]
+/-- `TARGET_EDGES`. -/
+def targetEdges : Array LayoutOptionTarget := #[.edges]
+/-- `TARGET_PORTS`. -/
+def targetPorts : Array LayoutOptionTarget := #[.ports]
+/-- `TARGET_LABELS`. -/
+def targetLabels : Array LayoutOptionTarget := #[.labels]
+/-- `TARGET_PARENTS_LABELS`. -/
+def targetParentsLabels : Array LayoutOptionTarget := #[.parents, .labels]
+/-- `TARGET_PARENTS_NODES`. -/
+def targetParentsNodes : Array LayoutOptionTarget := #[.parents, .nodes]
+/-- `TARGET_NODES_EDGES`. -/
+def targetNodesEdges : Array LayoutOptionTarget := #[.nodes, .edges]
+/-- `TARGET_NODES_LABELS`. -/
+def targetNodesLabels : Array LayoutOptionTarget := #[.nodes, .labels]
+/-- `TARGET_NODES_PORTS_LABELS`. -/
+def targetNodesPortsLabels : Array LayoutOptionTarget := #[.nodes, .ports, .labels]
+/-- `TARGET_NODES_EDGES_PORTS_LABELS`. -/
+def targetNodesEdgesPortsLabels : Array LayoutOptionTarget := #[.nodes, .edges, .ports, .labels]
+
+/-! ### `OptionMeta` and the registration helpers -/
+
+/-- `OptionMeta`: the descriptive part of an option (everything except id, type and default). -/
+structure OptionMeta where
+  name : String
+  description : String
+  targets : Array LayoutOptionTarget
+  visibility : LayoutOptionVisibility := .visible
+  group : Option String := none
+  lowerBound : Option OptionBound := none
+  upperBound : Option OptionBound := none
+
+namespace OptionMeta
+
+/-- `OptionMeta::visible`. -/
+def visible (name description : String) (targets : Array LayoutOptionTarget) : OptionMeta :=
+  { name, description, targets, visibility := .visible }
+
+/-- `OptionMeta::advanced`. -/
+def advanced (name description : String) (targets : Array LayoutOptionTarget) : OptionMeta :=
+  { visible name description targets with visibility := .advanced }
+
+/-- `OptionMeta::hidden`. -/
+def hidden (name description : String) (targets : Array LayoutOptionTarget) : OptionMeta :=
+  { visible name description targets with visibility := .hidden }
+
+/-- `OptionMeta::group`. -/
+def withGroup (m : OptionMeta) (group : String) : OptionMeta := { m with group := some group }
+
+/-- `OptionMeta::lower_bound`. -/
+def withLowerBound (m : OptionMeta) (bound : OptionBound) : OptionMeta :=
+  { m with lowerBound := some bound }
+
+/-- `apply_meta!`: copies the descriptive fields onto the option data under construction. -/
+def apply (m : OptionMeta) (d : LayoutOptionData) : LayoutOptionData :=
+  { d with
+    name := m.name
+    description := m.description
+    targets := EnumSet.of m.targets
+    visibility := m.visibility
+    group := m.group.getD d.group
+    lowerBound := m.lowerBound.orElse fun _ => d.lowerBound
+    upperBound := m.upperBound.orElse fun _ => d.upperBound }
+
+end OptionMeta
+
+/-- `object_parser::<T>()`: the parser of an OBJECT option, selected by the value type. -/
+class OptionObjectParser (α : Type) where
+  parser : Option OptionParser
+
+instance (priority := low) (α : Type) : OptionObjectParser α := ⟨none⟩
+instance : OptionObjectParser KVector := ⟨some LayoutOptionData.kvectorParser⟩
+instance : OptionObjectParser KVectorChain := ⟨some LayoutOptionData.kvectorChainParser⟩
+instance : OptionObjectParser ElkPadding := ⟨some LayoutOptionData.paddingParser⟩
+instance : OptionObjectParser ElkMargin := ⟨some LayoutOptionData.marginsParser⟩
+/-- TODO(IndividualSpacings): needs the service at parse time, so no value is parsed here. -/
+instance : OptionObjectParser IndividualSpacings := ⟨some fun _ => none⟩
+
+/-- `register_option`: plain option (boolean, int, double, string or object). -/
+def registerOption {α : Type} [PropCodec α] [OptionObjectParser α] (r : Registry)
+    (property : Property α) (optionType : LayoutOptionType) (m : OptionMeta) : Registry :=
+  let parser := if optionType == .object then OptionObjectParser.parser (α := α) else none
+  r.registerOption <| m.apply
+    { id := property.id, type := optionType, defaultValue := property.default.map PropCodec.enc,
+      parser }
+
+/-- `register_enum_option`. -/
+def registerEnumOption {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+    (m : OptionMeta) : Registry :=
+  r.registerOption <| m.apply
+    { id := property.id, type := .enum, defaultValue := property.default.map PropCodec.enc,
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+
+/-- `register_enumset_option`. -/
+def registerEnumSetOption {α : Type} [ElkEnum α] (r : Registry) (property : Property (EnumSet α))
+    (m : OptionMeta) : Registry :=
+  r.registerOption <| m.apply
+    { id := property.id, type := .enumSet, defaultValue := property.default.map PropCodec.enc,
+      choices := LayoutOptionData.enumChoices α,
+      parser := some (LayoutOptionData.enumSetParser α) }
+
+/-! ### Registration sections -/
+
+/-- `register_ui_options`. -/
+def registerUiOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.ALGORITHM .string
+    (OptionMeta.visible "Layout Algorithm" "Select a specific layout algorithm." targetParents)
+  let r := registerOption r CoreOptions.RESOLVED_ALGORITHM .object
+    (OptionMeta.hidden "Resolved Layout Algorithm" "Meta data associated with the selected algorithm." targetParents)
+  let r := registerEnumOption r CoreOptions.ALIGNMENT
+    (OptionMeta.advanced "Alignment" "Alignment of the selected node relative to other nodes; the exact meaning depends on the used algorithm." targetNodes)
+  let r := registerOption r CoreOptions.ASPECT_RATIO .double
+    ((OptionMeta.advanced "Aspect Ratio" "The desired aspect ratio of the drawing, that is the quotient of width by height." targetParents).withLowerBound (OptionBound.greaterThan 0.0))
+  let r := registerOption r CoreOptions.BEND_POINTS .object
+    (OptionMeta.hidden "Bend Points" "A fixed list of bend points for the edge. This is used by the 'Fixed Layout' algorithm to specify a pre-defined routing for an edge. The vector chain must include the source point, any bend points, and the target point, so it must have at least two points." targetEdges)
+  let r := registerEnumSetOption r CoreOptions.CONTENT_ALIGNMENT
+    (OptionMeta.advanced "Content Alignment" "Specifies how the content of a node are aligned. Each node can individually control the alignment of its contents. If a node should be aligned top left in its parent node, the parent node should specify that option." targetParents)
+  let r := registerOption r CoreOptions.DEBUG_MODE .boolean
+    (OptionMeta.advanced "Debug Mode" "Whether additional debug information shall be generated." targetParents)
+  let r := registerEnumOption r CoreOptions.DIRECTION
+    (OptionMeta.visible "Direction" "Overall direction of edges: horizontal (right / left) or vertical (down / up)." targetParents)
+  let r := registerEnumOption r CoreOptions.EDGE_ROUTING
+    (OptionMeta.visible "Edge Routing" "What kind of edge routing style should be applied for the content of a parent node. Algorithms may also set this option to single edges in order to mark them as splines. The bend point list of edges with this option set to SPLINES must be interpreted as control points for a piecewise cubic spline." targetParents)
+  let r := registerOption r CoreOptions.EXPAND_NODES .boolean
+    (OptionMeta.advanced "Expand Nodes" "If active, nodes are expanded to fill the area of their parent." targetParents)
+  let r := registerEnumOption r CoreOptions.HIERARCHY_HANDLING
+    (OptionMeta.advanced "Hierarchy Handling" "Determines whether separate layout runs are triggered for different compound nodes in a hierarchical graph. Setting a node's hierarchy handling to INCLUDE_CHILDREN will lay out that node and all of its descendants in a single layout run, until a descendant is encountered which has its hierarchy handling set to SEPARATE_CHILDREN. In general, SEPARATE_CHILDREN will ensure that a new layout run is triggered for a node with that setting. Including multiple levels of hierarchy in a single layout run may allow cross-hierarchical edges to be laid out properly. If the root node is set to INHERIT (or not set at all), the default behavior is SEPARATE_CHILDREN." targetParentsNodes)
+  let r := registerOption r CoreOptions.PADDING .object
+    (OptionMeta.advanced "Padding" "The padding to be left to a parent element's border when placing child elements. This can also serve as an output option of a layout algorithm if node size calculation is setup appropriately." targetParentsNodes)
+  let r := registerOption r CoreOptions.INTERACTIVE .boolean
+    (OptionMeta.advanced "Interactive" "Whether the algorithm should be run in interactive mode for the content of a parent node. What this means exactly depends on how the specific algorithm interprets this option. Usually in the interactive mode algorithms try to modify the current layout as little as possible." targetParents)
+  let r := registerOption r CoreOptions.INTERACTIVE_LAYOUT .boolean
+    (OptionMeta.advanced "Interactive Layout" "Whether the graph should be changeable interactively and by setting constraints." targetParents)
+  let r := registerOption r CoreOptions.OMIT_NODE_MICRO_LAYOUT .boolean
+    (OptionMeta.advanced "Omit Node Micro Layout" "Node micro layout comprises the computation of node dimensions (if requested), the placement of ports and their labels, and the placement of node labels. The functionality is implemented independent of any specific layout algorithm and should not have any negative impact on the layout algorithm's performance itself. Yet, if any unforeseen behavior occurs, this option allows to deactivate the micro layout." targetParents)
+  let r := registerEnumOption r CoreOptions.BOX_PACKING_MODE
+    ((OptionMeta.visible "Box Layout Mode" "Configures the packing mode used by the BoxLayoutProvider. If SIMPLE is not required (neither priorities are used nor the interactive mode), GROUP_DEC can improve the packing and decrease the area. GROUP_MIXED and GROUP_INC may, in very specific scenarios, work better." targetParents).withGroup "box")
+  r
+
+/-- `register_json_options`. -/
+def registerJsonOptions (r : Registry) : Registry :=
+  let r := registerEnumOption r CoreOptions.JSON_SHAPE_COORDS
+    ((OptionMeta.visible "Shape Coords" "For layouts transferred into JSON graphs, specify the coordinate system to be used for nodes, ports, and labels of nodes and ports." targetParents).withGroup "json")
+  let r := registerEnumOption r CoreOptions.JSON_EDGE_COORDS
+    ((OptionMeta.visible "Edge Coords" "For layouts transferred into JSON graphs, specify the coordinate system to be used for edge route points and edge labels." targetParents).withGroup "json")
+  r
+
+/-- `register_spacing_options`. -/
+def registerSpacingOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.SPACING_COMMENT_COMMENT .double
+    (((OptionMeta.visible "Comment Comment Spacing" "Spacing to be preserved between a comment box and other comment boxes connected to the same node. The space left between comment boxes of different nodes is controlled by the node-node spacing." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_COMMENT_NODE .double
+    (((OptionMeta.visible "Comment Node Spacing" "Spacing to be preserved between a node and its connected comment boxes. The space left between a node and the comments of another node is controlled by the node-node spacing." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_COMPONENT_COMPONENT .double
+    (((OptionMeta.visible "Components Spacing" "Spacing to be preserved between pairs of connected components. This option is only relevant if separateConnectedComponents is activated." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_EDGE_EDGE .double
+    (((OptionMeta.visible "Edge Spacing" "Spacing to be preserved between any two edges. Note that while this can somewhat easily be satisfied for the segments of orthogonally drawn edges, it is harder for general polylines or splines." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_EDGE_LABEL .double
+    (((OptionMeta.visible "Edge Label Spacing" "The minimal distance to be preserved between a label and the edge it is associated with. Note that the placement of a label is influenced by the edgeLabels.placement option." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_EDGE_NODE .double
+    (((OptionMeta.visible "Edge Node Spacing" "Spacing to be preserved between nodes and edges." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_LABEL_LABEL .double
+    (((OptionMeta.visible "Label Spacing" "Determines the amount of space to be left between two labels of the same graph element." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_LABEL_NODE .double
+    (((OptionMeta.visible "Label Node Spacing" "Spacing to be preserved between labels and the border of node they are associated with. Note that the placement of a label is influenced by the nodeLabels.placement option." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_LABEL_PORT_HORIZONTAL .double
+    ((OptionMeta.visible "Horizontal spacing between Label and Port" "Horizontal spacing to be preserved between labels and the ports they are associated with. Note that the placement of a label is influenced by the portLabels.placement option." targetParents).withGroup "spacing")
+  let r := registerOption r CoreOptions.SPACING_LABEL_PORT_VERTICAL .double
+    ((OptionMeta.visible "Vertical spacing between Label and Port" "Vertical spacing to be preserved between labels and the ports they are associated with. Note that the placement of a label is influenced by the portLabels.placement option." targetParents).withGroup "spacing")
+  let r := registerOption r CoreOptions.SPACING_NODE_NODE .double
+    (((OptionMeta.visible "Node Spacing" "The minimal distance to be preserved between each two nodes." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_NODE_SELF_LOOP .double
+    (((OptionMeta.visible "Node Self Loop Spacing" "Spacing to be preserved between a node and its self loops." targetParents).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_PORT_PORT .double
+    (((OptionMeta.visible "Port Spacing" "Spacing between pairs of ports of the same node." targetParentsNodes).withGroup "spacing").withLowerBound (OptionBound.atLeast 0.0))
+  let r := registerOption r CoreOptions.SPACING_INDIVIDUAL .object
+    ((OptionMeta.advanced "Individual Spacing" "Allows to specify individual spacing values for graph elements that shall be different from the value specified for the element's parent." targetNodesEdgesPortsLabels).withGroup "spacing")
+  let r := registerOption r CoreOptions.SPACING_PORTS_SURROUNDING .object
+    ((OptionMeta.advanced "Additional Port Space" "Additional space around the sets of ports on each node side. For each side of a node, this option can reserve additional space before and after the ports on each side. For example, a top spacing of 20 makes sure that the first port on the western and eastern side is 20 units away from the northern border." targetParents).withGroup "spacing")
+  r
+
+/-- `register_partitioning_options`. -/
+def registerPartitioningOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.PARTITIONING_PARTITION .int
+    ((OptionMeta.advanced "Layout Partition" "Partition to which the node belongs. This requires Layout Partitioning to be active. Nodes with lower partition IDs will appear to the left of nodes with higher partition IDs (assuming a left-to-right layout direction)." targetParentsNodes).withGroup "partitioning")
+  let r := registerOption r CoreOptions.PARTITIONING_ACTIVATE .boolean
+    ((OptionMeta.advanced "Layout Partitioning" "Whether to activate partitioned layout. This will allow to group nodes through the Layout Partition option. A pair of nodes with different partition indices is then placed such that the node with lower index is placed to the left of the other node (with left-to-right layout direction). Depending on the layout algorithm, this may only be guaranteed to work if all nodes have a layout partition configured, or at least if edges that cross partitions are not part of a partition-crossing cycle." targetParents).withGroup "partitioning")
+  r
+
+/-- `register_node_label_options`. -/
+def registerNodeLabelOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.NODE_LABELS_PADDING .object
+    ((OptionMeta.advanced "Node Label Padding" "Define padding for node labels that are placed inside of a node." targetParents).withGroup "nodeLabels")
+  let r := registerEnumSetOption r CoreOptions.NODE_LABELS_PLACEMENT
+    ((OptionMeta.visible "Node Label Placement" "Hints for where node labels are to be placed; if empty, the node label's position is not modified." targetNodesLabels).withGroup "nodeLabels")
+  r
+
+/-- `register_port_alignment_options`. -/
+def registerPortAlignmentOptions (r : Registry) : Registry :=
+  let r := registerEnumOption r CoreOptions.PORT_ALIGNMENT_DEFAULT
+    ((OptionMeta.visible "Port Alignment" "Defines the default port distribution for a node. May be overridden for each side individually." targetNodes).withGroup "portAlignment")
+  let r := registerEnumOption r CoreOptions.PORT_ALIGNMENT_NORTH
+    ((OptionMeta.advanced "Port Alignment (North)" "Defines how ports on the northern side are placed, overriding the node's general port alignment." targetNodes).withGroup "portAlignment")
+  let r := registerEnumOption r CoreOptions.PORT_ALIGNMENT_SOUTH
+    ((OptionMeta.advanced "Port Alignment (South)" "Defines how ports on the southern side are placed, overriding the node's general port alignment." targetNodes).withGroup "portAlignment")
+  let r := registerEnumOption r CoreOptions.PORT_ALIGNMENT_WEST
+    ((OptionMeta.advanced "Port Alignment (West)" "Defines how ports on the western side are placed, overriding the node's general port alignment." targetNodes).withGroup "portAlignment")
+  let r := registerEnumOption r CoreOptions.PORT_ALIGNMENT_EAST
+    ((OptionMeta.advanced "Port Alignment (East)" "Defines how ports on the eastern side are placed, overriding the node's general port alignment." targetNodes).withGroup "portAlignment")
+  r
+
+/-- `register_port_constraints_and_misc`. -/
+def registerPortConstraintsAndMisc (r : Registry) : Registry :=
+  let r := registerEnumOption r CoreOptions.PORT_CONSTRAINTS
+    (OptionMeta.visible "Port Constraints" "Defines constraints of the position of the ports of a node." targetNodes)
+  let r := registerOption r CoreOptions.POSITION .object
+    (OptionMeta.advanced "Position" "The position of a node, port, or label. This is used by the 'Fixed Layout' algorithm to specify a pre-defined position." targetNodesPortsLabels)
+  let r := registerOption r CoreOptions.PRIORITY .int
+    (OptionMeta.advanced "Priority" "Defines the priority of an object; its meaning depends on the specific layout algorithm and the context where it is used." targetNodesEdges)
+  let r := registerOption r CoreOptions.RANDOM_SEED .int
+    (OptionMeta.advanced "Randomization Seed" "Seed used for pseudo-random number generators to control the layout algorithm. If the value is 0, the seed shall be determined pseudo-randomly (e.g. from the system time)." targetParents)
+  let r := registerOption r CoreOptions.SEPARATE_CONNECTED_COMPONENTS .boolean
+    (OptionMeta.visible "Separate Connected Components" "Whether each connected component should be processed separately." targetParents)
+  r
+
+/-- `register_node_size_options`. -/
+def registerNodeSizeOptions (r : Registry) : Registry :=
+  let r := registerEnumSetOption r CoreOptions.NODE_SIZE_CONSTRAINTS
+    ((OptionMeta.visible "Node Size Constraints" "What should be taken into account when calculating a node's size. Empty size constraints specify that a node's size is already fixed and should not be changed." targetNodes).withGroup "nodeSize")
+  let r := registerEnumSetOption r CoreOptions.NODE_SIZE_OPTIONS
+    ((OptionMeta.visible "Node Size Options" "Options modifying the behavior of the size constraints set on a node. Each member of the set specifies something that should be taken into account when calculating node sizes. The empty set corresponds to no further modifications." targetNodes).withGroup "nodeSize")
+  let r := registerOption r CoreOptions.NODE_SIZE_MINIMUM .object
+    ((OptionMeta.advanced "Node Size Minimum" "The minimal size to which a node can be reduced." targetNodes).withGroup "nodeSize")
+  let r := registerOption r CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE .boolean
+    ((OptionMeta.visible "Fixed Graph Size" "By default, the fixed layout provider will enlarge a graph until it is large enough to contain its children. If this option is set, it will not do so." targetParents).withGroup "nodeSize")
+  r
+
+/-- `register_programmatic_options`. -/
+def registerProgrammaticOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.JUNCTION_POINTS .object
+    (OptionMeta.hidden "Junction Points" "This option is not used as option, but as output of the layout algorithms. It is attached to edges and determines the points where junction symbols should be drawn in order to represent hyperedges with orthogonal routing. Whether such points are computed depends on the chosen layout algorithm and edge routing style. The points are put into the vector chain with no specific order." targetEdges)
+  let r := registerOption r CoreOptions.HYPERNODE .boolean
+    (OptionMeta.hidden "Hypernode" "Whether the node should be handled as a hypernode." targetNodes)
+  let r := registerOption r CoreOptions.LABEL_MANAGER .object
+    (OptionMeta.hidden "Label Manager" "Label managers can shorten labels upon a layout algorithm's request." targetParentsLabels)
+  let r := registerOption r CoreOptions.SCALE_FACTOR .double
+    ((OptionMeta.hidden "Scale Factor" "The scaling factor to be applied to the corresponding node in recursive layout. It causes the corresponding node's size to be adjusted, and its ports and labels to be sized and placed accordingly after the layout of that node has been determined (and before the node itself and its siblings are arranged). The scaling is not reverted afterwards, so the resulting layout graph contains the adjusted size and position data." targetNodes).withLowerBound (OptionBound.greaterThan 0.0))
+  let r := registerOption r CoreOptions.CHILD_AREA_WIDTH .double
+    (OptionMeta.hidden "Child Area Width" "The width of the area occupied by the laid out children of a node." targetParents)
+  let r := registerOption r CoreOptions.CHILD_AREA_HEIGHT .double
+    (OptionMeta.hidden "Child Area Height" "The height of the area occupied by the laid out children of a node." targetParents)
+  r
+
+/-- `register_comment_and_edge_label_options`. -/
+def registerCommentAndEdgeLabelOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.COMMENT_BOX .boolean
+    (OptionMeta.visible "Comment Box" "Whether the node should be regarded as a comment box instead of a regular node. In that case its placement should be similar to how labels are handled. Any edges incident to a comment box specify to which graph elements the comment is related." targetNodes)
+  let r := registerEnumOption r CoreOptions.EDGE_LABELS_PLACEMENT
+    ((OptionMeta.visible "Edge Label Placement" "Gives a hint on where to put edge labels." targetLabels).withGroup "edgeLabels")
+  let r := registerOption r CoreOptions.EDGE_LABELS_INLINE .boolean
+    ((OptionMeta.visible "Inline Edge Labels" "If true, an edge label is placed directly on its edge. May only apply to center edge labels. This kind of label placement is only advisable if the label's rendering is such that it is not crossed by its edge and thus stays legible." targetLabels).withGroup "edgeLabels")
+  r
+
+/-- `register_font_options`. -/
+def registerFontOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.FONT_NAME .string
+    ((OptionMeta.hidden "Font Name" "Font name used for a label." targetLabels).withGroup "font")
+  let r := registerOption r CoreOptions.FONT_SIZE .int
+    (((OptionMeta.hidden "Font Size" "Font size used for a label." targetLabels).withGroup "font").withLowerBound (OptionBound.atLeastInt 1))
+  r
+
+/-- `register_text_options`. -/
+def registerTextOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.SOFTWRAPPING_FUZZINESS .double
+    (OptionMeta.visible "Softwrapping Fuzziness" "Determines the amount of fuzziness to be used when performing softwrapping on labels. The value expresses the percent of overhang that is permitted for each line. If the next line would take up less space than this threshold, it is appended to the current line instead of being placed in a new line." targetLabels)
+  let r := registerOption r CoreOptions.MARGINS .object
+    (OptionMeta.visible "Margins" "Margins define additional space around the actual bounds of a graph element. For instance, ports or labels being placed on the outside of a node's border might introduce such a margin. The margin is used to guarantee non-overlap of other graph elements with those ports or labels." targetNodes)
+  let r := registerOption r CoreOptions.NO_LAYOUT .boolean
+    (OptionMeta.visible "No Layout" "No layout is done for the associated element. This is used to mark parts of a diagram to avoid their inclusion in the layout graph, or to mark parts of the layout graph to prevent layout engines from processing them. If you wish to exclude the contents of a compound node from automatic layout, while the node itself is still considered on its own layer, use the 'Fixed Layout' algorithm for that node." targetNodesEdgesPortsLabels)
+  r
+
+/-- `register_port_options`. -/
+def registerPortOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.PORT_ANCHOR .object
+    ((OptionMeta.visible "Port Anchor Offset" "The offset to the port position where connections shall be attached." targetPorts).withGroup "port")
+  let r := registerOption r CoreOptions.PORT_INDEX .int
+    ((OptionMeta.visible "Port Index" "The index of a port in the fixed order around a node. The order is assumed as clockwise, starting with the leftmost port on the top side. This option must be set if Port Constraints is set to FIXED_ORDER and no specific positions are given for the ports. Additionally, the Port Side option must be defined in this case." targetPorts).withGroup "port")
+  let r := registerEnumOption r CoreOptions.PORT_SIDE
+    ((OptionMeta.visible "Port Side" "The side of a node on which a port is situated. This option must be set if Port Constraints is set to FIXED_SIDE or FIXED_ORDER and no specific positions are given for the ports." targetPorts).withGroup "port")
+  let r := registerOption r CoreOptions.PORT_BORDER_OFFSET .double
+    ((OptionMeta.visible "Port Border Offset" "The offset of ports on the node border. With a positive offset the port is moved outside of the node, while with a negative offset the port is moved towards the inside. An offset of 0 means that the port is placed directly on the node border." targetPorts).withGroup "port")
+  r
+
+/-- `register_port_label_options`. -/
+def registerPortLabelOptions (r : Registry) : Registry :=
+  let r := registerEnumSetOption r CoreOptions.PORT_LABELS_PLACEMENT
+    ((OptionMeta.visible "Port Label Placement" "Decides on a placement method for port labels; if empty, the node label's position is not modified." targetNodes).withGroup "portLabels")
+  let r := registerOption r CoreOptions.PORT_LABELS_NEXT_TO_PORT_IF_POSSIBLE .boolean
+    ((OptionMeta.hidden "Port Labels Next to Port" "Use portLabels.placement: NEXT_TO_PORT_IF_POSSIBLE." targetNodes).withGroup "portLabels")
+  let r := registerOption r CoreOptions.PORT_LABELS_TREAT_AS_GROUP .boolean
+    ((OptionMeta.visible "Treat Port Labels as Group" "If this option is true (default), the labels of a port will be treated as a group when it comes to centering them next to their port. If this option is false, only the first label will be centered next to the port, with the others being placed below. This only applies to labels of eastern and western ports and will have no effect if labels are not placed next to their port." targetNodes).withGroup "portLabels")
+  r
+
+/-- `register_topdown_options`. -/
+def registerTopdownOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.TOPDOWN_LAYOUT .boolean
+    (OptionMeta.advanced "Topdown Layout" "Turns topdown layout on and off. If this option is enabled, hierarchical layout will be computed first for the root node and then for its children recursively. Layouts are then scaled down to fit the area provided by their parents. Graphs must follow a certain structure for topdown layout to work properly." targetParents)
+  let r := registerOption r CoreOptions.TOPDOWN_SIZE_CATEGORIES .int
+    (((OptionMeta.advanced "Number of size categories" "Defines the number of categories to use for the FIXED_INTEGER_RATIO_BOXES size approximator." targetParents).withGroup "topdown").withLowerBound (OptionBound.atLeastInt 1))
+  let r := registerOption r CoreOptions.TOPDOWN_SIZE_CATEGORIES_HIERARCHICAL_NODE_WEIGHT .int
+    (((OptionMeta.advanced "Weight of a node containing children for determining the graph size" "When determining the graph size for the size categorisation, this value determines how many times a node containing children is weighted more than a simple node. For example setting this value to four would result in a graph containing a simple node and a hierarchical node to be counted as having a size of five." targetParents).withGroup "topdown").withLowerBound (OptionBound.atLeastInt 1))
+  let r := registerOption r CoreOptions.TOPDOWN_SCALE_FACTOR .double
+    (((OptionMeta.hidden "Topdown Scale Factor" "The scaling factor to be applied to the nodes laid out within the node in recursive topdown layout. The difference to Scale Factor is that the node itself is not scaled. This value has to be set on hierarchical nodes." targetParents).withGroup "topdown").withLowerBound (OptionBound.greaterThan 0.0))
+  let r := registerOption r CoreOptions.TOPDOWN_SIZE_APPROXIMATOR .object
+    ((OptionMeta.advanced "Topdown Size Approximator" "The size approximator to be used to set sizes of hierarchical nodes during topdown layout. The default value is null, which results in nodes keeping whatever size is defined for them." targetNodes).withGroup "topdown")
+  let r := registerOption r CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH .double
+    ((OptionMeta.advanced "Topdown Hierarchical Node Width" "The fixed size of a hierarchical node when using topdown layout. If this value is set on a parallel node it applies to its children, when set on a hierarchical node it applies to the node itself." targetParentsNodes).withGroup "topdown")
+  let r := registerOption r CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO .double
+    ((OptionMeta.advanced "Topdown Hierarchical Node Aspect Ratio" "The fixed aspect ratio of a hierarchical node when using topdown layout. Default is 1/sqrt(2). If this value is set on a parallel node it applies to its children, when set on a hierarchical node it applies to the node itself." targetParentsNodes).withGroup "topdown")
+  let r := registerEnumOption r CoreOptions.TOPDOWN_NODE_TYPE
+    ((OptionMeta.advanced "Topdown Node Type" "The different node types used for topdown layout. If the node type is set to PARALLEL_NODE the algorithm must be set to a TopdownLayoutProvider such as TopdownPacking." targetNodes).withGroup "topdown")
+  let r := registerOption r CoreOptions.TOPDOWN_SCALE_CAP .double
+    ((OptionMeta.advanced "Topdown Scale Cap" "Determines the upper limit for the topdown scale factor. The default value is 1.0 which ensures that nested children never end up appearing larger than their parents in terms of unit sizes such as the font size. If the limit is larger, nodes will fully utilize the available space." targetParents).withGroup "topdown")
+  r
+
+/-- `register_inside_self_loop_options`. -/
+def registerInsideSelfLoopOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE .boolean
+    ((OptionMeta.advanced "Activate Inside Self Loops" "Whether this node allows to route self loops inside of it instead of around it. If set to true, this will make the node a compound node if it is not already, and will require the layout algorithm to support compound nodes with hierarchical ports." targetNodes).withGroup "insideSelfLoops")
+  let r := registerOption r CoreOptions.INSIDE_SELF_LOOPS_YO .boolean
+    ((OptionMeta.advanced "Inside Self Loop" "Whether a self loop should be routed inside a node instead of around that node." targetEdges).withGroup "insideSelfLoops")
+  r
+
+/-- `register_edge_options`. -/
+def registerEdgeOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.EDGE_THICKNESS .double
+    ((OptionMeta.hidden "Edge Thickness" "The thickness of an edge. This is a hint on the line width used to draw an edge, possibly requiring more space to be reserved for it." targetEdges).withGroup "edge")
+  let r := registerEnumOption r CoreOptions.EDGE_TYPE
+    ((OptionMeta.hidden "Edge Type" "The type of an edge. This is usually used for UML class diagrams, where associations must be handled differently from generalizations." targetEdges).withGroup "edge")
+  r
+
+/-- `register_global_options`. -/
+def registerGlobalOptions (r : Registry) : Registry :=
+  let r := registerOption r CoreOptions.ANIMATE .boolean
+    ((OptionMeta.visible "Animate" "Whether the shift from the old layout to the new computed layout shall be animated." targetParents).withGroup "global")
+  let r := registerOption r CoreOptions.ANIM_TIME_FACTOR .int
+    (((OptionMeta.visible "Animation Time Factor" "Factor for computation of animation time. The higher the value, the longer the animation time. If the value is 0, the resulting time is always equal to the minimum defined by Minimal Animation Time." targetParents).withGroup "global").withLowerBound (OptionBound.atLeastInt 0))
+  let r := registerOption r CoreOptions.LAYOUT_ANCESTORS .boolean
+    ((OptionMeta.visible "Layout Ancestors" "Whether the hierarchy levels on the path from the selected element to the root of the diagram shall be included in the layout process." targetParents).withGroup "global")
+  let r := registerOption r CoreOptions.MAX_ANIM_TIME .int
+    (((OptionMeta.visible "Maximal Animation Time" "The maximal time for animations, in milliseconds." targetParents).withGroup "global").withLowerBound (OptionBound.atLeastInt 0))
+  let r := registerOption r CoreOptions.MIN_ANIM_TIME .int
+    (((OptionMeta.visible "Minimal Animation Time" "The minimal time for animations, in milliseconds." targetParents).withGroup "global").withLowerBound (OptionBound.atLeastInt 0))
+  let r := registerOption r CoreOptions.PROGRESS_BAR .boolean
+    ((OptionMeta.visible "Progress Bar" "Whether a progress bar shall be displayed during layout computations." targetParents).withGroup "global")
+  let r := registerOption r CoreOptions.VALIDATE_GRAPH .boolean
+    ((OptionMeta.visible "Validate Graph" "Whether the graph shall be validated before any layout algorithm is applied. If this option is enabled and at least one error is found, the layout process is aborted and a message is shown to the user." targetParents).withGroup "global")
+  let r := registerOption r CoreOptions.VALIDATE_OPTIONS .boolean
+    ((OptionMeta.visible "Validate Options" "Whether layout options shall be validated before any layout algorithm is applied. If this option is enabled and at least one error is found, the layout process is aborted and a message is shown to the user." targetParents).withGroup "global")
+  let r := registerOption r CoreOptions.ZOOM_TO_FIT .boolean
+    ((OptionMeta.visible "Zoom to Fit" "Whether the zoom level shall be set to view the whole diagram after layout." targetParents).withGroup "global")
+  r
+
+/-- `register_dependencies`: option dependencies. -/
+def registerDependencies (r : Registry) : Registry :=
+  let r := r.addDependency CoreOptions.PARTITIONING_PARTITION.id CoreOptions.PARTITIONING_ACTIVATE.id (some (.bool true))
+  let r := r.addDependency CoreOptions.TOPDOWN_LAYOUT.id CoreOptions.TOPDOWN_NODE_TYPE.id none
+  let r := r.addDependency CoreOptions.TOPDOWN_SIZE_CATEGORIES.id CoreOptions.TOPDOWN_SIZE_APPROXIMATOR.id (some (PropCodec.enc TopdownSizeApproximator.fixedIntegerRatioBoxes))
+  let r := r.addDependency CoreOptions.TOPDOWN_SIZE_CATEGORIES_HIERARCHICAL_NODE_WEIGHT.id CoreOptions.TOPDOWN_SIZE_CATEGORIES.id none
+  let r := r.addDependency CoreOptions.TOPDOWN_SCALE_FACTOR.id CoreOptions.TOPDOWN_NODE_TYPE.id (some (PropCodec.enc TopdownNodeTypes.hierarchicalNode))
+  let r := r.addDependency CoreOptions.TOPDOWN_SIZE_APPROXIMATOR.id CoreOptions.TOPDOWN_NODE_TYPE.id (some (PropCodec.enc TopdownNodeTypes.hierarchicalNode))
+  let r := r.addDependency CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH.id CoreOptions.TOPDOWN_NODE_TYPE.id none
+  let r := r.addDependency CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO.id CoreOptions.TOPDOWN_NODE_TYPE.id none
+  let r := r.addDependency CoreOptions.TOPDOWN_NODE_TYPE.id CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE.id none
+  let r := r.addDependency CoreOptions.TOPDOWN_SCALE_CAP.id CoreOptions.TOPDOWN_NODE_TYPE.id (some (PropCodec.enc TopdownNodeTypes.hierarchicalNode))
+  r
+
+/-- `register_categories`: the algorithm categories. -/
+def registerCategories (r : Registry) : Registry :=
+  let r := r.registerCategory { id := "org.eclipse.elk.layered", name := "Layered", description := "The layer-based method was introduced by Sugiyama, Tagawa and Toda in 1981. It emphasizes the direction of edges by pointing as many edges as possible into the same direction. The nodes are arranged in layers, which are sometimes called \"hierarchies\", and then reordered such that the number of edge crossings is minimized. Afterwards, concrete coordinates are computed for the nodes and edge bend points." }
+  let r := r.registerCategory { id := "org.eclipse.elk.orthogonal", name := "Orthogonal", description := "Orthogonal methods that follow the \"topology-shape-metrics\" approach by Batini, Nardelli and Tamassia '86. The first phase determines the topology of the drawing by applying a planarization technique, which results in a planar representation of the graph. The orthogonal shape is computed in the second phase, which aims at minimizing the number of edge bends, and is called orthogonalization. The third phase leads to concrete coordinates for nodes and edge bend points by applying a compaction method, thus defining the metrics." }
+  let r := r.registerCategory { id := "org.eclipse.elk.force", name := "Force", description := "Layout algorithms that follow physical analogies by simulating a system of attractive and repulsive forces. The first successful method of this kind was proposed by Eades in 1984." }
+  let r := r.registerCategory { id := "org.eclipse.elk.circle", name := "Circle", description := "Circular layout algorithms emphasize cycles or biconnected components of a graph by arranging them in circles. This is useful if a drawing is desired where such components are clearly grouped, or where cycles are shown as prominent options of the graph." }
+  let r := r.registerCategory { id := "org.eclipse.elk.tree", name := "Tree", description := "Specialized layout methods for trees, i.e. acyclic graphs. The regular structure of graphs that have no undirected cycles can be emphasized using an algorithm of this type." }
+  let r := r.registerCategory { id := "org.eclipse.elk.planar", name := "Planar", description := "Algorithms that require a planar or upward planar graph. Most of these algorithms are theoretically interesting, but not practically usable." }
+  let r := r.registerCategory { id := "org.eclipse.elk.radial", name := "Radial", description := "Radial layout algorithms usually position the nodes of the graph on concentric circles." }
+  r
+
+end CoreOptionsMeta
+
+namespace CoreOptions
+
+open CoreOptionsMeta in
+/-- `ILayoutMetaDataProvider.apply` of `CoreOptions`: registers the categories, all core
+options and their dependencies, in the order of elk-rs. -/
+def metaDataProvider : LayoutMetaDataProvider where
+  apply r :=
+    let r := registerCategories r
+    let r := registerUiOptions r
+    let r := registerJsonOptions r
+    let r := registerSpacingOptions r
+    let r := registerPartitioningOptions r
+    let r := registerNodeLabelOptions r
+    let r := registerPortAlignmentOptions r
+    let r := registerPortConstraintsAndMisc r
+    let r := registerNodeSizeOptions r
+    let r := registerProgrammaticOptions r
+    let r := registerCommentAndEdgeLabelOptions r
+    let r := registerFontOptions r
+    let r := registerTextOptions r
+    let r := registerPortOptions r
+    let r := registerPortLabelOptions r
+    let r := registerTopdownOptions r
+    let r := registerInsideSelfLoopOptions r
+    let r := registerEdgeOptions r
+    let r := registerGlobalOptions r
+    registerDependencies r
+
+end CoreOptions
+
+end Elk.Core.Options
