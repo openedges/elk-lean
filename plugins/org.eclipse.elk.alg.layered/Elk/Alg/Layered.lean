@@ -11,6 +11,7 @@ import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.P1Cycles
 import Elk.Alg.Layered.P2Layers
 import Elk.Alg.Layered.P3Order
+import Elk.Alg.Layered.P4Nodes
 import Elk.Alg.Layered.P5Edges
 import Elk.Alg.Layered.GraphConfigurator
 import Elk.Alg.Layered.ElkLayered

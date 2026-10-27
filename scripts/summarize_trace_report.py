@@ -74,6 +74,18 @@ def main() -> int:
         for m in step_mismatch[:list_n]:
             lines.append(f"- {m.get('model')}: oracle {m.get('java_steps')} / lean {m.get('rust_steps')} steps")
         lines.append("")
+    import os
+    trace_root = os.path.join(os.path.dirname(os.path.abspath(report_path)), "lean_trace")
+    unported = collections.Counter()
+    for dirpath, _dirs, files in os.walk(trace_root):
+        for name in files:
+            if "_Unported_" in name:
+                unported[name.split("_Unported_", 1)[1].rsplit(".json", 1)[0]] += 1
+    if unported:
+        lines.append("## Unported stand-ins hit by elk-lean (`ELK_LEAN_SKIP_UNPORTED`)")
+        for name, n in unported.most_common():
+            lines.append(f"- {name}: {n} runs")
+        lines.append("")
     with open(out_md, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
     return 0

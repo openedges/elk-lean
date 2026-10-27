@@ -60,6 +60,10 @@ def create (s : IntermediateProcessorStrategy) : IO LayeredProcessor := do
   | some p => return p
   | none =>
     if ← skipUnported then
+      -- the greedy switch processors are `LayerSweepCrossingMinimizer` instances in elk-rs
+      -- (hierarchy-aware, trace name `LayerSweepCrossingMinimizer`)
+      if s == .oneSidedGreedySwitch || s == .twoSidedGreedySwitch then
+        return { name := "LayerSweepCrossingMinimizer", process := fun _ _ => pure (), isHierarchyAware := true }
       return { name := s!"Unported_{ElkEnum.javaName s}", process := fun _ _ => pure () }
     throw (IO.userError s!"java.lang.UnsupportedOperationException: Layout processor {ElkEnum.javaName s} is not ported yet.")
 
@@ -80,6 +84,20 @@ def registerPhase (phase : LayeredPhases) (ordinal : Nat) (create : IO LayeredPh
     let slots := if slots.size > ordinal then slots else slots ++ Array.replicate (ordinal + 1 - slots.size) none
     r.set! pi (slots.set! ordinal (some create))
 
+/-- `ELK_LEAN_SKIP_UNPORTED` stand-in for the layer sweep crossing minimizer: keeps the input
+order but has the elk-rs `LayerSweepCrossingMinimizer` trace name, hierarchy awareness and
+processor configuration (`INTERMEDIATE_PROCESSING_CONFIGURATION` + `PORT_LIST_SORTER` before P3),
+so that the processors around P3 can be compared with the oracle before P3 is ported. -/
+def unportedLayerSweep : LayeredPhase :=
+  { noOpPhase "LayerSweepCrossingMinimizer" with
+    isHierarchyAware := true
+    getLayoutProcessorConfiguration := fun _ => pure (some (
+      (LayoutProcessorConfiguration.create : LayeredProcessorConfiguration)
+        |>.addBefore .p3NodeOrdering .longEdgeSplitter
+        |>.addBefore .p4NodePlacement .inLayerConstraintProcessor
+        |>.addAfter .p5EdgeRouting .longEdgeJoiner
+        |>.addBefore .p3NodeOrdering .portListSorter)) }
+
 /-- The phase factory for strategy constant `ordinal` (of the enumeration `enumName`) of `phase`;
 `enumName × ordinal` is the assembler cache key. -/
 def strategyFactory (phase : LayeredPhases) (enumName : String) (ordinal : Nat) (javaName : String) : LayeredPhaseFactory :=
@@ -89,6 +107,8 @@ def strategyFactory (phase : LayeredPhases) (enumName : String) (ordinal : Nat) 
       | some create => create
       | none =>
         if ← Intermediate.IntermediateProcessorStrategy.skipUnported then
+          if phase == .p3NodeOrdering && (javaName == "LAYER_SWEEP" || javaName == "MEDIAN_LAYER_SWEEP") then
+            return unportedLayerSweep
           return noOpPhase s!"Unported_{enumName}.{javaName}"
         throw (IO.userError s!"java.lang.UnsupportedOperationException: Layout phase {enumName}.{javaName} is not ported yet.") }
 
