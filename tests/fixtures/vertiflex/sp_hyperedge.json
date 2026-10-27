@@ -1,0 +1,3 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"org.eclipse.elk.vertiflex"},
+ "children":[{"id":"a","width":30,"height":20},{"id":"b","width":40,"height":20},{"id":"c","width":20,"height":30},{"id":"d","width":20,"height":30},{"id":"e","width":25,"height":25}],
+ "edges":[{"id":"h1","sources":["a"],"targets":["b","c"]},{"id":"e2","sources":["a"],"targets":["d"]},{"id":"e3","sources":["a"],"targets":["e"]}]}

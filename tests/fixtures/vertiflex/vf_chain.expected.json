@@ -1,0 +1,141 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "n0",
+      "width": 30,
+      "x": 10,
+      "y": 0
+    },
+    {
+      "height": 25,
+      "id": "n1",
+      "width": 40,
+      "x": 5,
+      "y": 90
+    },
+    {
+      "height": 20,
+      "id": "n2",
+      "width": 20,
+      "x": 15,
+      "y": 185
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 50,
+      "x": 0,
+      "y": 275
+    },
+    {
+      "height": 10,
+      "id": "n4",
+      "width": 10,
+      "x": 20,
+      "y": 375
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 25,
+            "y": 90
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 25,
+            "y": 20
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 25,
+            "y": 185
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 25,
+            "y": 115
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 25,
+            "y": 275
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": 25,
+            "y": 205
+          }
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e4",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 25,
+            "y": 375
+          },
+          "id": "e4_s0",
+          "startPoint": {
+            "x": 25,
+            "y": 305
+          }
+        }
+      ],
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ]
+    }
+  ],
+  "height": 397,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.vertiflex"
+  },
+  "width": 62,
+  "x": 0,
+  "y": 0
+}

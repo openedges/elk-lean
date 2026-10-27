@@ -1,0 +1,85 @@
+{
+  "children": [
+    {
+      "height": 22,
+      "id": "n0",
+      "width": 75,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "height": 48,
+      "id": "n1",
+      "layoutOptions": {
+        "elk.vertiflex.verticalConstraint": "498"
+      },
+      "width": 47,
+      "x": 14,
+      "y": 498
+    },
+    {
+      "height": 5,
+      "id": "n2",
+      "width": 43,
+      "x": 16,
+      "y": 616
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 37.5,
+            "y": 498
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 37.5,
+            "y": 22
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 37.5,
+            "y": 616
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 37.5,
+            "y": 546
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 633,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.vertiflex",
+    "elk.vertiflex.considerNodeModelOrder": "true"
+  },
+  "width": 87,
+  "x": 0,
+  "y": 0
+}
