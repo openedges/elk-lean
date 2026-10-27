@@ -551,6 +551,9 @@ Java's `NodeContext.comparePortContexts`), moved off the inside node labels for 
 the constrained (INSIDE/OUTSIDE) labels are stacked (`stackConstrainedLabels`). -/
 def placePortLabels (a : GraphAdapters m G N P L E) (node : N) (placement : EnumSet PortLabelPlacement)
     (v : PortLabelVariant m P L) : m Unit := do
+  let ports ← a.nodePorts node
+  -- without ports there are no labels to place or stack (the pass only reads the node then)
+  if ports.isEmpty then return
   let sizeConstraints ← a.node.getPropertyD node CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
   let s : PassSettings := {
     constrainedPlacement := placement.contains .inside || placement.contains .outside
@@ -564,7 +567,6 @@ def placePortLabels (a : GraphAdapters m G N P L E) (node : N) (placement : Enum
     gapV := ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_VERTICAL 1.0
     nodeLabelBounds := ← insideNodeLabelBounds a node }
   let nodeWidth := (← a.node.getSize node).x
-  let ports ← a.nodePorts node
   -- Per-side port counts for the label placement relation
   let mut sideCounts : Array Nat := Array.replicate 5 0
   for port in ports do
@@ -679,15 +681,25 @@ placement is fixed — `placePortLabels` with the ELK rules (`isHierarchical` = 
 def calculateLabelAndNodeSizesForElk (a : ElkAdapters) (graph : NodeId)
     (fullProcessForFixed : Bool := NodeDimensionFlags.global.fullProcessForFixed) : ElkM Unit := do
   let layoutDirection ← a.graph.getPropertyD graph CoreOptions.DIRECTION Direction.undefined
+  -- the spacings of every node without individual spacings are the graph's (or the defaults); the
+  -- loop changes no property of the graph, so they are read once
+  let inheritedSpacings ←
+    NodeLabelAndSizeCalculator.ProcessNodeSpacings.read a { individual := none, graph := some graph }
   for node in ← a.getNodes graph do
     let placement ← a.node.getPropertyD node CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
     if fullProcessForFixed && PortLabelPlacement.isFixed placement then
       let _ ← NodeLabelAndSizeCalculator.process a node layoutDirection
       continue
-    NodeLabelAndSizeCalculator.processNode a node layoutDirection
+    let src ← a.spacingSource node
+    let spacings ← if src.individual.isNone && src.graph == some graph then pure inheritedSpacings
+      else NodeLabelAndSizeCalculator.ProcessNodeSpacings.read a src
+    NodeLabelAndSizeCalculator.processNodeWith a node layoutDirection spacings
     if PortLabelPlacement.isFixed placement then continue
+    let ports ← a.nodePorts node
+    -- `placePortLabels` does nothing without ports
+    if ports.isEmpty then continue
     let nodeIsCompound ← ElkM.withGraph fun g => (g.node node).isHierarchical
-    let anyIncidentEdges := (← anyPortHasEdges a (← a.nodePorts node) false) || nodeIsCompound
+    let anyIncidentEdges := (← anyPortHasEdges a ports false) || nodeIsCompound
     let insideLabelPlacement := placement.contains .inside
     let nextToPortIfPossible := placement.contains .nextToPortIfPossible
     placePortLabels a node placement {

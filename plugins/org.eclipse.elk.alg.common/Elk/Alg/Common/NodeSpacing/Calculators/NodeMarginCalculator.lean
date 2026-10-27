@@ -165,8 +165,8 @@ def processNodeWithSpacing (c : NodeMarginCalculator) (a : GraphAdapters m G N P
   if c.includeEdgeHeadTailLabels then
     boundingBox ← processEdgeHeadTailLabels a boundingBox (← a.nodeOutgoingEdges node)
       (← a.nodeIncomingEdges node) node none none labelSpacing
-  let margin ← a.getNodeMargin node
-  let margin : ElkMargin := { margin with
+  -- every field of the node's margin is replaced (`NodeAdapter.getMargin()` need not be read)
+  let margin : ElkMargin := {
     top := fmax (nodePos.y - boundingBox.y) 0.0
     bottom := fmax (boundingBox.y + boundingBox.height - (nodePos.y + nodeSize.y)) 0.0
     left := fmax (nodePos.x - boundingBox.x) 0.0
