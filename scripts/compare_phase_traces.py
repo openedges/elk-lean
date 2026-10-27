@@ -52,6 +52,12 @@ from typing import Any, Iterator, Optional
 _NO_COLOR: bool = (not sys.stdout.isatty()) or bool(os.environ.get("NO_COLOR"))
 
 
+# `--strict-order`: compare node order within layers and port order within nodes as stored
+# (elk-rs vs elk-lean must agree on storage order; the default normalisation, inherited from the
+# Java-vs-Rust comparison, sorts both geometrically and hides order-only drifts).
+STRICT_ORDER = False
+
+
 def _c(code: str, text: str) -> str:
     return text if _NO_COLOR else f"\033[{code}m{text}\033[0m"
 
@@ -295,8 +301,11 @@ class SnapshotComparator:
         # within-layer ordering due to internal data-structure differences
         # (HashMap in Java vs Vec in Rust).  Sorting by node properties ensures
         # consistent matching regardless of implementation order.
-        all_nodes = SnapshotComparator._sort_nodes_within_layers(all_nodes)
-        all_nodes.extend(SnapshotComparator._sort_nodes_within_layers(snap.get("externalNodes", [])))
+        if STRICT_ORDER:
+            all_nodes = list(all_nodes) + list(snap.get("externalNodes", []))
+        else:
+            all_nodes = SnapshotComparator._sort_nodes_within_layers(all_nodes)
+            all_nodes.extend(SnapshotComparator._sort_nodes_within_layers(snap.get("externalNodes", [])))
         # Port storage order is not geometric identity. Resolve coincident ports
         # by their incident nodes before assigning cross-language endpoint IDs.
         node_indices = {node.get("id"): index for index, node in enumerate(all_nodes)}
@@ -315,7 +324,8 @@ class SnapshotComparator:
                 if isinstance(value, list): return [numeric(item) for item in value]
                 return value
             return (json.dumps(numeric(shape), sort_keys=True), sorted(incident.get(port.get("id"), [])))
-        all_nodes = [dict(node, ports=sorted(node.get("ports", []), key=port_key)) for node in all_nodes]
+        if not STRICT_ORDER:
+            all_nodes = [dict(node, ports=sorted(node.get("ports", []), key=port_key)) for node in all_nodes]
 
         return {
             "all_nodes": all_nodes,
@@ -1044,6 +1054,8 @@ Examples:
                              "(auto-detected if sub-dirs contain step files)")
     parser.add_argument("--max-diffs", type=int, default=500, metavar="N",
                         help="Maximum diffs collected per step (default: 500)")
+    parser.add_argument("--strict-order", action="store_true",
+                        help="Compare node and port storage order as recorded (no geometric normalisation)")
     parser.add_argument("--report-missing", action="store_true",
                         help="Report models present in only one trace directory (batch mode)")
     return parser
@@ -1065,6 +1077,8 @@ def main() -> int:
 
     if not math.isfinite(args.tolerance) or args.tolerance < 0 or args.max_diffs < 1:
         parser.error("tolerance must be finite and nonnegative; max-diffs must be positive")
+    global STRICT_ORDER
+    STRICT_ORDER = args.strict_order
     comparator = SnapshotComparator(tolerance=args.tolerance, max_diffs=args.max_diffs)
     batch_mode = args.batch or _is_batch_dir(java_base, rust_base)
 

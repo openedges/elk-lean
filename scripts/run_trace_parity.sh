@@ -5,6 +5,8 @@
 #          oracle.tsv, lean.tsv, trace_report.json, trace_summary.md (first divergent processor per
 #          model and a histogram of divergent processors).
 set -eu
+# Node/port storage order is compared strictly (`--strict-order`); set TRACE_COMPARE_LOOSE=1 for the
+# geometric normalisation of the Java-vs-Rust comparison.
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 MODELS=$1
 OUT=$2
@@ -26,6 +28,6 @@ echo "== elk-lean =="
   --layout-dir "$OUT/lean" --trace-dir "$OUT/lean_trace" --pretty > "$OUT/lean.log" 2>&1 || true
 tail -1 "$OUT/lean.log"
 echo "== traces =="
-python3 "$HERE/scripts/compare_phase_traces.py" --batch --json --report-missing "$OUT/oracle_trace" "$OUT/lean_trace" > "$OUT/trace_report.json" || true
+python3 "$HERE/scripts/compare_phase_traces.py" ${TRACE_COMPARE_LOOSE:---strict-order} --batch --json --report-missing "$OUT/oracle_trace" "$OUT/lean_trace" > "$OUT/trace_report.json" || true
 python3 "$HERE/scripts/summarize_trace_report.py" "$OUT/trace_report.json" "$OUT/lean.tsv" "$OUT/trace_summary.md"
 cat "$OUT/trace_summary.md"

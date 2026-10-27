@@ -48,7 +48,7 @@ elk-rs's `scripts/java_model_parity_trace.sh` and compared three ways.
 | Item | Comparison | Tool |
 |------|------------|------|
 | Model parity | oracle layout JSON vs Lean layout JSON, semantic, abs tol 1e-6 | `scripts/compare_model_parity_layouts.py` |
-| Phase-step trace | per-processor LGraph snapshots, positional, tol 1e-3 | `scripts/compare_phase_traces.py --batch` |
+| Phase-step trace | per-processor LGraph snapshots, positional, tol 1e-3; node/port storage order compared strictly (`--strict-order`, default in the run scripts) | `scripts/compare_phase_traces.py --batch --strict-order` |
 
 ```sh
 # single model against the oracle
