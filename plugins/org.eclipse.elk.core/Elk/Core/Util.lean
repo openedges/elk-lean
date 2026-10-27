@@ -1,6 +1,7 @@
 import Elk.Core.Util.Ffi
 import Elk.Core.Util.Java
 import Elk.Core.Util.Sort
+import Elk.Core.Util.RustSort
 import Elk.Core.Util.Random
 import Elk.Core.Util.ProgressMonitor
 import Elk.Core.Util.ElkTrace
