@@ -52,9 +52,18 @@
 | E. `CoreOptionsMeta` 등록 + 코어 알고리즘 메타데이터 + 지연 초기화 훅(`Elk.Core.Init`) + `LabelManagementOptions` | `core/options/core_options_meta.rs`(1,966줄), `data/mod.rs::register_core_algorithms`, `labels/*` | sonnet | high | 서브에이전트 E(worktree, 2026-10-27 시작) | 진행 중 |
 | F1. `ElkUtil`/`ElkSpacings`/validation/resolver/replacer/`IndividualSpacings`/visitors(+`LayoutConfigurator` 검토) | `core/util/{elk_util,elk_spacings}.rs`, `core/validation/*`, `core/data/{layout_algorithm_resolver,deprecated_layout_option_replacer}.rs`, `core/layout_configurator.rs` (≈3.1K줄) | opus | high | 서브에이전트 F1(worktree, 2026-10-27 시작) | 진행 중 |
 | F2. `ElkGraphAdapters`(adapter 추상화 설계: alg.common nodespacing과 공유) | `core/util/adapters/*` (1K줄) | fable(주) | high | 주 에이전트, Phase 3 착수 시 | 대기 |
-| G. JSON importer/exporter/layout API | `graph.json/*` (7.3K줄) | fable(주) | xhigh | 주 에이전트 | 진행 중(원본 분석) |
+| G. JSON importer/exporter/layout API/CLI/parity 스크립트 | `graph.json/*` (7.3K줄) | fable(주) | xhigh | 주 에이전트 | 완료(엔진 스텁): import/transfer/export 1:1, `Elk.Api.layoutJson`, `elk layout|batch|algorithms|options|categories`, `scripts/run_model_parity.sh`. 코퍼스 `.json` 100개 왕복 오류 0 |
+| H. JSON import/export 테스트 이식 | `graph.json/tests/all/*.rs` (4.8K줄) | sonnet | medium | 서브에이전트 H(worktree) | 진행 중 |
+| I. `.elkt` 파서(Phase 6 선행) | `alg.layered/tests/common/elkt_test_loader.rs` (3.3K줄), elk-live `src/elkt` | sonnet | high | 서브에이전트 I(worktree) | 진행 중 |
 
 ### Phase 1 (2차) — 병합 결과
 - A/B/C worktree 병합(`939786e`, `e5d62fa`, `3748155`) 후 전체 `lake build` 경고 0. `lake test` 통합 결과는 아래 커밋 메시지의 수치 참조.
 - 서브에이전트 공통 지적: `lake build ElkTests`가 실패(테스트 lib 루트 `tests/lean/Tests.lean` 부재) → 루트 파일 추가로 해결. 브리프의 빌드 명령도 `lake build && lake test`로 통일.
 - 주 에이전트 추가 작업: `Elk.Json.{Value,Printer,Parser}`(삽입 순서 보존, 정수/실수 구분, serde_json 호환 compact/pretty, elk-rs 호환 lenient 모드) + 테스트.
+
+### Phase 2 (1차) — JSON 계층·API·CLI·parity 파이프라인 (2026-10-27)
+- `Elk.Json.{ImporterState,Importer,TransferLayout,Exporter}`: elk-rs `JsonImporter`/`JsonExporter` 1:1 포팅. `ImportM := StateRefT ImporterState ElkM`, JSON 경로는 `Array Seg`. 전역 옵션 병합(`GlobalOptions.effectiveOptions`)은 elk-rs와 같이 정렬된 키 순서로 방문한다. transfer의 elk-rs 전용 보정(inside self-loop/passthrough 노드 폭 24→4, 수직 passthrough 높이, East/South 포트 이동, FixedOrder 높이 보정)은 그대로 옮겼다. **TODO(근본 원인)**: Java 기준값 확보 시 이 보정이 왜 필요한지(elk-rs 내부 상태와 Java의 차이) 재검토.
+- `Elk.Api.layoutJson`: 파싱 → `GlobalOptions.parse` → import → 엔진 → `materialize` → transfer → 직렬화. 오류는 `catchLayout`으로 Java 예외 클래스명 규약. 엔진은 F1 완료 전까지 placeholder(`RecursiveGraphLayoutEngine.layout := pure ()`).
+- CLI `elk layout|batch|algorithms|options|categories`. `batch`는 elk-rs parity manifest 형식을 소비/생성한다.
+- `scripts/run_model_parity.sh`: 코퍼스 `.json` → manifest → oracle 러너 → `elk batch` → 병합 → `compare_model_parity_layouts.py`. 100개 시험: oracle 100/100, lean 100/100(오류 0), 비교 total=100/compared=100/matches=0(스텁 엔진)/drift=100/skipped=0. 소요 1.3초.
+- 메타데이터: `elk options` 95개(E 등록분), `elk algorithms` 4개(fixed/random/box/layered placeholder).

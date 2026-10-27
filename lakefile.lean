@@ -144,6 +144,12 @@ lean_lib ElkAlgGraphviz where
   roots := #[`Elk.Alg.Graphviz]
   globs := #[.andSubmodules `Elk.Alg.Graphviz]
 
+/-- `org.eclipse.elk.graph.text`: the `.elkt` text format (parser/serialiser). -/
+lean_lib ElkText where
+  srcDir := "plugins/org.eclipse.elk.graph.text"
+  roots := #[`Elk.Text]
+  globs := #[.andSubmodules `Elk.Text]
+
 /-- Facade: algorithm registration, elkjs-compatible string API, trace support. -/
 lean_lib ElkApi where
   srcDir := "plugins/org.eclipse.elk.api"
