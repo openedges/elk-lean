@@ -1,0 +1,85 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 30,
+          "id": "g1a",
+          "width": 40,
+          "x": 12,
+          "y": 12
+        },
+        {
+          "height": 30,
+          "id": "g1b",
+          "width": 40,
+          "x": 72,
+          "y": 42
+        },
+        {
+          "height": 30,
+          "id": "g1c",
+          "width": 30,
+          "x": 102,
+          "y": 92
+        }
+      ],
+      "height": 134,
+      "id": "g1",
+      "layoutOptions": {
+        "algorithm": "org.eclipse.elk.sporeOverlap"
+      },
+      "width": 144,
+      "x": 12,
+      "y": 12.545454545454547
+    },
+    {
+      "children": [
+        {
+          "height": 30,
+          "id": "g2a",
+          "width": 40,
+          "x": 12,
+          "y": 12
+        },
+        {
+          "height": 30,
+          "id": "g2b",
+          "width": 40,
+          "x": 70.125,
+          "y": 68.47058823529412
+        },
+        {
+          "height": 30,
+          "id": "g2c",
+          "width": 30,
+          "x": 20.125,
+          "y": 62
+        }
+      ],
+      "height": 110.47058823529412,
+      "id": "g2",
+      "layoutOptions": {
+        "algorithm": "org.eclipse.elk.sporeCompaction"
+      },
+      "width": 122.125,
+      "x": 168.25,
+      "y": 166.54545454545456
+    },
+    {
+      "height": 50,
+      "id": "z",
+      "width": 50,
+      "x": 176,
+      "y": 12
+    }
+  ],
+  "height": 289.01604278074865,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "width": 302.375,
+  "x": 0,
+  "y": 0
+}

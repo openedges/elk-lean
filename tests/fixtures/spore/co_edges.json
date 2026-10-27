@@ -1,0 +1,157 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction"
+  },
+  "children": [
+    {
+      "id": "n0",
+      "x": 188,
+      "y": 463,
+      "width": 44,
+      "height": 16
+    },
+    {
+      "id": "n1",
+      "x": 436,
+      "y": 318,
+      "width": 12,
+      "height": 39
+    },
+    {
+      "id": "n2",
+      "x": 128,
+      "y": 153,
+      "width": 27,
+      "height": 28
+    },
+    {
+      "id": "n3",
+      "x": 62,
+      "y": 343,
+      "width": 43,
+      "height": 25
+    },
+    {
+      "id": "n4",
+      "x": 397,
+      "y": 312,
+      "width": 43,
+      "height": 15
+    },
+    {
+      "id": "n5",
+      "x": 179,
+      "y": 235,
+      "width": 14,
+      "height": 39
+    },
+    {
+      "id": "n6",
+      "x": 318,
+      "y": 49,
+      "width": 33,
+      "height": 22
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n0"
+      ]
+    },
+    {
+      "id": "e3",
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "id": "e4",
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ],
+      "sections": [
+        {
+          "id": "s1",
+          "startPoint": {
+            "x": 1,
+            "y": 2
+          },
+          "endPoint": {
+            "x": 3,
+            "y": 4
+          },
+          "bendPoints": [
+            {
+              "x": 9,
+              "y": 9
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "startPoint": {
+            "x": 5,
+            "y": 6
+          },
+          "endPoint": {
+            "x": 7,
+            "y": 8
+          }
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "sources": [
+        "n5"
+      ],
+      "targets": [
+        "n6"
+      ],
+      "sections": [
+        {
+          "id": "s3",
+          "startPoint": {
+            "x": 1,
+            "y": 2
+          },
+          "endPoint": {
+            "x": 3,
+            "y": 4
+          },
+          "bendPoints": [
+            {
+              "x": 9,
+              "y": 9
+            },
+            {
+              "x": 11,
+              "y": 12
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 0,
+      "y": 0,
+      "width": 60,
+      "height": 40,
+      "ports": [
+        {
+          "id": "a_p1",
+          "x": 60,
+          "y": 10,
+          "width": 8,
+          "height": 8,
+          "layoutOptions": {
+            "port.side": "EAST"
+          }
+        },
+        {
+          "id": "a_p2",
+          "x": -8,
+          "y": 20,
+          "width": 8,
+          "height": 8,
+          "layoutOptions": {
+            "port.side": "WEST"
+          }
+        }
+      ],
+      "labels": [
+        {
+          "id": "a_l1",
+          "text": "label A",
+          "x": 0,
+          "y": -16,
+          "width": 40,
+          "height": 12
+        }
+      ],
+      "layoutOptions": {
+        "portConstraints": "FIXED_POS"
+      }
+    },
+    {
+      "id": "b",
+      "x": 40,
+      "y": 10,
+      "width": 50,
+      "height": 50,
+      "ports": [
+        {
+          "id": "b_p1",
+          "x": 20,
+          "y": 50,
+          "width": 8,
+          "height": 8,
+          "layoutOptions": {
+            "port.side": "SOUTH"
+          },
+          "labels": [
+            {
+              "id": "b_pl",
+              "text": "p",
+              "x": 10,
+              "y": 8,
+              "width": 10,
+              "height": 10
+            }
+          ]
+        }
+      ],
+      "layoutOptions": {
+        "portConstraints": "FIXED_POS"
+      }
+    },
+    {
+      "id": "c",
+      "x": 70,
+      "y": 40,
+      "width": 30,
+      "height": 30
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sources": [
+        "a_p1"
+      ],
+      "targets": [
+        "b_p1"
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "c"
+      ],
+      "targets": [
+        "a_p2"
+      ]
+    }
+  ]
+}

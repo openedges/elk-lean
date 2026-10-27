@@ -1,0 +1,49 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "id": "b",
+      "x": 100,
+      "y": 0,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "id": "c",
+      "x": 0,
+      "y": 100,
+      "width": 20,
+      "height": 20
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "b"
+      ],
+      "targets": [
+        "c"
+      ]
+    }
+  ]
+}

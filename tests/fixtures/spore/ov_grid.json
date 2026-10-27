@@ -1,0 +1,92 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "children": [
+    {
+      "id": "n0_0",
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n0_1",
+      "x": 0,
+      "y": 30,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n0_2",
+      "x": 0,
+      "y": 60,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n1_0",
+      "x": 30,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n1_1",
+      "x": 30,
+      "y": 30,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n1_2",
+      "x": 30,
+      "y": 60,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n2_0",
+      "x": 60,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n2_1",
+      "x": 60,
+      "y": 30,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n2_2",
+      "x": 60,
+      "y": 60,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n3_0",
+      "x": 90,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n3_1",
+      "x": 90,
+      "y": 30,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n3_2",
+      "x": 90,
+      "y": 60,
+      "width": 40,
+      "height": 40
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "children": [
+    {
+      "height": 13,
+      "id": "n0",
+      "width": 46,
+      "x": 54.08653846153846,
+      "y": 55
+    },
+    {
+      "height": 14,
+      "id": "n1",
+      "width": 31,
+      "x": 59.08653846153846,
+      "y": 21
+    },
+    {
+      "height": 24,
+      "id": "n2",
+      "width": 19,
+      "x": 12.125,
+      "y": 44
+    },
+    {
+      "height": 23,
+      "id": "n3",
+      "width": 38,
+      "x": 12.125,
+      "y": 88
+    },
+    {
+      "height": 12,
+      "id": "n4",
+      "width": 24,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 29,
+      "id": "n5",
+      "width": 36,
+      "x": 70.125,
+      "y": 88
+    }
+  ],
+  "height": 129,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction",
+    "org.eclipse.elk.underlyingLayoutAlgorithm": "box"
+  },
+  "width": 118.12500000000001,
+  "x": 0,
+  "y": 0
+}

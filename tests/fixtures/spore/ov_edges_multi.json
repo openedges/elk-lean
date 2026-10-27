@@ -1,0 +1,127 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "children": [
+    {
+      "id": "n0",
+      "x": 13,
+      "y": 34,
+      "width": 31,
+      "height": 27
+    },
+    {
+      "id": "n1",
+      "x": 9,
+      "y": 12,
+      "width": 14,
+      "height": 15
+    },
+    {
+      "id": "n2",
+      "x": 37,
+      "y": 7,
+      "width": 26,
+      "height": 14
+    },
+    {
+      "id": "n3",
+      "x": 15,
+      "y": 22,
+      "width": 35,
+      "height": 22
+    },
+    {
+      "id": "n4",
+      "x": 1,
+      "y": 14,
+      "width": 14,
+      "height": 27
+    },
+    {
+      "id": "n5",
+      "x": 40,
+      "y": 40,
+      "width": 35,
+      "height": 25
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n0"
+      ]
+    },
+    {
+      "id": "e3",
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n0"
+      ]
+    },
+    {
+      "id": "e4",
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n5"
+      ]
+    },
+    {
+      "id": "e5",
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ],
+      "sections": [
+        {
+          "id": "s1",
+          "startPoint": {
+            "x": 1,
+            "y": 2
+          },
+          "endPoint": {
+            "x": 3,
+            "y": 4
+          },
+          "bendPoints": [
+            {
+              "x": 9,
+              "y": 9
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "startPoint": {
+            "x": 5,
+            "y": 6
+          },
+          "endPoint": {
+            "x": 7,
+            "y": 8
+          }
+        }
+      ]
+    }
+  ]
+}

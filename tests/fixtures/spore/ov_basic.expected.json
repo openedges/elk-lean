@@ -1,0 +1,65 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "a",
+      "width": 40,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "b",
+      "width": 40,
+      "x": 72,
+      "y": 42
+    },
+    {
+      "height": 30,
+      "id": "c",
+      "width": 30,
+      "x": 132,
+      "y": 14.5
+    },
+    {
+      "height": 30,
+      "id": "d",
+      "width": 30,
+      "x": 242,
+      "y": 222
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 242,
+            "y": 223
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 48.07142857142857,
+            "y": 42
+          }
+        }
+      ],
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "d"
+      ]
+    }
+  ],
+  "height": 264,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "width": 284,
+  "x": 0,
+  "y": 0
+}
