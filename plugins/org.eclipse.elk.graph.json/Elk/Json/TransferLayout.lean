@@ -232,10 +232,10 @@ def transferXywh (x y w h : Float) (path : JsonPath) (parent : Option ElementId)
   modAt path fun o =>
     match o with
     | .obj kvs =>
-      let kvs := Value.setEntry kvs "x" (.ofFloatElk ax)
-      let kvs := Value.setEntry kvs "y" (.ofFloatElk ay)
-      let kvs := Value.setEntry kvs "width" (.ofFloatElk w)
-      .obj (Value.setEntry kvs "height" (.ofFloatElk h))
+      let kvs := Value.setEntry kvs Key.x (.ofFloatElk ax)
+      let kvs := Value.setEntry kvs Key.y (.ofFloatElk ay)
+      let kvs := Value.setEntry kvs Key.width (.ofFloatElk w)
+      .obj (Value.setEntry kvs Key.height (.ofFloatElk h))
     | other => other
 
 /-- `recompute_fixed_order_vertical_port_surrounding_height`. -/
@@ -264,9 +264,9 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
   -- the members read below (`layoutOptions`/`properties`) are not touched by `transferXywh`, and
   -- `width`/`height` read back the values it writes
   let jsonObj ← objectAt path
-  let layoutOptions := match JsonAdapter.optObject jsonObj "layoutOptions" with
+  let layoutOptions := match JsonAdapter.optObject jsonObj Key.layoutOptions with
     | some o => some o
-    | none => JsonAdapter.optObject jsonObj "properties"
+    | none => JsonAdapter.optObject jsonObj Key.properties
   let lookup (lo : Value) (full short : String) : Option Value :=
     match lo.get? full with
     | some v => some v
@@ -340,18 +340,18 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
       else if shouldCompactInsideSelfLoopNode then
         if (g.node p).children.size == 1 then
           modI fun s => { s with passthroughCompactedParentKeys := s.passthroughCompactedParentKeys.push p }
-    modAt path (·.set "width" (.ofFloatElk 4.0))
+    modAt path (·.set Key.width (.ofFloatElk 4.0))
   if shouldCompactVerticalPassthroughNode && nodeHeight > 4.0 then
     let delta := nodeHeight - 4.0
     modI fun s => { s with compactedVerticalNodeYDelta := s.compactedVerticalNodeYDelta.insert n delta }
     if let some p := node.parent then
       modI fun s => { s with verticalCompactedParentKeys := s.verticalCompactedParentKeys.push p }
-    modAt path (·.set "height" (.ofFloatElk 4.0))
+    modAt path (·.set Key.height (.ofFloatElk 4.0))
   if hasPortsAndPortLabelsSizeConstraints && portConstraints == .fixedOrder then
     if let some compensated ← recomputeFixedOrderVerticalPortSurroundingHeight n then
-      let current := (((← objectAt path).get? "height").bind (·.getFloat?)).getD 0.0
+      let current := (((← objectAt path).get? Key.height).bind (·.getFloat?)).getD 0.0
       if compensated > current + 1e-9 then
-        modAt path (·.set "height" (.ofFloatElk compensated))
+        modAt path (·.set Key.height (.ofFloatElk compensated))
 
 /-- `transfer_layout_port`. -/
 def transferLayoutPort (p : PortId) : ImportM Unit := do
@@ -366,13 +366,13 @@ def transferLayoutPort (p : PortId) : ImportM Unit := do
     let side := port.props.getD CoreOptions.PORT_SIDE .undefined
     if let some delta := st.insideSelfLoopNodeXDelta.get? parentNode then
       if side == .east then
-        if let some x := ((← objectAt path).get? "x").bind (·.getFloat?) then
-          modAt path (·.set "x" (.ofFloatElk (x - delta)))
+        if let some x := ((← objectAt path).get? Key.x).bind (·.getFloat?) then
+          modAt path (·.set Key.x (.ofFloatElk (x - delta)))
           modI fun s => { s with shiftedEastPortXDelta := s.shiftedEastPortXDelta.insert p delta }
     if let some delta := st.compactedVerticalNodeYDelta.get? parentNode then
       if side == .south then
-        if let some y := ((← objectAt path).get? "y").bind (·.getFloat?) then
-          modAt path (·.set "y" (.ofFloatElk (y - delta)))
+        if let some y := ((← objectAt path).get? Key.y).bind (·.getFloat?) then
+          modAt path (·.set Key.y (.ofFloatElk (y - delta)))
           modI fun s => { s with shiftedSouthPortYDelta := s.shiftedSouthPortYDelta.insert p delta }
 
 def adjustXForShiftedEastPort (shape : ConnectableId) (x : Float) : ImportM Float := do
@@ -385,7 +385,7 @@ def adjustYForShiftedSouthPort (shape : ConnectableId) (y : Float) : ImportM Flo
   | .port p => return (((← getI).shiftedSouthPortYDelta.get? p).map (y - ·)).getD y
   | .node _ => return y
 
-private def pointObject (x y : Float) : Value := .obj #[("x", .ofFloatElk x), ("y", .ofFloatElk y)]
+private def pointObject (x y : Float) : Value := .obj #[(Key.x, .ofFloatElk x), (Key.y, .ofFloatElk y)]
 
 /-- `transfer_layout_edge`. -/
 def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
@@ -410,7 +410,7 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
         | _ => pure (.obj #[])
       | none =>
         let fallbackId := s.identifier.getD s!"{edgeId}_s{i}"
-        pure (.obj #[("id", .str fallbackId)])
+        pure (.obj #[(Key.id, .str fallbackId)])
     let mut startX ← adjustEdgeX e s.startX
     let mut startY ← adjustEdgeY e s.startY
     let mut endX ← adjustEdgeX e s.endX
@@ -422,23 +422,23 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
       if let some shape := s.outgoingShape then
         endX ← adjustXForShiftedEastPort shape endX
         endY ← adjustYForShiftedSouthPort shape endY
-    let mut obj := base.set "startPoint" (pointObject startX startY)
-    obj := obj.set "endPoint" (pointObject endX endY)
+    let mut obj := base.set Key.startPoint (pointObject startX startY)
+    obj := obj.set Key.endPoint (pointObject endX endY)
     if !s.bendPoints.isEmpty then
       let mut bends : Array Value := #[]
       for b in s.bendPoints do
         bends := bends.push (pointObject (← adjustEdgeX e b.x) (← adjustEdgeY e b.y))
-      obj := obj.set "bendPoints" (.arr bends)
+      obj := obj.set Key.bendPoints (.arr bends)
     if let some shape := s.incomingShape then
-      if let some id := idByElement st shape then obj := obj.set "incomingShape" id.toValue
+      if let some id := idByElement st shape then obj := obj.set Key.incomingShape id.toValue
     if let some shape := s.outgoingShape then
-      if let some id := idByElement st shape then obj := obj.set "outgoingShape" id.toValue
+      if let some id := idByElement st shape then obj := obj.set Key.outgoingShape id.toValue
     if !s.incomingSections.isEmpty then
       let ids := s.incomingSections.filterMap fun sid => (tableGet? st.sectionIds sid.idx).map (·.toValue)
-      obj := obj.set "incomingSections" (.arr ids)
+      obj := obj.set Key.incomingSections (.arr ids)
     if !s.outgoingSections.isEmpty then
       let ids := s.outgoingSections.filterMap fun sid => (tableGet? st.sectionIds sid.idx).map (·.toValue)
-      obj := obj.set "outgoingSections" (.arr ids)
+      obj := obj.set Key.outgoingSections (.arr ids)
     jsonSections := jsonSections.push obj
   let junctionPoints : Option KVectorChain :=
     if edge.props.has CoreOptions.JUNCTION_POINTS then edge.props.get CoreOptions.JUNCTION_POINTS else none
@@ -449,15 +449,15 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
       else pure none
     | none => pure none
   if !jsonSections.isEmpty then
-    modAt path fun o => (o.remove "sections").set "sections" (.arr jsonSections)
+    modAt path fun o => (o.remove Key.sections).set Key.sections (.arr jsonSections)
   if let some jps := junctionPoints then
     if !jps.isEmpty then
       let mut arr : Array Value := #[]
       for jp in jps do
         arr := arr.push (pointObject (← adjustEdgeX e jp.x) (← adjustEdgeY e jp.y))
-      modAt path (·.set "junctionPoints" (.arr arr))
+      modAt path (·.set Key.junctionPoints (.arr arr))
   if let some cid := containerId then
-    modAt path (·.set "container" (.str cid))
+    modAt path (·.set Key.container (.str cid))
 where
   idByElement (st : ImporterState) : ConnectableId → Option JsonId
     | .node n => tableGet? st.nodeIds n.idx
@@ -474,28 +474,28 @@ def transferLayoutLabel (l : LabelId) : ImportM Unit := do
 
 /-- `recompute_compacted_parent_width_candidate`. -/
 def recomputeCompactedParentWidthCandidate (parentObj : Value) : Option Float := Id.run do
-  let some children := JsonAdapter.optArray parentObj "children" | return none
+  let some children := JsonAdapter.optArray parentObj Key.children | return none
   if children.isEmpty then return none
   let mut maxChildRight := Float.negInf
   for child in children do
     if !child.isObj then continue
-    let some x := (child.get? "x").bind (·.getFloat?) | continue
-    let some width := (child.get? "width").bind (·.getFloat?) | continue
+    let some x := (child.get? Key.x).bind (·.getFloat?) | continue
+    let some width := (child.get? Key.width).bind (·.getFloat?) | continue
     maxChildRight := fmax maxChildRight (x + width + 12.0)
   if !maxChildRight.isFinite then return none
   let childSpanCandidate := maxChildRight
   let mut edgeMaxX := Float.negInf
-  if let some edges := JsonAdapter.optArray parentObj "edges" then
+  if let some edges := JsonAdapter.optArray parentObj Key.edges then
     for edge in edges do
-      let some sections := JsonAdapter.optArray edge "sections" | continue
+      let some sections := JsonAdapter.optArray edge Key.sections | continue
       for sec in sections do
-        if let some sx := ((sec.get? "startPoint").bind (·.get? "x")).bind (·.getFloat?) then
+        if let some sx := ((sec.get? Key.startPoint).bind (·.get? Key.x)).bind (·.getFloat?) then
           edgeMaxX := fmax edgeMaxX sx
-        if let some ex := ((sec.get? "endPoint").bind (·.get? "x")).bind (·.getFloat?) then
+        if let some ex := ((sec.get? Key.endPoint).bind (·.get? Key.x)).bind (·.getFloat?) then
           edgeMaxX := fmax edgeMaxX ex
-        if let some bends := JsonAdapter.optArray sec "bendPoints" then
+        if let some bends := JsonAdapter.optArray sec Key.bendPoints then
           for b in bends do
-            if let some bx := (b.get? "x").bind (·.getFloat?) then
+            if let some bx := (b.get? Key.x).bind (·.getFloat?) then
               edgeMaxX := fmax edgeMaxX bx
   if edgeMaxX.isFinite then
     let mut candidate := fmax childSpanCandidate edgeMaxX
@@ -521,12 +521,12 @@ def fixParentWidthsForCompactedPassthroughNodes : ImportM Unit := do
   for parentKey in dedup st.passthroughCompactedParentKeys do
     let some path := tableGet? st.nodePath parentKey.idx | continue
     let parentObj ← objectAt path
-    let hasPorts := (JsonAdapter.optArray parentObj "ports").any (!·.isEmpty)
+    let hasPorts := (JsonAdapter.optArray parentObj Key.ports).any (!·.isEmpty)
     if hasPorts then continue
     let some candidate := recomputeCompactedParentWidthCandidate parentObj | continue
-    let some current := (parentObj.get? "width").bind (·.getFloat?) | continue
+    let some current := (parentObj.get? Key.width).bind (·.getFloat?) | continue
     if candidate > 0.0 && candidate + 1e-9 < current then
-      modAt path (·.set "width" (.ofFloatElk candidate))
+      modAt path (·.set Key.width (.ofFloatElk candidate))
 
 /-- `fix_parent_heights_for_compacted_vertical_nodes`. -/
 def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
@@ -535,15 +535,15 @@ def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
   for parentKey in dedup st.verticalCompactedParentKeys do
     let some path := tableGet? st.nodePath parentKey.idx | continue
     let parentObj ← objectAt path
-    let hasPorts := (JsonAdapter.optArray parentObj "ports").any (!·.isEmpty)
+    let hasPorts := (JsonAdapter.optArray parentObj Key.ports).any (!·.isEmpty)
     if hasPorts then continue
-    let some children := JsonAdapter.optArray parentObj "children" | continue
+    let some children := JsonAdapter.optArray parentObj Key.children | continue
     if children.isEmpty then continue
-    let childPrefix := path ++ #[.key "children"]
+    let childPrefix := path ++ #[.key Key.children]
     let mut ordered : Array (Nat × Float × Float) := #[]
     for h : i in [0:children.size] do
       let child := children[i]
-      let some y := (child.get? "y").bind (·.getFloat?) | continue
+      let some y := (child.get? Key.y).bind (·.getFloat?) | continue
       let childPath := childPrefix ++ #[.idx i]
       let childKey := (st.nodePath.findIdx? fun p => p == some childPath).map (⟨·⟩ : Nat → NodeId)
       let delta := (childKey.bind fun k => st.compactedVerticalNodeYDelta.get? k).getD 0.0
@@ -553,13 +553,13 @@ def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
     let mut total := 0.0
     for (i, originalY, delta) in sortedChildren do
       if cumulative.abs > 1e-9 then
-        modAt (childPrefix ++ #[.idx i]) (·.set "y" (.ofFloatElk (originalY - cumulative)))
+        modAt (childPrefix ++ #[.idx i]) (·.set Key.y (.ofFloatElk (originalY - cumulative)))
       if delta > 0.0 then
         cumulative := cumulative + delta
         total := total + delta
     if total > 0.0 then
-      if let some current := (parentObj.get? "height").bind (·.getFloat?) then
-        modAt path (·.set "height" (.ofFloatElk (fmax (current - total) 0.0)))
+      if let some current := (parentObj.get? Key.height).bind (·.getFloat?) then
+        modAt path (·.set Key.height (.ofFloatElk (fmax (current - total) 0.0)))
 
 /-- `transfer_nodes_and_ports`: stack based traversal (children pushed in order, popped last-first). -/
 def transferNodesAndPorts (root : NodeId) : ImportM Unit := do
@@ -593,9 +593,9 @@ def transferLayout : ImportM Unit := do
   let st ← getI
   let some root := st.rootNode | throwJsonImport "No input model available."
   let hint := Id.run do
-    let opts := match JsonAdapter.optObject st.model "layoutOptions" with
+    let opts := match JsonAdapter.optObject st.model Key.layoutOptions with
       | some o => some o
-      | none => JsonAdapter.optObject st.model "properties"
+      | none => JsonAdapter.optObject st.model Key.properties
     let v := opts.bind fun o => match o.get? "org.eclipse.elk.hierarchyHandling" with
       | some v => some v
       | none => o.get? "hierarchyHandling"

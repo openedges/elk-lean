@@ -221,7 +221,7 @@ def asId (v : Value) : ImportM JsonId := do
 
 /-- `getId`: the mandatory `id` member. -/
 def getId (obj : Value) : ImportM JsonId := do
-  match obj.get? "id" with
+  match obj.get? Key.id with
   | some v => asId v
   | none => throwJsonImport "Every element must have an id."
 
@@ -240,7 +240,7 @@ def optString (obj : Value) (key : String) : ImportM (Option String) := do
   | none => return none
 
 /-- `idSave`: the `id` member as a string, if present. -/
-def idSave (obj : Value) : ImportM (Option String) := optString obj "id"
+def idSave (obj : Value) : ImportM (Option String) := optString obj Key.id
 
 /-- `optDouble`: numbers, numeric strings; `null` counts as absent. -/
 def optDouble (obj : Value) (key : String) : ImportM (Option Float) := do
@@ -304,13 +304,13 @@ def parse (optionsJson : String) : IO (Except String GlobalOptions) := do
 id is not authored, in the (sorted, like serde's `Map`) order elk-rs visits
 them, each paired with the effective value. -/
 def effectiveOptions (g : GlobalOptions) (element : Value) : IO (Array (String × Value) × GlobalOptions) := do
-  let selected := match element.get? "layoutOptions" with
+  let selected := match element.get? Key.layoutOptions with
     | some v => some v
-    | none => element.get? "properties"
+    | none => element.get? Key.properties
   let authoredObj : Option (Array (String × Value)) :=
-    match (element.get? "layoutOptions").bind (·.getObj?) with
+    match (element.get? Key.layoutOptions).bind (·.getObj?) with
     | some o => some o
-    | none => (element.get? "properties").bind (·.getObj?)
+    | none => (element.get? Key.properties).bind (·.getObj?)
   if g.values.isEmpty || (selected.any fun v => !v.isObj) then
     return (authoredObj.getD #[], g)
   let authored := selected.bind (·.getObj?)
@@ -354,8 +354,8 @@ partial def materialize (g : GlobalOptions) (root : Value) : IO Value := do
   let rec apply (gg : GlobalOptions) (element : Value) : IO (Value × GlobalOptions) := do
     match element with
     | .obj _ =>
-      let field := if element.hasKey "layoutOptions" then "layoutOptions"
-        else if element.hasKey "properties" then "properties" else "layoutOptions"
+      let field := if element.hasKey Key.layoutOptions then Key.layoutOptions
+        else if element.hasKey Key.properties then Key.properties else Key.layoutOptions
       let mut gg := gg
       let mut existing : Std.HashSet String := {}
       if let some (.obj kvs) := element.get? field then
@@ -365,7 +365,7 @@ partial def materialize (g : GlobalOptions) (root : Value) : IO Value := do
           existing := existing.insert c
       let mut element := element.modifyKey field (.obj #[]) fun lo =>
         resolved.foldl (fun lo (k, v, c) => if existing.contains c then lo else lo.set k v) lo
-      for arrKey in #["children", "edges", "ports", "labels"] do
+      for arrKey in #[Key.children, Key.edges, Key.ports, Key.labels] do
         if let some (.arr items) := element.get? arrKey then
           let mut items' : Array Value := #[]
           for item in items do

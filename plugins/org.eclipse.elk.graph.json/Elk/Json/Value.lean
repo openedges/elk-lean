@@ -71,6 +71,72 @@ inductive Value where
   | obj (kvs : Array (String × Value))
   deriving Inhabited
 
+/-! Member names of ELK JSON graphs as shared constants. The parser returns these very objects
+for equal keys (`Parser.knownKeys`), and the importer looks members up with them, so most key
+comparisons succeed on pointer equality (`lean_string_eq` tests it first). -/
+namespace Key
+
+/-- `"id"`. -/
+@[noinline] def id : String := "id"
+/-- `"x"`. -/
+@[noinline] def x : String := "x"
+/-- `"y"`. -/
+@[noinline] def y : String := "y"
+/-- `"width"`. -/
+@[noinline] def width : String := "width"
+/-- `"height"`. -/
+@[noinline] def height : String := "height"
+/-- `"labels"`. -/
+@[noinline] def labels : String := "labels"
+/-- `"text"`. -/
+@[noinline] def text : String := "text"
+/-- `"ports"`. -/
+@[noinline] def ports : String := "ports"
+/-- `"layoutOptions"`. -/
+@[noinline] def layoutOptions : String := "layoutOptions"
+/-- `"properties"`. -/
+@[noinline] def properties : String := "properties"
+/-- `"children"`. -/
+@[noinline] def children : String := "children"
+/-- `"edges"`. -/
+@[noinline] def edges : String := "edges"
+/-- `"sources"`. -/
+@[noinline] def sources : String := "sources"
+/-- `"targets"`. -/
+@[noinline] def targets : String := "targets"
+/-- `"source"`. -/
+@[noinline] def source : String := "source"
+/-- `"target"`. -/
+@[noinline] def target : String := "target"
+/-- `"sourcePort"`. -/
+@[noinline] def sourcePort : String := "sourcePort"
+/-- `"targetPort"`. -/
+@[noinline] def targetPort : String := "targetPort"
+/-- `"sections"`. -/
+@[noinline] def sections : String := "sections"
+/-- `"startPoint"`. -/
+@[noinline] def startPoint : String := "startPoint"
+/-- `"endPoint"`. -/
+@[noinline] def endPoint : String := "endPoint"
+/-- `"bendPoints"`. -/
+@[noinline] def bendPoints : String := "bendPoints"
+/-- `"incomingShape"`. -/
+@[noinline] def incomingShape : String := "incomingShape"
+/-- `"outgoingShape"`. -/
+@[noinline] def outgoingShape : String := "outgoingShape"
+/-- `"incomingSections"`. -/
+@[noinline] def incomingSections : String := "incomingSections"
+/-- `"outgoingSections"`. -/
+@[noinline] def outgoingSections : String := "outgoingSections"
+/-- `"junctionPoints"`. -/
+@[noinline] def junctionPoints : String := "junctionPoints"
+/-- `"container"`. -/
+@[noinline] def container : String := "container"
+/-- `"individualSpacings"`. -/
+@[noinline] def individualSpacings : String := "individualSpacings"
+
+end Key
+
 /-- Path segment for `Value.getAt`/`modifyAt`. -/
 inductive Seg where
   | key (k : String)
