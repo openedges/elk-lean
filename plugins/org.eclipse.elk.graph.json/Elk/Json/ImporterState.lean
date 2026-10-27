@@ -46,7 +46,67 @@ structure GlobalOptions where
   values : Array (String × Value) := #[]
   canonicalIds : Std.HashMap String String := {}
 
-/-- Importer scratch state (one import + one transfer). -/
+/-- Value of a table indexed by element ids (`none` for ids without an entry). -/
+@[inline] def tableGet? {α : Type} (t : Array (Option α)) (i : Nat) : Option α := (t[i]?).join
+
+/-- Stores `v` at index `i` of a table indexed by element ids, growing it with `none`. -/
+def tableSet {α : Type} (t : Array (Option α)) (i : Nat) (v : α) : Array (Option α) :=
+  if i < t.size then t.set! i (some v)
+  else (t ++ Array.replicate (i - t.size) none).push (some v)
+
+/-- `tableSet` when `v` is present; the table is unchanged otherwise. -/
+@[noinline] def tableSetOpt {α : Type} (t : Array (Option α)) (i : Nat) : Option α → Array (Option α)
+  | some v => tableSet t i v
+  | none => t
+
+/-- Per-element results of `transferLayout` in one dense index space: nodes first, then ports,
+labels and edges (`ElementId` → `base + id`). Absent entries hold the hash-map defaults of the
+former representation (`0` for global coordinates, `PARENT`/`CONTAINER` for the modes). -/
+structure TransferTables where
+  portBase : Nat := 0
+  labelBase : Nat := 0
+  edgeBase : Nat := 0
+  size : Nat := 0
+  globalX : FloatArray := .empty
+  globalY : FloatArray := .empty
+  shapeCoords : Array ShapeCoords := #[]
+  edgeCoords : Array EdgeCoords := #[]
+
+namespace TransferTables
+
+/-- Tables for a graph with the given element counts. -/
+def create (nodes ports labels edges : Nat) : TransferTables :=
+  let size := nodes + ports + labels + edges
+  { portBase := nodes, labelBase := nodes + ports, edgeBase := nodes + ports + labels, size,
+    globalX := ⟨Array.replicate size 0.0⟩, globalY := ⟨Array.replicate size 0.0⟩,
+    shapeCoords := Array.replicate size .parent, edgeCoords := Array.replicate size .container }
+
+/-- Dense index of an element. -/
+@[inline] def index (t : TransferTables) : ElementId → Nat
+  | .node n => n.idx
+  | .port p => t.portBase + p.idx
+  | .label l => t.labelBase + l.idx
+  | .edge e => t.edgeBase + e.idx
+
+/-- Records the coordinate modes of the element with dense index `i`. (Branch-free and written as a
+constructor match, so the update reuses the table object.) -/
+@[inline] def setModes (t : TransferTables) (i : Nat) (sm : ShapeCoords) (em : EdgeCoords) : TransferTables :=
+  match t with
+  | ⟨portBase, labelBase, edgeBase, size, globalX, globalY, shapeCoords, edgeCoords⟩ =>
+    ⟨portBase, labelBase, edgeBase, size, globalX, globalY, shapeCoords.set! i sm, edgeCoords.set! i em⟩
+
+/-- Records the global coordinates and the coordinate modes of the shape with dense index `i`. -/
+@[inline] def setShape (t : TransferTables) (i : Nat) (gx gy : Float) (sm : ShapeCoords) (em : EdgeCoords) :
+    TransferTables :=
+  match t with
+  | ⟨portBase, labelBase, edgeBase, size, globalX, globalY, shapeCoords, edgeCoords⟩ =>
+    ⟨portBase, labelBase, edgeBase, size, globalX.set! i gx, globalY.set! i gy, shapeCoords.set! i sm,
+      edgeCoords.set! i em⟩
+
+end TransferTables
+
+/-- Importer scratch state (one import + one transfer). Element-keyed tables are arrays indexed by
+the element id (the importer creates the elements densely). -/
 structure ImporterState where
   model : Value := .null
   defaults : Option GlobalOptions := none
@@ -55,20 +115,17 @@ structure ImporterState where
   portIdMap : Std.HashMap JsonId PortId := {}
   edgeIdMap : Std.HashMap JsonId EdgeId := {}
   sectionIdMap : Std.HashMap JsonId SectionId := {}
-  nodePath : Std.HashMap NodeId JsonPath := {}
-  portPath : Std.HashMap PortId JsonPath := {}
-  edgePath : Std.HashMap EdgeId JsonPath := {}
-  sectionPath : Std.HashMap SectionId JsonPath := {}
-  labelPath : Std.HashMap LabelId JsonPath := {}
-  nodeIds : Std.HashMap NodeId JsonId := {}
-  portIds : Std.HashMap PortId JsonId := {}
-  edgeIds : Std.HashMap EdgeId JsonId := {}
-  sectionIds : Std.HashMap SectionId JsonId := {}
-  edgeOriginalParent : Std.HashMap EdgeId NodeId := {}
-  globalX : Std.HashMap ElementId Float := {}
-  globalY : Std.HashMap ElementId Float := {}
-  shapeCoordsMap : Std.HashMap ElementId ShapeCoords := {}
-  edgeCoordsMap : Std.HashMap ElementId EdgeCoords := {}
+  nodePath : Array (Option JsonPath) := #[]
+  portPath : Array (Option JsonPath) := #[]
+  edgePath : Array (Option JsonPath) := #[]
+  sectionPath : Array (Option JsonPath) := #[]
+  labelPath : Array (Option JsonPath) := #[]
+  nodeIds : Array (Option JsonId) := #[]
+  portIds : Array (Option JsonId) := #[]
+  edgeIds : Array (Option JsonId) := #[]
+  sectionIds : Array (Option JsonId) := #[]
+  edgeOriginalParent : Array (Option NodeId) := #[]
+  tables : TransferTables := {}
   insideSelfLoopNodeXDelta : Std.HashMap NodeId Float := {}
   shiftedEastPortXDelta : Std.HashMap PortId Float := {}
   compactedVerticalNodeYDelta : Std.HashMap NodeId Float := {}
@@ -79,6 +136,62 @@ structure ImporterState where
   rootNode : Option NodeId := none
 
 instance : Inhabited ImporterState := ⟨{}⟩
+
+namespace ImporterState
+
+/-! Updates of single fields written as a constructor match: the compiler reuses the state
+object (a `{ s with … }` update projects the fields and allocates a new 26-field object). -/
+
+/-- Applies `f` to `model`. -/
+@[inline] def modifyModel (s : ImporterState) (f : Value → Value) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨(f model), defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- Applies `f` to `tables`. -/
+@[inline] def modifyTables (s : ImporterState) (f : TransferTables → TransferTables) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, (f tables), insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- `registerNode`: id map, JSON id and path of a node. -/
+@[inline] def addNode (s : ImporterState) (id : JsonId) (n : NodeId) (path : JsonPath) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, defaults, optionCache, (nodeIdMap.insert id n), portIdMap, edgeIdMap, sectionIdMap, (tableSet nodePath n.idx path), portPath, edgePath, sectionPath, labelPath, (tableSet nodeIds n.idx id), portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- `registerPort`: id map, JSON id and path of a port. -/
+@[inline] def addPort (s : ImporterState) (id : JsonId) (p : PortId) (path : JsonPath) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, (portIdMap.insert id p), edgeIdMap, sectionIdMap, nodePath, (tableSet portPath p.idx path), edgePath, sectionPath, labelPath, nodeIds, (tableSet portIds p.idx id), edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- `registerEdge`: id map, JSON id, path and original parent of an edge. -/
+@[inline] def addEdge (s : ImporterState) (id : JsonId) (e : EdgeId) (path : JsonPath) (containing : Option NodeId) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, (edgeIdMap.insert id e), sectionIdMap, nodePath, portPath, (tableSet edgePath e.idx path), sectionPath, labelPath, nodeIds, portIds, (tableSet edgeIds e.idx id), sectionIds, (tableSetOpt edgeOriginalParent e.idx containing), tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- `registerSection`: id map, JSON id and path of a section. -/
+@[inline] def addSection (s : ImporterState) (id : JsonId) (sec : SectionId) (path : JsonPath) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, (sectionIdMap.insert id sec), nodePath, portPath, edgePath, (tableSet sectionPath sec.idx path), labelPath, nodeIds, portIds, edgeIds, (tableSet sectionIds sec.idx id), edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- Path of a label. -/
+@[inline] def addLabelPath (s : ImporterState) (l : LabelId) (path : JsonPath) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, (tableSet labelPath l.idx path), nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+/-- Stores the (cache-updated) per-call defaults. -/
+@[inline] def setDefaults (s : ImporterState) (g : GlobalOptions) : ImporterState :=
+  match s with
+  | ⟨model, _defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩ =>
+    ⟨model, (some g), optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode⟩
+
+end ImporterState
+
 
 /-- Importer monad: importer state over the ElkGraph arena state. -/
 abbrev ImportM := StateRefT ImporterState ElkM
@@ -108,7 +221,7 @@ def asId (v : Value) : ImportM JsonId := do
 
 /-- `getId`: the mandatory `id` member. -/
 def getId (obj : Value) : ImportM JsonId := do
-  match obj.get? "id" with
+  match obj.get? Key.id with
   | some v => asId v
   | none => throwJsonImport "Every element must have an id."
 
@@ -127,7 +240,7 @@ def optString (obj : Value) (key : String) : ImportM (Option String) := do
   | none => return none
 
 /-- `idSave`: the `id` member as a string, if present. -/
-def idSave (obj : Value) : ImportM (Option String) := optString obj "id"
+def idSave (obj : Value) : ImportM (Option String) := optString obj Key.id
 
 /-- `optDouble`: numbers, numeric strings; `null` counts as absent. -/
 def optDouble (obj : Value) (key : String) : ImportM (Option Float) := do
@@ -191,13 +304,13 @@ def parse (optionsJson : String) : IO (Except String GlobalOptions) := do
 id is not authored, in the (sorted, like serde's `Map`) order elk-rs visits
 them, each paired with the effective value. -/
 def effectiveOptions (g : GlobalOptions) (element : Value) : IO (Array (String × Value) × GlobalOptions) := do
-  let selected := match element.get? "layoutOptions" with
+  let selected := match element.get? Key.layoutOptions with
     | some v => some v
-    | none => element.get? "properties"
+    | none => element.get? Key.properties
   let authoredObj : Option (Array (String × Value)) :=
-    match (element.get? "layoutOptions").bind (·.getObj?) with
+    match (element.get? Key.layoutOptions).bind (·.getObj?) with
     | some o => some o
-    | none => (element.get? "properties").bind (·.getObj?)
+    | none => (element.get? Key.properties).bind (·.getObj?)
   if g.values.isEmpty || (selected.any fun v => !v.isObj) then
     return (authoredObj.getD #[], g)
   let authored := selected.bind (·.getObj?)
@@ -241,8 +354,8 @@ partial def materialize (g : GlobalOptions) (root : Value) : IO Value := do
   let rec apply (gg : GlobalOptions) (element : Value) : IO (Value × GlobalOptions) := do
     match element with
     | .obj _ =>
-      let field := if element.hasKey "layoutOptions" then "layoutOptions"
-        else if element.hasKey "properties" then "properties" else "layoutOptions"
+      let field := if element.hasKey Key.layoutOptions then Key.layoutOptions
+        else if element.hasKey Key.properties then Key.properties else Key.layoutOptions
       let mut gg := gg
       let mut existing : Std.HashSet String := {}
       if let some (.obj kvs) := element.get? field then
@@ -252,7 +365,7 @@ partial def materialize (g : GlobalOptions) (root : Value) : IO Value := do
           existing := existing.insert c
       let mut element := element.modifyKey field (.obj #[]) fun lo =>
         resolved.foldl (fun lo (k, v, c) => if existing.contains c then lo else lo.set k v) lo
-      for arrKey in #["children", "edges", "ports", "labels"] do
+      for arrKey in #[Key.children, Key.edges, Key.ports, Key.labels] do
         if let some (.arr items) := element.get? arrKey then
           let mut items' : Array Value := #[]
           for item in items do

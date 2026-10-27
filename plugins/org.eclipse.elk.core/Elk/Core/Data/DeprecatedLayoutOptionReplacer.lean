@@ -30,8 +30,14 @@ def replace (props : PropertyMap) : PropertyMap := Id.run do
       props := props.set CoreOptions.PORT_LABELS_PLACEMENT placement
   return props
 
+/-- Whether `replace` changes the map (the elements without deprecated options are left alone). -/
+def needsReplace (props : PropertyMap) : Bool :=
+  props.has CoreOptions.PORT_LABELS_NEXT_TO_PORT_IF_POSSIBLE
+    || (props.get CoreOptions.NODE_SIZE_OPTIONS).any (·.contains .spaceEfficientPortLabels)
+
 /-- `visit(element)`. -/
-def visit (el : ElementId) : ElkM Unit := modify (·.modifyProps el replace)
+def visit (el : ElementId) : ElkM Unit := do
+  if needsReplace ((← get).props el) then modify (·.modifyProps el replace)
 
 /-- `new DeprecatedLayoutOptionReplacer()` as an `IGraphElementVisitor` (stateless). -/
 def new : GraphElementVisitor := { visit := visit }

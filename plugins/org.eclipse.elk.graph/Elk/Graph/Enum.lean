@@ -52,16 +52,66 @@ def normalizeName (s : String) : String :=
     else acc
   (String.fromUTF8? out).getD ""
 
+/-- UTF-8 byte `i` of `s` (`0` past the end). -/
+@[inline] def utf8ByteAt (s : String) (i : Nat) : UInt8 :=
+  if h : i < s.utf8ByteSize then s.getUTF8Byte ⟨i⟩ h else 0
+
+/-- Whether `normalizeName` keeps the byte (ASCII letters and digits). -/
+@[inline] private def isKept (b : UInt8) : Bool :=
+  (b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122)
+
+@[inline] private def upperByte (b : UInt8) : UInt8 := if b >= 97 && b <= 122 then b - 32 else b
+
+/-- First index `≥ i` below `stop` whose byte `normalizeName` keeps (`stop` if none). -/
+private partial def nextKept (s : String) (i stop : Nat) : Nat :=
+  if i < stop && !isKept (utf8ByteAt s i) then nextKept s (i + 1) stop else i
+
+/-- `normalizeName (bytes [i, i1) of s) == normalizeName (bytes [j, j1) of t)`, without building
+either string. -/
+partial def normalizedEq (s : String) (i i1 : Nat) (t : String) (j j1 : Nat) : Bool :=
+  let i := nextKept s i i1
+  let j := nextKept t j j1
+  if i >= i1 then j >= j1
+  else if j >= j1 then false
+  else upperByte (utf8ByteAt s i) == upperByte (utf8ByteAt t j) && normalizedEq s (i + 1) i1 t (j + 1) j1
+
+/-- `String.Slice.toNat?` on the bytes `[i, j)` of `s` (digits with single `_` separators, neither
+leading nor trailing), accumulated in `acc`. `last` records whether the previous byte was a digit. -/
+private partial def natOfRange? (s : String) (i j : Nat) (last : Bool) (acc : Nat) : Option Nat :=
+  if i < j then
+    let b := utf8ByteAt s i
+    if b == 95 then (if last then natOfRange? s (i + 1) j false acc else none)
+    else if b >= 48 && b <= 57 then natOfRange? s (i + 1) j true (acc * 10 + (b - 48).toNat)
+    else none
+  else if last then some acc else none
+
+/-- `Char.isWhitespace` on a byte (space, tab, CR, LF; what `trimAscii` removes). -/
+@[inline] def isWsByte (b : UInt8) : Bool := b == 32 || b == 9 || b == 13 || b == 10
+
+/-- `ofNameLoose?` on the bytes `[i, j)` of `s`, which must hold no leading or trailing
+whitespace. -/
+def ofNameLooseRange? (s : String) (i j : Nat) : Option α :=
+  if i >= j then none
+  else match natOfRange? s i j false 0 with
+    | some n => ofOrdinal? n
+    | none => (values : Array α).find? fun v => let n := javaName v; normalizedEq s i j n 0 n.utf8ByteSize
+
+/-- First index `≥ i` below `stop` that is not whitespace. -/
+private partial def skipWsFwd (s : String) (i stop : Nat) : Nat :=
+  if i < stop && isWsByte (utf8ByteAt s i) then skipWsFwd s (i + 1) stop else i
+
+/-- One past the last index `< stop` (and `≥ start`) that is not whitespace. -/
+private partial def skipWsBack (s : String) (start stop : Nat) : Nat :=
+  if stop > start && isWsByte (utf8ByteAt s (stop - 1)) then skipWsBack s start (stop - 1) else stop
+
 /-- Lenient lookup (elk-rs `parse_enum_value`): a decimal token selects by
-ordinal, otherwise names are compared after `normalizeName`. -/
+ordinal, otherwise names are compared after `normalizeName`. Works on the bytes of `s`
+(no allocation); equal to the reference `trimAscii` / `toNat?` / `normalizeName` formulation
+(`Tests.Graph.All.enumNormalizeTests`). -/
 def ofNameLoose? (s : String) : Option α :=
-  let t := s.trimAscii.toString
-  if t.isEmpty then none
-  else match t.toNat? with
-    | some i => ofOrdinal? i
-    | none =>
-      let n := normalizeName t
-      (values : Array α).find? (fun v => normalizeName (javaName v) == n)
+  let i := skipWsFwd s 0 s.utf8ByteSize
+  let j := skipWsBack s i s.utf8ByteSize
+  ofNameLooseRange? s i j
 
 end ElkEnum
 

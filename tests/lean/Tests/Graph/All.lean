@@ -121,6 +121,36 @@ def enumNormalizeTests : Tests.Suite := Tests.suite "graph.enum.normalizeName" d
   let reference (s : String) : String := String.ofList ((s.toList.filter Char.isAlphanum).map Char.toUpper)
   for s in ["H_CENTER", "hCenter", "h-center", "  Orthogonal ", "é_x1ß", "", "a1_B2-c3", "日本SPLINES", "node_size.minimum"] do
     Tests.checkEq s!"normalizeName {repr s}" (Elk.ElkEnum.normalizeName s) (reference s)
+  -- the byte-wise `ofNameLoose?` / `EnumSet.parse?` agree with the string-building formulations
+  let refLoose (s : String) : Option Elk.Graph.GraphFeature :=
+    let t := s.trimAscii.toString
+    if t.isEmpty then none
+    else match t.toNat? with
+      | some i => Elk.ElkEnum.ofOrdinal? i
+      | none =>
+        let n := Elk.ElkEnum.normalizeName t
+        (Elk.ElkEnum.values : Array Elk.Graph.GraphFeature).find? (fun v => Elk.ElkEnum.normalizeName (Elk.ElkEnum.javaName v) == n)
+  let refSet (s : String) : Option (Elk.EnumSet Elk.Graph.GraphFeature) := Id.run do
+    let trimmed := s.trimAscii.toString
+    if trimmed.isEmpty then return some Elk.EnumSet.empty
+    let normalized := String.map (fun c => if c == '[' || c == ']' || c == ',' || c.isWhitespace then ' ' else c) trimmed
+    let mut set : Elk.EnumSet Elk.Graph.GraphFeature := Elk.EnumSet.empty
+    for tok in normalized.splitOn " " do
+      let t := tok.trimAscii.toString
+      if t.isEmpty then continue
+      match (refLoose t) with
+      | some v => set := set.insert v
+      | none => return none
+    return some set
+  let cases := ["SELF_LOOPS", "selfLoops", " self-loops\t", "SELFLOOPS", "Self_Loops_", "_SELF_LOOPS",
+    "3", "03", "0_3", "_3", "3_", "1__2", " 7 ", "8", "", "  ", "-", "é", "selfLoopsé", "self loops",
+    "PORTS", "ports2", "INSIDE_SELF_LOOPS", "insideSelfLoops", "EDGE_LABELS", "日本", "disconnected\n"]
+  for s in cases do
+    Tests.check s!"ofNameLoose? {repr s}" ((Elk.ElkEnum.ofNameLoose? s : Option Elk.Graph.GraphFeature) == refLoose s)
+  let setCases := cases ++ ["[PORTS, SELF_LOOPS]", "[]", "[ ]", "PORTS,,COMPOUND", "[PORTS, nope]", "PORTS  compound",
+    "[ports,\tclusters]\r\n", "[,]", "[PORTS] [EDGE_LABELS]", "2,3", "[2, x]", "[é]"]
+  for s in setCases do
+    Tests.check s!"EnumSet.parse? {repr s}" ((Elk.Graph.EnumSet.parse? s : Option (Elk.EnumSet Elk.Graph.GraphFeature)) == refSet s)
 
 def suites : Array Tests.Suite := #[elkGraphUtilTests, graphIdentifierGeneratorTests, enumNormalizeTests]
 

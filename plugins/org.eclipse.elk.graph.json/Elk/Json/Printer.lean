@@ -33,18 +33,18 @@ private def pushEscaped (out : String) (c : Char) : String :=
 
 /-- Whether `s` has a character that serde_json escapes (`"`, `\`, control characters), checked on
 the UTF-8 bytes from byte `i` (bytes of multi-byte characters are `≥ 0x80`). -/
-private def hasEscapes (s : String) (i : Nat) : Bool :=
-  if h : i < s.utf8ByteSize then
-    let b := s.getUTF8Byte ⟨i⟩ h
-    b < 0x20 || b == 0x22 || b == 0x5c || hasEscapes s (i + 1)
+private def hasEscapes (s : String) (n : Nat) (hn : n = s.utf8ByteSize) (i : Nat) : Bool :=
+  if h : i < n then
+    let b := s.getUTF8Byte ⟨i⟩ (show i < s.utf8ByteSize from hn ▸ h)
+    b < 0x20 || b == 0x22 || b == 0x5c || hasEscapes s n hn (i + 1)
   else
     false
-termination_by s.utf8ByteSize - i
+termination_by n - i
 
 /-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
 def escapeInto (out s : String) : String :=
   let out := out.push '"'
-  let out := if hasEscapes s 0 then s.foldl pushEscaped out else out ++ s
+  let out := if hasEscapes s s.utf8ByteSize rfl 0 then s.foldl pushEscaped out else out ++ s
   out.push '"'
 
 /-- serde_json string escaping. -/
@@ -53,12 +53,26 @@ def escapeString (s : String) : String := escapeInto "" s
 private def sortEntries (kvs : Array (String × Value)) : Array (String × Value) :=
   Elk.Core.Util.stableSort kvs (fun a b => compare a.1 b.1)
 
+/-- Appends the decimal representation of `n` (`Nat.repr` without the intermediate string). -/
+private def pushNat (out : String) (n : Nat) : String :=
+  if n < 10 then out.push (Char.ofNat (48 + n))
+  else (pushNat out (n / 10)).push (Char.ofNat (48 + n % 10))
+termination_by n
+decreasing_by omega
+
+/-- Appends `n.render`; integers are written in place. -/
+@[inline] private def pushNumber (out : String) (n : Number) : String :=
+  match n with
+  | .int (.ofNat k) => pushNat out k
+  | .int (.negSucc k) => pushNat (out.push '-') (k + 1)
+  | n => out ++ n.render
+
 /-- Compact rendering (`serde_json::to_string`). -/
 partial def compact (sortKeys : Bool) (v : Value) (out : String) : String :=
   match v with
   | .null => out ++ "null"
   | .bool b => out ++ (if b then "true" else "false")
-  | .num n => out ++ n.render
+  | .num n => pushNumber out n
   | .str s => escapeInto out s
   | .arr xs => Id.run do
     let mut out := out.push '['

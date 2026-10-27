@@ -39,6 +39,35 @@ def javaSemantics : Suite := suite "core.util.java" do
   checkEq "tdiv -7/2" (Int.tdiv (-7) 2) (-3)
   checkEq "tmod -7%2" (Int.tmod (-7) 2) (-1)
   checkEq "wrap32" (Int.wrap32 2147483648) (-2147483648)
+  -- the `UInt64`-only bit comparisons/conversions agree with the `Int` formulations they replaced
+  let refSigned (b : UInt64) : Int :=
+    if b ≥ 0x8000000000000000 then (b.toNat : Int) - 0x10000000000000000 else (b.toNat : Int)
+  let refTotal (a b : Float) : Ordering :=
+    let key (x : Float) : Int :=
+      let bits := x.toBits
+      refSigned (if bits ≥ 0x8000000000000000 then bits ^^^ 0x7FFFFFFFFFFFFFFF else bits)
+    compare (key a) (key b)
+  let refJava (a b : Float) : Ordering :=
+    if a < b then .lt else if a > b then .gt
+    else compare (refSigned (if a.isNaN then 0x7ff8000000000000 else a.toBits))
+      (refSigned (if b.isNaN then 0x7ff8000000000000 else b.toBits))
+  let floats : Array Float := #[0.0, -0.0, 1.0, -1.0, 0.5, -2.5, 1e300, -1e300, 5e-324, -5e-324,
+    Float.posInf, Float.negInf, Float.nan, -Float.nan, Float.ofBits 0x7ff0000000000001,
+    Float.ofBits 0xfff8000000000001, 2147483647.0, 4294967296.0, -4294967296.0]
+  for a in floats do
+    for b in floats do
+      check s!"compareTotal {a.toBits} {b.toBits}" (Float.compareTotal a b == refTotal a b)
+      check s!"compareJava {a.toBits} {b.toBits}" (Float.compareJava a b == refJava a b)
+  for bits in [(0 : UInt64), 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0x100000000, 0x7FFFFFFFFFFFFFFF,
+      0x8000000000000000, 0x8000000000000001, 0xFFFFFFFFFFFFFFFF] do
+    checkEq s!"UInt64.toIntSigned {bits}" (UInt64.toIntSigned bits) (refSigned bits)
+  for i in [(0 : Int), 1, -1, 2147483647, -2147483648, 4294967296, -4294967296, 9223372036854775807,
+      -9223372036854775808, 18446744073709551615, 18446744073709551616, -18446744073709551617,
+      123456789012345678901234567890, -123456789012345678901234567890] do
+    checkEq s!"toUInt64Wrap {i}" (Int.toUInt64Wrap i) (UInt64.ofNat (Int.toNat (i.emod 0x10000000000000000)))
+  for u in [(0 : UInt32), 1, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFF] do
+    checkEq s!"UInt32.toIntSigned {u}" (UInt32.toIntSigned u)
+      (if u ≥ 0x80000000 then (u.toNat : Int) - 0x100000000 else (u.toNat : Int))
 
 def sorting : Suite := suite "core.util.sort" do
   let input : Array (Nat × Nat) := #[(3, 0), (1, 1), (3, 2), (2, 3), (1, 4), (3, 5), (0, 6)]

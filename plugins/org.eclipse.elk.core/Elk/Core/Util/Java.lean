@@ -72,9 +72,15 @@ def Float.javaRound (x : Float) : Int :=
 /-- `Float.ofInt`-style conversion used everywhere (`i as f64`). -/
 @[inline] def Int.toFloat (i : Int) : Float := Float.ofInt i
 
-/-- Signed interpretation of the raw bits, for `Double.compare`. -/
+/-- Signed interpretation of the raw bits (Java `long`). Built from `UInt64` operations: the
+literal `2^64` and the intermediate `Nat`s of `b.toNat - 2^64` are GMP numbers. -/
 private def bitsSigned (b : UInt64) : Int :=
-  if b ≥ 0x8000000000000000 then (b.toNat : Int) - 0x10000000000000000 else (b.toNat : Int)
+  if b ≥ 0x8000000000000000 then Int.negSucc (~~~b).toNat else Int.ofNat b.toNat
+
+/-- `compare (bitsSigned a) (bitsSigned b)` without building the `Int`s (most bit patterns of
+doubles are beyond the small-`Int` range): signed order is unsigned order with the sign bit flipped. -/
+@[inline] private def compareBitsSigned (a b : UInt64) : Ordering :=
+  compare (a ^^^ 0x8000000000000000) (b ^^^ 0x8000000000000000)
 
 /-- Java `Double.compare` / Rust `f64::total_cmp`-like ordering:
 `-0.0 < 0.0`, every NaN is equal to every NaN and greater than everything else. -/
@@ -84,7 +90,7 @@ def Float.compareJava (a b : Float) : Ordering :=
   else
     let ba := if a.isNaN then 0x7ff8000000000000 else a.toBits
     let bb := if b.isNaN then 0x7ff8000000000000 else b.toBits
-    compare (bitsSigned ba) (bitsSigned bb)
+    compareBitsSigned ba bb
 
 /-- Rust `partial_cmp(..).unwrap_or(Equal)`: NaN compares equal to everything. -/
 @[inline] def Float.comparePartial (a b : Float) : Ordering :=
@@ -92,10 +98,10 @@ def Float.compareJava (a b : Float) : Ordering :=
 
 /-- Rust `f64::total_cmp`. -/
 def Float.compareTotal (a b : Float) : Ordering :=
-  let key (x : Float) : Int :=
+  let key (x : Float) : UInt64 :=
     let bits := x.toBits
-    bitsSigned (if bits ≥ 0x8000000000000000 then bits ^^^ 0x7FFFFFFFFFFFFFFF else bits)
-  compare (key a) (key b)
+    if bits ≥ 0x8000000000000000 then bits ^^^ 0x7FFFFFFFFFFFFFFF else bits
+  compareBitsSigned (key a) (key b)
 
 /-- Java `Double.doubleToLongBits` equality (`equals`): NaN == NaN, `-0.0 != 0.0`. -/
 def Float.equalsJava (a b : Float) : Bool :=
@@ -124,14 +130,18 @@ def Float.e : Float := 2.718281828459045
 @[inline] def Int.jmod (a b : Int) : Int := Int.tmod a b
 
 /-- Two's complement bit pattern of an `Int` as `UInt64` (Rust `as u64`). -/
-def Int.toUInt64Wrap (i : Int) : UInt64 := UInt64.ofNat (Int.toNat (i.emod 0x10000000000000000))
+def Int.toUInt64Wrap (i : Int) : UInt64 :=
+  -- `-(n + 1)` is `~~~n` in two's complement (no `2^64` literal, no GMP for small values)
+  match i with
+  | .ofNat n => UInt64.ofNat n
+  | .negSucc n => ~~~(UInt64.ofNat n)
 
 /-- Rust `i64 as i32` / Java `(int) long`: wrap to 32 bits. -/
 def Int.wrap32 (i : Int) : Int := (Int32.ofInt i).toInt
 
 /-- `Int` from a `UInt32` interpreted as Java `int` (two's complement). -/
 def UInt32.toIntSigned (u : UInt32) : Int :=
-  if u ≥ 0x80000000 then (u.toNat : Int) - 0x100000000 else (u.toNat : Int)
+  if u ≥ 0x80000000 then Int.negSucc (~~~u).toNat else Int.ofNat u.toNat
 
 /-- `Int` from a `UInt64` interpreted as Java `long`. -/
 def UInt64.toIntSigned (u : UInt64) : Int := bitsSigned u
