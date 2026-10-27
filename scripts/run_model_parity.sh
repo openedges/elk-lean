@@ -21,7 +21,9 @@ mkdir -p "$OUT"
 ELKT_ARGS=""
 if [ "${PARITY_INCLUDE_ELKT:-1}" = "1" ]; then ELKT_ARGS="--include-elkt --elk-bin $LEAN --elkt-cache $OUT/elkt_json"; fi
 python3 "$HERE/scripts/make_json_manifest.py" "$MODELS" "$OUT/inputs.tsv" $ELKT_ARGS "$@"
-if [ ! -f "$OUT/oracle.tsv" ] || [ "${PARITY_REFRESH_ORACLE:-0}" = "1" ]; then
+# the oracle layouts are regenerated when the manifest or the layout directory is missing (a git
+# worktree may carry a tracked oracle.tsv without the ignored oracle/ directory)
+if [ ! -f "$OUT/oracle.tsv" ] || [ ! -d "$OUT/oracle" ] || [ "${PARITY_REFRESH_ORACLE:-0}" = "1" ]; then
   echo "== oracle (elk-rs) =="
   "$RUNNER" --input-manifest "$OUT/inputs.tsv" --output-manifest "$OUT/oracle.tsv" \
     --rust-layout-dir "$OUT/oracle" --pretty-print true > "$OUT/oracle.log" 2>&1 || true
