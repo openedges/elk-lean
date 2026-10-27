@@ -1,0 +1,21 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "a",
+      "width": 40,
+      "x": 12,
+      "y": 12
+    }
+  ],
+  "edges": [],
+  "height": 44,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.randomSeed": "3"
+  },
+  "width": 64,
+  "x": 0,
+  "y": 0
+}

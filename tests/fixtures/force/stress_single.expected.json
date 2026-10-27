@@ -1,0 +1,20 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "a",
+      "width": 40,
+      "x": 50,
+      "y": 50
+    }
+  ],
+  "edges": [],
+  "height": 120,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "stress"
+  },
+  "width": 140,
+  "x": 0,
+  "y": 0
+}

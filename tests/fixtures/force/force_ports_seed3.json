@@ -1,0 +1,58 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "force",
+  "elk.randomSeed": "3"
+ },
+ "children": [
+  {
+   "id": "a",
+   "width": 30,
+   "height": 30,
+   "ports": [
+    {
+     "id": "ap",
+     "width": 5,
+     "height": 5
+    }
+   ]
+  },
+  {
+   "id": "b",
+   "width": 30,
+   "height": 30,
+   "ports": [
+    {
+     "id": "bp",
+     "width": 5,
+     "height": 5
+    }
+   ]
+  },
+  {
+   "id": "c",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "ap"
+   ],
+   "targets": [
+    "bp"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "b"
+   ],
+   "targets": [
+    "c"
+   ]
+  }
+ ]
+}

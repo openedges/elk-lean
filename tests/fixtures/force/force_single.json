@@ -1,0 +1,15 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "force",
+  "elk.randomSeed": "3"
+ },
+ "children": [
+  {
+   "id": "a",
+   "width": 40,
+   "height": 20
+  }
+ ],
+ "edges": []
+}

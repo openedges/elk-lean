@@ -1,0 +1,364 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "force",
+  "elk.force.model": "EADES",
+  "elk.randomSeed": "21"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 20,
+   "height": 45
+  },
+  {
+   "id": "n1",
+   "width": 20,
+   "height": 30
+  },
+  {
+   "id": "n2",
+   "width": 20,
+   "height": 30
+  },
+  {
+   "id": "n3",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n4",
+   "width": 40,
+   "height": 30
+  },
+  {
+   "id": "n5",
+   "width": 20,
+   "height": 20
+  },
+  {
+   "id": "n6",
+   "width": 30,
+   "height": 20
+  },
+  {
+   "id": "n7",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n8",
+   "width": 40,
+   "height": 20
+  },
+  {
+   "id": "n9",
+   "width": 40,
+   "height": 30
+  },
+  {
+   "id": "n10",
+   "width": 30,
+   "height": 45
+  },
+  {
+   "id": "n11",
+   "width": 20,
+   "height": 45
+  },
+  {
+   "id": "n12",
+   "width": 20,
+   "height": 30
+  },
+  {
+   "id": "n13",
+   "width": 20,
+   "height": 20
+  },
+  {
+   "id": "n14",
+   "width": 20,
+   "height": 45
+  },
+  {
+   "id": "n15",
+   "width": 40,
+   "height": 20
+  },
+  {
+   "id": "n16",
+   "width": 30,
+   "height": 45
+  },
+  {
+   "id": "n17",
+   "width": 20,
+   "height": 30
+  },
+  {
+   "id": "n18",
+   "width": 40,
+   "height": 20
+  },
+  {
+   "id": "n19",
+   "width": 40,
+   "height": 20
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n14"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n17"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e19",
+   "sources": [
+    "n14"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e20",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e21",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e22",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e23",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e24",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e25",
+   "sources": [
+    "n19"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e26",
+   "sources": [
+    "n18"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e27",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n7"
+   ]
+  }
+ ]
+}

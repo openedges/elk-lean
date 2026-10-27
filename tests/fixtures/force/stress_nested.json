@@ -1,0 +1,69 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "stress"
+ },
+ "children": [
+  {
+   "id": "a",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "b",
+   "width": 30,
+   "height": 30,
+   "children": [
+    {
+     "id": "b1",
+     "width": 20,
+     "height": 20
+    },
+    {
+     "id": "b2",
+     "width": 20,
+     "height": 20
+    }
+   ],
+   "edges": [
+    {
+     "id": "be",
+     "sources": [
+      "b1"
+     ],
+     "targets": [
+      "b2"
+     ]
+    }
+   ],
+   "layoutOptions": {
+    "elk.algorithm": "stress"
+   }
+  },
+  {
+   "id": "c",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "b"
+   ],
+   "targets": [
+    "c"
+   ]
+  }
+ ]
+}

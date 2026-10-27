@@ -1,0 +1,114 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "width": 30,
+      "x": 12,
+      "y": 20.557554770359957
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30,
+      "x": 63.07266144830267,
+      "y": 56.46626384321837
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 30,
+      "x": 106.92869236963614,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 30,
+      "x": 158.00135381793874,
+      "y": 47.90870907285856
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 63.072661448302675,
+            "y": 60.91990458136368
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 46.10391403221466
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 107.13454492024727,
+            "y": 42
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 92.86680889769156,
+            "y": 56.46626384321837
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 158.00135381793874,
+            "y": 52.362349811003796
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 136.92869236963614,
+            "y": 37.546359261854754
+          }
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n3"
+      ]
+    }
+  ],
+  "height": 98.46626384321837,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.force.model": "EADES",
+    "elk.interactive": "true",
+    "elk.randomSeed": "3"
+  },
+  "width": 200.00135381793874,
+  "x": 0,
+  "y": 0
+}

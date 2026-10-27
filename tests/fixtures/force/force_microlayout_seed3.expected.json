@@ -1,0 +1,95 @@
+{
+  "children": [
+    {
+      "height": 24,
+      "id": "a",
+      "labels": [
+        {
+          "height": 14,
+          "text": "A long label",
+          "width": 80,
+          "x": 5,
+          "y": 5
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS]"
+      },
+      "width": 90,
+      "x": 34.86354961454715,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "b",
+      "width": 30,
+      "x": 12,
+      "y": 62.722818181146806
+    },
+    {
+      "height": 0,
+      "id": "c",
+      "width": 0,
+      "x": 51.871018671621634,
+      "y": 68.92274484180383
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 41.760082792836094,
+            "y": 62.722818181146806
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 68.05548338027828,
+            "y": 36
+          }
+        }
+      ],
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 51.371018671621634,
+            "y": 69.09965905379356
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 72.41539182145529
+          }
+        }
+      ],
+      "sources": [
+        "b"
+      ],
+      "targets": [
+        "c"
+      ]
+    }
+  ],
+  "height": 104.7228181811468,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.randomSeed": "3"
+  },
+  "width": 136.86354961454714,
+  "x": 0,
+  "y": 0
+}
