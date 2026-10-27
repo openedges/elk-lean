@@ -75,14 +75,15 @@
 - 부동소수점 출력은 `Float.toShortest`(C shim), 파싱은 `strtod` 바인딩. Java 의미론이 다른 연산은 `Elk.Core.Util.Java` 헬퍼 사용.
 - `import Lean` 금지(런타임 바이너리에 컴파일러가 링크됨). 매크로는 `Init` 수준 API만 사용한다.
 
-## 현재 핵심 스냅샷 (2026-10-27, Phase 0 완료)
+## 현재 핵심 스냅샷 (2026-10-27, Phase 2 완료·Phase 3/4 진행 중)
 - **버전**: elk-lean `0.12.0`(미공개), 레퍼런스 ELK/elkjs `0.12.0`, oracle elk-rs `0.12.1`(`../elk-rs` HEAD `eb586b6d`).
 - **툴체인**: Lean `v4.35.0` / Lake 5.0 (`~/.elan/bin`, 셸 PATH 미수정: `export PATH=$HOME/.elan/bin:$PATH`). Node 24·Rust 1.97.1은 `../elk-rs`에서 `mise exec --`로 사용.
 - **서브모듈 고정**: `external/elk` → `32331291`(v0.12.0), `external/elkjs` → `ff5771d7`(0.12.0), `external/elk-models` → `ac5af2ba`, `external/elk-live` → `cbf63a24`.
 - **oracle**: `.reference/elk-rs-target/release/model_parity_layout_runner`, `perf_benchmark`(`scripts/build_oracle.sh`로 재빌드).
-- **빌드 상태**: `lake build` 21 jobs 성공(경고 0), `lake test` 통과(1 smoke), CLI `elk --version` 동작, C shim(`elk_float_to_shortest`, `elk_strtod`) 링크 확인.
-- **Parity**: 아직 없음(Phase 2에서 파이프라인 가동).
-- **다음 우선순위**: Phase 1 기반 계층(`Elk.Graph`, `Elk.Core.Math/Util/Options/Data`) → Phase 2 JSON/엔진/CLI/parity 파이프라인.
+- **완료**: Phase 0~2 — graph/core(옵션·메타데이터·검증·ElkUtil·어댑터·alg assembler)·JSON(import/export/transfer/API/CLI)·ELK Text 리더·`RecursiveGraphLayoutEngine`·fixed/random/box 프로바이더. alg.common 중 networksimplex·compaction·polyomino·geometry·overlaps·spore·utils 완료, nodespacing 진행 중(N1→N2a/N2b→N3). layered는 옵션 패키지(M-opts)와 그래프 모델(M0) 진행 중.
+- **빌드 상태**: `lake build` 213 jobs 성공(경고 0), `lake test` 2167 통과/0 실패.
+- **Parity**: 코어 프로바이더 fixture 17개 중 16개 oracle과 바이트 일치(`tests/fixtures/core`, `box.json`은 layered 대기). 모델 parity는 코퍼스 550개 `.json`이 모두 layered라 Phase 4 전까지 match 0(파이프라인은 가동, 오류 0). `.elkt` 898개는 `elk convert`로 변환 가능.
+- **다음 우선순위**: nodespacing 완료 → layered 옵션/그래프 모델 → importer/transferrer/드라이버(M1~M3) → P1~P5·intermediate 프로세서 병렬 → phase-step trace parity.
 
 ## 기본 실행 명령
 - 빌드/테스트: `lake build && lake test`
