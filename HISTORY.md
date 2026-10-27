@@ -148,6 +148,7 @@
 | F2. spore(`sporeOverlap`, `sporeCompaction`) | `alg.spore/src/**`(2.2K줄) | sonnet | high | 서브에이전트 F2(worktree) | 진행 중 |
 | F3. disco | `alg.disco/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F3(worktree) | 완료(`merge F3`): **oracle 결함**: stock runner는 disco에서 `ElkReflect` 미등록 polyomino enum 기본값으로 panic → scratchpad 복사본에 `init_reflect` 3줄 패치한 runner로 fixture 생성(58건 중 56 일치, 2건은 oracle·Lean 동일 오류 메시지). polyomino 옵션은 Rust처럼 packer에 전달되지 않음 |
 | F4. topdownpacking | `alg.topdownpacking/src/**`(1K줄) | sonnet | medium | 서브에이전트 F4(worktree) | 완료(`merge F4`): oracle 하네스(stock runner는 topdownpacking 미등록 → scratchpad에 등록판 빌드)로 fixture 9/9 바이트 일치. **oracle 특이점**: elk-rs는 `as_topdown_layout_provider()`가 `None`이라 predicted graph size를 엔진에 노출하지 않음(Java는 노출) → Rust 따름, Java 동작은 `providerWithPrediction`(미등록) |
+| C1. `Elk.Core.Util.RustSort`(Rust 1.97 `slice::sort_by` = insertion ≤20 + driftsort 정밀 이식, 비일관 비교자 재현) | `core/src/slice/sort/**`(std) | opus | high | 서브에이전트 C1(worktree) | 진행 중 |
 | F5. vertiflex | `alg.vertiflex/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F5(worktree) | 진행 중 |
 | F6. radial | `alg.radial/src/**`(3.5K줄) | sonnet | high | 서브에이전트 F6(worktree) | 진행 중 |
 | F7a/F7b. mrtree(그래프·importer·intermediate → p1~p4·provider) | `alg.mrtree/src/**`(6.5K줄) | opus | high | 대기 | |
