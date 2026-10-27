@@ -45,3 +45,10 @@ if [ "${1:-}" = "--verify-stdlib" ]; then
   python3 plugins/org.eclipse.elk.wasm/tools/verify_stdlib_c.py --lean "$(command -v lean)" \
     --stdlib-c plugins/org.eclipse.elk.wasm/build/stdlib-c --work plugins/org.eclipse.elk.wasm/build/verify --jobs "$JOBS"
 fi
+# the npm package (plugins/org.eclipse.elk.js) ships the two builds under dist/
+NPM_DIST="$HERE/plugins/org.eclipse.elk.js/dist"
+mkdir -p "$NPM_DIST/wasm" "$NPM_DIST/wasm-node"
+cp plugins/org.eclipse.elk.wasm/dist/wasm/* "$NPM_DIST/wasm/"
+cp plugins/org.eclipse.elk.wasm/dist/wasm-node/* "$NPM_DIST/wasm-node/"
+cp plugins/org.eclipse.elk.wasm/dist/BUILD_INFO.json "$NPM_DIST/wasm/"
+echo "copied to $NPM_DIST/{wasm,wasm-node}"

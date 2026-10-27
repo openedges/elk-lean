@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
@@ -139,14 +139,24 @@ describe('Entry point', () => {
   });
 
   describe('WASM fallback when no NAPI binary', () => {
-    // TODO(Phase 8, WASM): once plugins/org.eclipse.elk.wasm exists, copy dist/wasm* as in
-    // elk-rs testEntryPoints and require successful layouts in all three modes.
-    it('reports the missing WASM backend in direct, fake-worker, and worker_threads modes', () => {
-      // Copy only the JS outside the repo so no optional native package or local .node file
-      // can satisfy the loader accidentally.
+    // Only the JS (and the WASM build, when present) is copied outside the repo, so no optional
+    // native package or local .node file can satisfy the loader accidentally.
+    const wasmNode = path.join(__dirname, '../dist/wasm-node/elk_lean.cjs');
+    const built = existsSync(wasmNode);
+    it(built ? 'lays out through WASM in direct, fake-worker and worker_threads modes'
+             : 'reports the missing WASM backend in direct, fake-worker, and worker_threads modes', () => {
       const isolated = mkdtempSync(path.join(tmpdir(), 'elk-lean-wasm-fallback-'));
       try {
         cpSync(path.join(__dirname, '../js'), path.join(isolated, 'js'), { recursive: true });
+        if (built) {
+          cpSync(path.join(__dirname, '../dist/wasm-node'), path.join(isolated, 'dist/wasm-node'), { recursive: true });
+        }
+        // reference output: the native addon of this checkout when it is built, else structural checks
+        let reference = null;
+        try {
+          const native = require('./../js/load-native.js')();
+          reference = JSON.parse(native.layout_json(JSON.stringify(graph), '{}'));
+        } catch (e) { reference = null; }
         const script = `
           const assert = require('node:assert/strict');
           const ELK = require('./js/index.js');
@@ -154,19 +164,36 @@ describe('Entry point', () => {
           const FakeWorker = require('./js/elk-worker.js').Worker;
           const path = require('node:path');
           const graph = ${JSON.stringify(graph)};
+          const reference = ${JSON.stringify(reference)};
+          const built = ${built};
           const notBuilt = /WASM backend not built/;
+          const checkResult = (out) => {
+            assert.ok(Array.isArray(out.children) && out.children.length === graph.children.length);
+            for (const c of out.children) { assert.equal(typeof c.x, 'number'); assert.equal(typeof c.y, 'number'); }
+            if (reference) assert.deepEqual(out, reference);
+          };
           (async () => {
-            assert.throws(() => new ELK(), notBuilt);
+            if (!built) {
+              assert.throws(() => new ELK(), notBuilt);
+            } else {
+              const direct = new ELK();
+              checkResult(await direct.layout(JSON.parse(JSON.stringify(graph))));
+              assert.ok((await direct.knownLayoutAlgorithms()).some(a => a.id === 'org.eclipse.elk.layered'));
+            }
             for (const elk of [new API({ workerFactory: () => new FakeWorker() }),
               new ELK({ workerUrl: path.resolve('./js/elk-worker.js') })]) {
               try {
-                await assert.rejects(elk.layout(graph), err => notBuilt.test(err.message));
+                if (!built) {
+                  await assert.rejects(elk.layout(graph), err => notBuilt.test(err.message));
+                } else {
+                  checkResult(await elk.layout(JSON.parse(JSON.stringify(graph))));
+                }
               } finally { elk.terminateWorker(); }
             }
           })().catch(error => { console.error(error); process.exitCode = 1; });
         `;
         const result = spawnSync(process.execPath, ['-e', script], {
-          cwd: isolated, encoding: 'utf8', timeout: 20000,
+          cwd: isolated, encoding: 'utf8', timeout: 60000,
         });
         assert.equal(result.error, undefined, result.stderr);
         assert.equal(result.status, 0, result.stderr);
