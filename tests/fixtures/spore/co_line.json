@@ -1,0 +1,97 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction"
+  },
+  "children": [
+    {
+      "id": "n0",
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "id": "n1",
+      "x": 123,
+      "y": 7,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "id": "n2",
+      "x": 240,
+      "y": 14,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "id": "n3",
+      "x": 363,
+      "y": 21,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "id": "n4",
+      "x": 480,
+      "y": 28,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "id": "n5",
+      "x": 603,
+      "y": 35,
+      "width": 40,
+      "height": 30
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "id": "e1",
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "id": "e3",
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ]
+    },
+    {
+      "id": "e4",
+      "sources": [
+        "n4"
+      ],
+      "targets": [
+        "n5"
+      ]
+    }
+  ]
+}

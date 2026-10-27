@@ -1,0 +1,141 @@
+{
+  "children": [
+    {
+      "height": 40,
+      "id": "a",
+      "labels": [
+        {
+          "height": 12,
+          "id": "a_l1",
+          "text": "label A",
+          "width": 40,
+          "x": 0,
+          "y": -16
+        }
+      ],
+      "layoutOptions": {
+        "portConstraints": "FIXED_POS"
+      },
+      "ports": [
+        {
+          "height": 8,
+          "id": "a_p1",
+          "layoutOptions": {
+            "port.side": "EAST"
+          },
+          "width": 8,
+          "x": 60,
+          "y": 10
+        },
+        {
+          "height": 8,
+          "id": "a_p2",
+          "layoutOptions": {
+            "port.side": "WEST"
+          },
+          "width": 8,
+          "x": -8,
+          "y": 20
+        }
+      ],
+      "width": 60,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 50,
+      "id": "b",
+      "layoutOptions": {
+        "portConstraints": "FIXED_POS"
+      },
+      "ports": [
+        {
+          "height": 8,
+          "id": "b_p1",
+          "labels": [
+            {
+              "height": 10,
+              "id": "b_pl",
+              "text": "p",
+              "width": 10,
+              "x": 10,
+              "y": 8
+            }
+          ],
+          "layoutOptions": {
+            "port.side": "SOUTH"
+          },
+          "width": 8,
+          "x": 20,
+          "y": 50
+        }
+      ],
+      "width": 50,
+      "x": 108,
+      "y": 58.57142857142857
+    },
+    {
+      "height": 30,
+      "id": "c",
+      "width": 30,
+      "x": 178,
+      "y": 128.57142857142856
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 108,
+            "y": 69.40345368916797
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 72,
+            "y": 49.00156985871271
+          }
+        }
+      ],
+      "sources": [
+        "a_p1"
+      ],
+      "targets": [
+        "b_p1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 69.06786171574905,
+            "y": 52
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 178,
+            "y": 132.48817407757804
+          }
+        }
+      ],
+      "sources": [
+        "c"
+      ],
+      "targets": [
+        "a_p2"
+      ]
+    }
+  ],
+  "height": 170.57142857142856,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "width": 220,
+  "x": 0,
+  "y": 0
+}

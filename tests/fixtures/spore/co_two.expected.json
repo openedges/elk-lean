@@ -1,0 +1,51 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "a",
+      "width": 30,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "b",
+      "width": 30,
+      "x": 62,
+      "y": 49.5
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 62,
+            "y": 53.25
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 38.25
+          }
+        }
+      ],
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    }
+  ],
+  "height": 91.5,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction"
+  },
+  "width": 104,
+  "x": 0,
+  "y": 0
+}

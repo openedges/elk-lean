@@ -1,0 +1,26 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 10,
+      "y": 10,
+      "width": 40,
+      "height": 30
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "a"
+      ]
+    }
+  ]
+}

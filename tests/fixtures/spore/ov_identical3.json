@@ -1,0 +1,29 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": 20,
+      "y": 20,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "b",
+      "x": 20,
+      "y": 20,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "c",
+      "x": 20,
+      "y": 20,
+      "width": 40,
+      "height": 40
+    }
+  ]
+}

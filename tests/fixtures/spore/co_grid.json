@@ -1,0 +1,92 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction"
+  },
+  "children": [
+    {
+      "id": "n0_0",
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n0_1",
+      "x": 0,
+      "y": 100,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n0_2",
+      "x": 0,
+      "y": 200,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n1_0",
+      "x": 100,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n1_1",
+      "x": 100,
+      "y": 100,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n1_2",
+      "x": 100,
+      "y": 200,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n2_0",
+      "x": 200,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n2_1",
+      "x": 200,
+      "y": 100,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n2_2",
+      "x": 200,
+      "y": 200,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n3_0",
+      "x": 300,
+      "y": 0,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n3_1",
+      "x": 300,
+      "y": 100,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "id": "n3_2",
+      "x": 300,
+      "y": 200,
+      "width": 40,
+      "height": 40
+    }
+  ]
+}

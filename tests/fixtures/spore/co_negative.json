@@ -1,0 +1,36 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction"
+  },
+  "children": [
+    {
+      "id": "a",
+      "x": -100.5,
+      "y": -3.25,
+      "width": 33.5,
+      "height": 20.75
+    },
+    {
+      "id": "b",
+      "x": 250.125,
+      "y": 4.5,
+      "width": 40.25,
+      "height": 25.5
+    },
+    {
+      "id": "c",
+      "x": 12.75,
+      "y": -208,
+      "width": 19.5,
+      "height": 31.125
+    },
+    {
+      "id": "d",
+      "x": -30,
+      "y": 310,
+      "width": 28,
+      "height": 28
+    }
+  ]
+}

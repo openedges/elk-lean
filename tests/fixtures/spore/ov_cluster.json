@@ -1,0 +1,118 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap"
+  },
+  "children": [
+    {
+      "id": "n0",
+      "x": 11,
+      "y": 68,
+      "width": 41,
+      "height": 18
+    },
+    {
+      "id": "n1",
+      "x": 40,
+      "y": 36,
+      "width": 36,
+      "height": 34
+    },
+    {
+      "id": "n2",
+      "x": 8,
+      "y": 2,
+      "width": 43,
+      "height": 23
+    },
+    {
+      "id": "n3",
+      "x": 61,
+      "y": 0,
+      "width": 28,
+      "height": 32
+    },
+    {
+      "id": "n4",
+      "x": 18,
+      "y": 76,
+      "width": 46,
+      "height": 11
+    },
+    {
+      "id": "n5",
+      "x": 2,
+      "y": 43,
+      "width": 48,
+      "height": 21
+    },
+    {
+      "id": "n6",
+      "x": 17,
+      "y": 34,
+      "width": 11,
+      "height": 17
+    },
+    {
+      "id": "n7",
+      "x": 35,
+      "y": 40,
+      "width": 19,
+      "height": 17
+    },
+    {
+      "id": "n8",
+      "x": 18,
+      "y": 37,
+      "width": 22,
+      "height": 11
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "id": "e1",
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n4"
+      ]
+    },
+    {
+      "id": "e2",
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n5"
+      ]
+    },
+    {
+      "id": "e3",
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n6"
+      ]
+    },
+    {
+      "id": "e4",
+      "sources": [
+        "n4"
+      ],
+      "targets": [
+        "n7"
+      ]
+    }
+  ]
+}

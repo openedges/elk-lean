@@ -1,0 +1,55 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "width": 40,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 40,
+      "x": 72,
+      "y": 19
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 40,
+      "x": 132,
+      "y": 26
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 40,
+      "x": 192,
+      "y": 33
+    },
+    {
+      "height": 30,
+      "id": "n4",
+      "width": 40,
+      "x": 252,
+      "y": 40
+    },
+    {
+      "height": 30,
+      "id": "n5",
+      "width": 40,
+      "x": 312,
+      "y": 47
+    }
+  ],
+  "height": 89,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeCompaction",
+    "org.eclipse.elk.compaction.orthogonal": true
+  },
+  "width": 364,
+  "x": 0,
+  "y": 0
+}

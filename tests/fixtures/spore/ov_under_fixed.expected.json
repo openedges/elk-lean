@@ -1,0 +1,55 @@
+{
+  "children": [
+    {
+      "height": 18,
+      "id": "n0",
+      "width": 29,
+      "x": 123.62337662337663,
+      "y": 102
+    },
+    {
+      "height": 33,
+      "id": "n1",
+      "width": 29,
+      "x": 12,
+      "y": 58.22222222222222
+    },
+    {
+      "height": 34,
+      "id": "n2",
+      "width": 21,
+      "x": 61,
+      "y": 73.97222222222223
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 32,
+      "x": 123,
+      "y": 12
+    },
+    {
+      "height": 18,
+      "id": "n4",
+      "width": 42,
+      "x": 61,
+      "y": 22.22222222222222
+    },
+    {
+      "height": 20,
+      "id": "n5",
+      "width": 44,
+      "x": 157.9090909090909,
+      "y": 62
+    }
+  ],
+  "height": 132,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.sporeOverlap",
+    "org.eclipse.elk.underlyingLayoutAlgorithm": "fixed"
+  },
+  "width": 213.9090909090909,
+  "x": 0,
+  "y": 0
+}
