@@ -61,6 +61,10 @@ structure HyperEdgeSegment where
   splitPartner : Option Nat := none
   /-- `split_by` (segment index). -/
   splitBy : Option Nat := none
+  /-- Port-only field (not in Java/Rust): set by `recomputeExtent` when no connection coordinate is
+  `NaN`, so the sorted lists lie within `[startPosition, endPosition]` (used to skip the conflict and
+  crossing counting of segments far apart, see `OrthogonalRoutingGenerator.createDependency`). -/
+  extentBoundsCoordinates : Bool := false
   deriving Inhabited
 
 namespace HyperEdgeSegment
@@ -133,11 +137,15 @@ first and last element of the sorted `positions` (`f64::min`/`f64::max`). -/
 def recomputeExtentList (start stop : Float) (positions : Array Float) : Float × Float :=
   (extentStart start positions, extentEnd stop positions)
 
-/-- `recomputeExtent()`: start/end coordinate from the incoming and outgoing coordinates. -/
+/-- `recomputeExtent()`: start/end coordinate from the incoming and outgoing coordinates (also sets
+`extentBoundsCoordinates`: without `NaN`s the sorted lists' first and last elements are their
+extremes). -/
 def recomputeExtent (s : HyperEdgeSegment) : HyperEdgeSegment :=
   let start := extentStart (extentStart Float.nan s.incomingConnectionCoordinates) s.outgoingConnectionCoordinates
   let stop := extentEnd (extentEnd Float.nan s.incomingConnectionCoordinates) s.outgoingConnectionCoordinates
-  { s with startPosition := start, endPosition := stop }
+  let bounded := s.incomingConnectionCoordinates.all (fun x => x == x) &&
+    s.outgoingConnectionCoordinates.all (fun x => x == x)
+  { s with startPosition := start, endPosition := stop, extentBoundsCoordinates := bounded }
 
 /-! ### In-place updaters
 

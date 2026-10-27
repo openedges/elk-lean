@@ -54,24 +54,42 @@ private structure State where
   /-- `next_source_mark`. -/
   nextSourceMark : Int
 
-/-- Sum of the weights of the dependencies `deps[k:]` (only critical ones when `criticalOnly`). -/
-private partial def sumWeights (g : SegmentGraph) (deps : Array Nat) (criticalOnly : Bool) (k : Nat) (acc : Int) : Int :=
+/-- Sums of the weights of all and of the critical dependencies among `deps[k:]` (one pass). -/
+private partial def sumWeights (g : SegmentGraph) (deps : Array Nat) (k : Nat) (total critical : Int) : Int × Int :=
   if h : k < deps.size then
     let d := deps[k]
-    sumWeights g deps criticalOnly (k + 1) (if !criticalOnly || g.depIsCritical d then acc + g.depWeight d else acc)
-  else acc
+    let weight := g.depWeight d
+    sumWeights g deps (k + 1) (total + weight) (if g.depIsCritical d then critical + weight else critical)
+  else (total, critical)
+
+/-- Per-segment weights of `initializeState`. -/
+private structure Weights where
+  inWeight : Array Int
+  criticalInWeight : Array Int
+  outWeight : Array Int
+  criticalOutWeight : Array Int
+
+/-- Appends the (critical) in/out weights of the segments `i, i + 1, …` (`in`/`out` = the critical
+weights when `criticalOnly`). -/
+private partial def collectWeights (g : SegmentGraph) (criticalOnly : Bool) (i : Nat) (w : Weights) : Weights :=
+  if h : i < g.segments.size then
+    let seg := g.segments[i]
+    let (inTotal, inCritical) := sumWeights g seg.incomingSegmentDependencies 0 0 0
+    let (outTotal, outCritical) := sumWeights g seg.outgoingSegmentDependencies 0 0 0
+    match w with
+    | ⟨inWeight, criticalInWeight, outWeight, criticalOutWeight⟩ =>
+      collectWeights g criticalOnly (i + 1)
+        ⟨inWeight.push (if criticalOnly then inCritical else inTotal), criticalInWeight.push inCritical,
+          outWeight.push (if criticalOnly then outCritical else outTotal), criticalOutWeight.push outCritical⟩
+  else w
 
 /-- `initialize(segments, sources, sinks, criticalOnly)`: marks `-1, -2, …`, (critical) in/out
 weights, and the initial sinks (no outgoing weight) and sources (else no incoming weight), both in
 segment order. -/
 private def initializeState (g : SegmentGraph) (criticalOnly : Bool) : State :=
   let n := g.segments.size
-  let criticalInWeight := g.segments.map fun seg => sumWeights g seg.incomingSegmentDependencies true 0 0
-  let criticalOutWeight := g.segments.map fun seg => sumWeights g seg.outgoingSegmentDependencies true 0 0
-  let inWeight := if criticalOnly then criticalInWeight
-    else g.segments.map fun seg => sumWeights g seg.incomingSegmentDependencies false 0 0
-  let outWeight := if criticalOnly then criticalOutWeight
-    else g.segments.map fun seg => sumWeights g seg.outgoingSegmentDependencies false 0 0
+  let ⟨inWeight, criticalInWeight, outWeight, criticalOutWeight⟩ := collectWeights g criticalOnly 0
+    ⟨Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n⟩
   let sinks := (Array.range n).filter fun i => outWeight[i]! == 0
   let sources := (Array.range n).filter fun i => outWeight[i]! != 0 && inWeight[i]! == 0
   { mark := (Array.range n).map fun (i : Nat) => -1 - (i : Int), inWeight, criticalInWeight, outWeight, criticalOutWeight,

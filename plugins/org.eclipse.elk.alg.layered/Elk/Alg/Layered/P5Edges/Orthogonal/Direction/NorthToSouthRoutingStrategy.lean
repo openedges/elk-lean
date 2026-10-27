@@ -20,32 +20,21 @@ open BaseRoutingDirectionStrategy
 def portPositionOnHyperNode (a : LGraphArena) (port : LPortId) : Float :=
   HyperEdgeSegment.portPositionOnHyperNode a .northToSouth port
 
-/-- The bend points of one edge leaving `segment` (Rust inner loop body of `calculate_bend_points`). -/
-private def routeEdge (g : SegmentGraph) (segment : HyperEdgeSegment) (edge : LEdgeId) (sourceX targetX segmentY startPos
-    edgeSpacing : Float) (created : Std.HashSet KVector) : LayeredM (Std.HashSet KVector) := do
-  let mut created := created
-  let mut currentY := segmentY
-  let mut currentSegment : Option HyperEdgeSegment := none
-  let bend : KVector := ⟨sourceX, currentY⟩
-  addBendPoint edge bend
-  created ← addJunctionPointIfNecessary created edge segment bend false
-  if let some partnerIdx := segment.splitPartner then
+/-- The bend and junction points of one edge leaving `segment` (Rust inner loop body of
+`calculate_bend_points`). -/
+private def routeEdge (g : SegmentGraph) (segment : HyperEdgeSegment) (sourceX targetX segmentY startPos
+    edgeSpacing : Float) (created : Std.HashSet KVector) : EdgeRoute :=
+  let r : EdgeRoute := { created }
+  let r := r.addPoint segment ⟨sourceX, segmentY⟩ false
+  match segment.splitPartner with
+  | some partnerIdx =>
     let splitPartner := g.segment partnerIdx
     let splitX := splitPartner.incomingConnectionCoordinates[0]?.getD sourceX
-    let bend : KVector := ⟨splitX, currentY⟩
-    addBendPoint edge bend
-    created ← addJunctionPointIfNecessary created edge segment bend false
-    currentY := startPos + splitPartner.routingSlot.toFloat * edgeSpacing
-    currentSegment := some splitPartner
-    let bend : KVector := ⟨splitX, currentY⟩
-    addBendPoint edge bend
-    created ← addJunctionPointIfNecessary created edge splitPartner bend false
-  let bend : KVector := ⟨targetX, currentY⟩
-  addBendPoint edge bend
-  match currentSegment with
-  | some splitPartner => created ← addJunctionPointIfNecessary created edge splitPartner bend false
-  | none => created ← addJunctionPointIfNecessary created edge segment bend false
-  return created
+    let r := r.addPoint segment ⟨splitX, segmentY⟩ false
+    let currentY := startPos + Float.ofInt splitPartner.routingSlot * edgeSpacing
+    let r := r.addPoint splitPartner ⟨splitX, currentY⟩ false
+    r.addPoint splitPartner ⟨targetX, currentY⟩ false
+  | none => r.addPoint segment ⟨targetX, segmentY⟩ false
 
 /-- `calculateBendPoints(segment, startPos, edgeSpacing)` (see `WestToEastRoutingStrategy`, with the
 coordinates swapped). -/
@@ -54,16 +43,16 @@ def calculateBendPoints (g : SegmentGraph) (segmentIdx : Nat) (startPos edgeSpac
   let segment := g.segment segmentIdx
   if segment.isDummy then return created
   let mut created := created
-  let segmentY := startPos + segment.routingSlot.toFloat * edgeSpacing
+  let segmentY := startPos + Float.ofInt segment.routingSlot * edgeSpacing
   for port in segment.ports do
-    let (sourceAnchor, outgoingEdges, portInArena) ← sourcePortData scope port
+    let (sourceAnchor, outgoingEdges, portInArena) ← LayeredM.withArena (sourcePortData · scope port)
     let sourceX := sourceAnchor.x
     for edge in outgoingEdges do
-      let (isSelfLoop, targetAnchor) ← edgeTargetData portInArena port edge
+      let (isSelfLoop, targetAnchor) ← LayeredM.withArena (edgeTargetData · portInArena port edge)
       if isSelfLoop then continue
       let targetX := targetAnchor.x
       if (sourceX - targetX).abs > OrthogonalRoutingGenerator.TOLERANCE then
-        created ← routeEdge g segment edge sourceX targetX segmentY startPos edgeSpacing created
+        created ← applyRoute edge (routeEdge g segment sourceX targetX segmentY startPos edgeSpacing created)
   return created
 
 /-- The strategy (`new NorthToSouthRoutingStrategy()`). -/

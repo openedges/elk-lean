@@ -155,11 +155,25 @@ private def addRegularDependency (g : SegmentGraph) (i1 i2 : Nat) (depValue1 dep
     (g.addDependency false i1 i2 0).addDependency false i2 i1 0
   else g
 
+/-- Whether a segment ending at `endLeft` lies so far left of a segment starting at `startRight` that
+no pair of their connection coordinates `p ≤ endLeft < startRight ≤ q` passes the conflict tests of
+`countConflicts` for either threshold `t`: `p > q - t` and `q < p + t` are false for all such pairs
+once they are false for `p = endLeft`, `q = startRight` (rounded subtraction and addition are
+monotone; a `NaN` result makes a test false). The crossing counts of the two segments are `0` as
+well, so `createDependencyIfNecessary` adds nothing. Only valid when both segments'
+`extentBoundsCoordinates` hold. -/
+@[inline] private def separated (endLeft startRight critical threshold : Float) : Bool :=
+  endLeft < startRight &&
+    !(endLeft > startRight - critical) && !(startRight < endLeft + critical) &&
+    !(endLeft > startRight - threshold) && !(startRight < endLeft + threshold)
+
 /-- `createDependencyIfNecessary(he1, he2)` on segments `i1`, `i2`, without the critical dependency
 count: critical dependencies for critical conflicts, otherwise a regular dependency weighted by the
 difference of the two orderings' conflict and crossing penalties (two zero-weight dependencies on a
-tie with positive values). Degenerate segments (extent below `TOLERANCE`) get none. The segments are
-only read before the first dependency is added; the counts are unboxed `UInt64` values. -/
+tie with positive values). Degenerate segments (extent below `TOLERANCE`) get none, nor do segments
+`separated` from each other (whose conflicts and crossings are all `0`, so the counting is skipped).
+The segments are only read before the first dependency is added; the counts are unboxed `UInt64`
+values. -/
 def createDependency (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (i1 i2 : Nat) : SegmentGraph :=
   let he1 := g.segment i1
   let he2 := g.segment i2
@@ -168,6 +182,9 @@ def createDependency (gen : OrthogonalRoutingGenerator) (g : SegmentGraph) (i1 i
   let start2 := he2.startPosition
   let end2 := he2.endPosition
   if (start1 - end1).abs < TOLERANCE || (start2 - end2).abs < TOLERANCE then g
+  else if he1.extentBoundsCoordinates && he2.extentBoundsCoordinates &&
+      (separated end1 start2 gen.criticalConflictThreshold gen.conflictThreshold ||
+        separated end2 start1 gen.criticalConflictThreshold gen.conflictThreshold) then g
   else
     let critical := gen.criticalConflictThreshold
     let threshold := gen.conflictThreshold

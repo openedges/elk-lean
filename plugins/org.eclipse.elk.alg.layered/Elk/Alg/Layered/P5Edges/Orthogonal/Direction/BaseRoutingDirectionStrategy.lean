@@ -1,4 +1,5 @@
 import Std.Data.HashSet
+import Elk.Core.Util.FastFloat
 import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.P5Edges.Orthogonal.HyperEdgeSegmentDependency
@@ -86,56 +87,80 @@ structure BaseRoutingDirectionStrategy where
 
 namespace BaseRoutingDirectionStrategy
 
-/-- `addJunctionPointIfNecessary(edge, segment, pos, vertical)` (Rust `add_junction_point_with_guard`):
-adds `pos` to the edge's `JUNCTION_POINTS` if it lies strictly inside the segment's extent or on a
-boundary shared by an incoming and an outgoing connection, unless it was already created. -/
-def addJunctionPointIfNecessary (created : Std.HashSet KVector) (edge : LEdgeId) (segment : HyperEdgeSegment)
-    (pos : KVector) (vertical : Bool) : LayeredM (Std.HashSet KVector) := do
-  let p := if vertical then pos.y else pos.x
-  if created.contains pos then return created
-  let pointInsideEdgeSegment := p > segment.startPosition && p < segment.endPosition
-  let mut pointAtSegmentBoundary := false
-  let incoming := segment.incomingConnectionCoordinates
-  let outgoing := segment.outgoingConnectionCoordinates
-  if !incoming.isEmpty && !outgoing.isEmpty then
+/-- The test of `addJunctionPointIfNecessary(edge, segment, pos, vertical)` (Rust
+`add_junction_point_with_guard`): `pos` becomes a junction point if it was not created yet and lies
+strictly inside the segment's extent or on a boundary shared by an incoming and an outgoing
+connection. -/
+def isJunctionPoint (created : Std.HashSet KVector) (segment : HyperEdgeSegment) (pos : KVector) (vertical : Bool) :
+    Bool :=
+  if created.contains pos then false
+  else
+    let p := if vertical then pos.y else pos.x
+    let pointInsideEdgeSegment := p > segment.startPosition && p < segment.endPosition
+    let incoming := segment.incomingConnectionCoordinates
+    let outgoing := segment.outgoingConnectionCoordinates
     let tol := OrthogonalRoutingGenerator.TOLERANCE
-    pointAtSegmentBoundary := pointAtSegmentBoundary ||
-      ((p - incoming[0]!).abs < tol && (p - outgoing[0]!).abs < tol)
-    pointAtSegmentBoundary := pointAtSegmentBoundary ||
-      ((p - incoming.back!).abs < tol && (p - outgoing.back!).abs < tol)
-  if pointInsideEdgeSegment || pointAtSegmentBoundary then
-    modifyEdge edge fun ed =>
-      let junctionPoints := ed.props.getD LayeredOptions.JUNCTION_POINTS #[]
-      { ed with props := ed.props.set LayeredOptions.JUNCTION_POINTS (junctionPoints.push pos) }
-    return created.insert pos
-  return created
+    let pointAtSegmentBoundary := !incoming.isEmpty && !outgoing.isEmpty &&
+      (((p - incoming[0]!).abs < tol && (p - outgoing[0]!).abs < tol) ||
+        ((p - incoming.back!).abs < tol && (p - outgoing.back!).abs < tol))
+    pointInsideEdgeSegment || pointAtSegmentBoundary
 
-/-- Appends a bend point to an edge (`edge.getBendPoints().add(bend)`). -/
-def addBendPoint (edge : LEdgeId) (bend : KVector) : LayeredM Unit :=
-  modifyEdge edge fun ed => { ed with bendPoints := ed.bendPoints.push bend }
+/-- The bend points and junction points one edge receives from `calculateBendPoints`, and the created
+junction points so far. Rust adds them to the edge one by one; neither is read back while routing,
+so they are written in one update (`applyRoute`). -/
+structure EdgeRoute where
+  /-- Bend points in order (`edge.getBendPoints().add(bend)`). -/
+  bends : Array KVector := #[]
+  /-- Junction points in order (`JUNCTION_POINTS` additions). -/
+  junctions : Array KVector := #[]
+  /-- `created_junction_points`. -/
+  created : Std.HashSet KVector
+
+/-- `edge.getBendPoints().add(pos)` followed by `addJunctionPointIfNecessary(edge, segment, pos,
+vertical)`. -/
+@[inline] def EdgeRoute.addPoint (r : EdgeRoute) (segment : HyperEdgeSegment) (pos : KVector) (vertical : Bool) :
+    EdgeRoute :=
+  match r with
+  | ⟨bends, junctions, created⟩ =>
+    if isJunctionPoint created segment pos vertical then ⟨bends.push pos, junctions.push pos, created.insert pos⟩
+    else ⟨bends.push pos, junctions, created⟩
+
+/-- Appends the collected points to the edge (bend points; junction points to `JUNCTION_POINTS`, which
+is only touched when there are some). Not inlined, so the edge is updated in place. -/
+@[noinline] def appendRoute (bends junctions : Array KVector) (ed : LEdge) : LEdge :=
+  let ed := { ed with bendPoints := ed.bendPoints ++ bends }
+  if junctions.isEmpty then ed
+  else
+    let junctionPoints := ed.props.getD LayeredOptions.JUNCTION_POINTS #[]
+    { ed with props := ed.props.set LayeredOptions.JUNCTION_POINTS (junctionPoints ++ junctions) }
+
+/-- Writes an edge's route; returns the created junction points. -/
+@[inline] def applyRoute (edge : LEdgeId) (r : EdgeRoute) : LayeredM (Std.HashSet KVector) := do
+  match r with
+  | ⟨bends, junctions, created⟩ =>
+    modifyEdge edge (appendRoute bends junctions)
+    return created
 
 /-- The source port data the Rust strategies read: from the arena when `sync.port_id(port)` exists
 (absolute anchor, `port_outgoing_edges`), else from the live port (anchor or `(0, 0)`, all outgoing
 edges). Also returns whether the port is in the arena. -/
-def sourcePortData (scope : ArenaScope) (port : LPortId) : LayeredM (KVector × Array LEdgeId × Bool) := do
-  let a ← get
+def sourcePortData (a : LGraphArena) (scope : ArenaScope) (port : LPortId) : KVector × Array LEdgeId × Bool :=
   if scope.containsPort a port then
-    return ((a.portAbsoluteAnchor port).getD {}, scope.portOutgoingEdges a port, true)
+    ((a.portAbsoluteAnchor port).getD {}, scope.portOutgoingEdges a port, true)
   else
-    return ((a.portAbsoluteAnchor port).getD {}, (a.port port).outgoingEdges, false)
+    ((a.portAbsoluteAnchor port).getD {}, (a.port port).outgoingEdges, false)
 
 /-- The edge data the Rust strategies read: `(is self loop, target anchor)`. Edges of an arena port are
 arena edges, whose self-loop test is `source port == target port`; other edges use
 `LEdge.isSelfLoop()` (same node) and the live target anchor (or `(0, 0)`). -/
-def edgeTargetData (portInArena : Bool) (port : LPortId) (edge : LEdgeId) : LayeredM (Bool × KVector) := do
-  let a ← get
+def edgeTargetData (a : LGraphArena) (portInArena : Bool) (port : LPortId) (edge : LEdgeId) : Bool × KVector :=
   let target := (a.edge edge).target
   if portInArena then
-    if target == some port then return (true, {})
-    return (false, (target.bind a.portAbsoluteAnchor).getD {})
+    if target == some port then (true, {})
+    else (false, (target.bind a.portAbsoluteAnchor).getD {})
   else
-    if a.edgeIsSelfLoop edge then return (true, {})
-    return (false, (target.bind a.portAbsoluteAnchor).getD {})
+    if a.edgeIsSelfLoop edge then (true, {})
+    else (false, (target.bind a.portAbsoluteAnchor).getD {})
 
 end BaseRoutingDirectionStrategy
 
