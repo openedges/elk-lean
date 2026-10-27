@@ -136,6 +136,9 @@ structure LNodeInternals where
 
 /-- Internal properties set on `LPort`s. -/
 structure LPortInternals where
+  /-- `SPLINE_NS_PORT_Y_COORD` (`splines.nsPortY`): y coordinate of a north/south port's original port,
+  set by `NorthSouthPortPostprocessor` for the spline router. -/
+  splineNsPortYCoord : Option Float := none
   /-- `ORIGIN`. -/
   origin : Option Origin := none
   /-- `INSIDE_CONNECTIONS` (`insideConnections`, `false`). -/
@@ -178,8 +181,6 @@ structure LEdgeInternals where
   splineSurvivingEdge : Option LEdgeId := none
   /-- `SPLINE_EDGE_CHAIN` (`splines.edgeChain`; Java `null` = empty). -/
   splineEdgeChain : Array LEdgeId := #[]
-  /-- `SPLINE_NS_PORT_Y_COORD` (`splines.nsPortY`). -/
-  splineNsPortYCoord : Option Float := none
   /-- `IS_PART_OF_CYCLE` (`partOfCycle`, `false`) as reset on edges by `Tarjan.resetTarjan`. -/
   isPartOfCycle : Bool := false
   deriving Inhabited

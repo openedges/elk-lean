@@ -490,7 +490,7 @@ def nsPostTests : Suite := suite "layered.intermediate.NorthSouthPortPostprocess
   checkEq "splines: edge reconnected without bend points" ((a3.edge edges3[0]!).target, (a3.edge edges3[0]!).bendPoints)
     (some ports3[0]!, #[])
   checkEq "splines: SPLINE_NS_PORT_Y_COORD on the origin port"
-    ((a3.port ports3[0]!).props.get NorthSouthPortPostprocessor.SPLINE_NS_PORT_Y_COORD) (some 10.0)
+    ((a3.port ports3[0]!).internal.splineNsPortYCoord) (some 10.0)
 
 /-! ## InvertedPortProcessor -/
 

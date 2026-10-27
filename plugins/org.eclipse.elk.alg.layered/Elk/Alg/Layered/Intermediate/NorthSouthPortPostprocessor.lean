@@ -22,16 +22,10 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Math Elk.Core.Option
 
 namespace NorthSouthPortPostprocessor
 
-/-- Stand-in for `InternalProperties.SPLINE_NS_PORT_Y_COORD` (Java id `splines.nsPortY`) on
-ports. TODO(I6): `LPortInternals` has no `splineNsPortYCoord` field yet (the existing field is on
-`LEdgeInternals`, but Java/Rust set and read it on ports: `SplineSegment`,
-`FinalSplineBendpointsCalculator`); once the field exists, `setSplineNsPortYCoord` must write
-`internal.splineNsPortYCoord` instead and this property can be removed. -/
-def SPLINE_NS_PORT_Y_COORD : Property Float := Property.mk' "splines.nsPortY"
-
-/-- `origin_guard.set_property(SPLINE_NS_PORT_Y_COORD, Some(y))` on the origin port. -/
+/-- `origin_guard.set_property(SPLINE_NS_PORT_Y_COORD, Some(y))` on the origin port
+(`LPortInternals.splineNsPortYCoord`). -/
 def setSplineNsPortYCoord (port : LPortId) (y : Float) : LayeredM Unit :=
-  setPortProp port SPLINE_NS_PORT_Y_COORD y
+  modifyPort port fun p => { p with internal := { p.internal with splineNsPortYCoord := some y } }
 
 /-- `ports_same_origin(ports)`: at least two ports, all with the same `LPort` origin. -/
 def portsSameOrigin (ports : Array LPortId) : LayeredM Bool := do
