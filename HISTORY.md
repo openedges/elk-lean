@@ -45,9 +45,14 @@
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
 | 규약 모듈 + 테스트 프레임워크 + `PORTING.md` | `graph/*`, `core/util/mod.rs`, `core/math/{kvector,kvector_chain,spacing,elk_padding,elk_margin,elk_rectangle}.rs` | fable(주) | max | 주 에이전트 | 완료(126 테스트) |
-| A. Options 열거형 전부 + `CoreOptions` 상수 + `TopdownSizeApproximator` | `core/options/*.rs` (`core_options_meta.rs` 제외, ≈1.3K줄) | sonnet | high | 서브에이전트 A(worktree) | 진행 중 |
-| B. Math 나머지 + 테스트 | `core/math/{elk_math,bezier_spline,cubic_spline_interpolator,ispline_interpolator}.rs`, `core/tests/all/{elk_math,bezier_spline,cubic_spline_interpolator,kvector,kvector_chain}_test.rs` (≈1.4K+1K줄) | sonnet | medium | 서브에이전트 B(worktree) | 진행 중 |
-| C. Util 보조 + graph/property 테스트 이식 | `core/util/{progress_monitor,elk_trace,exclusive_bounds,abstract_random_list_accessor}.rs`, `graph/util/graph_identifier_generator.rs`, `graph/tests/*`, `core/tests/all/{basic_progress_monitor,property,util_misc}_test.rs` (≈1.2K+1K줄) | sonnet | medium | 서브에이전트 C(worktree) | 진행 중 |
-| D. `Elk.Core.Data` 레지스트리·resolver·deprecated replacer | `core/data/*.rs` (≈1.9K줄) | fable(주) | high | 주 에이전트 | 진행 중 |
+| A. Options 열거형 전부 + `CoreOptions` 상수 + `TopdownSizeApproximator` | `core/options/*.rs` (`core_options_meta.rs` 제외, ≈1.3K줄) | sonnet | high | 서브에이전트 A(worktree) | 완료: 열거형 20개(생성자 수 Java 일치), `CoreOptions` 94개 상수, 테스트 ≈120, 경고 0. 편차: `SizeConstraint.minimumSizeSet`/`PortLabelPlacement.insideSet·outsideSet`(이름 충돌), `PortAlignment.«end»`, `TopdownSizeApproximator.getSize`의 lookahead/layoutNextLevel은 엔진 필요로 TODO |
+| B. Math 나머지 + 테스트 | `core/math/{elk_math,bezier_spline,cubic_spline_interpolator,ispline_interpolator}.rs`, `core/tests/all/{elk_math,bezier_spline,cubic_spline_interpolator,kvector,kvector_chain}_test.rs` (≈1.4K+1K줄) | sonnet | medium | 서브에이전트 B(worktree) | 완료: 테스트 ≈200 추가, 경고 0. 편차: 팩토리얼/이항은 `Except`, `findRoots`/`bezier`는 값 반환, `maxl/minl` i32 초기값 등 Rust 특이점 유지 |
+| C. Util 보조 + graph/property 테스트 이식 | `core/util/{progress_monitor,elk_trace,exclusive_bounds,abstract_random_list_accessor}.rs`, `graph/util/graph_identifier_generator.rs`, `graph/tests/*`, `core/tests/all/{basic_progress_monitor,property,util_misc}_test.rs` (≈1.2K+1K줄) | sonnet | medium | 서브에이전트 C(worktree) | 완료: 테스트 ≈90 추가, 경고 0. 편차: `ProgressMonitor.basic` 기본 maxHierarchyLevels=-1(Java/Rust 기본), 작업량 전파는 Java 방식(Rust는 전파 안 함), `subMonitors`는 항상 빈 배열, `GraphIdentifierGenerator` 접미사는 고정 seed LCG(Rust는 시계). 미이식: `util_misc_test`(DefaultFactory/Maybe/Triple/WrappedException 미존재) |
+| D. `Elk.Core.Data` 레지스트리 | `core/data/{mod,layout_option_data,layout_algorithm_data,layout_category_data,i_layout_meta_data*}.rs` | fable(주) | high | 주 에이전트 | 완료: `LayoutOptionData`/`LayoutAlgorithmData`/`LayoutCategoryData`/`Registry`/`LayoutMetaDataService`(전역 `IO.Ref`, 지연 초기화 훅, 등록 순서 보존, suffix 캐시). resolver/replacer는 F로 이관 |
 | E. `CoreOptionsMeta` 등록 | `core/options/core_options_meta.rs` (1,966줄) | sonnet | high | D 완료 후 | 대기 |
 | F. `ElkUtil`/`ElkSpacings`/adapters/validation/labels/`IndividualSpacings` | `core/util/{elk_util,elk_spacings,adapters/*}.rs`, `core/validation/*`, `core/labels/*` (≈3.5K줄) | opus | high | A·D 완료 후 | 대기 |
+
+### Phase 1 (2차) — 병합 결과
+- A/B/C worktree 병합(`939786e`, `e5d62fa`, `3748155`) 후 전체 `lake build` 경고 0. `lake test` 통합 결과는 아래 커밋 메시지의 수치 참조.
+- 서브에이전트 공통 지적: `lake build ElkTests`가 실패(테스트 lib 루트 `tests/lean/Tests.lean` 부재) → 루트 파일 추가로 해결. 브리프의 빌드 명령도 `lake build && lake test`로 통일.
+- 주 에이전트 추가 작업: `Elk.Json.{Value,Printer,Parser}`(삽입 순서 보존, 정수/실수 구분, serde_json 호환 compact/pretty, elk-rs 호환 lenient 모드) + 테스트.

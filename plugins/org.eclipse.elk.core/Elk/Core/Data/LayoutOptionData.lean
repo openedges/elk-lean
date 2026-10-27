@@ -1,0 +1,139 @@
+import Elk.Graph
+/-!
+# `org.eclipse.elk.core.data.LayoutOptionData`
+
+Metadata of one layout option: id, type, targets, default value, bounds,
+enum choices and the parser used for string values (JSON, `.elkt`,
+`IndividualSpacings`). Values are `PropValue`s; parsers for enum, enum set
+and object options are closures created by the metadata providers.
+-/
+namespace Elk.Core.Data
+
+open Elk Elk.Graph Elk.Core.Util Elk.Core.Math
+
+/-- `LayoutOptionData.Type`. -/
+elk_enum LayoutOptionType := undefined boolean int string double enum (enumSet "ENUMSET") object
+
+/-- `LayoutOptionData.Target`. -/
+elk_enum LayoutOptionTarget := parents nodes edges ports labels
+
+/-- `LayoutOptionData.Visibility`. -/
+elk_enum LayoutOptionVisibility := visible advanced hidden
+
+/-- `LayoutOptionData.Dependency`: the option only applies if `optionId` has
+`requiredValue` (or any value when `none`). -/
+structure LayoutOptionDependency where
+  optionId : String
+  requiredValue : Option PropValue := none
+
+/-- Parser for the string form of an option value. -/
+abbrev OptionParser := String → Option PropValue
+
+structure LayoutOptionData where
+  id : String
+  group : String := ""
+  legacyIds : Array String := #[]
+  defaultValue : Option PropValue := none
+  type : LayoutOptionType := .undefined
+  name : String := ""
+  description : String := ""
+  targets : EnumSet LayoutOptionTarget := EnumSet.empty
+  dependencies : Array LayoutOptionDependency := #[]
+  visibility : LayoutOptionVisibility := .visible
+  lowerBound : Option PropValue := none
+  upperBound : Option PropValue := none
+  /-- Enum constant names (ENUM / ENUMSET), in ordinal order. -/
+  choices : Array String := #[]
+  /-- Parser for ENUM / ENUMSET / OBJECT values. -/
+  parser : Option OptionParser := none
+
+namespace LayoutOptionData
+
+instance : BEq LayoutOptionData := ⟨fun a b => a.id == b.id⟩
+instance : Hashable LayoutOptionData := ⟨fun a => hash a.id⟩
+instance : ToString LayoutOptionData := ⟨fun a => a.id⟩
+instance : Inhabited LayoutOptionData := ⟨{ id := "" }⟩
+
+/-- `canParseValue`. -/
+def canParseValue (d : LayoutOptionData) : Bool :=
+  match d.type with
+  | .undefined => false
+  | .enum | .enumSet | .object => d.parser.isSome
+  | _ => true
+
+/-- `parseValue(String)`: elk-rs semantics (`"null"` and empty strings yield
+`none`, except that an empty ENUMSET parses to the empty set via the parser). -/
+def parseValue (d : LayoutOptionData) (valueString : String) : Option PropValue :=
+  if valueString == "null" then none
+  else if valueString.isEmpty && d.type != .enumSet then none
+  else
+    match d.type with
+    | .boolean => (PropValue.parseBool? valueString).map PropValue.bool
+    | .int => (parseInt32? valueString).map PropValue.int
+    | .double => (parseFloat? valueString).map PropValue.double
+    | .string => some (PropValue.string valueString)
+    | .enum | .enumSet | .object => d.parser.bind fun p => p valueString
+    | .undefined => none
+
+/-- `getDefaultDefault()`: the type's natural default. -/
+def defaultDefaultValue (d : LayoutOptionData) : Option PropValue :=
+  match d.type with
+  | .string => some (.string "")
+  | .boolean => some (.bool false)
+  | .int => some (.int 0)
+  | .double => some (.double 0.0)
+  | _ => none
+
+/-- `getChoices()`: `["false", "true"]` for booleans, the constant names for enums. -/
+def getChoices (d : LayoutOptionData) : Array String :=
+  match d.type with
+  | .boolean => #["false", "true"]
+  | .enum | .enumSet => d.choices
+  | _ => #[]
+
+def enumValueCount (d : LayoutOptionData) : Nat :=
+  match d.type with
+  | .enum | .enumSet => d.choices.size
+  | _ => 0
+
+def enumValueName (d : LayoutOptionData) (index : Nat) : Option String := d.choices[index]?
+
+/-! ### Builder helpers used by the metadata providers -/
+
+/-- Enum constant names of an `ElkEnum`, in ordinal order. -/
+def enumChoices (α : Type) [ElkEnum α] : Array String := (ElkEnum.values : Array α).map ElkEnum.javaName
+
+/-- Parser for an ENUM option (elk-rs `parse_enum_value` semantics). -/
+def enumParser (α : Type) [ElkEnum α] : OptionParser :=
+  fun s => (ElkEnum.ofNameLoose? s : Option α).map PropCodec.enc
+
+/-- Parser for an ENUMSET option (elk-rs `parse_enumset_value` semantics). -/
+def enumSetParser (α : Type) [ElkEnum α] : OptionParser :=
+  fun s => (EnumSet.parse? s : Option (EnumSet α)).map PropCodec.enc
+
+/-- Parser for `KVector` object options. -/
+def kvectorParser : OptionParser := fun s => (KVector.parse s).toOption.map PropValue.vector
+
+/-- Parser for `KVectorChain` object options. -/
+def kvectorChainParser : OptionParser := fun s => (KVectorChain.parse s).toOption.map PropValue.vectorChain
+
+/-- Parser for `ElkPadding` object options. -/
+def paddingParser : OptionParser := fun s =>
+  (parseSpacingValue? s).map fun (t, r, b, l) => PropValue.padding ⟨t, r, b, l⟩
+
+/-- Parser for `ElkMargin` object options. -/
+def marginsParser : OptionParser := fun s =>
+  (parseSpacingValue? s).map fun (t, r, b, l) => PropValue.margins ⟨t, r, b, l⟩
+
+/-- Convenience constructor mirroring elk-rs `LayoutOptionDataBuilder`. -/
+def mk' (id : String) (type : LayoutOptionType) (name description : String)
+    (targets : Array LayoutOptionTarget) (defaultValue : Option PropValue := none)
+    (group : String := "") (visibility : LayoutOptionVisibility := .visible)
+    (lowerBound upperBound : Option PropValue := none) (legacyIds : Array String := #[])
+    (choices : Array String := #[]) (parser : Option OptionParser := none) : LayoutOptionData :=
+  { id, group, legacyIds, defaultValue, type, name, description,
+    targets := EnumSet.of targets, visibility, lowerBound, upperBound, choices, parser }
+
+end LayoutOptionData
+
+end Elk.Core.Data
