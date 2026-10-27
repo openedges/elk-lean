@@ -172,6 +172,13 @@ namespace BarycenterData
 @[inline] def barycenter? (d : BarycenterData) (li ni : Nat) : Option Float :=
   (d.state? li ni).bind (·.barycenter)
 
+/-- Whether state `(li, ni)` exists and has a barycenter (`barycenter?` is `some`), without an
+`Option`. -/
+@[inline] def hasBarycenterAt (d : BarycenterData) (li ni : Nat) : Bool := BarycenterState.knownIn d.states li ni
+
+/-- The barycenter of state `(li, ni)` when `hasBarycenterAt` (else unspecified). -/
+@[inline] def barycenterValueAt (d : BarycenterData) (li ni : Nat) : Float := BarycenterState.valueIn d.states li ni
+
 /-- Adds the degree and summed weight of state `(fromLi, fromNi)` (or `(0, 0.0)`) to `(li, ni)`. -/
 def addFrom (d : BarycenterData) (li ni fromLi fromNi : Nat) : BarycenterData :=
   let (degree, weight) := match d.state? fromLi fromNi with
@@ -181,7 +188,7 @@ def addFrom (d : BarycenterData) (li ni fromLi fromNi : Nat) : BarycenterData :=
 
 /-- Sets barycenter, summed weight (both `value`) and degree `1`. -/
 @[inline] def assign (d : BarycenterData) (li ni : Nat) (value : Float) : BarycenterData :=
-  d.modifyState li ni fun st => { st with barycenter := some value, summedWeight := value, degree := 1 }
+  d.modifyState li ni fun st => { st with barycenterValue := value, hasBarycenter := true, summedWeight := value, degree := 1 }
 
 /-- `random.next_float()` with `random_trace::trace_next_float`. -/
 def drawFloat (d : BarycenterData) (traceOn : Bool) (location : Unit → String) : Float × BarycenterData :=
@@ -213,7 +220,7 @@ def finishBarycenter (c : BarycenterContext) (li ni : Nat) (nodeName : String) (
         let perturbation := Float.toF32 (Float.toF32 (Float.toF32 raw * ra) - Float.toF32 (ra / floatTwo))
         d.modifyState li ni fun st =>
           let summedWeight := st.summedWeight + perturbation
-          { st with summedWeight, barycenter := some (summedWeight / Float.ofInt st.degree) }
+          { st with summedWeight, barycenterValue := summedWeight / Float.ofInt st.degree, hasBarycenter := true }
       match d with
       | ⟨states, random, traces⟩ =>
         if random.mockDoubleSequence.isNone && !c.randomTrace then
@@ -233,7 +240,7 @@ def finishBarycenter (c : BarycenterContext) (li ni : Nat) (nodeName : String) (
   match d.state? li ni with
   | some st =>
     if st.visited then none
-    else some (d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := floatZero, barycenter := none })
+    else some (d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := floatZero, hasBarycenter := false })
   | none => some d
 
 /-- Whether state `(li, ni)` exists and was already visited (`startVisit` returns `none`). -/
@@ -244,7 +251,7 @@ def finishBarycenter (c : BarycenterContext) (li ni : Nat) (nodeName : String) (
 
 /-- `startVisit` of a state known not to be visited. -/
 @[inline] def resetVisit (d : BarycenterData) (li ni : Nat) : BarycenterData :=
-  d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := floatZero, barycenter := none }
+  d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := floatZero, hasBarycenter := false }
 
 /-- The far ends of a captured port in the sweep direction. -/
 @[inline] def farEnds (c : BarycenterContext) (s : CrossMinSnapshot) (pid : Nat) : Array Nat :=
@@ -267,10 +274,20 @@ partial def anyPortEndInLayer (c : BarycenterContext) (s : CrossMinSnapshot) (li
 partial def addEndRanks (c : BarycenterContext) (ends : Array Nat) (k : Nat) (acc : Float) : Float :=
   if h : k < ends.size then addEndRanks c ends (k + 1) (acc + c.portRanks.get! ends[k]) else acc
 
-/-- `acc + rank` over the far ends of the captured ports `pids[i:]` (in order). -/
+/-- `acc + rank` over the far ends `ends[k:hi]` (in order). -/
+partial def addEndRanksRange (ranks : FloatArray) (ends : Array Nat) (k hi : Nat) (acc : Float) : Float :=
+  if h : k < hi ∧ k < ends.size then addEndRanksRange ranks ends (k + 1) hi (acc + ranks.get! ends[k]) else acc
+
+/-- `acc + rank` over the far ends of the captured ports `pids[i:]` (in order; the far ends in the
+sweep direction are the predecessor or successor range of the snapshot's `endIds`). -/
 partial def addPortEndRanks (c : BarycenterContext) (s : CrossMinSnapshot) (pids : Array Nat) (i : Nat) (acc : Float) :
     Float :=
-  if h : i < pids.size then addPortEndRanks c s pids (i + 1) (addEndRanks c (farEnds c s pids[i]) 0 acc) else acc
+  if h : i < pids.size then
+    let pid := pids[i]
+    let lo := if c.forward then s.endLo pid else s.endSplit pid
+    let hi := if c.forward then s.endSplit pid else s.endHi pid
+    addPortEndRanks c s pids (i + 1) (addEndRanksRange c.portRanks s.endIds lo hi acc)
+  else acc
 
 /-- The number of far ends of the captured ports `pids[i:]`. -/
 partial def countPortEnds (c : BarycenterContext) (s : CrossMinSnapshot) (pids : Array Nat) (i acc : Nat) : Nat :=
@@ -296,12 +313,13 @@ partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat)
         let sum := addPortEndRanks c s pids 0 floatZero
         let degree : Int := (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
         d.modifyState li ni fun st =>
-          { st with visited := true, degree := 0 + degree, summedWeight := sum, barycenter := none }
-    let node? := c.nodeOfFlat? flat
-    let d := match node? with
-      | some node => calcSnapAssociates c s li ni (c.arena.node node).internal.barycenterAssociates 0 d
-      | none => d
-    let nodeName := if c.crossminTrace then (node?.map c.nodeLabel).getD "<unknown>" else ""
+          { st with visited := true, degree := 0 + degree, summedWeight := sum, hasBarycenter := false }
+    -- the associates (read only for a node that has any, `nodeEndFlags` bit `2`)
+    let d := if s.nodeEndFlag flat &&& 4 == 0 then d
+      else match c.nodeOfFlat? flat with
+        | some node => calcSnapAssociates c s li ni (c.arena.node node).internal.barycenterAssociates 0 d
+        | none => d
+    let nodeName := if c.crossminTrace then ((c.nodeOfFlat? flat).map c.nodeLabel).getD "<unknown>" else ""
     finishBarycenter c li ni nodeName d
 
 /-- The port loop of `calcSnap` over the captured ports `pids[i:]` of node `flat`. -/
@@ -416,9 +434,9 @@ partial def nextKnownBarycenter (c : BarycenterContext) (d : BarycenterData) (no
     (dflt : Float) : Float :=
   if h : j < nodes.size then
     let n := nodes[j]
-    match d.barycenter? (c.layerIndexOf n) (c.nodeIdOf n) with
-    | some b => b
-    | none => nextKnownBarycenter c d nodes (j + 1) dflt
+    let li := c.layerIndexOf n
+    let ni := c.nodeIdOf n
+    if d.hasBarycenterAt li ni then d.barycenterValueAt li ni else nextKnownBarycenter c d nodes (j + 1) dflt
   else dflt
 
 /-- The pre-ordered branch of `fill_in_unknown_barycenters` from `nodes[index]` on (`lastValue`: the
@@ -429,9 +447,8 @@ partial def fillPreOrdered (c : BarycenterContext) (nodes : Array LNodeId) (inde
     let node := nodes[index]
     let li := c.layerIndexOf node
     let ni := c.nodeIdOf node
-    match d.barycenter? li ni with
-    | some v => fillPreOrdered c nodes (index + 1) v d
-    | none =>
+    if d.hasBarycenterAt li ni then fillPreOrdered c nodes (index + 1) (d.barycenterValueAt li ni) d
+    else
       let nextValue := nextKnownBarycenter c d nodes (index + 1) (lastValue + floatOne)
       let computed := (lastValue + nextValue) / floatTwo
       fillPreOrdered c nodes (index + 1) computed (d.assign li ni computed)
@@ -497,9 +514,12 @@ def compareBarycenters : Option Float → Option Float → Ordering
 partial def barycenterKeys (c : BarycenterContext) (states : Array (Array (Option BarycenterState))) (layer : Array LNodeId)
     (i : Nat) (values : FloatArray) (known : ByteArray) : FloatArray × ByteArray :=
   if h : i < layer.size then
-    match barycenterIn c states layer[i] with
-    | some b => barycenterKeys c states layer (i + 1) (values.push b) (known.push 1)
-    | none => barycenterKeys c states layer (i + 1) (values.push floatZero) (known.push 0)
+    let n := layer[i]
+    let li := c.layerIndexOf n
+    let ni := c.nodeIdOf n
+    if BarycenterState.knownIn states li ni then
+      barycenterKeys c states layer (i + 1) (values.push (BarycenterState.valueIn states li ni)) (known.push 1)
+    else barycenterKeys c states layer (i + 1) (values.push floatZero) (known.push 0)
   else (values, known)
 
 /-- `compareBarycenters (key i) (key j) == .gt` of the comparator below (known before unknown,
@@ -669,6 +689,8 @@ def initializable (h : BarycenterHeuristic) : Initializable where
   initAtLayerLevel := h.initAtLayerLevel
   initAtNodeLevel := h.constraintResolver.initAtNodeLevel
   initAfterTraversal := do h.portRanks.set (← h.portDistributor.portRanksF)
+  usesPortLevel := false
+  usesEdgeLevel := false
 
 /-- The `ICrossingMinimizationHeuristic` view; `random` is the caller's generator used by
 `setFirstLayerOrder`/`minimizeCrossings`. Not deterministic, never always improving. -/

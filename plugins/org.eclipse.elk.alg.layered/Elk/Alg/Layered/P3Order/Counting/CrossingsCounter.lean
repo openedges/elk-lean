@@ -297,6 +297,13 @@ change their sides, so `getPortSideView(side)` is empty: the cached range is eit
   let flat1 := s.nodeMap.get node.idx
   flat1 != 0 && !s.nodeHasNestedGraph (flat1 - 1) && s.nodeSideMask (flat1 - 1) &&& sideBit side == 0
 
+/-- Whether `node` is a captured node without nested graph: while the snapshot is used its port list
+is a permutation of the captured one and every port keeps its side and `LPort.id`, so the captured
+side and id (`portFlags`, `portId`) are the live ones. -/
+@[inline] def isStableNode (s : CrossMinSnapshot) (node : LNodeId) : Bool :=
+  let flat1 := s.nodeMap.get node.idx
+  flat1 != 0 && !s.nodeHasNestedGraph (flat1 - 1)
+
 /-- Numbers the ports of `getPortSideView(side)` of the `nodes` (top-down, or bottom-up without
 `topDown`; the views are not reversed, as for `EAST` top-down and `WEST` bottom-up), continuing
 after the `len` ports numbered so far: `positions[LPort.id] := len`, and the captured id of the
@@ -308,33 +315,39 @@ entered, `k` the next node to visit. A cached range is numbered while its ports 
 `start` with the filter (every port numbered before lies on `side`, so its position is written
 again, and `pids[start:]` is overwritten). -/
 private partial def numberSideViewsSnap (a : LGraphArena) (s : CrossMinSnapshot) (nodes : Array LNodeId)
-    (side : PortSide) (topDown : Bool) (k : Nat) (ports : Array LPortId) (j hi : Nat) (filter : Bool) (start : Nat)
-    (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
+    (side : PortSide) (topDown : Bool) (k : Nat) (ports : Array LPortId) (j hi : Nat) (filter stable : Bool)
+    (start : Nat) (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
   if h : j < hi ∧ j < ports.size then
     let p := ports[j]
-    let pt := a.port p
-    if !sideIs pt.side side then
+    let pid := s.portId p
+    -- side and `LPort.id` of the port: for a `stable` node (`isStableNode`) the captured ones
+    let onSide := if stable then s.portFlag pid >>> 3 == sideCode side else sideIs (a.port p).side side
+    if !onSide then
       if filter then
-        numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter start len positions pids
+        numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter stable start len positions pids
       else
-        numberSideViewsSnap a s nodes side topDown k ports 0 ports.size true start start positions pids
+        numberSideViewsSnap a s nodes side topDown k ports 0 ports.size true stable start start positions pids
     else
-      numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter start (len + 1)
-        (setPosition positions (asUsize pt.id) len) (writeAt pids len (s.portId p))
+      let liveId := if stable then pid else asUsize (a.port p).id
+      numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter stable start (len + 1)
+        (setPosition positions liveId len) (writeAt pids len pid)
   else if k < nodes.size then
     let node := nodes[if topDown then k else nodes.size - 1 - k]!
-    if noPortOnSide s node side then
-      numberSideViewsSnap a s nodes side topDown (k + 1) #[] 0 0 false len len positions pids
+    let stable := isStableNode s node
+    if stable && noPortOnSide s node side then
+      numberSideViewsSnap a s nodes side topDown (k + 1) #[] 0 0 false stable len len positions pids
     else
       let nd := a.node node
       match cachedRange a node nd side with
-      | some (lo, hi) => numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports lo hi false len len positions pids
-      | none => numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports 0 nd.ports.size true len len positions pids
+      | some (lo, hi) =>
+        numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports lo hi false stable len len positions pids
+      | none =>
+        numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports 0 nd.ports.size true stable len len positions pids
   else (positions, pids, len)
 
-/-- Whether a far end of `ends[k:]` lies above `cur`. -/
-private partial def anyEndAbove (positions : Array Int) (cur : Int) (ends : Array Nat) (k : Nat) : Bool :=
-  if h : k < ends.size then (positions[ends[k]]?.getD 0) > cur || anyEndAbove positions cur ends (k + 1)
+/-- Whether a far end of `ends[k:hi]` lies above `cur`. -/
+private partial def anyEndAbove (positions : Array Int) (cur : Int) (ends : Array Nat) (k hi : Nat) : Bool :=
+  if h : k < hi ∧ k < ends.size then (positions[ends[k]]?.getD 0) > cur || anyEndAbove positions cur ends (k + 1) hi
   else false
 
 /-- Applies the deferred removals `pend[k:np]` (pairs of index and count) to the prefix sums of the
@@ -348,33 +361,34 @@ private partial def flushRemovals (pend : Array Nat) (k np : Nat) (bound : USize
 @[inline] private def pushPending (pend : Array Nat) (np x c : Nat) : Array Nat :=
   if np + 1 < pend.size then (pend.set! np x).set! (np + 1) c else (pend.push x).push c
 
-/-- Sum of `rank(endPosition)` over the far ends `ends[k:]` above `cur` (packed tree of `n` buckets). -/
+/-- Sum of `rank(endPosition)` over the far ends `ends[k:hi]` above `cur` (packed tree of `n` buckets). -/
 private partial def rankEndsPacked (positions : Array Int) (t : Array Nat) (n : Nat) (cur : Int) (ends : Array Nat)
-    (k acc : Nat) : Nat :=
-  if h : k < ends.size then
+    (k hi acc : Nat) : Nat :=
+  if h : k < hi ∧ k < ends.size then
     let e := positions[ends[k]]?.getD 0
-    rankEndsPacked positions t n cur ends (k + 1)
+    rankEndsPacked positions t n cur ends (k + 1) hi
       (if e > cur then acc + BinaryIndexedTree.rankPacked t n (asUsize e) else acc)
   else acc
 
-/-- `add(endPosition)` for the far ends `ends[k:]` above `cur`: the bucket `t[n + 1 + x]` and the
+/-- `add(endPosition)` for the far ends `ends[k:hi]` above `cur`: the bucket `t[n + 1 + x]` and the
 prefix sums (indices below `n` only, like `add`). -/
-private partial def addEndsPacked (positions : Array Int) (cur : Int) (ends : Array Nat) (k n : Nat) (t : Array Nat) :
+private partial def addEndsPacked (positions : Array Int) (cur : Int) (ends : Array Nat) (k hi n : Nat) (t : Array Nat) :
     Array Nat :=
-  if h : k < ends.size then
+  if h : k < hi ∧ k < ends.size then
     let e := positions[ends[k]]?.getD 0
     if e > cur then
       let x := asUsize e
       if x < n then
         let b := n + 1 + x
         let t := t.set! b (t[b]! + 1)
-        addEndsPacked positions cur ends (k + 1) n (BinaryIndexedTree.incLoopPacked t (n + 1).toUSize (x + 1).toUSize)
-      else addEndsPacked positions cur ends (k + 1) n t
-    else addEndsPacked positions cur ends (k + 1) n t
+        addEndsPacked positions cur ends (k + 1) hi n (BinaryIndexedTree.incLoopPacked t (n + 1).toUSize (x + 1).toUSize)
+      else addEndsPacked positions cur ends (k + 1) hi n t
+    else addEndsPacked positions cur ends (k + 1) hi n t
   else t
 
 /-- `count_crossings_on_ports_snap` over the captured ids `pids[i:n]` on a fresh packed tree `t` of
-`n` buckets (deferred removals `pend[0:np]`). -/
+`n` buckets (deferred removals `pend[0:np]`). The far ends of a port (`port_predecessors`, then
+`port_successors`) are the range `[endLo, endHi)` of the snapshot's flattened `endIds`. -/
 private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (pids : Array Nat) (i n : Nat)
     (t pend : Array Nat) (np crossings : Nat) : Nat :=
   if h : i < n ∧ i < pids.size then
@@ -386,12 +400,13 @@ private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Arr
     let t := if c != 0 then t.set! (n + 1 + x) 0 else t
     let pend := if c != 0 then pushPending pend np x c else pend
     let np := if c != 0 then np + 2 else np
-    let preds := s.portPredecessors pid
-    let succs := s.portSuccessors pid
-    if anyEndAbove positions cur preds 0 || anyEndAbove positions cur succs 0 then
+    let ends := s.endIds
+    let lo := s.endLo pid
+    let hi := s.endHi pid
+    if anyEndAbove positions cur ends lo hi then
       let t := flushRemovals pend 0 np (n + 1).toUSize t
-      let crossings := rankEndsPacked positions t n cur succs 0 (rankEndsPacked positions t n cur preds 0 crossings)
-      let t := addEndsPacked positions cur succs 0 n (addEndsPacked positions cur preds 0 n t)
+      let crossings := rankEndsPacked positions t n cur ends lo hi crossings
+      let t := addEndsPacked positions cur ends lo hi n t
       countBetweenSnapLoop s positions pids (i + 1) n t pend 0 crossings
     else countBetweenSnapLoop s positions pids (i + 1) n t pend np crossings
   else crossings
@@ -608,8 +623,8 @@ def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : A
     let a ← get
     let positions ← c.portPositions.swap #[]
     let pids ← c.idScratch.swap #[]
-    let (positions, pids, len) := numberSideViewsSnap a s leftLayer .east true 0 #[] 0 0 false 0 0 positions pids
-    let (positions, pids, n) := numberSideViewsSnap a s rightLayer .west false 0 #[] 0 0 false len len positions pids
+    let (positions, pids, len) := numberSideViewsSnap a s leftLayer .east true 0 #[] 0 0 false false 0 0 positions pids
+    let (positions, pids, n) := numberSideViewsSnap a s rightLayer .west false 0 #[] 0 0 false false len len positions pids
     c.portPositions.set positions
     let crossings := countBetweenSnapLoop s positions pids 0 n (Array.replicate (2 * n + 1) 0) #[] 0 0
     c.idScratch.set pids

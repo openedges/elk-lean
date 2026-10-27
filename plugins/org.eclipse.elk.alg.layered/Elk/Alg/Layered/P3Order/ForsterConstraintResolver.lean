@@ -2,6 +2,7 @@ import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.P3Order.CrossMinSnapshot
 import Elk.Alg.Layered.P3Order.Counting.IInitializable
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
+import Elk.Alg.Layered.P3Order.Counting.CrossMinUtil
 import Std.Data.HashMap
 /-!
 # `org.eclipse.elk.alg.layered.p3order.ForsterConstraintResolver`
@@ -50,14 +51,49 @@ structure BarycenterState where
   summedWeight : Float := 0.0
   /-- `degree`. -/
   degree : Int := 0
-  /-- `barycenter` (Java `Double`, `null` = unknown). -/
-  barycenter : Option Float := none
+  /-- `barycenter` (Java `Double`, `null` = unknown) when `hasBarycenter` (unboxed; see `barycenter`). -/
+  barycenterValue : Float := 0.0
+  /-- Whether the barycenter is known. -/
+  hasBarycenter : Bool := false
   /-- `visited`. -/
   visited : Bool := false
   deriving Inhabited
 
 /-- `BarycenterState::new(node)`. -/
 def BarycenterState.new (node : LNodeId) : BarycenterState := { node }
+
+/-- `barycenter` (`none` = unknown). -/
+@[inline] def BarycenterState.barycenter (st : BarycenterState) : Option Float :=
+  if st.hasBarycenter then some st.barycenterValue else none
+
+/-- Whether state `(li, ni)` of a `barycenter_states[layer][node id]` table exists and has a
+barycenter (without building an `Option`). -/
+@[inline] def BarycenterState.knownIn (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Bool :=
+  if h : li < states.size then
+    let row := states[li]
+    if h2 : ni < row.size then
+      match row[ni] with
+      | some st => st.hasBarycenter
+      | none => false
+    else false
+  else false
+
+/-- The barycenter of state `(li, ni)` when `knownIn` (`0.0` without a state). -/
+@[inline] def BarycenterState.valueIn (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Float :=
+  if h : li < states.size then
+    let row := states[li]
+    if h2 : ni < row.size then
+      match row[ni] with
+      | some st => st.barycenterValue
+      | none => floatZero
+    else floatZero
+  else floatZero
+
+/-- `barycenter = b`. -/
+@[inline] def BarycenterState.setBarycenter (st : BarycenterState) (b : Option Float) : BarycenterState :=
+  match b with
+  | some v => { st with barycenterValue := v, hasBarycenter := true }
+  | none => { st with hasBarycenter := false }
 
 /-- Updates state `(li, ni)` of a `barycenter_states[layer][node id]` table (no-op without a
 state). The row and the state are taken out before the update so that both change in place. -/
@@ -225,7 +261,7 @@ def nodeBarycenter (c : ForsterCtx) (n : LNodeId) : ForsterM (Option Float) := d
 def setNodeBarycenter (c : ForsterCtx) (n : LNodeId) (b : Option Float) : ForsterM Unit := do
   let li := c.layerIndex n
   let ni := c.nodeId n
-  modify fun d => d.updateBarycenterStates (BarycenterState.updateIn · li ni fun s => { s with barycenter := b })
+  modify fun d => d.updateBarycenterStates (BarycenterState.updateIn · li ni fun s => s.setBarycenter b)
 
 /-- `group_barycenter(group)`: the barycenter of the group's first node. -/
 def groupBarycenter (c : ForsterCtx) (gid : Nat) : ForsterM (Option Float) := do
@@ -558,6 +594,8 @@ def initAtNodeLevel (r : ForsterConstraintResolver) (l n : Nat) (order : Array (
 def initializable (r : ForsterConstraintResolver) : Initializable where
   initAtLayerLevel := r.initAtLayerLevel
   initAtNodeLevel := r.initAtNodeLevel
+  usesPortLevel := false
+  usesEdgeLevel := false
 
 end ForsterConstraintResolver
 

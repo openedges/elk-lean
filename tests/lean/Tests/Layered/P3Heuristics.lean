@@ -517,7 +517,7 @@ def moCompare (force : Bool := true) (strategy : GroupOrderStrategy := .onlyWith
   h.base.calculateBarycentersM order[1]! true random
   if equalBarycenters then
     h.base.constraintResolver.barycenterStates.modify fun s =>
-      s.modify 1 fun l => l.map fun o => o.map fun st => { st with barycenter := some 1.0 }
+      s.modify 1 fun l => l.map fun o => o.map fun st => st.setBarycenter (some 1.0)
   let first ← h.compareNodesM x z
   let second ← h.compareNodesM x z
   return (first, second)

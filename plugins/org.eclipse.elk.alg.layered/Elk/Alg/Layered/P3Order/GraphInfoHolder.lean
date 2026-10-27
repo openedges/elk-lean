@@ -147,7 +147,8 @@ def initHolder (order : Array (Array LNodeId)) : LayeredM (Array LGraphId × Nat
       cachePortSides node
       if let some nested := (← getNode node).nestedGraph then
         childGraphs.modify (·.push nested)
-    initAtPortLevel := fun _ _ _ _ => nPorts.modify (· + 1) }
+    initAtPortLevel := fun _ _ _ _ => nPorts.modify (· + 1)
+    usesEdgeLevel := false }
   Initializable.init #[holderInit] order
   return (← childGraphs.get, ← nPorts.get)
 

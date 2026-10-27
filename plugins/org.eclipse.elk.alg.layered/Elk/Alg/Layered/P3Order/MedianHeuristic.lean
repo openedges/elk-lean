@@ -151,7 +151,7 @@ def minimizeCrossings (_h : MedianHeuristic) (order : Array (Array LNodeId)) (fr
   return (writeLayer order freeLayerIndex sorted, false)
 
 /-- The `IInitializable` part (no initialisation). -/
-def initializable (_h : MedianHeuristic) : Initializable := {}
+def initializable (_h : MedianHeuristic) : Initializable := { usesPortLevel := false, usesEdgeLevel := false }
 
 /-- The `ICrossingMinimizationHeuristic` view; `random` is used by `setFirstLayerOrder` only.
 Deterministic, never always improving. -/

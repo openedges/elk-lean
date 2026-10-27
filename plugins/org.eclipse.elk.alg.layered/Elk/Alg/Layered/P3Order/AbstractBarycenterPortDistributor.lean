@@ -500,20 +500,19 @@ partial def anyEndInLayer (s : CrossMinSnapshot) (targets : Array Nat) (nodeLaye
     if s.portOwnerLayer targets[i] == nodeLayer then true else anyEndInLayer s targets nodeLayer (i + 1)
   else false
 
-/-- `f32` sum of the ranks of `targets[i:]` (`add`: added, else subtracted). -/
-partial def rankSumOf (ranks : FloatArray) (targets : Array Nat) (add : Bool) (i : Nat) (sum : Float) : Float :=
-  if h : i < targets.size then
+/-- `f32` sum of the ranks of `targets[i:hi]` (`add`: added, else subtracted). -/
+partial def rankSumOf (ranks : FloatArray) (targets : Array Nat) (add : Bool) (i hi : Nat) (sum : Float) : Float :=
+  if h : i < hi ∧ i < targets.size then
     let r := f32t (ranks.get! targets[i])
-    rankSumOf ranks targets add (i + 1) (if add then f32t (sum + r) else f32t (sum - r))
+    rankSumOf ranks targets add (i + 1) hi (if add then f32t (sum + r) else f32t (sum - r))
   else sum
 
 /-- Whether a far end of the captured port `pid` of flat node `flat` lies in layer `nodeLayer`
 (`anyEndInLayer` of its successors, then predecessors): the precomputed `portFlags` bit when
 `nodeLayer` is the owner's layer, else the loops. -/
-@[inline] def portEndInLayer (s : CrossMinSnapshot) (flag : UInt8) (pid flat nodeLayer : Nat) (succs preds : Array Nat) :
-    Bool :=
+@[inline] def portEndInLayer (s : CrossMinSnapshot) (flag : UInt8) (pid flat nodeLayer : Nat) : Bool :=
   if s.portOwnerFlat pid == flat && s.nodeLayerOf flat == nodeLayer then flag &&& 4 != 0
-  else anyEndInLayer s succs nodeLayer 0 || anyEndInLayer s preds nodeLayer 0
+  else anyEndInLayer s (s.portSuccessors pid) nodeLayer 0 || anyEndInLayer s (s.portPredecessors pid) nodeLayer 0
 
 /-- The port loop of `distribute_ports_for_iter_snap` over the captured ports `pids[i:]` of flat
 node `flat` on the side with code `side`: barycenters (`bary`), the running min/max barycenter
@@ -531,11 +530,13 @@ partial def iteratePortsSnapLoop (s : CrossMinSnapshot) (a : LGraphArena) (pids 
     if pside != side then
       iteratePortsSnapLoop s a pids side flat absurdlyLargeFloat nodeLayer positions (i + 1) ranks bary minB maxB inLayer shell
     else
-      let preds := s.portPredecessors pid
-      let succs := s.portSuccessors pid
+      -- the far ends: predecessors `endIds[lo:mid]`, successors `endIds[mid:hi]`
+      let lo := s.endLo pid
+      let mid := s.endSplit pid
+      let hi := s.endHi pid
       -- `ensure_port_capacity(pid)` (only when a barycenter is recorded below)
       let grow := pid >= ranks.size && pid >>> 32 == 0
-      let degree := preds.size + succs.size
+      let degree := hi - lo
       if pside == 1 || pside == 3 then
         -- north/south: skipped without a dummy, else the dummy's value
         match s.portRefOpt pid with
@@ -556,12 +557,13 @@ partial def iteratePortsSnapLoop (s : CrossMinSnapshot) (a : LGraphArena) (pids 
             else
               iteratePortsSnapLoop s a pids side flat absurdlyLargeFloat nodeLayer positions (i + 1) ranks (bary.set! pid sum)
                 minB maxB inLayer shell
-      else if portEndInLayer s flag pid flat nodeLayer succs preds then
+      else if portEndInLayer s flag pid flat nodeLayer then
         -- in-layer port: collected
         iteratePortsSnapLoop s a pids side flat absurdlyLargeFloat nodeLayer positions (i + 1) ranks bary minB maxB
           (inLayer.push pid) shell
       else
-        let sum := rankSumOf ranks preds false 0 (rankSumOf ranks succs true 0 floatZero)
+        let ends := s.endIds
+        let sum := rankSumOf ranks ends false lo mid (rankSumOf ranks ends true mid hi floatZero)
         let ranks := if grow then resizeFloats ranks (pid + 1) else ranks
         let bary := if grow then resizeFloats bary (pid + 1) else bary
         if degree > 0 then
@@ -742,37 +744,63 @@ def distributePortsForIterLock (a : LGraphArena) (st : BarycenterPortDistributor
 @[inline] def portKeyGreater (sy : UInt8) (by' : Float) (sx : UInt8) (bx : Float) : Bool :=
   if sy != sx then sy > sx else baryGreater by' bx
 
+/-- The side code of a port: the captured one (`portFlags`) with `useSnap` (a node without nested
+graph, whose ports keep their sides while the snapshot is used), else the live one. -/
+@[inline] def keySide (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (p : LPortId) : UInt8 :=
+  if useSnap then s.portFlag (s.portId p) >>> 3 else sideCode (a.port p).side
+
+/-- The barycenter index of a port (`LPort.id as usize`): the captured id with `useSnap` (equal to the
+live one, see `keySide`), else the live one. -/
+@[inline] def keyIndex (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (p : LPortId) : Nat :=
+  if useSnap then s.portId p else asUsize (a.port p).id
+
 /-- Whether no two neighbours of `ports[i:]` are in the wrong order (`comparePortsBySideAndBarycenter`
 of a port and its successor is not `.gt`; with `noNaN`, also no NaN barycenter), given the side code
 and barycenter of `ports[i - 1]`. -/
-partial def portsSortedFrom (a : LGraphArena) (bary : FloatArray) (ports : Array LPortId) (noNaN : Bool) (i : Nat)
-    (prevSide : UInt8) (prevBary : Float) : Bool :=
+partial def portsSortedFrom (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (bary : FloatArray)
+    (ports : Array LPortId) (noNaN : Bool) (i : Nat) (prevSide : UInt8) (prevBary : Float) : Bool :=
   if h : i < ports.size then
-    let pt := a.port ports[i]
-    let side := sideCode pt.side
-    let b := bary.get! (asUsize pt.id)
+    let p := ports[i]
+    let side := keySide a s useSnap p
+    let b := bary.get! (keyIndex a s useSnap p)
     if noNaN && b != b then false
     else if portKeyGreater prevSide prevBary side b then false
-    else portsSortedFrom a bary ports noNaN (i + 1) side b
+    else portsSortedFrom a s useSnap bary ports noNaN (i + 1) side b
   else true
 
 /-- Whether `ports` is already ordered (see `portsSortedFrom`). Without NaN the comparator is a
 total preorder, so every stable sort returns such a list unchanged; an insertion sort (which only
 compares neighbours of the sorted prefix) does so even with NaN barycenters. -/
-def portsSorted (a : LGraphArena) (bary : FloatArray) (ports : Array LPortId) (noNaN : Bool) : Bool :=
+def portsSorted (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (bary : FloatArray) (ports : Array LPortId)
+    (noNaN : Bool) : Bool :=
   if h : 0 < ports.size then
-    let pt := a.port ports[0]
-    let b := bary.get! (asUsize pt.id)
-    if noNaN && b != b then false else portsSortedFrom a bary ports noNaN 1 (sideCode pt.side) b
+    let p := ports[0]
+    let b := bary.get! (keyIndex a s useSnap p)
+    if noNaN && b != b then false else portsSortedFrom a s useSnap bary ports noNaN 1 (keySide a s useSnap p) b
   else true
 
 /-- The keys (side code, barycenter) of `ports[i:]`. -/
-partial def portKeys (a : LGraphArena) (bary : FloatArray) (ports : Array LPortId) (i : Nat) (sides : ByteArray)
-    (barys : FloatArray) : ByteArray × FloatArray :=
+partial def portKeys (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (bary : FloatArray) (ports : Array LPortId)
+    (i : Nat) (sides : ByteArray) (barys : FloatArray) : ByteArray × FloatArray :=
   if h : i < ports.size then
-    let pt := a.port ports[i]
-    portKeys a bary ports (i + 1) (sides.push (sideCode pt.side)) (barys.push (bary.get! (asUsize pt.id)))
+    let p := ports[i]
+    portKeys a s useSnap bary ports (i + 1) (sides.push (keySide a s useSnap p)) (barys.push (bary.get! (keyIndex a s useSnap p)))
   else (sides, barys)
+
+/-- `sort_ports(node)` (`sortPortsLock`) with the keys read from the snapshot (`useSnap`, see
+`keySide`) or live. -/
+def sortPortsWith (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (st : BarycenterPortDistributorState)
+    (node : LNodeId) : Array LPortId :=
+  let ports := (a.node node).ports
+  let bary := st.portBarycenter
+  if ports.size < 2 then ports
+  else if portsSorted a s useSnap bary ports (ports.size > 16) then ports
+  else
+    let (sides, barys) := portKeys a s useSnap bary ports 0 (ByteArray.emptyWithCapacity ports.size)
+      (FloatArray.emptyWithCapacity ports.size)
+    let perm := keyedStableSort ports.size fun i j =>
+      portKeyGreater (sides.get! i) (barys.get! i) (sides.get! j) (barys.get! j)
+    perm.map fun k => ports[k]!
 
 /-- `sort_ports(node)` (lock path): the current ports sorted by (side, barycenter, index). The
 stable sort only ever compares an element with one that was before it in the input, so the index
@@ -782,16 +810,7 @@ without neighbours in the wrong order unchanged even with NaN barycenters; beyon
 NaN). Otherwise the keys are read once and `keyedStableSort` sorts their positions (the same
 comparisons and moves as `stableSort ports comparePortsBySideAndBarycenter`). -/
 def sortPortsLock (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId) : Array LPortId :=
-  let ports := (a.node node).ports
-  let bary := st.portBarycenter
-  if ports.size < 2 then ports
-  else if portsSorted a bary ports (ports.size > 16) then ports
-  else
-    let (sides, barys) := portKeys a bary ports 0 (ByteArray.emptyWithCapacity ports.size)
-      (FloatArray.emptyWithCapacity ports.size)
-    let perm := keyedStableSort ports.size fun i j =>
-      portKeyGreater (sides.get! i) (barys.get! i) (sides.get! j) (barys.get! j)
-    perm.map fun k => ports[k]!
+  sortPortsWith a {} false st node
 
 /-- Whether ports `xs[i:]` and `ys[i:]` are the same. -/
 partial def samePortsFrom (xs ys : Array LPortId) (i : Nat) : Bool :=
@@ -970,10 +989,11 @@ def markSortedOnce (st : BarycenterPortDistributorState) (flat n : Nat) (flag : 
       sortedOnce := sortedOnce.set! flat flag, rankedLayer, rankedType }
 
 /-- Whether no port of `ports[i:]` has a NaN barycenter. -/
-partial def noNaNBarycenterFrom (a : LGraphArena) (bary : FloatArray) (ports : Array LPortId) (i : Nat) : Bool :=
+partial def noNaNBarycenterFrom (a : LGraphArena) (s : CrossMinSnapshot) (useSnap : Bool) (bary : FloatArray)
+    (ports : Array LPortId) (i : Nat) : Bool :=
   if h : i < ports.size then
-    let b := bary.get! (asUsize (a.port ports[i]).id)
-    b == b && noNaNBarycenterFrom a bary ports (i + 1)
+    let b := bary.get! (keyIndex a s useSnap ports[i])
+    b == b && noNaNBarycenterFrom a s useSnap bary ports (i + 1)
   else true
 
 /-- `*ports_mut() = ports; cache_port_sides()` for a node without nested graph in the snapshot
@@ -1022,9 +1042,9 @@ private def distributePortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistr
   let st := distributePortsForSideSnap s a st node flat portIds .north nodeId layerIndex layerSize
   -- Rust `sort_ports(node)` runs while `distribute_ports` holds the snapshot taken out of
   -- `self.snapshot`, so its lock fallback sorts the *current* port order (index tie-break)
-  let sorted := sortPortsLock a st node
+  let sorted := sortPortsWith a s stable st node
   if stable then
-    let idempotent := sorted.size <= 16 || noNaNBarycenterFrom a st.portBarycenter sorted 0
+    let idempotent := sorted.size <= 16 || noNaNBarycenterFrom a s true st.portBarycenter sorted 0
     setPortsSnap st flat s.nNodes node sorted (if idempotent then 2 else 1)
   else
     setPorts node sorted
@@ -1171,6 +1191,7 @@ def initializable (d : AbstractBarycenterPortDistributor) : Initializable where
   initAtNodeLevel := d.initAtNodeLevel
   initAtPortLevel := d.initAtPortLevel
   initAfterTraversal := d.initAfterTraversal
+  usesEdgeLevel := false
 
 /-- The `ISweepPortDistributor` implementation. -/
 def toSweepPortDistributor (d : AbstractBarycenterPortDistributor) : SweepPortDistributor where

@@ -124,7 +124,8 @@ structure CrossMinSnapshot where
   /-- per flat node: `PORT_CONSTRAINTS.isOrderFixed` at build time (`1`/`0`; Lean only). -/
   nodeOrderFixed : ByteArray := ByteArray.empty
   /-- per flat node: bit `0` (`1`) a predecessor, bit `1` (`2`) a successor of a captured port lies in
-  the node's layer (Lean only). -/
+  the node's layer, bit `2` (`4`) the node has `BARYCENTER_ASSOCIATES` (not changed during the
+  crossing minimisation) (Lean only). -/
   nodeEndFlags : ByteArray := ByteArray.empty
   /-- per flat node: number of predecessors of its captured ports (Lean only). -/
   nodePredCounts : Array Nat := #[]
@@ -133,6 +134,13 @@ structure CrossMinSnapshot where
   /-- per port id: bit `0` (`1`) predecessors, bit `1` (`2`) successors, bit `2` (`4`) a far end in the
   owner's layer, bits `3..5` the side code (`ElkEnum.ordinal`) (Lean only). -/
   portFlags : ByteArray := ByteArray.empty
+  /-- `portIns`/`portOuts` flattened (Lean only): the far ends of port id `p` are
+  `endIds[endStart[p]:endStart[p + 1]]`, the predecessors before `endMid[p]`, then the successors. -/
+  endIds : Array Nat := #[]
+  /-- per port id (and one more entry): start of its far ends in `endIds`. -/
+  endStart : Array Nat := #[0]
+  /-- per port id: start of its successors in `endIds`. -/
+  endMid : Array Nat := #[]
   /-- per port id: side. -/
   portSides : Array PortSide := #[]
   /-- per port id: flat index of the owner. -/
@@ -187,7 +195,8 @@ def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : C
           s := { s with
             portSides := s.portSides.set! pid pt.side, portOwners := s.portOwners.set! pid f,
             portRefs := s.portRefs.set! pid (some port),
-            portIns := s.portIns.modify pid (· ++ preds), portOuts := s.portOuts.modify pid (· ++ succs) }
+            portIns := s.portIns.modify pid (fun l => if l.isEmpty then preds else l ++ preds),
+            portOuts := s.portOuts.modify pid (fun l => if l.isEmpty then succs else l ++ succs) }
       s := { s with nodePortIds := s.nodePortIds.push portIds }
       flat := flat + 1
   -- the side masks of the final `port_side_of` values
@@ -226,13 +235,23 @@ def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : C
     let pids := s.nodePortIds[f]?.getD #[]
     let predInLayer := pids.any fun pid => endInLayer (s.portIns[pid]?.getD #[]) li
     let succInLayer := pids.any fun pid => endInLayer (s.portOuts[pid]?.getD #[]) li
-    nodeEndFlags := nodeEndFlags.push ((if predInLayer then 1 else 0) ||| (if succInLayer then 2 else 0))
+    let assoc : UInt8 := if nd.internal.barycenterAssociates.isEmpty then 0 else 4
+    nodeEndFlags := nodeEndFlags.push ((if predInLayer then 1 else 0) ||| (if succInLayer then 2 else 0) ||| assoc)
     predCounts := predCounts.push (pids.foldl (fun acc pid => acc + (s.portIns[pid]?.getD #[]).size) 0)
     succCounts := succCounts.push (pids.foldl (fun acc pid => acc + (s.portOuts[pid]?.getD #[]).size) 0)
+  let mut endIds : Array Nat := #[]
+  let mut endStart : Array Nat := Array.emptyWithCapacity (nPorts + 1)
+  let mut endMid : Array Nat := Array.emptyWithCapacity nPorts
+  for pid in [0:nPorts] do
+    endStart := endStart.push endIds.size
+    endIds := endIds ++ (s.portIns[pid]?.getD #[])
+    endMid := endMid.push endIds.size
+    endIds := endIds ++ (s.portOuts[pid]?.getD #[])
+  endStart := endStart.push endIds.size
   return { s with nNodes := flat, nodeSideMasks := masks, nodeMap := IdIndex.ofPairs nodeKeys nodeValues,
                   nodeInputCounts := inCounts, nodeNorthInputCounts := northInCounts, nodeOutputCounts := outCounts,
                   nodeMaxPortIds := maxIds, nodeOrderFixed, nodeEndFlags, nodePredCounts := predCounts,
-                  nodeSuccCounts := succCounts, portFlags,
+                  nodeSuccCounts := succCounts, portFlags, endIds, endStart, endMid,
                   portMap := IdIndex.ofPairs portKeys portValues }
 
 /-- `CrossMinSnapshot::build(order, n_ports)`: built from the current arena. -/
@@ -299,6 +318,18 @@ def build (order : Array (Array LNodeId)) (nPorts : Nat) : LayeredM CrossMinSnap
 
 /-- `port_ref_opt(port_id)`. -/
 @[inline] def portRefOpt (s : CrossMinSnapshot) (portId : Nat) : Option LPortId := (s.portRefs[portId]?).bind id
+
+/-- The range `[lo, hi)` of the far ends of a port id in `endIds` (`lo = hi` out of range). -/
+@[inline] def endLo (s : CrossMinSnapshot) (portId : Nat) : Nat :=
+  if portId < s.endMid.size then s.endStart[portId]! else 0
+
+/-- See `endLo`. -/
+@[inline] def endHi (s : CrossMinSnapshot) (portId : Nat) : Nat :=
+  if portId < s.endMid.size then s.endStart[portId + 1]! else 0
+
+/-- The end of the predecessors (start of the successors) of a port id in `endIds`. -/
+@[inline] def endSplit (s : CrossMinSnapshot) (portId : Nat) : Nat :=
+  if h : portId < s.endMid.size then s.endMid[portId] else 0
 
 /-- The `portFlags` of a port id (`0` out of range: no edges, side `UNDEFINED`). -/
 @[inline] def portFlag (s : CrossMinSnapshot) (portId : Nat) : UInt8 :=

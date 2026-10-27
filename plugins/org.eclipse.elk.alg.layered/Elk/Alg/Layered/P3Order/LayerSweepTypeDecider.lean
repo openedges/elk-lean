@@ -253,6 +253,8 @@ def initAtNodeLevel (d : LayerSweepTypeDecider) (l n : Nat) (order : Array (Arra
 def initializable (d : LayerSweepTypeDecider) : Initializable where
   initAtLayerLevel := d.initAtLayerLevel
   initAtNodeLevel := d.initAtNodeLevel
+  usesPortLevel := false
+  usesEdgeLevel := false
 
 end LayerSweepTypeDecider
 
