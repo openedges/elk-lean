@@ -1,3 +1,4 @@
+import Elk.Alg.Layered.Intermediate.IntermediateProcessorStrategy
 import Elk.Alg.Layered.Intermediate.LabelDummySwitcher
 /-!
 # `org.eclipse.elk.alg.layered.intermediate`

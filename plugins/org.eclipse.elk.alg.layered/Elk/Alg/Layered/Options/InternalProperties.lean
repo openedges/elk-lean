@@ -42,6 +42,8 @@ inductive Origin where
 
 /-- Internal properties set on `LGraph`s. -/
 structure LGraphInternals where
+  /-- `ORIGIN`: the `ElkNode` the graph was imported from. -/
+  origin : Option Origin := none
   /-- `GRAPH_PROPERTIES` (`graphProperties`, default empty set). -/
   graphProperties : EnumSet GraphProperties := EnumSet.empty
   /-- `RANDOM` (`random`). -/

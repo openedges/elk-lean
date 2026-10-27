@@ -89,9 +89,10 @@
 | F2. `GraphAdapters` 레코드 + `ElkGraphAdapters`; `Elk.Core.Alg`(assembler/processor configuration) | `core/util/adapters/*`, `core/alg/*`(1.6K줄) | fable(주) | high | 주 에이전트 | 완료(`0bf1391`): 클로저 레코드 `GraphAdapters m G N P L E`(raw `PropValue` 접근 + typed 헬퍼, 어댑터별 volatile id), `LayoutProcessor/LayoutPhase/LayoutProcessorConfiguration/AlgorithmAssembler`(IO.Ref 핸들, 캐시, ElkTrace 트레이스) |
 | L. core alg/adapters 테스트 이식 | `core/tests/all/{algorithm_assembler,layout_processor_configuration,elk_graph_adapters}_test.rs` + `alg_test_util.rs`(0.6K줄) | sonnet | medium | 서브에이전트 L(worktree) | 완료(`20bcd64`): 25/25 이식 + 빌드 순서·PortComparator 추가 검사, 차이 없음 |
 | N1. nodespacing cellsystem + NodeContext/PortContext/NodeLabelLocation + NodeLabelAndSizeUtilities | `nodespacing/cellsystem/mod.rs`, `internal/*.rs`, `internal/algorithm/node_label_and_size_utilities.rs`(2.8K줄) | opus | xhigh | 서브에이전트 N1(worktree) | 완료(`merge N1`, ≈130 검사): 공유 `CellArena`(CellId)로 Java 참조 의미 재현, `applyLabelLayout`은 위치 반환, `NodeContext` 어댑터 레코드 제네릭. 메모: Rust `process_with_options`는 `set_node_padding` 결과를 버림 → N3는 `setNodePadding` 호출 금지; `PortContext.portRatioOrPosition`은 Rust가 설정하지 않음(N2b 주의) |
-| N2a. nodespacing 셀/라벨/노드 크기 알고리즘(PortContextCreator, NodeLabelCellCreator, InsidePortLabelCellCreator, CellSystemConfigurator, LabelPlacer, NodeSizeCalculator) | `internal/algorithm/*`(1.3K줄) | opus | xhigh | 서브에이전트 N2a(worktree) | 진행 중 |
-| N2b. nodespacing 포트 배치(PortPlacementCalculator, Horizontal/VerticalPortPlacementSizeCalculator, PortLabelPlacementCalculator) | `internal/algorithm/*`(1.9K줄) | opus | xhigh | 서브에이전트 N2b(worktree) | 진행 중 |
-| N3. 계산기(NodeLabelAndSizeCalculator, NodeDimensionCalculation, NodeMarginCalculator, NodeMicroLayout) + `nodespacing_test.rs` 등 | `node_*_calculat*.rs`(4.6K줄), `tests/all/*`(4.3K줄) | opus | xhigh | N2a/N2b 이후 | 대기 |
+| N2a. nodespacing 셀/라벨/노드 크기 알고리즘(PortContextCreator, NodeLabelCellCreator, InsidePortLabelCellCreator, CellSystemConfigurator, LabelPlacer, NodeSizeCalculator) | `internal/algorithm/*`(1.3K줄) | opus | xhigh | 서브에이전트 N2a(worktree) | 완료(`merge N2a`, 123 검사): Rust와 동일한 호출 순서; 셀 사본 2회 갱신 → 공유 셀 1회 |
+| N2b. nodespacing 포트 배치(PortPlacementCalculator, Horizontal/VerticalPortPlacementSizeCalculator, PortLabelPlacementCalculator) | `internal/algorithm/*`(1.9K줄) | opus | xhigh | 서브에이전트 N2b(worktree) | 완료(`merge N2b`, 113 검사): Rust 우선(FIXED_RATIO는 미설정 ratio 0.0 사용, 비율 허용오차 `<`). worktree가 stale base(origin/main 미갱신)여서 에이전트가 main 파일을 복사해 빌드 → 소유 파일만 커밋 |
+| N3a. `NodeLabelAndSizeCalculator` + `NodeMarginCalculator` | `node_label_and_size_calculator.rs`(2.2K줄), `node_margin_calculator.rs` | opus | xhigh | 서브에이전트 N3a(worktree) | 진행 중 |
+| N3b. `NodeDimensionCalculation` + `NodeMicroLayout` + `nodespacing_test.rs` 등 end-to-end 테스트 | `node_dimension_calculation.rs`(2.1K줄), `tests/all/*`(4.3K줄) | opus | xhigh | N3a 이후 | 대기 |
 
 ### Phase 4 착수 — layered 기반 (2026-10-27)
 - 설계(`PORTING.md` §15): 단일 arena `LGraphArena` + typed id, `LayeredM := StateRefT LGraphArena IO`, 공개 옵션은 `props : PropertyMap`, `InternalProperties`는 요소별 `internal` typed 필드, `PROCESSORS`는 상태 밖, elk-rs `LArena/ArenaSync`(CSR 사본)는 포팅하지 않고 순회 순서만 재현, trace recorder 스키마 동일.
@@ -102,13 +103,18 @@
 |---|---|---|---|---|---|
 | M-opts. layered 옵션 열거형 + `LayeredOptions` + `LayeredMetaDataProvider` + `LayeredSpacings` | `layered/options/*.rs`(≈4.4K줄, 기계적; 이름 불일치를 피하려 단일 담당) | opus | high | 서브에이전트 M-opts(worktree) | 완료(`merge M-opts`, 131 검사): 열거형 33개, `LayeredOptions` 130 상수(89 고유 + 40 core 별칭 + ALGORITHM_ID; 브리프의 297은 과대 추정), 옵션 89개 등록/옵션 지원 153개(Rust 스크립트 생성값 그대로). id는 elk-rs의 `org.eclipse.elk.alg.layered.*`(Java id는 legacy id) |
 | M0. 그래프 모델(ids/arena/LayeredM/LNode·LPort·LEdge·LLabel·Layer·LGraph), `InternalProperties` typed 필드, `Spacings`, `LGraphUtil`, `Tarjan`, `TraceRecorder`, `LayeredPhases`/`IntermediateProcessorStrategy`(레지스트리), `GraphConfigurator` | `layered/graph/*.rs`(arena 제외 ≈3.3K줄), `options/{internal_properties,spacings}.rs`, `trace_recorder.rs`, `graph_configurator.rs` | fable(주) | max | 주 에이전트 | 완료(`1a4d278`~): 프로세서/페이즈는 레지스트리에 등록되며 미이식 항목은 `UnsupportedOperationException`으로 보고 → 프로세서 단위 점진 parity 가능. 메타데이터는 `LayoutMetaDataService.addInitHook`으로 등록(옵션 184개) |
-| M2. `ElkGraphLayoutTransferrer` | `graph/transform/elk_graph_layout_transferrer.rs`(1.3K줄) | opus | xhigh | 서브에이전트 M2(worktree) | 진행 중 |
+| M2. `ElkGraphLayoutTransferrer` | `graph/transform/elk_graph_layout_transferrer.rs`(1.3K줄) | opus | xhigh | 서브에이전트 M2(worktree) | 완료(`merge M2`, 133 검사): elk-rs 보정 전부 포함. `applyLayout a ledges lgraph elkGraph : ElkM Unit`(루트 ElkNode 명시). 지적: `ElkGraphUtil.firstEdgeSection`이 마지막 섹션을 유지(Java/Rust는 첫 섹션) → 확인 후 수정 |
 | M3a. `ElkLayered`/`LayeredLayoutProvider` | `elk_layered.rs`, `layered_layout_provider.rs`(1.1K줄) | fable(주) | xhigh | M3b 이후 | 대기 |
 | M3b. components + compound | `components/*`, `compound/*`(4.4K줄) | opus | xhigh | 서브에이전트 M3b(worktree) | 진행 중 |
 | M1. `ElkGraphImporter`/`ElkGraphTransformer`/`LGraphAdapters` | (위 참조; `NodeLabelAndSizeCalculator`에 의존) | opus | xhigh | N3 이후 | 대기 |
 | P1. cycle breakers 9종 + `GroupModelOrderCalculator` | `p1cycles/*`(2K줄) | opus | high | 서브에이전트 P1(worktree) | 진행 중 |
 | P2. layerers 9종(NetworkSimplexLayerer 포함) | `p2layers/*`(2.5K줄) | opus | xhigh | 서브에이전트 P2(worktree) | 진행 중 |
-| P3~P5, intermediate | `p3order`(10.6K, 3분할: counting/holder, sweep+heuristics, port distributors/forster), `p4nodes`(5.3K, 2분할), `p5edges`(6.4K, 3분할), `intermediate`(28K, ≈10분할) | opus | xhigh | P1/P2 병합 후 순차 병렬 | 대기 |
+| P3a. crossing counters + `CrossMinSnapshot` + greedyswitch | `p3order/counting/*`, `cross_min_snapshot.rs`, `intermediate/greedyswitch/*`(3.8K줄) + `tests/p3_order/counting/*`(4.8K줄) | opus | xhigh | 서브에이전트 P3a(worktree) | 진행 중 |
+| P3b/P3c. port distributors + forster(2.9K) → heuristics/type decider/sweep copy(3.0K) → GraphInfoHolder + LayerSweepCrossingMinimizer(2.5K) | `p3order/*` | opus | xhigh | P3a 이후 순차 | 대기 |
+| P4a. NetworkSimplexPlacer/Simple/Interactive/LinearSegments | `p4nodes/*.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P4a(worktree) | 진행 중 |
+| P4b. BK node placer | `p4nodes/bk/*`(2.4K줄) | opus | xhigh | 서브에이전트 P4b(worktree) | 진행 중 |
+| P5a/P5b. orthogonal(+polyline) / splines | `p5edges/**`(6.4K줄) | opus | xhigh | 대기 | 대기 |
+| I1~I8. intermediate 프로세서(≈14분할: 라벨, 셀프루프 2, 계층 포트, 수평 압축, wrapping, long edge/north-south, 제약/파티션/코멘트, graph transformer/end labels/spline bendpoints, model order 등) | `intermediate/**`(28K줄) | opus | xhigh | 대기 | 대기 |
 
 
 #### Phase 2 (2차) 작업 할당표
