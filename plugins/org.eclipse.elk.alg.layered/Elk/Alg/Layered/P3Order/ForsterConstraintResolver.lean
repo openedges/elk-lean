@@ -59,6 +59,23 @@ structure BarycenterState where
 /-- `BarycenterState::new(node)`. -/
 def BarycenterState.new (node : LNodeId) : BarycenterState := { node }
 
+/-- Updates state `(li, ni)` of a `barycenter_states[layer][node id]` table (no-op without a
+state). The row and the state are taken out before the update so that both change in place. -/
+@[inline] def BarycenterState.updateIn (states : Array (Array (Option BarycenterState))) (li ni : Nat)
+    (f : BarycenterState → BarycenterState) : Array (Array (Option BarycenterState)) :=
+  if h : li < states.size then
+    let row := states[li]
+    let states := states.setIfInBounds li #[]
+    let row := if h2 : ni < row.size then
+        let o := row[ni]
+        let row := row.setIfInBounds ni none
+        match o with
+        | some st => row.setIfInBounds ni (some (f st))
+        | none => row
+      else row
+    states.setIfInBounds li row
+  else states
+
 /-- `ForsterConstraintResolver.ConstraintGroup`: nodes that must stay together, with the
 constraint graph edges (group ids). -/
 structure ConstraintGroup where
@@ -119,6 +136,27 @@ structure ForsterData where
   constraintGroupArena : Array ConstraintGroup := #[]
   deriving Inhabited
 
+namespace ForsterData
+
+/-- Updates the barycenter states (fields taken out first, so the tables change in place). -/
+@[inline] def updateBarycenterStates (d : ForsterData)
+    (f : Array (Array (Option BarycenterState)) → Array (Array (Option BarycenterState))) : ForsterData :=
+  match d with
+  | ⟨lu, bs, cg, cga⟩ => ⟨lu, f bs, cg, cga⟩
+
+/-- Updates the constraint group table. -/
+@[inline] def updateConstraintGroups (d : ForsterData) (f : Array (Array (Option Nat)) → Array (Array (Option Nat))) :
+    ForsterData :=
+  match d with
+  | ⟨lu, bs, cg, cga⟩ => ⟨lu, bs, f cg, cga⟩
+
+/-- Updates the constraint group arena. -/
+@[inline] def updateArena (d : ForsterData) (f : Array ConstraintGroup → Array ConstraintGroup) : ForsterData :=
+  match d with
+  | ⟨lu, bs, cg, cga⟩ => ⟨lu, bs, cg, f cga⟩
+
+end ForsterData
+
 /-- Read-only context: the arena and the snapshot (if set). -/
 structure ForsterCtx where
   arena : LGraphArena
@@ -163,11 +201,11 @@ namespace ForsterM
 
 /-- `group_mut(group_id)` with an update. -/
 @[inline] def modifyGroup (gid : Nat) (f : ConstraintGroup → ConstraintGroup) : ForsterM Unit :=
-  modify fun d => { d with constraintGroupArena := d.constraintGroupArena.modify gid f }
+  modify fun d => d.updateArena (·.modify gid f)
 
 /-- `add_group(group)`. -/
 def addGroup (g : ConstraintGroup) : ForsterM Nat :=
-  modifyGet fun d => (d.constraintGroupArena.size, { d with constraintGroupArena := d.constraintGroupArena.push g })
+  modifyGet fun d => (d.constraintGroupArena.size, d.updateArena (·.push g))
 
 /-- `group_of(node)`. -/
 def groupOf (c : ForsterCtx) (n : LNodeId) : ForsterM Nat := do
@@ -187,8 +225,7 @@ def nodeBarycenter (c : ForsterCtx) (n : LNodeId) : ForsterM (Option Float) := d
 def setNodeBarycenter (c : ForsterCtx) (n : LNodeId) (b : Option Float) : ForsterM Unit := do
   let li := c.layerIndex n
   let ni := c.nodeId n
-  modify fun d => { d with
-    barycenterStates := d.barycenterStates.modify li fun l => l.modify ni fun o => o.map fun s => { s with barycenter := b } }
+  modify fun d => d.updateBarycenterStates (BarycenterState.updateIn · li ni fun s => { s with barycenter := b })
 
 /-- `group_barycenter(group)`: the barycenter of the group's first node. -/
 def groupBarycenter (c : ForsterCtx) (gid : Nat) : ForsterM (Option Float) := do
@@ -208,13 +245,11 @@ def initNodeLevel (c : ForsterCtx) (node : LNodeId) (fullInit : Bool) : ForsterM
   let ni := c.nodeId node
   if li < (← get).constraintGroups.size then
     let gid ← addGroup (ConstraintGroup.new node)
-    modify fun d => { d with
-      constraintGroups := d.constraintGroups.modify li fun l => (growTo l (ni + 1) none).setIfInBounds ni (some gid) }
+    modify fun d => d.updateConstraintGroups (·.modify li fun l => (growTo l (ni + 1) none).setIfInBounds ni (some gid))
   if fullInit then
     if li < (← get).barycenterStates.size then
-      modify fun d => { d with
-        barycenterStates := d.barycenterStates.modify li fun l =>
-          (growTo l (ni + 1) none).setIfInBounds ni (some (BarycenterState.new node)) }
+      modify fun d => d.updateBarycenterStates (·.modify li fun l =>
+        (growTo l (ni + 1) none).setIfInBounds ni (some (BarycenterState.new node)))
     if let some unit := (c.arena.node node).internal.inLayerLayoutUnit then
       modify fun d => { d with layoutUnits := d.layoutUnits.insert unit ((d.layoutUnits.getD unit #[]).push node) }
 
@@ -260,14 +295,21 @@ private def isViolated (predBary groupBary : Float) (predIndex groupIndex : Nat)
   if predBary.toF32 == groupBary.toF32 then predIndex > groupIndex
   else predBary > groupBary
 
+/-- The index of the last occurrence of `gid` in `groups` (`0` when absent): the value of the Rust
+`index_map` (filled in order, later entries win). -/
+def lastIndexOf (groups : Array Nat) (gid : Nat) : Nat := Id.run do
+  let mut k := groups.size
+  while k > 0 do
+    k := k - 1
+    if groups[k]! == gid then return k
+  return 0
+
 /-- `find_violated_constraint(groups)`: a topological traversal of the constraint graph from its
 sources (FIFO), returning the first `(predecessor, group)` pair in the wrong order. -/
 def findViolatedConstraint (c : ForsterCtx) (groups : Array Nat) : ForsterM (Option (Nat × Nat)) := do
   let mut active : Array Nat := #[]
-  let mut indexMap : Std.HashMap Nat Nat := {}
   for h : index in [0:groups.size] do
     let gid := groups[index]
-    indexMap := indexMap.insert gid index
     if let some g ← group gid then
       modifyGroup gid fun x => { x with incomingConstraints := #[] }
       if g.hasOutgoingConstraints && g.incomingConstraintsCount == 0 then
@@ -280,7 +322,11 @@ def findViolatedConstraint (c : ForsterCtx) (groups : Array Nat) : ForsterM (Opt
     for predecessor in incoming do
       let predBary := (← groupBarycenter c predecessor).getD 0.0
       let groupBary := (← groupBarycenter c gid).getD 0.0
-      if isViolated predBary groupBary (indexMap.getD predecessor 0) (indexMap.getD gid 0) then
+      -- the group indices only break ties of the `f32` barycenters (Rust builds an index map)
+      let violated := if predBary.toF32 == groupBary.toF32 then
+          isViolated predBary groupBary (lastIndexOf groups predecessor) (lastIndexOf groups gid)
+        else isViolated predBary groupBary 0 0
+      if violated then
         return some (predecessor, gid)
     let outgoing := ((← group gid).map (·.outgoingConstraints)).getD #[]
     for successorId in outgoing do
@@ -376,11 +422,15 @@ def processConstraintsInternal (c : ForsterCtx) (nodes : Array LNodeId) (onlyBet
     | none => break
   let mut result : Array LNodeId := #[]
   for gid in groups do
-    let groupBarycenter ← groupBarycenter c gid
     let groupNodes := ((← group gid).map (·.nodes)).getD #[]
-    for node in groupNodes do
-      result := result.push node
-      setNodeBarycenter c node groupBarycenter
+    if groupNodes.size == 1 then
+      -- the barycenter of a single-node group is the node's own: writing it back changes nothing
+      result := result.push groupNodes[0]!
+    else
+      let groupBarycenter ← groupBarycenter c gid
+      for node in groupNodes do
+        result := result.push node
+        setNodeBarycenter c node groupBarycenter
   return result
 
 /-- `process_constraints(nodes)`: with `constraintsBetweenNonDummies` first between normal
