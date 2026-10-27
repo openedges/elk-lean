@@ -2,6 +2,7 @@ import Elk.Core.Util.ElkUtil
 import Elk.Core.Util.Sort
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.core.util.BoxLayoutProvider`
 
@@ -30,7 +31,7 @@ structure Group where
 abbrev BoxM := StateT (Array Group) ElkM
 
 @[inline] private def getGroup (i : Nat) : BoxM Group := do return (← get)[i]!
-@[inline] private def modGroup (i : Nat) (f : Group → Group) : BoxM Unit := modify (·.modify i f)
+@[inline] private def modGroup (i : Nat) (f : Group → Group) : BoxM Unit := modify (·.modifyIn i f)
 
 private def newNodeGroup (n : NodeId) : BoxM Nat := do
   ElkM.modifyNode n fun nd => { nd with x := 0.0, y := 0.0 }

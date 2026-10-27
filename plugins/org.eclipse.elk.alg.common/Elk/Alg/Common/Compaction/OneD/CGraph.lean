@@ -1,6 +1,7 @@
 import Elk.Alg.Common.Compaction.OneD.CNode
 import Elk.Alg.Common.Compaction.OneD.CGroup
 import Elk.Core.Options.Direction
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.common.compaction.oned.CGraph`
 
@@ -51,11 +52,11 @@ def supports (g : CGraph) (direction : Direction) : Bool := g.supportedDirection
 
 /-- In-place update of a node (Rust `node.borrow_mut()`). -/
 @[inline] def modifyCNode (g : CGraph) (n : CNodeId) (f : CNode → CNode) : CGraph :=
-  { g with cNodes := g.cNodes.modify n.idx f }
+  { g with cNodes := g.cNodes.modifyIn n.idx f }
 
 /-- In-place update of a group (Rust `group.borrow_mut()`). -/
 @[inline] def modifyCGroup (g : CGraph) (c : CGroupId) (f : CGroup → CGroup) : CGraph :=
-  { g with cGroups := g.cGroups.modify c.idx f }
+  { g with cGroups := g.cGroups.modifyIn c.idx f }
 
 /-- Ids of all nodes in arena order (Rust `c_graph.borrow().c_nodes.clone()`). -/
 def cNodeIds (g : CGraph) : Array CNodeId := (Array.range g.cNodes.size).map (⟨·⟩)

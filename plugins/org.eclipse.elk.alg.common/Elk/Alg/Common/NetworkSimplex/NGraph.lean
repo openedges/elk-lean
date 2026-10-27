@@ -1,4 +1,5 @@
 import Elk.Alg.Common.NetworkSimplex.NEdge
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.common.networksimplex.NGraph` (elk-rs `n_graph.rs`)
 
@@ -46,11 +47,11 @@ namespace NGraph
 
 /-- In-place update of node `n`. -/
 @[inline] def modifyNode {ο : Type} (g : NGraph ο) (n : NNodeId) (f : NNode ο → NNode ο) : NGraph ο :=
-  { g with nodes := g.nodes.modify n.idx f }
+  { g with nodes := g.nodes.modifyIn n.idx f }
 
 /-- In-place update of edge `e`. -/
 @[inline] def modifyEdge {ο : Type} (g : NGraph ο) (e : NEdgeId) (f : NEdge ο → NEdge ο) : NGraph ο :=
-  { g with edges := g.edges.modify e.idx f }
+  { g with edges := g.edges.modifyIn e.idx f }
 
 /-- Adds a fully specified edge to the arena and appends it to the outgoing
 edges of its source and the incoming edges of its target (the side effect of

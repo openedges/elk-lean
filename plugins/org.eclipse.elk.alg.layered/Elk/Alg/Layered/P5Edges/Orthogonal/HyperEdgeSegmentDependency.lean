@@ -1,4 +1,5 @@
 import Elk.Alg.Layered.P5Edges.Orthogonal.HyperEdgeSegment
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.orthogonal.HyperEdgeSegmentDependency`
 
@@ -103,7 +104,7 @@ def dependencies (g : SegmentGraph) : Array HyperEdgeSegmentDependency :=
 /-- Updates segment `i` in place (a no-op for an invalid index). The update is only performed in
 place when `f` is not inlined (see `HyperEdgeSegment.pushOutgoingDependency`). -/
 @[inline] def modifySegment (g : SegmentGraph) (i : Nat) (f : HyperEdgeSegment → HyperEdgeSegment) : SegmentGraph :=
-  { g with segments := g.segments.modify i f }
+  { g with segments := g.segments.modifyIn i f }
 
 /-- Appends a segment (Rust `edge_segments.push(segment)`); its index is the previous number of
 segments. -/

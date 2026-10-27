@@ -5,6 +5,7 @@ import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.P5Edges.Splines.SplineSegment
 import Elk.Alg.Layered.P5Edges.Splines.SplinesMath
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.splines.SplineEdgeRouter`
 
@@ -102,7 +103,7 @@ shared `SplineSegmentRef`); out-of-range ids are ignored. -/
 def modifySplineSegment (graph : LGraphId) (id : SplineSegmentId) (f : SplineSegment → SplineSegment) :
     LayeredM Unit :=
   modifyGraph graph fun g =>
-    { g with internal := { g.internal with splineSegments := g.internal.splineSegments.modify id.idx f } }
+    { g with internal := { g.internal with splineSegments := g.internal.splineSegments.modifyIn id.idx f } }
 
 namespace SplineSegment
 
@@ -275,7 +276,7 @@ abbrev RouterM := StateT State LayeredM
 
 /-- Updates the segment `id` in place. -/
 @[inline] def modifySegment (id : SplineSegmentId) (f : SplineSegment → SplineSegment) : RouterM Unit :=
-  modify fun s => { s with segments := s.segments.modify id.idx f }
+  modify fun s => { s with segments := s.segments.modifyIn id.idx f }
 
 /-- The dependency `id`. -/
 @[inline] def getDependency (id : DependencyId) : RouterM Dependency := do

@@ -1,4 +1,5 @@
 import Elk.Graph.Ids
+import Elk.Graph.ArrayModify
 import Elk.Graph.Properties
 /-!
 # ElkGraph data model (`org.eclipse.elk.graph.{ElkNode, ElkPort, ElkEdge, ElkLabel, ElkEdgeSection}`)
@@ -143,23 +144,23 @@ namespace ElkGraph
 @[inline] def modifyNode (g : ElkGraph) (n : NodeId) (f : ElkNode → ElkNode) : ElkGraph :=
   let arr := g.nodes
   let g := { g with nodes := #[] }
-  { g with nodes := arr.modify n.idx f }
+  { g with nodes := arr.modifyIn n.idx f }
 @[inline] def modifyPort (g : ElkGraph) (p : PortId) (f : ElkPort → ElkPort) : ElkGraph :=
   let arr := g.ports
   let g := { g with ports := #[] }
-  { g with ports := arr.modify p.idx f }
+  { g with ports := arr.modifyIn p.idx f }
 @[inline] def modifyEdge (g : ElkGraph) (e : EdgeId) (f : ElkEdge → ElkEdge) : ElkGraph :=
   let arr := g.edges
   let g := { g with edges := #[] }
-  { g with edges := arr.modify e.idx f }
+  { g with edges := arr.modifyIn e.idx f }
 @[inline] def modifyLabel (g : ElkGraph) (l : LabelId) (f : ElkLabel → ElkLabel) : ElkGraph :=
   let arr := g.labels
   let g := { g with labels := #[] }
-  { g with labels := arr.modify l.idx f }
+  { g with labels := arr.modifyIn l.idx f }
 @[inline] def modifySection (g : ElkGraph) (s : SectionId) (f : ElkEdgeSection → ElkEdgeSection) : ElkGraph :=
   let arr := g.sections
   let g := { g with sections := #[] }
-  { g with sections := arr.modify s.idx f }
+  { g with sections := arr.modifyIn s.idx f }
 
 @[inline] def nodeCount (g : ElkGraph) : Nat := g.nodes.size
 @[inline] def portCount (g : ElkGraph) : Nat := g.ports.size

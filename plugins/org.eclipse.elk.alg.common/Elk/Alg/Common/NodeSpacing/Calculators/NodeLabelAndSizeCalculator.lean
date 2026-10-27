@@ -3,6 +3,7 @@ import Elk.Core.Util.ElkUtil
 import Elk.Alg.Common.NodeSpacing.Internal
 import Elk.Alg.Common.NodeSpacing.Internal.AlgorithmCells
 import Elk.Alg.Common.NodeSpacing.Internal.AlgorithmPorts
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.common.nodespacing.NodeLabelAndSizeCalculator`
 
@@ -416,7 +417,7 @@ def cell (g : InsideNodeLabelGrid) (row col : ContainerArea) : CellMinSize :=
 /-- Updates `cells[row][col]`. -/
 def modifyCell (g : InsideNodeLabelGrid) (row col : ContainerArea) (f : CellMinSize → CellMinSize) :
     InsideNodeLabelGrid :=
-  { g with cells := g.cells.modify row.index (·.modify col.index f) }
+  { g with cells := g.cells.modify row.index (·.modifyIn col.index f) }
 
 /-- elk-rs `InsideNodeLabelGrid::new(node, layout_direction)`: reads the grid settings (spacings
 individual or inherited) and adds the size of every node label with an inside placement

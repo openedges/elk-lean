@@ -229,6 +229,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 12. **전역 `stableSort`/`rustSortBy`는 특수화되지 않아** 비교마다 클로저 호출·박싱이 든다 → 핫 경로는 키를 미리 뽑아 전용 정렬(같은 비교 순서)로 처리한다(PL3 삽입 정렬, PT 키 정렬).
 13. **분기·조인 뒤의 `{ s with … }` 갱신은 객체를 재사용하지 못한다**: 모든 필드를 투영해 새 객체를 할당한다(26필드 `ImporterState`는 갱신마다 재할당). 직선 코드의 `{ g with … }`(`ElkGraph.modifyNode`)는 괜찮다. 핫 갱신은 분기 없는 생성자 매치(`match s with | ⟨a, b, …⟩ => ⟨a', b, …⟩`)로 쓴다(PJ `ImporterState.addNode` 등).
 14. **double 비트 패턴을 `Int`로 비교하지 않는다**: 대부분의 비트 패턴이 small-`Int` 범위 밖이라 비교마다 GMP 수가 할당된다(`Float.compareTotal`/`compareJava`, P5 정렬). 부호 비트를 뒤집은 `UInt64` 키를 비교한다. `2^64`/`2^32` 리터럴을 쓰는 부호 변환도 `~~~`(보수)로 바꾼다(PJ, 차분 테스트 `core.util.java`).
+16. **`Array.modify`에 인라인된 직선 갱신 람다는 원소를 매번 재할당한다**(Lean 4.35): 컴파일러가 원소의 필드 읽기와 exclusivity 검사를 `modify`가 슬롯을 비우기(`fset dummy`) *전에* 두어(배열이 아직 원소를 참조) 재사용이 항상 실패한다. 분기가 있는 갱신과 `@[noinline]` 갱신 함수는 괜찮다. 모든 arena 헬퍼(`ElkGraph.modifyNode`, `LGraphArena.modifyNode/Port/Edge/…`, 각 알고리즘 arena)는 `Array.modifyIn`(`Elk.Graph.ArrayModify`: 슬롯을 비운 뒤 경계 재검사 분기 안에서 갱신)을 쓴다 — 생성 C에서 `lean_array_fset(.., box(0))`가 `lean_is_exclusive` 앞에 와야 한다. 새 arena 헬퍼도 `modifyIn`으로 쓴다.
 15. **증명된 인덱스로 unchecked 접근**: `USize` 인덱스와 `i < a.usize` 증명(`usize_lt_size`)으로 `uget`/`uset`을 쓰면 `Nat` 박싱 검사 없는 직접 load가 된다. 배열 크기 동치는 루프 밖에서 한 번 검사하고(`scanForces`), 실패 시 checked 복사본으로 간다(PF2 force 쌍 루프, rectpacking 스캔). 어댑터 읽기(부작용 없음)는 한 번 읽어 재사용하고, 빈 컨테이너(라벨 없는 셀·스트립)는 생성하지 않는다(PN).
 
 ## 8. 배포 설계

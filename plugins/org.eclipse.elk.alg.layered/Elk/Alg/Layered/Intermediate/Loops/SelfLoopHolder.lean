@@ -1,4 +1,5 @@
 import Elk.Alg.Layered.Intermediate.Loops.SelfHyperLoop
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.loops.SelfLoopHolder`
 
@@ -45,11 +46,11 @@ namespace SelfLoopHolder
 @[inline] def slHyperLoop (h : SelfLoopHolder) (l : SelfHyperLoopId) : SelfHyperLoop := h.slHyperLoops[l.idx]!
 
 @[inline] def modifySLPort (h : SelfLoopHolder) (p : SelfLoopPortId) (f : SelfLoopPort → SelfLoopPort) : SelfLoopHolder :=
-  { h with slPorts := h.slPorts.modify p.idx f }
+  { h with slPorts := h.slPorts.modifyIn p.idx f }
 @[inline] def modifySLEdge (h : SelfLoopHolder) (e : SelfLoopEdgeId) (f : SelfLoopEdge → SelfLoopEdge) : SelfLoopHolder :=
-  { h with slEdges := h.slEdges.modify e.idx f }
+  { h with slEdges := h.slEdges.modifyIn e.idx f }
 @[inline] def modifySLHyperLoop (h : SelfLoopHolder) (l : SelfHyperLoopId) (f : SelfHyperLoop → SelfHyperLoop) : SelfLoopHolder :=
-  { h with slHyperLoops := h.slHyperLoops.modify l.idx f }
+  { h with slHyperLoops := h.slHyperLoops.modifyIn l.idx f }
 
 /-- The ids of all hyper loops (in `slHyperLoops` order). -/
 def hyperLoopIds (h : SelfLoopHolder) : Array SelfHyperLoopId :=

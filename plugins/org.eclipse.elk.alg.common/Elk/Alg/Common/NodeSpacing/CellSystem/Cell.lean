@@ -2,6 +2,7 @@ import Elk.Core.Math
 import Elk.Alg.Common.NodeSpacing.CellSystem.ContainerArea
 import Elk.Alg.Common.NodeSpacing.CellSystem.HorizontalLabelAlignment
 import Elk.Alg.Common.NodeSpacing.CellSystem.VerticalLabelAlignment
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.common.nodespacing.cellsystem.Cell` (+ the shared cell arena)
 
@@ -144,7 +145,7 @@ def add (a : CellArena L) (c : Cell L) : CellArena L × CellId :=
 
 /-- Updates the cell with the given id in place (ignored for an invalid id). -/
 @[inline] def modify (a : CellArena L) (id : CellId) (f : Cell L → Cell L) : CellArena L :=
-  { a with cells := a.cells.modify id.idx f }
+  { a with cells := a.cells.modifyIn id.idx f }
 
 /-- `Cell.getPadding()`. -/
 @[inline] def padding (a : CellArena L) (id : CellId) : ElkPadding := (a.get id).padding

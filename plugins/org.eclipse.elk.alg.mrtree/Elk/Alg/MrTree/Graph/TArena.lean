@@ -3,6 +3,7 @@ import Elk.Alg.MrTree.Graph.TGraph
 import Elk.Alg.MrTree.Graph.TNode
 import Elk.Alg.MrTree.Graph.TEdge
 import Elk.Alg.MrTree.Graph.TLabel
+import Elk.Graph.ArrayModify
 /-!
 # The tree graph arena (`TArena`) and the `MrTreeM` monad
 
@@ -53,13 +54,13 @@ namespace TArena
 @[inline] def label (a : TArena) (l : TLabelId) : TLabel := a.labels[l.idx]!
 
 @[inline] def modifyGraph (a : TArena) (g : TGraphId) (f : TGraph → TGraph) : TArena :=
-  { a with graphs := a.graphs.modify g.idx f }
+  { a with graphs := a.graphs.modifyIn g.idx f }
 @[inline] def modifyNode (a : TArena) (n : TNodeId) (f : TNode → TNode) : TArena :=
-  { a with nodes := a.nodes.modify n.idx f }
+  { a with nodes := a.nodes.modifyIn n.idx f }
 @[inline] def modifyEdge (a : TArena) (e : TEdgeId) (f : TEdge → TEdge) : TArena :=
-  { a with edges := a.edges.modify e.idx f }
+  { a with edges := a.edges.modifyIn e.idx f }
 @[inline] def modifyLabel (a : TArena) (l : TLabelId) (f : TLabel → TLabel) : TArena :=
-  { a with labels := a.labels.modify l.idx f }
+  { a with labels := a.labels.modifyIn l.idx f }
 
 /-! ### Creation -/
 

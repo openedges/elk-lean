@@ -2,6 +2,7 @@ import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.P3Order.Counting.IInitializable
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.layered.p3order.LayerSweepTypeDecider`
 
@@ -97,7 +98,7 @@ def ensureSlot (info : Array (Array NodeInfo)) (li ni : Nat) : Array (Array Node
 def updateInfo (info : Array (Array NodeInfo)) (a : LGraphArena) (n : LNodeId) (f : NodeInfo → NodeInfo) :
     Array (Array NodeInfo) :=
   let (li, ni) := nodeKey a n
-  (ensureSlot info li ni).modify li (·.modify ni f)
+  (ensureSlot info li ni).modify li (·.modifyIn ni f)
 
 /-- `node_info_for(node)` as a value (the table grows like in Rust). -/
 def infoFor (info : Array (Array NodeInfo)) (a : LGraphArena) (n : LNodeId) : Array (Array NodeInfo) × NodeInfo :=

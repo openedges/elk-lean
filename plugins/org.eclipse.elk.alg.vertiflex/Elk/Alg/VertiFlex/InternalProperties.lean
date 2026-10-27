@@ -1,5 +1,6 @@
 import Elk.Graph
 import Elk.Alg.VertiFlex.P2Relative.OutlineNode
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.vertiflex.InternalProperties`
 
@@ -61,7 +62,7 @@ def getProps (n : NodeId) : VertiFlexM NodeProps := do
 
 /-- `node.set_property(InternalProperties::.., ..)`: updates the record of a node in place. -/
 def modifyProps (n : NodeId) (f : NodeProps → NodeProps) : VertiFlexM Unit :=
-  modifyThe VertiFlexState fun s => { s with nodes := s.nodes.modify n.idx f }
+  modifyThe VertiFlexState fun s => { s with nodes := s.nodes.modifyIn n.idx f }
 
 /-- Rust `.expect(msg)` on a property that must be present: the panic message is the plain `msg`. -/
 def expectSome {α : Type} (value : Option α) (msg : String) : VertiFlexM α :=

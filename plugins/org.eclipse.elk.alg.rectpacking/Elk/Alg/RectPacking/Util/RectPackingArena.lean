@@ -1,5 +1,6 @@
 import Elk.Graph
 import Elk.Core.Util.Java
+import Elk.Graph.ArrayModify
 /-!
 # Rectangle packing arena (`util::{Block, BlockRow, BlockStack, RectRow}` data and `RectPackingM`)
 
@@ -151,11 +152,11 @@ namespace RectPackingM
   return (← getThe RectPackingArena).rows[r.idx]!
 
 @[inline] def modifyBlock (b : BlockId) (f : Block → Block) : RectPackingM Unit :=
-  modifyThe RectPackingArena fun a => { a with blocks := a.blocks.modify b.idx f }
+  modifyThe RectPackingArena fun a => { a with blocks := a.blocks.modifyIn b.idx f }
 @[inline] def modifyStack (s : BlockStackId) (f : BlockStack → BlockStack) : RectPackingM Unit :=
-  modifyThe RectPackingArena fun a => { a with stacks := a.stacks.modify s.idx f }
+  modifyThe RectPackingArena fun a => { a with stacks := a.stacks.modifyIn s.idx f }
 @[inline] def modifyRow (r : RectRowId) (f : RectRow → RectRow) : RectPackingM Unit :=
-  modifyThe RectPackingArena fun a => { a with rows := a.rows.modify r.idx f }
+  modifyThe RectPackingArena fun a => { a with rows := a.rows.modifyIn r.idx f }
 
 @[inline] def setBlock (b : BlockId) (v : Block) : RectPackingM Unit := modifyBlock b fun _ => v
 @[inline] def setStack (s : BlockStackId) (v : BlockStack) : RectPackingM Unit := modifyStack s fun _ => v

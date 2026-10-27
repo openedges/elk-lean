@@ -4,6 +4,7 @@ import Elk.Alg.Layered.P3Order.Counting.IInitializable
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
 import Elk.Alg.Layered.P3Order.Counting.CrossMinUtil
 import Std.Data.HashMap
+import Elk.Graph.ArrayModify
 /-!
 # `org.eclipse.elk.alg.layered.p3order.ForsterConstraintResolver`
 
@@ -241,7 +242,7 @@ namespace ForsterM
 
 /-- `group_mut(group_id)` with an update. -/
 @[inline] def modifyGroup (gid : Nat) (f : ConstraintGroup → ConstraintGroup) : ForsterM Unit :=
-  modify fun d => d.updateArena (·.modify gid f)
+  modify fun d => d.updateArena (·.modifyIn gid f)
 
 /-- `add_group(group)`. -/
 def addGroup (g : ConstraintGroup) : ForsterM Nat :=

@@ -4,6 +4,7 @@ import Elk.Alg.Layered.Graph.LNode
 import Elk.Alg.Layered.Graph.LPort
 import Elk.Alg.Layered.Graph.LEdge
 import Elk.Alg.Layered.Graph.LLabel
+import Elk.Graph.ArrayModify
 /-!
 # The layered graph arena
 
@@ -43,27 +44,27 @@ namespace LGraphArena
 @[inline] def modifyGraph (a : LGraphArena) (g : LGraphId) (f : LGraph → LGraph) : LGraphArena :=
   let arr := a.graphs
   let a := { a with graphs := #[] }
-  { a with graphs := arr.modify g.idx f }
+  { a with graphs := arr.modifyIn g.idx f }
 @[inline] def modifyNode (a : LGraphArena) (n : LNodeId) (f : LNode → LNode) : LGraphArena :=
   let arr := a.nodes
   let a := { a with nodes := #[] }
-  { a with nodes := arr.modify n.idx f }
+  { a with nodes := arr.modifyIn n.idx f }
 @[inline] def modifyPort (a : LGraphArena) (p : LPortId) (f : LPort → LPort) : LGraphArena :=
   let arr := a.ports
   let a := { a with ports := #[] }
-  { a with ports := arr.modify p.idx f }
+  { a with ports := arr.modifyIn p.idx f }
 @[inline] def modifyEdge (a : LGraphArena) (e : LEdgeId) (f : LEdge → LEdge) : LGraphArena :=
   let arr := a.edges
   let a := { a with edges := #[] }
-  { a with edges := arr.modify e.idx f }
+  { a with edges := arr.modifyIn e.idx f }
 @[inline] def modifyLabel (a : LGraphArena) (l : LLabelId) (f : LLabel → LLabel) : LGraphArena :=
   let arr := a.labels
   let a := { a with labels := #[] }
-  { a with labels := arr.modify l.idx f }
+  { a with labels := arr.modifyIn l.idx f }
 @[inline] def modifyLayer (a : LGraphArena) (l : LayerId) (f : Layer → Layer) : LGraphArena :=
   let arr := a.layers
   let a := { a with layers := #[] }
-  { a with layers := arr.modify l.idx f }
+  { a with layers := arr.modifyIn l.idx f }
 
 /-- `new LGraph()`. -/
 def createGraph (a : LGraphArena) (g : LGraph := {}) : LGraphArena × LGraphId :=

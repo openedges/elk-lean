@@ -1,4 +1,5 @@
 import Elk.Graph.Ids
+import Elk.Graph.ArrayModify
 import Elk.Graph.Enum
 import Elk.Graph.Properties
 import Elk.Graph.Model
