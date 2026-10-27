@@ -10,6 +10,7 @@ import Elk.Alg.Layered.Options.Spacings
 import Elk.Alg.Layered.Intermediate.Loops.SelfLoopHolder
 import Elk.Alg.Common.NodeSpacing.CellSystem.Cell
 import Elk.Alg.Layered.Intermediate.Wrapping.BreakingPointInfo
+import Elk.Alg.Layered.P5Edges.Splines.SplineSegment
 /-!
 # `org.eclipse.elk.alg.layered.options.InternalProperties`
 
@@ -22,7 +23,7 @@ Conversion rules for the processors: `x.getProperty(InternalProperties.FOO)` →
 `x.internal.foo`; `x.setProperty(InternalProperties.FOO, v)` → `{ x with internal.foo := v }`.
 Object-valued properties reference arena ids. Properties whose value types are defined
 with later packages (`SELF_LOOP_HOLDER`, `BREAKING_POINT_INFO`, `END_LABELS`,
-`SPLINE_ROUTE_START`, `SPACINGS`) are added to these structures when those packages are
+`SPACINGS`) are added to these structures when those packages are
 ported. `PROCESSORS` is not stored on the graph: `ElkLayered` keeps the processor lists.
 -/
 namespace Elk.Alg.Layered.Options
@@ -45,6 +46,9 @@ inductive Origin where
 
 /-- Internal properties set on `LGraph`s. -/
 structure LGraphInternals where
+  /-- Segment table behind `SPLINE_ROUTE_START` (the `SplineSegment`s of the spline router, shared by
+  the edges of a hyperedge); `SplineSegmentId.idx` indexes it. -/
+  splineSegments : Array P5Edges.Splines.SplineSegment := #[]
   /-- `ORIGIN`: the `ElkNode` the graph was imported from. -/
   origin : Option Origin := none
   /-- `GRAPH_PROPERTIES` (`graphProperties`, default empty set). -/
@@ -178,6 +182,8 @@ structure LPortInternals where
 
 /-- Internal properties set on `LEdge`s. -/
 structure LEdgeInternals where
+  /-- `SPLINE_ROUTE_START` (`splines.route.start`): ids into the graph's `splineSegments`. -/
+  splineRouteStart : Option (Array P5Edges.Splines.SplineSegmentId) := none
   /-- `ORIGIN`. -/
   origin : Option Origin := none
   /-- `REVERSED` (`reversed`, `false`). -/

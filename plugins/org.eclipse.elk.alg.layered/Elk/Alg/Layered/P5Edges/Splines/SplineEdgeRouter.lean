@@ -37,10 +37,9 @@ router places the nodes horizontally (`LGraphUtil.placeNodesHorizontally`) and s
 Rust stores `SPLINE_ROUTE_START: Vec<SplineSegmentRef>` on each start edge; the segments must
 outlive the phase. The Lean port appends the router's segment table to the graph
 (`LGraphInternals.splineSegments`) and stores the ids on the edge
-(`LEdgeInternals.splineRouteStart`); until those fields exist `storeSplineRoutes` is a no-op (see
-the `TODO(shared-fields)` markers) and the routes are returned by `SplineEdgeRouter.route`.
+(`LEdgeInternals.splineRouteStart`); `route` starts its table at the graph's current table.
 `SPLINE_NS_PORT_Y_COORD` is a *port* property in Java/Rust (set by `NorthSouthPortPostprocessor`)
-and is read through `splineNsPortYCoordOf`, also pending.
+and is read through `splineNsPortYCoordOf`.
 
 ## Rust vs Java
 Rust uses insertion-ordered `Vec`s where Java uses `HashSet`s (up/down hyperedge candidates,
@@ -88,9 +87,8 @@ end SplineEdgeRouter
 def absoluteAnchorY (a : LGraphArena) (port : LPortId) : Float :=
   ((a.portAbsoluteAnchor port).map (·.y)).getD 0.0
 
-/-- `port.getProperty(InternalProperties.SPLINE_NS_PORT_Y_COORD)`.
-TODO(shared-fields): return `p.internal.splineNsPortYCoord` once `LPortInternals` has the field. -/
-def splineNsPortYCoordOf (_p : LPort) : Option Float := none
+/-- `port.getProperty(InternalProperties.SPLINE_NS_PORT_Y_COORD)` (`LPortInternals.splineNsPortYCoord`). -/
+def splineNsPortYCoordOf (p : LPort) : Option Float := p.internal.splineNsPortYCoord
 
 namespace SplineSegment
 
@@ -824,17 +822,16 @@ def routeGraph (graph : LGraphId) : RouterM Unit := do
 
 /-- Runs the router on `graph` and returns the final router state (segment table, route starts). -/
 def route (graph : LGraphId) : LayeredM State := do
-  let ((), st) ← (routeGraph graph).run {}
+  let existing := (← getGraph graph).internal.splineSegments
+  let ((), st) ← (routeGraph graph).run { segments := existing }
   return st
 
-/-- Persists the segment table and the `SPLINE_ROUTE_START` lists.
-TODO(shared-fields): once `LGraphInternals.splineSegments : Array SplineSegment` and
-`LEdgeInternals.splineRouteStart : Option (Array SplineSegmentId)` exist, `route` must start its
-table at the graph's table size and this stores:
-`modifyGraph graph fun g => { g with internal := { g.internal with splineSegments := st.segments } }`
-and, for every `(edge, spline)` in `st.routeStarts`,
-`modifyEdge edge fun e => { e with internal := { e.internal with splineRouteStart := some spline } }`. -/
-def storeSplineRoutes (_graph : LGraphId) (_st : State) : LayeredM Unit := pure ()
+/-- Persists the segment table (`LGraphInternals.splineSegments`) and the `SPLINE_ROUTE_START` lists
+(`LEdgeInternals.splineRouteStart`). -/
+def storeSplineRoutes (graph : LGraphId) (st : State) : LayeredM Unit := do
+  modifyGraph graph fun g => { g with internal := { g.internal with splineSegments := st.segments } }
+  for (edge, spline) in st.routeStarts do
+    modifyEdge edge fun e => { e with internal := { e.internal with splineRouteStart := some spline } }
 
 /-- `process(layeredGraph, monitor)`. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
