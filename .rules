@@ -1,0 +1,75 @@
+# ELK Layout Kernel for Pure Lean 4 (elk-lean)
+
+## 프로젝트 목표
+- ELK Layout Kernel Java 0.12.0(및 elkjs 0.12.0, elk-rs 0.12.1)을 순수 Lean 4로 포팅한다.
+- 기능, API(JSON 입출력·옵션 메타데이터), 알고리즘을 동일하게 이식하고 데이터 모델/파일 구조를 Java 플러그인 구조와 대응시킨다.
+- 동일 입력에 동일 출력, layered 프로세서 단계별 중간 상태도 동일하게 유지한다(elk-rs oracle 기준).
+- 빌드/테스트/parity를 항상 통과 상태로 유지하고, 성능·메모리 회귀를 방지한다.
+- CLI, NAPI(Node.js), WASM(브라우저/Node), elkjs 호환 npm 패키지를 제공한다.
+- 라이선스는 Java 버전과 동일하게 유지한다(EPL-2.0 OR GPL-3.0-or-later).
+
+## 문서 운영 원칙
+- `PLAN.md`: 포팅 계획(목표, 기준 버전, 아키텍처 결정, 단계, 검증, 리스크). 설계 변경 시 함께 갱신한다.
+- `.rules`(= `AGENTS.md` = `CLAUDE.md`): 작업 방식, 품질 게이트, 현재 핵심 우선순위만 관리한다.
+- `HISTORY.md`: 단계별 구현/검증/수치 변화/이슈 분석 등 진행 이력을 모두 기록한다.
+- `TESTING.md`: 검증 환경 준비, 항목 명세, 절차, 릴리즈 체크리스트.
+- `VERSIONING.md`: 버전 관리, 서브모듈/oracle 고정 정책.
+- 새 단계 완료 시 `HISTORY.md`를 먼저 갱신하고, 필요 시 `.rules`의 핵심 스냅샷만 동기화한다.
+- 본문 설명은 한글로 작성한다(코드/명령어/식별자/경로는 원문 영문 유지).
+
+## 자동 진행 규칙
+- 사용자가 "계속 진행" 또는 "끝까지 진행"을 요청하면, `PLAN.md`의 현재 Phase 작업을 순서대로 진행한다.
+- 막힘/불확실성만 짧게 질문하고, 그 외에는 추가 질문 없이 진행한다.
+- 완전 구현이 어려운 항목은 최소 동작 + TODO(파일/테스트/명령 포함)를 남기고 다음 항목으로 진행한다.
+- 테스트/빌드 실패 시 우선 수정하고 재시도한 뒤 계속 진행한다.
+- 서브에이전트에 작업을 분배할 때는 "대응 Rust/Java 파일 목록, 본 규약, parity 명령, 보고 형식"을 함께 전달한다.
+
+## 단계별 상시 체크 (매 작업 단계)
+1. 코드/문서 변경 직후 `lake build`를 실행한다.
+2. 빌드 출력의 error/warning을 0건으로 맞춘 뒤 다음 단계로 진행한다(`set_option linter.* false`로 숨기지 않는다).
+3. `lake test`를 실행한다.
+
+## 품질 게이트 (단계 종료 시 필수)
+1. 코드 변경 후 코드리뷰 실행
+2. `lake build` (error/warning 0건)
+3. `lake test` (failure 0건)
+4. Parity 실행 및 통과률 확인 — 아래 두 가지 모두 필수 (상세: `TESTING.md`):
+   - **Model parity**: 최종 레이아웃 출력 비교 (oracle elk-rs vs Lean layout JSON)
+   - **Phase-step trace**: layered 프로세서별 중간 상태 비교
+5. 성능 게이트: 기준선 대비 5% 이상 느려지면 원인 분석 후 진행
+6. 문서 갱신: `.rules` 핵심 스냅샷의 parity 수치, `HISTORY.md` 변경 내역/수치
+7. 커밋 (`<scope>: <summary>`)
+8. 불가/예외 사항은 `HISTORY.md`에 사유와 대안을 기록
+
+## Lean 코딩 규약 (핵심)
+- 그래프 요소는 arena 배열 + typed id(`NodeId` 등)로만 참조한다. `IO.Ref` 상호 참조 객체 그래프 금지(순환 → 누수).
+- 알고리즘 상태는 `StateRefT σ IO` 모나드로 다룬다. 상태 전체를 바인딩(`let g ← get`)한 채로 `modify`하지 않는다(배열 복사 발생). 요소 갱신은 `modifyNode id f` 류 헬퍼만 사용한다.
+- `List` 대신 `Array`, 불안정 `Array.qsort` 대신 `stableSort`. 음수가 될 수 있는 정수는 `Int`.
+- `panic!`/`unsafe`/`sorry` 금지, 예외는 `throw (IO.userError "<JavaExceptionClass>: msg")`.
+- Java 클래스 1개 = Lean 파일 1개, 경로는 Java 패키지를 CamelCase 모듈로 변환. 공개 선언에는 docstring(원본 클래스/메서드명 포함).
+- 열거형은 `elk_enum` 매크로로 선언한다(ordinal/Java 이름/`EnumSet` 코덱 자동 생성).
+- 부동소수점 출력은 `Float.toShortest`(C shim), 파싱은 `strtod` 바인딩. Java 의미론이 다른 연산은 `Elk.Core.Util.Java` 헬퍼 사용.
+- `import Lean` 금지(런타임 바이너리에 컴파일러가 링크됨). 매크로는 `Init` 수준 API만 사용한다.
+
+## 현재 핵심 스냅샷 (2026-10-27, Phase 0 완료)
+- **버전**: elk-lean `0.12.0`(미공개), 레퍼런스 ELK/elkjs `0.12.0`, oracle elk-rs `0.12.1`(`../elk-rs` HEAD `eb586b6d`).
+- **툴체인**: Lean `v4.35.0` / Lake 5.0 (`~/.elan/bin`, 셸 PATH 미수정: `export PATH=$HOME/.elan/bin:$PATH`). Node 24·Rust 1.97.1은 `../elk-rs`에서 `mise exec --`로 사용.
+- **서브모듈 고정**: `external/elk` → `32331291`(v0.12.0), `external/elkjs` → `ff5771d7`(0.12.0), `external/elk-models` → `ac5af2ba`, `external/elk-live` → `cbf63a24`.
+- **oracle**: `.reference/elk-rs-target/release/model_parity_layout_runner`, `perf_benchmark`(`scripts/build_oracle.sh`로 재빌드).
+- **빌드 상태**: `lake build` 21 jobs 성공(경고 0), `lake test` 통과(1 smoke), CLI `elk --version` 동작, C shim(`elk_float_to_shortest`, `elk_strtod`) 링크 확인.
+- **Parity**: 아직 없음(Phase 2에서 파이프라인 가동).
+- **다음 우선순위**: Phase 1 기반 계층(`Elk.Graph`, `Elk.Core.Math/Util/Options/Data`) → Phase 2 JSON/엔진/CLI/parity 파이프라인.
+
+## 기본 실행 명령
+- 빌드/테스트: `lake build && lake test`
+- CLI: `.lake/build/bin/elk --version`
+- oracle 재빌드: `sh scripts/build_oracle.sh`
+- oracle 단일 모델 실행: `sh scripts/oracle_layout.sh <input.json> <out.json> [trace_dir]`
+- Model parity(Phase 2부터): `sh scripts/run_model_parity.sh external/elk-models tests/model_parity`
+
+## 외부 모듈 정책
+- `external/*`는 상류 레퍼런스 서브모듈이며 수정하지 않는다.
+- `../elk-rs`는 읽기 전용 레퍼런스다. 빌드 산출물은 `CARGO_TARGET_DIR=.reference/elk-rs-target`으로 격리한다.
+
+## 진행 기록 위치
+- 상세 진행 이력/완료 단계/드리프트 분석/실험 로그/TODO: `HISTORY.md`

@@ -1,0 +1,32 @@
+# Lake build artifacts
+/.lake/
+**/.lake/
+
+# Reference builds of elk-rs (oracle binaries, cargo target dir)
+/.reference/
+
+# Editor/OS noise
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# npm / node
+node_modules/
+/plugins/org.eclipse.elk.js/dist/
+/plugins/org.eclipse.elk.napi/build/
+/plugins/org.eclipse.elk.wasm/build/
+
+# Parity / perf outputs (large, regenerated)
+/tests/model_parity*/inputs/
+/tests/model_parity*/lean/
+/tests/model_parity*/oracle/
+/tests/model_parity*/trace_*/
+/tests/model_parity*/*_progress.tsv
+/tests/perf/*.csv
+/tests/tmp/*
+!/tests/tmp/.gitkeep

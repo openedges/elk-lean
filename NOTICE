@@ -1,0 +1,37 @@
+# Notices for elk-lean
+
+elk-lean is a pure Lean 4 port of the Eclipse Layout Kernel (ELK).
+
+## Copyright
+
+Copyright (c) 2026 elk-lean contributors.
+
+The ported algorithms, data structures, option metadata and documentation are
+derived from the Eclipse Layout Kernel, Copyright (c) 2010-2025 Kiel University
+and others, and from elk-rs (https://github.com/openedges/elk-rs), Copyright (c)
+2026 openedges, which is itself a port of ELK.
+
+## Declared Project Licenses
+
+This program and the accompanying materials are made available under the terms
+of the Eclipse Public License v. 2.0 which is available at
+https://www.eclipse.org/legal/epl-2.0.
+
+This Source Code may also be made available under the following Secondary
+Licenses when the conditions for such availability set forth in the Eclipse
+Public License v. 2.0 are satisfied: GNU General Public License, version 3 or
+later, which is available at https://www.gnu.org/licenses/gpl-3.0.html.
+
+SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
+
+## Source Code
+
+- ELK: https://github.com/eclipse-elk/elk (reference commit 323312916048544e4e594eab3303cdb0d01e2929, v0.12.0)
+- elkjs: https://github.com/kieler/elkjs (reference commit ff5771d7165445c42c408bb8a090c8035272218c, 0.12.0)
+- elk-rs: https://github.com/openedges/elk-rs (reference commit eb586b6d91ee0b55cda591546cec8f04cc7f2422, v0.12.1)
+
+## Third-party Content
+
+- `scripts/compare_model_parity_layouts.py` and `scripts/compare_phase_traces.py`
+  are copied from elk-rs (EPL-2.0 OR GPL-3.0-or-later).
+- `external/elk-models` test models carry their own license notices.
