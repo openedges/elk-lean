@@ -555,9 +555,9 @@ def interactiveReferencePoint (node : LNodeId) : LayeredM (Option KVector) := do
 in Java/elk-rs) and stores the advanced generator back; a missing generator starts at seed 0
 like elk-rs `Random::default()`. -/
 def drawRandom {α : Type} (graph : LGraphId) (f : Random → α × Random) : LayeredM α := do
-  let random := (← getGraph graph).internal.random.getD (Random.ofInt 0)
+  let random := (← LayeredM.graphRandom? graph).getD (Random.ofInt 0)
   let (value, random') := f random
-  modifyGraph graph fun g => { g with internal := { g.internal with random := some random' } }
+  LayeredM.setGraphRandom graph random'
   return value
 
 /-- `Spacings.getHorizontalSpacing(n1, n2)` on arena nodes. -/

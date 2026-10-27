@@ -107,15 +107,19 @@ def split (graph : LGraphId) : LayeredM (Array LGraphId) := do
             if let some j := ptrToIdx[tgtNode]? then adj := adj.push j
     adjacency := adjacency.set! i adj
   let mut result : Array LGraphId := #[]
+  let randomHolder ← LayeredM.randomHolder graph
   let mut visited : Array Bool := Array.replicate nodes.size false
   for start in [0:nodes.size] do
     if visited[start]! then continue
     let (componentIndices, extPortSides, visited') := dfsFlat start adjacency extPortSide visited
     visited := visited'
     if componentIndices.isEmpty then continue
+    -- `copy_properties` clones `RANDOM`, whose state elk-rs shares between clones: the
+    -- component draws from the generator of the graph it was split from
     let componentGraph ← createGraph {
       props := gr.props.remove LayeredOptions.NODE_SIZE_MINIMUM,
-      internal := { gr.internal with extPortConnections := extPortSides },
+      internal := { gr.internal with extPortConnections := extPortSides, random := none,
+                                     randomOwner := some randomHolder },
       padding := gr.padding }
     for idx in componentIndices do
       let n := nodes[idx]!

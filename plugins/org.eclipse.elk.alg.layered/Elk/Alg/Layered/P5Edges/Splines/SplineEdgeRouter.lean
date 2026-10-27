@@ -300,7 +300,7 @@ def nextInt (graph : LGraphId) (bound : Int) : RouterM Int := do
   let (v, r) := (← get).random.nextInt bound
   modify fun s => { s with random := r }
   if (← get).sharedRandom then
-    modifyGraph graph fun g => { g with internal := { g.internal with random := some r } }
+    LayeredM.setGraphRandom graph r
   return v
 
 /-- `insert_unique_port(left_ports_layer, port)`. -/
@@ -806,7 +806,7 @@ def routeGraph (graph : LGraphId) : RouterM Unit := do
     edgeEdgeSpacing := gr.props.getD LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS 0.0
     sloppyRouting := gr.props.getD LayeredOptions.EDGE_ROUTING_SPLINES_MODE SplineRoutingMode.sloppy == .sloppy
     sloppyLayerSpacingFactor := gr.props.getD LayeredOptions.EDGE_ROUTING_SPLINES_SLOPPY_LAYER_SPACING_FACTOR 0.0 }
-  match gr.internal.random with
+  match ← LayeredM.graphRandom? graph with
   | some r => modify fun s => { s with random := r, sharedRandom := true }
   | none => modify fun s => { s with random := Random.ofInt 0, sharedRandom := false }
   let layers := gr.layers

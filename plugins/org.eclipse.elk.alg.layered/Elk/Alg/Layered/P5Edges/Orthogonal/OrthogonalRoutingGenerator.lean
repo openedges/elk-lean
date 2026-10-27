@@ -314,7 +314,7 @@ def routeEdges (gen : OrthogonalRoutingGenerator) (graph : LGraphId) (sourceLaye
       let (g', count) := gen.createDependencyIfNecessary g i j
       g := g'
       criticalDependencyCount := criticalDependencyCount + count
-  let graphRandom := (← getGraph graph).internal.random
+  let graphRandom ← LayeredM.graphRandom? graph
   let mut random := graphRandom.getD (Random.ofInt 0)
   if criticalDependencyCount >= 2 then
     let (g', r) := gen.breakCriticalCycles g random
@@ -326,8 +326,7 @@ def routeEdges (gen : OrthogonalRoutingGenerator) (graph : LGraphId) (sourceLaye
   random := r
   gen.traceSegments "after_noncritical" g
   if graphRandom.isSome then
-    let finalRandom := random
-    modifyGraph graph fun x => { x with internal := { x.internal with random := some finalRandom } }
+    LayeredM.setGraphRandom graph random
   g := topologicalNumbering g
   let mut rankCount : Int := -1
   let mut created : Std.HashSet KVector := {}

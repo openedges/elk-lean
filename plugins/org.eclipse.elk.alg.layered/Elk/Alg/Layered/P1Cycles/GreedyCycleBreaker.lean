@@ -72,7 +72,7 @@ private def nextInt (graph : LGraphId) (bound : Int) : GreedyM Int := do
   let (v, r) := (← get).random.nextInt bound
   modify fun s => { s with random := r }
   if (← get).sharedRandom then
-    modifyGraph graph fun g => { g with internal := { g.internal with random := some r } }
+    LayeredM.setGraphRandom graph r
   return v
 
 private def popSink : GreedyM (Option LNodeId) := do
@@ -268,7 +268,7 @@ private def markNode (node : LNodeId) (value : Int) : GreedyM Bool := do
 def run (graph : LGraphId) : GreedyM Unit := do
   let nodes := (← getGraph graph).layerlessNodes
   let total := nodes.size
-  let graphRandom := (← getGraph graph).internal.random
+  let graphRandom ← LayeredM.graphRandom? graph
   modify fun s => { s with
     indeg := Array.replicate total 0, outdeg := Array.replicate total 0, mark := Array.replicate total 0,
     sources := #[], sourcesHead := 0, sinks := #[], sinksHead := 0,

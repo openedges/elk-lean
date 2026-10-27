@@ -51,7 +51,7 @@ def processNode (n : LNodeId) (router : AbstractSelfLoopRouter) (spacings : Self
 def run (graph : LGraphId) : LayeredM Unit := do
   let gr ← getGraph graph
   let edgeRouting := (gr.props.get LayeredOptions.EDGE_ROUTING).getD .orthogonal
-  let graphRandom := gr.internal.random
+  let graphRandom ← LayeredM.graphRandom? graph
   let spacings : SelfLoopRoutingSpacings :=
     { edgeEdge := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE).getD 10.0
       edgeLabel := (gr.props.get LayeredOptions.SPACING_EDGE_LABEL).getD 2.0
@@ -66,8 +66,7 @@ def run (graph : LGraphId) : LayeredM Unit := do
     if nd.type != .normal || nd.internal.selfLoopHolder.isNone then continue
     random ← processNode n router spacings random
   if graphRandom.isSome then
-    let finalRandom := random
-    modifyGraph graph fun x => { x with internal := { x.internal with random := some finalRandom } }
+    LayeredM.setGraphRandom graph random
 
 /-- The `SelfLoopRouter` intermediate processor. -/
 def processor : LayeredProcessor :=

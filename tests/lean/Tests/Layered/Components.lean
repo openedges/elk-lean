@@ -401,8 +401,25 @@ def compactionCases : Suite := suite "layered.components.compactionTestRs" do
       nd.position.x.isFinite && nd.position.y.isFinite && nd.size.x > 0.0 && nd.size.y > 0.0
     check name ok
 
+/-- elk-rs `Random` clones share their state (`Arc<Mutex<u64>>`): components split from a graph
+draw from the graph's generator, so draws in one component advance the next component's sequence. -/
+def sharedRandomTests : Suite := suite "layered.components.sharedRandom" do
+  let ((orig, comps, d0, d1), a) ← LayeredM.run (do
+    let s ← buildSample
+    LayeredM.modifyGraph s.graph fun g => { g with internal := { g.internal with random := some (Elk.Core.Util.Random.ofInt 0) } }
+    let comps ← ComponentsProcessor.split s.graph
+    let d0 ← LGraphUtil.drawRandom comps[0]! (·.nextInt 1000)
+    let d1 ← LGraphUtil.drawRandom comps[1]! (·.nextInt 1000)
+    return (s.graph, comps, d0, d1)) default
+  let (e0, r1) := (Elk.Core.Util.Random.ofInt 0).nextInt 1000
+  let (e1, r2) := r1.nextInt 1000
+  checkEq "component 0 draws the first value of the shared sequence" d0 e0
+  checkEq "component 1 continues the sequence (hand: second value of Random(0))" d1 e1
+  check "components hold no copy of the generator" ((a.graph comps[0]!).internal.random.isNone)
+  checkEq "the generator lives on the split graph" ((a.graph orig).internal.random.map (·.seed)) (some r2.seed)
+
 def suites : Array Suite :=
   #[componentGroupTests, splitTests, externalSplitTests, combineSimpleRowTests, combineGroupTests,
-    processorUnitTests, compactionTests, compactionCases]
+    processorUnitTests, compactionTests, compactionCases, sharedRandomTests]
 
 end Tests.Layered.Components

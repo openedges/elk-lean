@@ -55,6 +55,10 @@ structure LGraphInternals where
   graphProperties : EnumSet GraphProperties := EnumSet.empty
   /-- `RANDOM` (`random`). -/
   random : Option Random := none
+  /-- The graph whose `random` this graph shares. elk-rs `Random` shares its state between clones
+  (`Arc<Mutex<u64>>`), so components split from a graph (which clone its `RANDOM`) draw from the
+  same generator; use `LayeredM.graphRandom?`/`setGraphRandom` instead of `random` directly. -/
+  randomOwner : Option LGraphId := none
   /-- `CYCLIC` (`cyclic`, `false`). -/
   cyclic : Bool := false
   /-- `EXT_PORT_REPLACED_DUMMIES` (`externalPortReplacedDummies`; Java `null` = empty). -/

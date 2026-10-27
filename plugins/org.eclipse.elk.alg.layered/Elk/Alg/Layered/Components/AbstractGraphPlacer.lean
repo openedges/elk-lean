@@ -86,7 +86,11 @@ def moveGraphs (destination : LGraphId) (sources : Array LGraphId) (offsetX offs
 /-- `LGraph.copyProperties(source)` as used by the placers (see the module doc). -/
 def copyProperties (target source : LGraphId) : LayeredM Unit := do
   let src ← getGraph source
-  modifyGraph target fun g => { g with props := g.props.copyFrom src.props, internal := src.internal }
+  -- the copied `RANDOM` shares its state with the target's (elk-rs `Random` clones share state),
+  -- so the target keeps its own generator link
+  modifyGraph target fun g =>
+    let internal := { src.internal with random := g.internal.random, randomOwner := g.internal.randomOwner }
+    { g with props := g.props.copyFrom src.props, internal := internal }
 
 /-- `target.getLayerlessNodes().clear()`. -/
 def clearLayerlessNodes (target : LGraphId) : LayeredM Unit :=

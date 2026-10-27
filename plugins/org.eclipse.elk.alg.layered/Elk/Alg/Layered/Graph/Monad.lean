@@ -135,6 +135,28 @@ def cachePortSides (n : LNodeId) : LayeredM Unit := do
 @[inline] def hasLabelProp {α : Type} (l : LLabelId) (p : Property α) : LayeredM Bool := do
   return (← getLabel l).props.has p
 
+/-! ### Shared `RANDOM` -/
+
+/-- The graph holding the generator shared with `g` (follows `LGraphInternals.randomOwner`). -/
+def randomHolder (g : LGraphId) : LayeredM LGraphId := do
+  let mut cur := g
+  for _ in [0:64] do
+    match (← getGraph cur).internal.randomOwner with
+    | some o =>
+      if o == cur then return cur
+      cur := o
+    | none => return cur
+  return cur
+
+/-- `graph.getProperty(InternalProperties.RANDOM)`: the generator shared by `g`, if any. -/
+def graphRandom? (g : LGraphId) : LayeredM (Option Elk.Core.Util.Random) := do
+  return (← getGraph (← randomHolder g)).internal.random
+
+/-- Writes the advanced generator back to the graph holding it (elk-rs shares the state). -/
+def setGraphRandom (g : LGraphId) (r : Elk.Core.Util.Random) : LayeredM Unit := do
+  let h ← randomHolder g
+  modifyGraph h fun x => { x with internal := { x.internal with random := some r } }
+
 end LayeredM
 
 end Elk.Alg.Layered.Graph

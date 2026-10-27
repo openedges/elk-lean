@@ -166,7 +166,7 @@ def configureGraphProperties (graph : LGraphId) : LayeredM Unit := do
     setGraphProp graph CoreOptions.DIRECTION inferred
   -- Random::default() of elk-rs seeds with 0; Java's `new Random()` would be time based
   let random := if randomSeed == 0 then Random.ofInt 0 else Random.ofInt randomSeed
-  modifyGraph graph fun g => { g with internal := { g.internal with random := some random } }
+  modifyGraph graph fun g => { g with internal := { g.internal with random := some random, randomOwner := none } }
   if favorStraightness.isNone then
     -- Java metadata defaults edge routing to ORTHOGONAL for layered; UNDEFINED counts as orthogonal here too
     let favor := edgeRouting == .orthogonal || edgeRouting == .undefined
