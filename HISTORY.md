@@ -54,7 +54,7 @@
 | F2. `ElkGraphAdapters`(adapter 추상화 설계: alg.common nodespacing과 공유) | `core/util/adapters/*` (1K줄) | fable(주) | high | 주 에이전트, Phase 3 착수 시 | 대기 |
 | G. JSON importer/exporter/layout API/CLI/parity 스크립트 | `graph.json/*` (7.3K줄) | fable(주) | xhigh | 주 에이전트 | 완료(엔진 스텁): import/transfer/export 1:1, `Elk.Api.layoutJson`, `elk layout|batch|algorithms|options|categories`, `scripts/run_model_parity.sh`. 코퍼스 `.json` 100개 왕복 오류 0 |
 | H. JSON import/export 테스트 이식 | `graph.json/tests/all/*.rs` (4.8K줄) | sonnet | medium | 서브에이전트 H(worktree) | 완료(`33d06b4`): 비-layered 테스트 전부 이식(graph/edges/sections/id/layoutOptions/individualSpacings/export/transfer/metadata cache/layout API), 동작 차이 없음. layered 의존 테스트(edge_coords, root_external_ports, edgeless 4건)는 Phase 4 이후 복원 TODO |
-| I. `.elkt` 파서(Phase 6 선행) | `alg.layered/tests/common/elkt_test_loader.rs` (3.3K줄), elk-live `src/elkt` | sonnet | high | 서브에이전트 I(worktree) | 진행 중 |
+| I. `.elkt` 파서(Phase 6 선행) | `alg.layered/tests/common/elkt_test_loader.rs` (3.3K줄), elk-live `src/elkt` | sonnet | high | 서브에이전트 I(worktree) | 완료(`f3c485c`): Rust 테스트 로더(라인 기반 방언) 대신 `ElkGraph.xtext` 문법을 구현(`Elk.Text.{Lexer,Parser,Loader}`, `parseElkt`/`loadAst`/`applyDefaults`). 코퍼스 898/898 파싱, Ptolemy `.elkt` 550개가 `.json` 쌍과 구조 일치. 미구현: Xtext validator 검사, 직렬화기. 추정 초과(≈16분, sonnet/high → 실제 opus급 난도) |
 
 ### Phase 1 (2차) — 병합 결과
 - A/B/C worktree 병합(`939786e`, `e5d62fa`, `3748155`) 후 전체 `lake build` 경고 0. `lake test` 통합 결과는 아래 커밋 메시지의 수치 참조.

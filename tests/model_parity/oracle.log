@@ -1,0 +1,122 @@
+model parity rust runner: total=60, timeout=120s
+[1/60] start realworld/ptolemy/flattened/algebraic_heateropentank_HeaterOpenTank.json
+[1/60] ok realworld/ptolemy/flattened/algebraic_heateropentank_HeaterOpenTank.json (7 ms)
+[2/60] start realworld/ptolemy/flattened/algebraic_heateropentank_HeaterOpenTankRefactored.json
+[2/60] ok realworld/ptolemy/flattened/algebraic_heateropentank_HeaterOpenTankRefactored.json (3 ms)
+[3/60] start realworld/ptolemy/flattened/algebraic_rlc_RLC.json
+[3/60] ok realworld/ptolemy/flattened/algebraic_rlc_RLC.json (2 ms)
+[4/60] start realworld/ptolemy/flattened/aspect_cartrackingattackmodeling_CarTrackingAttackModeling.json
+[4/60] ok realworld/ptolemy/flattened/aspect_cartrackingattackmodeling_CarTrackingAttackModeling.json (4 ms)
+[5/60] start realworld/ptolemy/flattened/aspect_cartrackingattackmodeling_CarTrackingAttackModelingAllAttacksInOneModel.json
+[5/60] ok realworld/ptolemy/flattened/aspect_cartrackingattackmodeling_CarTrackingAttackModelingAllAttacksInOneModel.json (7 ms)
+[6/60] start realworld/ptolemy/flattened/aspect_compositeqm_CheckExecutionTimeConstraints.json
+[6/60] ok realworld/ptolemy/flattened/aspect_compositeqm_CheckExecutionTimeConstraints.json (2 ms)
+[7/60] start realworld/ptolemy/flattened/aspect_compositeqm_CompositeQM.json
+[7/60] ok realworld/ptolemy/flattened/aspect_compositeqm_CompositeQM.json (1 ms)
+[8/60] start realworld/ptolemy/flattened/aspect_de_DE2.json
+[8/60] ok realworld/ptolemy/flattened/aspect_de_DE2.json (3 ms)
+[9/60] start realworld/ptolemy/flattened/backtrack_primetest_PrimeTest.json
+[9/60] ok realworld/ptolemy/flattened/backtrack_primetest_PrimeTest.json (3 ms)
+[10/60] start realworld/ptolemy/flattened/backtrack_ramprollback_RampRollback.json
+[10/60] ok realworld/ptolemy/flattened/backtrack_ramprollback_RampRollback.json (2 ms)
+[11/60] start realworld/ptolemy/flattened/backtrack_trialmodule_TrialModule.json
+[11/60] ok realworld/ptolemy/flattened/backtrack_trialmodule_TrialModule.json (4 ms)
+[12/60] start realworld/ptolemy/flattened/backtrack_trialmodule_TrialModuleNonBacktrack.json
+[12/60] ok realworld/ptolemy/flattened/backtrack_trialmodule_TrialModuleNonBacktrack.json (3 ms)
+[13/60] start realworld/ptolemy/flattened/ca_conway_Conway.json
+[13/60] ok realworld/ptolemy/flattened/ca_conway_Conway.json (3 ms)
+[14/60] start realworld/ptolemy/flattened/ca_conwayrandom_ConwayRandom.json
+[14/60] ok realworld/ptolemy/flattened/ca_conwayrandom_ConwayRandom.json (1 ms)
+[15/60] start realworld/ptolemy/flattened/ci_router_ComplexRouter.json
+[15/60] ok realworld/ptolemy/flattened/ci_router_ComplexRouter.json (2 ms)
+[16/60] start realworld/ptolemy/flattened/ci_router_Router.json
+[16/60] ok realworld/ptolemy/flattened/ci_router_Router.json (2 ms)
+[17/60] start realworld/ptolemy/flattened/ci_router_dropqueuetest1.json
+[17/60] ok realworld/ptolemy/flattened/ci_router_dropqueuetest1.json (2 ms)
+[18/60] start realworld/ptolemy/flattened/ci_router_queuetest1.json
+[18/60] ok realworld/ptolemy/flattened/ci_router_queuetest1.json (1 ms)
+[19/60] start realworld/ptolemy/flattened/colt_coltrandom_ColtRandom.json
+[19/60] ok realworld/ptolemy/flattened/colt_coltrandom_ColtRandom.json (3 ms)
+[20/60] start realworld/ptolemy/flattened/comm_convolutionalcoder_ConvolutionalCoder.json
+[20/60] ok realworld/ptolemy/flattened/comm_convolutionalcoder_ConvolutionalCoder.json (2 ms)
+[21/60] start realworld/ptolemy/flattened/comm_huffmandecoder_HuffmanDecoder.json
+[21/60] ok realworld/ptolemy/flattened/comm_huffmandecoder_HuffmanDecoder.json (1 ms)
+[22/60] start realworld/ptolemy/flattened/comm_trellisdecoder_TrellisDecoder.json
+[22/60] ok realworld/ptolemy/flattened/comm_trellisdecoder_TrellisDecoder.json (3 ms)
+[23/60] start realworld/ptolemy/flattened/comm_viterbidecoder_ViterbiDecoder.json
+[23/60] ok realworld/ptolemy/flattened/comm_viterbidecoder_ViterbiDecoder.json (20 ms)
+[24/60] start realworld/ptolemy/flattened/continuous_bouncingball_BouncingBall.json
+[24/60] ok realworld/ptolemy/flattened/continuous_bouncingball_BouncingBall.json (1 ms)
+[25/60] start realworld/ptolemy/flattened/continuous_cartpendulum_CartPendulum.json
+[25/60] ok realworld/ptolemy/flattened/continuous_cartpendulum_CartPendulum.json (1 ms)
+[26/60] start realworld/ptolemy/flattened/continuous_cartracking_CarTracking.json
+[26/60] ok realworld/ptolemy/flattened/continuous_cartracking_CarTracking.json (5 ms)
+[27/60] start realworld/ptolemy/flattened/continuous_continuousinsidede_ContinuousInsideDE.json
+[27/60] ok realworld/ptolemy/flattened/continuous_continuousinsidede_ContinuousInsideDE.json (2 ms)
+[28/60] start realworld/ptolemy/flattened/continuous_hierarchicalexecution_HierarchicalExecution.json
+[28/60] ok realworld/ptolemy/flattened/continuous_hierarchicalexecution_HierarchicalExecution.json (44 ms)
+[29/60] start realworld/ptolemy/flattened/continuous_levelcrossingdetector_LevelCrossingDetector.json
+[29/60] ok realworld/ptolemy/flattened/continuous_levelcrossingdetector_LevelCrossingDetector.json (13 ms)
+[30/60] start realworld/ptolemy/flattened/continuous_levelcrossingdetectordetectsglitches_LevelCrossingDetectorDetectsGlitches.json
+[30/60] ok realworld/ptolemy/flattened/continuous_levelcrossingdetectordetectsglitches_LevelCrossingDetectorDetectsGlitches.json (14 ms)
+[31/60] start realworld/ptolemy/flattened/continuous_pendulum3d_Pendulum3D.json
+[31/60] ok realworld/ptolemy/flattened/continuous_pendulum3d_Pendulum3D.json (5 ms)
+[32/60] start realworld/ptolemy/flattened/continuous_sigmadelta_SigmaDelta.json
+[32/60] ok realworld/ptolemy/flattened/continuous_sigmadelta_SigmaDelta.json (8 ms)
+[33/60] start realworld/ptolemy/flattened/continuous_starmac_Starmac.json
+[33/60] ok realworld/ptolemy/flattened/continuous_starmac_Starmac.json (56 ms)
+[34/60] start realworld/ptolemy/flattened/continuous_staticunits_StaticUnits.json
+[34/60] ok realworld/ptolemy/flattened/continuous_staticunits_StaticUnits.json (3 ms)
+[35/60] start realworld/ptolemy/flattened/continuous_staticunits_StaticUnits2.json
+[35/60] ok realworld/ptolemy/flattened/continuous_staticunits_StaticUnits2.json (3 ms)
+[36/60] start realworld/ptolemy/flattened/continuous_stickymasses_StickyMasses.json
+[36/60] ok realworld/ptolemy/flattened/continuous_stickymasses_StickyMasses.json (9 ms)
+[37/60] start realworld/ptolemy/flattened/continuous_units_Units.json
+[37/60] ok realworld/ptolemy/flattened/continuous_units_Units.json (21 ms)
+[38/60] start realworld/ptolemy/flattened/continuous_v2v_V2V.json
+[38/60] ok realworld/ptolemy/flattened/continuous_v2v_V2V.json (2 ms)
+[39/60] start realworld/ptolemy/flattened/curriculum_curriculum_Curriculum.json
+[39/60] ok realworld/ptolemy/flattened/curriculum_curriculum_Curriculum.json (81 ms)
+[40/60] start realworld/ptolemy/flattened/curriculum_curriculum_Curriculum149.json
+[40/60] ok realworld/ptolemy/flattened/curriculum_curriculum_Curriculum149.json (9 ms)
+[41/60] start realworld/ptolemy/flattened/curriculum_curriculum_curriculumAbstracted.json
+[41/60] ok realworld/ptolemy/flattened/curriculum_curriculum_curriculumAbstracted.json (8 ms)
+[42/60] start realworld/ptolemy/flattened/curriculum_curriculum_curriculumLS1.json
+[42/60] ok realworld/ptolemy/flattened/curriculum_curriculum_curriculumLS1.json (7 ms)
+[43/60] start realworld/ptolemy/flattened/curriculum_curriculum_curriculumOption1.json
+[43/60] ok realworld/ptolemy/flattened/curriculum_curriculum_curriculumOption1.json (7 ms)
+[44/60] start realworld/ptolemy/flattened/curriculum_curriculum_curriculumProbStat.json
+[44/60] ok realworld/ptolemy/flattened/curriculum_curriculum_curriculumProbStat.json (6 ms)
+[45/60] start realworld/ptolemy/flattened/dde_localzeno_LocalZeno.json
+[45/60] ok realworld/ptolemy/flattened/dde_localzeno_LocalZeno.json (2 ms)
+[46/60] start realworld/ptolemy/flattened/dde_localzeno_LocalZenoTest.json
+[46/60] ok realworld/ptolemy/flattened/dde_localzeno_LocalZenoTest.json (2 ms)
+[47/60] start realworld/ptolemy/flattened/ddf_LoopSyntactic2.json
+[47/60] ok realworld/ptolemy/flattened/ddf_LoopSyntactic2.json (3 ms)
+[48/60] start realworld/ptolemy/flattened/ddf_LoopSyntacticC.json
+[48/60] ok realworld/ptolemy/flattened/ddf_LoopSyntacticC.json (2 ms)
+[49/60] start realworld/ptolemy/flattened/ddf_eratosthenes_Eratosthenes.json
+[49/60] ok realworld/ptolemy/flattened/ddf_eratosthenes_Eratosthenes.json (2 ms)
+[50/60] start realworld/ptolemy/flattened/ddf_huffmandecoder_HuffmanDecoder.json
+[50/60] ok realworld/ptolemy/flattened/ddf_huffmandecoder_HuffmanDecoder.json (1 ms)
+[51/60] start realworld/ptolemy/flattened/ddf_randomwalk_RandomWalk.json
+[51/60] ok realworld/ptolemy/flattened/ddf_randomwalk_RandomWalk.json (1 ms)
+[52/60] start realworld/ptolemy/flattened/ddf_rijndaelencryption_RijndaelEncryption.json
+[52/60] ok realworld/ptolemy/flattened/ddf_rijndaelencryption_RijndaelEncryption.json (3 ms)
+[53/60] start realworld/ptolemy/flattened/de_CommunicationAnomalyDetectionAOM.json
+[53/60] ok realworld/ptolemy/flattened/de_CommunicationAnomalyDetectionAOM.json (5 ms)
+[54/60] start realworld/ptolemy/flattened/de_CommunicationAnomalyDetectionCQM.json
+[54/60] ok realworld/ptolemy/flattened/de_CommunicationAnomalyDetectionCQM.json (5 ms)
+[55/60] start realworld/ptolemy/flattened/de_afdx_AFDX.json
+[55/60] ok realworld/ptolemy/flattened/de_afdx_AFDX.json (2 ms)
+[56/60] start realworld/ptolemy/flattened/de_clock_Clock.json
+[56/60] ok realworld/ptolemy/flattened/de_clock_Clock.json (2 ms)
+[57/60] start realworld/ptolemy/flattened/de_clock_ClockTest.json
+[57/60] ok realworld/ptolemy/flattened/de_clock_ClockTest.json (3 ms)
+[58/60] start realworld/ptolemy/flattened/de_clockdrift_ClockDrifts.json
+[58/60] ok realworld/ptolemy/flattened/de_clockdrift_ClockDrifts.json (2 ms)
+[59/60] start realworld/ptolemy/flattened/de_compositeqm_CheckExecutionTimeConstraints.json
+[59/60] ok realworld/ptolemy/flattened/de_compositeqm_CheckExecutionTimeConstraints.json (2 ms)
+[60/60] start realworld/ptolemy/flattened/de_compositeqm_CompositeQM.json
+[60/60] ok realworld/ptolemy/flattened/de_compositeqm_CompositeQM.json (1 ms)
+model parity rust runner completed: total=60, ok=60, skipped=0, errors=0 (timeouts=0)
