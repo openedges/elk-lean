@@ -1,0 +1,113 @@
+import Elk.Core.Exceptions
+import Elk.Alg.Common.NodeSpacing.Internal.NodeContext
+/-!
+# `org.eclipse.elk.alg.common.nodespacing.internal.algorithm.PortContextCreator`
+
+Creates the port contexts of a node and assigns volatile ids to its ports (elk-rs
+`internal::algorithm::PortContextCreator`). Unless port labels are fixed (or inside port labels
+are ignored), the labels of each port are added to a new label cell created in the node context's
+cell arena and referenced by `PortContext.portLabelCell`.
+
+Order (elk-rs `create_port_contexts`): the volatile id of a port is its index in
+`NodeAdapter.getPorts()`; contexts are appended to their side in that order and afterwards the
+SOUTH and WEST lists are reversed. This reproduces Java's
+`TreeMultimap.create(comparePortSides, comparePortContexts)` (ascending volatile ids on
+NORTH/EAST, descending on SOUTH/WEST). `PortContext.portRatioOrPosition` stays `0.0` because
+elk-rs never sets it.
+
+Deviation from Java (following elk-rs): Java's `PortContext` keeps the port adapter and reads it
+lazily; elk-rs (and this port) extracts the port size, side, position, border offset, compound
+connections and the sizes/positions of the port labels once, when the context is created.
+-/
+namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
+
+open Elk Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
+open Elk.Alg.Common.NodeSpacing.CellSystem Elk.Alg.Common.NodeSpacing.Internal
+
+namespace PortContextCreator
+
+variable {m : Type → Type} [Monad m] {G N P L E : Type}
+
+/-- Whether a port's labels have to be placed next to the port (Java `PortContext` constructor,
+elk-rs `PortContextCreator::create_port_context`): always for inside labels of non-compound nodes;
+for inside labels of compound nodes only with `NEXT_TO_PORT_IF_POSSIBLE` and no compound
+connections; for outside labels only with `NEXT_TO_PORT_IF_POSSIBLE` and no incident edges. The
+incident edges are only read in the last case. -/
+def computeLabelsNextToPort (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
+    (hasCompoundConnections : Bool) : m Bool := do
+  let portLabelsNextToPort := ctx.portLabelsPlacement.contains .nextToPortIfPossible
+  if ctx.portLabelsPlacement.contains .inside then
+    if ctx.treatAsCompoundNode then
+      return portLabelsNextToPort && !hasCompoundConnections
+    else
+      return true
+  else if ctx.portLabelsPlacement.contains .outside then
+    if portLabelsNextToPort then
+      let incoming ← a.portIncomingEdges port
+      let outgoing ← a.portOutgoingEdges port
+      let hasIncidentEdges := !incoming.isEmpty || !outgoing.isEmpty
+      return !hasIncidentEdges
+    else
+      return false
+  else
+    return false
+
+/-- `PortContextCreator.createPortContext(nodeContext, port, imPortLabels)` (elk-rs
+`create_port_context`): extracts the port's data into a new `PortContext`, creates the port label
+cell (gap `labelLabelSpacing`, one label per port label, in label order) if `imPortLabels` holds
+and port labels are not fixed, and appends the context to its side. The port's volatile id must
+already be set. -/
+def createPortContext (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
+    (imPortLabels : Bool) : m (NodeContext N P L) := do
+  let portSize ← a.port.getSize port
+  let portSide ← a.portSide port
+  let portPosition ← a.port.getPosition port
+  let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET 0.0
+  let hasPortBorderOffset ← a.port.hasProp port CoreOptions.PORT_BORDER_OFFSET
+  let hasCompoundConnections ← a.hasCompoundConnections port
+  -- Collect label sizes and positions
+  let labels ← a.portLabels port
+  let labelSizes ← labels.mapM a.label.getSize
+  let labelPositions ← labels.mapM a.label.getPosition
+  let labelsNextToPort ← computeLabelsNextToPort a ctx port hasCompoundConnections
+  let volatileId ← a.port.getVolatileId port
+  let pc : PortContext P L := PortContext.new port portSize portSide volatileId portPosition
+    portBorderOffset hasPortBorderOffset hasCompoundConnections
+  let mut pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions }
+  let mut ctx := ctx
+  -- If the port has labels and if port labels are to be placed, we need to remember them
+  if imPortLabels && !PortLabelPlacement.isFixed ctx.portLabelsPlacement then
+    let (cells, labelCell) := ctx.cells.createLabel ctx.labelLabelSpacing
+    let mut cells := cells
+    for label in (← a.portLabels port) do
+      cells := cells.addLabel labelCell label (← a.label.getSize label)
+    ctx := { ctx with cells }
+    pc := { pc with portLabelCell := some labelCell }
+  return ctx.addPortContext pc
+
+/-- `PortContextCreator.createPortContexts(nodeContext, ignoreInsidePortLabels)` (elk-rs
+`create_port_contexts`): assigns volatile ids `0, 1, …` to the node's ports in port order, creates
+a context for each of them and finally reverses the SOUTH and WEST context lists (see the module
+doc). Port labels get a label cell unless `ignoreInsidePortLabels` is set and port labels are
+placed inside. Throws `IllegalArgumentException` for a port without a side (elk-rs panics with the
+same message). -/
+def createPortContexts [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L)
+    (ignoreInsidePortLabels : Bool) : m (NodeContext N P L) := do
+  let imPortLabels := !ignoreInsidePortLabels || !ctx.portLabelsPlacement.contains .inside
+  let mut ctx := ctx
+  let mut volatileId : Int := 0
+  for port in (← a.nodePorts ctx.node) do
+    if (← a.portSide port) == .undefined then
+      throwIllegalArgument
+        "Label and node size calculator can only be used with ports that have port sides assigned."
+    a.port.setVolatileId port volatileId
+    ctx ← createPortContext a ctx port imPortLabels
+    volatileId := volatileId + 1
+  -- Java's TreeMultimap order: NORTH/EAST ascending, SOUTH/WEST descending by volatile id
+  ctx := ctx.modifyPortContextsOf .south (·.reverse)
+  ctx := ctx.modifyPortContextsOf .west (·.reverse)
+  return ctx
+
+end PortContextCreator
+
+end Elk.Alg.Common.NodeSpacing.Internal.Algorithm
