@@ -1024,17 +1024,36 @@ def placeOutsideContainer (ops : ElementOps m L) (container : Option (StripConta
 
 /-! ### `process` / `processWithOptions` (Java pipeline) -/
 
+/-- The indices of `pcs` stably sorted by volatile id. `PortContextCreator` gives the `n` ports the
+ids `0, …, n-1`; then the order is the inverse permutation, filled in directly (`order[id] = i`).
+Any other set of ids (out of range or repeated) falls back to the stable sort. -/
+def volatileIdOrder (pcs : Array (PortContext P L)) : Array Nat := Id.run do
+  let n := pcs.size
+  -- `n` marks an unfilled slot
+  let mut order : Array Nat := Array.replicate n n
+  let mut isPermutation := true
+  for i in [0:n] do
+    if h : i < pcs.size then
+      match pcs[i].volatileId with
+      | .ofNat id =>
+        if order.getD id 0 == n then order := order.setIfInBounds id i
+        else isPermutation := false
+      | .negSucc _ => isPermutation := false
+  if isPermutation then return order
+  let volatileIdAt (i : Nat) : Int := (pcs[i]?.map (·.volatileId)).getD 0
+  -- Sort the context indices (`PortContext P L` has no `Inhabited` instance for arbitrary `P`)
+  return stableSort (Array.range n) fun i j => Ord.compare (volatileIdAt i) (volatileIdAt j)
+
 /-- Applies the port positions like elk-rs `process_with_options`: all port contexts sorted by
-volatile id (stable), zipped with `NodeAdapter.getPorts()`. -/
+volatile id (stable, `volatileIdOrder`), zipped with `NodeAdapter.getPorts()`. -/
 def applyPortPositions (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) : m Unit := do
   let allPortContexts := ctx.allPortContexts
-  let volatileIdAt (i : Nat) : Int := (allPortContexts[i]?.map (·.volatileId)).getD 0
-  -- Sort the context indices (`PortContext P L` has no `Inhabited` instance for arbitrary `P`)
-  let order := stableSort (Array.range allPortContexts.size) fun i j => Ord.compare (volatileIdAt i) (volatileIdAt j)
+  let order := volatileIdOrder allPortContexts
   let ports ← a.nodePorts ctx.node
-  for (port, i) in ports.zip order do
-    if let some pc := allPortContexts[i]? then
-      a.port.setPosition port pc.portPosition
+  for k in [0:min ports.size order.size] do
+    if h : k < ports.size then
+      if let some pc := allPortContexts[order.getD k 0]? then
+        a.port.setPosition ports[k] pc.portPosition
 
 /-- Java `NodeLabelAndSizeCalculator.process(graph, node, applyStuff, ignoreInsidePortLabels)`
 (elk-rs `process_with_options(node, layout_direction, apply_stuff, ignore_inside_port_labels)`):

@@ -131,7 +131,9 @@ def empty : CellArena L := {}
 
 /-- Adds a cell and returns its id. -/
 def add (a : CellArena L) (c : Cell L) : CellArena L × CellId :=
-  ({ a with cells := a.cells.push c }, ⟨a.cells.size⟩)
+  -- the id is read first so that `a` is dead when its array is pushed (in place)
+  let id : CellId := ⟨a.cells.size⟩
+  ({ a with cells := a.cells.push c }, id)
 
 /-- The cell with the given id (a default atomic cell for an invalid id). -/
 @[inline] def get (a : CellArena L) (id : CellId) : Cell L := a.cells[id.idx]?.getD default
