@@ -7,6 +7,7 @@ import Elk.Alg.Layered.Options.InLayerConstraint
 import Elk.Alg.Layered.Options.GraphProperties
 import Elk.Alg.Layered.Compound.CrossHierarchyEdge
 import Elk.Alg.Layered.Options.Spacings
+import Elk.Alg.Layered.Intermediate.Loops.SelfLoopHolder
 /-!
 # `org.eclipse.elk.alg.layered.options.InternalProperties`
 
@@ -132,6 +133,9 @@ structure LNodeInternals where
   partitionDummy : Bool := false
   /-- `LABEL_SIDE` (`labelSide`, `UNKNOWN`) as set on label dummy nodes. -/
   labelSide : LabelSide := .unknown
+  /-- `SELF_LOOP_HOLDER` (`selfLoopHolder`): the self loop data of a node with self loops
+  (installed by `SelfLoopPreProcessor`, stored by value). -/
+  selfLoopHolder : Option Intermediate.Loops.SelfLoopHolder := none
   deriving Inhabited
 
 /-- Internal properties set on `LPort`s. -/
