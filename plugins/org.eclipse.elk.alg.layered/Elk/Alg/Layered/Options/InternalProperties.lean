@@ -175,6 +175,8 @@ structure LEdgeInternals where
   splineEdgeChain : Array LEdgeId := #[]
   /-- `SPLINE_NS_PORT_Y_COORD` (`splines.nsPortY`). -/
   splineNsPortYCoord : Option Float := none
+  /-- `IS_PART_OF_CYCLE` (`partOfCycle`, `false`) as reset on edges by `Tarjan.resetTarjan`. -/
+  isPartOfCycle : Bool := false
   deriving Inhabited
 
 /-- Internal properties set on `LLabel`s. -/
