@@ -3,8 +3,14 @@
 # Requires ../elk-rs at the pinned commit (see VERSIONING.md) and Rust via mise.
 set -eu
 HERE=$(cd "$(dirname "$0")/.." && pwd)
+# `.reference/` lives in the main checkout; git worktrees find it through the common git dir
+REF="$HERE/.reference"
+if [ ! -d "$REF" ]; then
+  COMMON=$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  if [ -n "$COMMON" ]; then REF="$(dirname "$COMMON")/.reference"; fi
+fi
 ELK_RS=${ELK_RS_DIR:-"$HERE/../elk-rs"}
-TARGET=${ORACLE_TARGET_DIR:-"$HERE/.reference/elk-rs-target"}
+TARGET=${ORACLE_TARGET_DIR:-"$REF/elk-rs-target"}
 EXPECTED=eb586b6d91ee0b55cda591546cec8f04cc7f2422
 ACTUAL=$(git -C "$ELK_RS" rev-parse HEAD)
 if [ "$ACTUAL" != "$EXPECTED" ]; then

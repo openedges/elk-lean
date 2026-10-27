@@ -6,10 +6,16 @@
 #          report.md, diff_details.tsv
 set -eu
 HERE=$(cd "$(dirname "$0")/.." && pwd)
+# `.reference/` lives in the main checkout; git worktrees find it through the common git dir
+REF="$HERE/.reference"
+if [ ! -d "$REF" ]; then
+  COMMON=$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  if [ -n "$COMMON" ]; then REF="$(dirname "$COMMON")/.reference"; fi
+fi
 MODELS=$1
 OUT=$2
 shift 2
-RUNNER=${ORACLE_RUNNER:-"$HERE/.reference/elk-rs-target/release/model_parity_layout_runner"}
+RUNNER=${ORACLE_RUNNER:-"$REF/elk-rs-target/release/model_parity_layout_runner"}
 LEAN=${ELK_LEAN_BIN:-"$HERE/.lake/build/bin/elk"}
 mkdir -p "$OUT"
 ELKT_ARGS=""

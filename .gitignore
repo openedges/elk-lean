@@ -28,5 +28,6 @@ node_modules/
 /tests/model_parity*/trace_*/
 /tests/model_parity*/*_progress.tsv
 /tests/perf/*.csv
+!/tests/perf/baseline_*.csv
 /tests/tmp/*
 !/tests/tmp/.gitkeep

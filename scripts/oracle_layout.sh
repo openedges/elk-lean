@@ -5,7 +5,13 @@
 # synthesized in a temporary directory.
 set -eu
 HERE=$(cd "$(dirname "$0")/.." && pwd)
-RUNNER=${ORACLE_RUNNER:-"$HERE/.reference/elk-rs-target/release/model_parity_layout_runner"}
+# `.reference/` lives in the main checkout; git worktrees find it through the common git dir
+REF="$HERE/.reference"
+if [ ! -d "$REF" ]; then
+  COMMON=$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  if [ -n "$COMMON" ]; then REF="$(dirname "$COMMON")/.reference"; fi
+fi
+RUNNER=${ORACLE_RUNNER:-"$REF/elk-rs-target/release/model_parity_layout_runner"}
 IN=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 OUT=$2
 TRACE=${3:-}

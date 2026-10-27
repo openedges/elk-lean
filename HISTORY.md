@@ -113,7 +113,7 @@
 | P3b1. port distributors(barycenter node-relative/layer-total, greedy) + `ForsterConstraintResolver` | `p3order/{abstract_barycenter_port_distributor,barycenter_port_distributor,greedy_port_distributor,layer_total_port_distributor,node_relative_port_distributor,forster_constraint_resolver}.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P3b1(worktree) | 완료(`merge P3b1`, 227 검사): `SweepPortDistributor.create crossMinType (random : IO.Ref Random) numLayers`, 상태는 `IO.Ref`로 공유(Rust `Shared*` 대체), 스냅샷/락 두 경로 모두 이식, `BarycenterState`는 여기서 정의(heuristic이 재사용) |
 | P3b2. heuristics(barycenter, model-order barycenter, median) + `SweepCopy` + `RandomTrace` | `p3order/{barycenter_heuristic,model_order_barycenter_heuristic,median_heuristic,sweep_copy,random_trace}.rs`(1.95K줄) | opus | xhigh | 서브에이전트 P3b2(worktree) | 완료(`merge P3b2`, 120 검사 + elk-rs 차등 하네스 12,000건: barycenter(lock/snapshot)·forced model order·median 전부 일치, unforced model order는 21+ 노드 레이어에서 driftsort 미이식으로 5건 차이 — 운영 경로에서는 생성되지 않음). 공용: `CrossingMinimizationHeuristic.setSnapshot`, `SweepPortDistributor.createWithBarycenter` 추가. TODO(rust-sort) |
 | P3c0. `InteractiveCrossingMinimizer` + `NoCrossingMinimizer` | `p3order/{interactive_crossing_minimizer,no_crossing_minimizer}.rs`(0.4K줄) | sonnet | high | 서브에이전트 P3c0(worktree) | 완료(`merge P3c0`, 71 검사): interactive(위치 기반 정렬 + NodeRelative 분배, Random 미사용), none(begin/done만). 구성표 Rust 그대로 |
-| P3c. `GraphInfoHolder` + `LayerSweepTypeDecider` + `LayerSweepCrossingMinimizer` + interactive/no-crossing minimizer | `p3order/{graph_info_holder,layer_sweep_type_decider,layer_sweep_crossing_minimizer,interactive_crossing_minimizer,no_crossing_minimizer}.rs`(3.2K줄) | opus | xhigh | 서브에이전트 P3c | 진행 중 |
+| P3c. `GraphInfoHolder` + `LayerSweepTypeDecider` + `LayerSweepCrossingMinimizer` + interactive/no-crossing minimizer | `p3order/{graph_info_holder,layer_sweep_type_decider,layer_sweep_crossing_minimizer,interactive_crossing_minimizer,no_crossing_minimizer}.rs`(3.2K줄) | opus | xhigh | 서브에이전트 P3c | 완료(`merge P3c`, ~75 검사): `GraphInfoHolder`/`LayerSweepTypeDecider`/`LayerSweepCrossingMinimizer`(barycenter·median phase, 1/2-sided greedy switch processor). **레이어드 파이프라인 완성**: 코퍼스 trace parity 1444/1444 전 단계 일치(엄격 순서), model parity 1444/1444, 옵션 변형 304건 trace 일치. trace로 잡은 버그: barycenter 분배기의 동률 포트 정렬(Rust는 snapshot을 빼낸 상태라 lock 경로 사용) |
 | P4a. NetworkSimplexPlacer/Simple/Interactive/LinearSegments | `p4nodes/*.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P4a(worktree) | 완료(`merge P4a`, 90 검사): simple/interactive/linearSegments/networkSimplex 등록. 발견: elk-rs `ArenaSync` 수신 엣지 순서는 발견 순서(`LGraphArena.arenaIncomingEdges`로 재현, PORTING §15.1 정정), `Layer.id`=인덱스 전제 |
 | P4b. BK node placer | `p4nodes/bk/*`(2.4K줄) | opus | xhigh | 서브에이전트 P4b(worktree) | 완료(`merge P4b`, 133 검사): BK 7 파일, `NeighborhoodInformation.buildFor`가 `LNode.id`/`Layer.id` 기록 후 read-only 스냅샷으로 배치. oracle trace 재생(ptolemy flattened 294 모델, BK 667 step) 665 일치 — 2건은 같은 포트로 들어오는 두 엣지의 수신 순서를 trace가 담지 않아 재생 불가(`ELK_BK_ORACLE_TRACES`로 재실행 가능) |
 | P5a. `OrthogonalEdgeRouter`/`PolylineEdgeRouter` + `OrthogonalRoutingGenerator`·direction strategies | `p5edges/{orthogonal_edge_router,polyline_edge_router}.rs`, `p5edges/orthogonal/**`(3.3K줄) | opus | xhigh | 서브에이전트 P5a(worktree) | 완료(`merge P5a`, 109 검사): `OrthogonalRoutingGenerator.new/routeEdges/TOLERANCE/breakNonCriticalCycles`, `SegmentGraph`(인덱스 arena), 방향 전략 3종(클로저 구조체), polyline. xpos/startPos는 `Float.toF32` 단계별 반올림. Random은 그래프 보유 시에만 write-back |
@@ -141,6 +141,18 @@
 | CLI `elk convert` + `.elkt` 입력(`layout`) | elk-rs 없음(Java `ElkModelParityExportTest`가 EMF로 변환) | fable(주) | low | 주 에이전트 | 완료: `elk convert [-o] [--pretty] [--sort-keys] [--defaults] IN.elkt`, `layout`이 `.elkt`를 자동 변환. ticket 425 모델(box 강제)이 oracle과 바이트 일치 |
 
 
+### Phase 4 완료 (2026-10-27): 레이어드 전체 일치
+- P3c 병합으로 레이어드 파이프라인 이식 완료. 독립 재검증(`bd28e64` 바이너리): 코퍼스 trace parity 1445개 비교 중 1444개 전 단계 일치(`--strict-order`), 나머지 1건은 당시 미링크였던 rectpacking 모델(이후 일치). model parity 1448개 중 비교 가능한 1444개 전부 일치(드리프트 0), 4건 skip(rectpacking 3 + 양쪽 동일 실패 1).
+- **oracle 러너 특이점**: `model_parity_layout_runner`는 `--trace-dir`가 있으면 루트 `ALGORITHM`을 `org.eclipse.elk.layered`로 강제(`force_layered_algorithm = trace_dir.is_some()`). Lean도 `elk batch --trace-dir`·`elk layout --force-algorithm`으로 동일 동작.
+- **JSON 숫자**: elk-rs `f64_to_number`(u64 포화·i64 범위·그 외 float) + serde_json 1.0.149/zmij 지수 표기(`1e+21`, `3e-6`)를 재현. 
+- **성능 1차**: `{ s with f := s.f.set … }`가 필드 배열을 매번 복사하던 문제(P3 포트 rank, 아레나 생성/수정 헬퍼) 해결 — 최대 모델 0.33 s → 0.18 s(oracle 0.14 s, 프로세스 시작 포함).
+
+### 성능 기준선 (2026-10-27): `elk bench` 1차 측정
+- `elk bench`(`Elk.Api.PerfBenchmark`): elk-rs `perf_benchmark.rs`의 rust_api 경로를 그대로 옮겼다(같은 LCG 생성기, 같은 26개 시나리오, 같은 CSV). 생성 JSON 26개는 Rust 생성기를 독립적으로 옮긴 Python 구현과 바이트 일치, 레이아웃 출력 26개는 oracle과 바이트 일치(정렬 키). 3개를 fixture(`tests/fixtures/perf`)로 고정.
+- `scripts/run_perf_benchmark.sh`(oracle rust_api·rust_native + lean_api) → `scripts/compare_perf.py`(시나리오별 배율, 기하평균, `baseline_lean_api.csv` 대비 5% 회귀 게이트). 결과: `tests/perf/report.md`.
+- Apple M1 8GB, 20회/워밍업 3회 기준 lean/rust_api 기하평균 **6.41배**. force·stress 26~32배, layered 5.7~8배(small 1.8배), mrtree·rectpacking 4~5배, radial 1.3~2.3배.
+- 1차 원인(생성 C 확인): `for` 루프의 가변 Float가 2개 이상이면 루프 상태가 `MProd`로 묶여 반복마다 `lean_box_float` 할당이 일어난다(예: stress `computeNewPosition`). Float 1개 상태는 unboxed `double`로 컴파일된다.
+
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
@@ -154,7 +166,7 @@
 | F7a. mrtree 기반(옵션·TGraph·importer·components·intermediate·TreeUtil) | `alg.mrtree/src/**` 일부(2.9K줄) | opus | high | 서브에이전트 F7a(worktree) | 완료(`merge F7a`, 170 검사): `TArena`(여러 TGraph가 노드·엣지 공유, layered 선례), `MrTreeM := StateRefT TArena IO`, intermediate 11종, importer/components, 메타데이터(rank 40). provider·p1~p4는 F7b |
 | F7b. mrtree p1~p4·provider | `alg.mrtree/src/{p1treeify,p2order,p3place,p4route}/**`, `tree_layout_provider.rs`(2.6K줄) | opus | high | 서브에이전트 F7b(worktree) | 완료(`merge F7b`): stock oracle 무작위 400건 중 394 + 손작성 26 + 코퍼스 강제 mrtree 550 + 대형 2 일치, enum 패치 oracle 237건 중 229 일치(8건은 양쪽 동일 실패). 남은 6건 = 코어 JSON의 `f64::MAX` 출력 버그. F7a `ComponentsProcessor.pack` 결합 순서 수정 |
 | F8a. rectpacking 기반(옵션·util·intermediate·p1 폭 근사) | `alg.rectpacking/src/**` 일부(2.6K줄) | opus | high | 서브에이전트 F8a(worktree) | 완료(`merge F8a`, 183 검사): `RectPackingM := StateRefT RectPackingArena ElkM`(block/stack/row 인덱스 arena, Rust `Weak` 생존성 재현), p1 폭 근사·필터·계산, intermediate 4종(InteractiveNodeReorderer는 `rustSortBy`로 비일관 비교자 재현), 메타데이터(rank 60). p2·p3·provider는 F8b |
-| F8b. rectpacking p2 packing·p3 whitespace·provider | `alg.rectpacking/src/{p2packing,p3whitespaceelimination}/**`, provider(2.0K줄) | opus | high | 서브에이전트 F8b(worktree) | 진행 중 |
+| F8b. rectpacking p2 packing·p3 whitespace·provider | `alg.rectpacking/src/{p2packing,p3whitespaceelimination}/**`, provider(2.0K줄) | opus | high | 서브에이전트 F8b(worktree) | 완료(`merge F8b`): stock oracle 651건 중 648 + enum 패치 700건 중 673 일치, 남은 차이는 코어 Box 결합 순서(수정 완료). 코퍼스 rectpacking 3모델 trace 전 단계 일치(러너의 trace 모드 layered 강제 재현 후) |
 - **메타데이터 등록 순서**: `LayoutMetaDataService.addInitHook hook (rank)`로 import 순서와 무관하게 elk-rs `layout_api.rs` 순서(layered 10, disco 20, force 30, mrtree 40, radial 50, rectpacking 60, spore 70, stress 80, vertiflex 90)를 재현. elk-rs·elkjs가 등록하지 않는 topdownpacking(Java ELK에는 있음)은 rank 100으로 맨 뒤에 둔 Lean 확장.
 
 
