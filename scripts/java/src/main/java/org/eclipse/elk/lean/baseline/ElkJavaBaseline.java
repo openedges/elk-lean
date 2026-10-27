@@ -66,8 +66,15 @@ import com.google.gson.JsonParser;
  * models are loaded through EMF, get {@code RANDOM_SEED} and are exported to JSON first (all
  * options, positions and sizes), and that JSON is what both ELK Java and elk-lean lay out.
  *
+ * <p>With {@code --trace}, the root algorithm is forced to layered (like elk-rs' trace runner and
+ * {@code elk batch --trace-dir}) and the layered LGraph after every processor is written to
+ * {@code <out_dir>/trace/<model>/step_NNN_<Processor>.json} ({@link ElkPhaseTraceExporter}).
+ *
  * <p>Usage: {@code ElkJavaBaseline <models_dir> <out_dir> [--include a,b] [--exclude a,b]
- * [--limit N] [--seed S] [--force-algorithm ID]}.
+ * [--limit N] [--seed S] [--force-algorithm ID] [--trace true] [--reverse true]}. {@code --reverse}
+ * processes the models in reverse order: ELK iterates some {@code HashMap}/{@code HashSet}s of
+ * objects without their own {@code hashCode} (self-loop port sides, partition members, ...), so its
+ * result for such a model depends on the identity hash codes handed out before — i.e. on the run.
  */
 public final class ElkJavaBaseline {
 
@@ -76,7 +83,7 @@ public final class ElkJavaBaseline {
     private ElkJavaBaseline() {
     }
 
-    private static void initialize() {
+    static void initialize() {
         LayoutMetaDataService.getInstance().registerLayoutMetaDataProviders(
                 new CoreOptions(),
                 new DisCoMetaDataProvider(),
@@ -107,6 +114,8 @@ public final class ElkJavaBaseline {
         int limit = 0;
         int seed = 1;
         String forceAlgorithm = null;
+        boolean trace = false;
+        boolean reverse = false;
         for (int i = 2; i + 1 < args.length; i += 2) {
             switch (args[i]) {
             case "--include":
@@ -124,6 +133,12 @@ public final class ElkJavaBaseline {
             case "--force-algorithm":
                 forceAlgorithm = args[i + 1];
                 break;
+            case "--trace":
+                trace = Boolean.parseBoolean(args[i + 1]);
+                break;
+            case "--reverse":
+                reverse = Boolean.parseBoolean(args[i + 1]);
+                break;
             default:
                 throw new IllegalArgumentException("unknown argument " + args[i]);
             }
@@ -133,7 +148,12 @@ public final class ElkJavaBaseline {
         final Path layoutDir = outputDir.resolve("layouts");
         Files.createDirectories(inputDir);
         Files.createDirectories(layoutDir);
-        final List<Path> models = collect(modelsRoot, include, exclude, limit);
+        final List<Path> models = new ArrayList<>(collect(modelsRoot, include, exclude, limit));
+        if (reverse) {
+            // a second run in a different JVM context: identity hash codes (HashMap/HashSet order of
+            // objects without their own hashCode) differ, which exposes ELK's context-dependent results
+            Collections.reverse(models);
+        }
         int ok = 0;
         int failed = 0;
         try (BufferedWriter manifest = Files.newBufferedWriter(outputDir.resolve("java_manifest.tsv"),
@@ -175,7 +195,14 @@ public final class ElkJavaBaseline {
                     if (forceAlgorithm != null) {
                         graph.setProperty(CoreOptions.ALGORITHM, forceAlgorithm);
                     }
-                    new RecursiveGraphLayoutEngine().layout(graph, new BasicProgressMonitor());
+                    if (trace) {
+                        graph.setProperty(CoreOptions.ALGORITHM, "org.eclipse.elk.layered");
+                        Path traceDir = outputDir.resolve("trace").resolve(rel);
+                        Files.createDirectories(traceDir);
+                        ElkPhaseTraceExporter.traceWithRecursiveEngine(graph, traceDir, false);
+                    } else {
+                        new RecursiveGraphLayoutEngine().layout(graph, new BasicProgressMonitor());
+                    }
                     importer.get().transferLayout(graph);
                     Files.writeString(layoutJson, json.toString(), StandardCharsets.UTF_8);
                     ok++;
