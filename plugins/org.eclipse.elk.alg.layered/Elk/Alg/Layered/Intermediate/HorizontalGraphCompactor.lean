@@ -2,6 +2,7 @@ import Elk.Alg.Common.Compaction.OneD.OneDimensionalCompactor
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.Intermediate.Compaction
+import Elk.Alg.Layered.P5Edges.Splines.SplineEdgeRouter
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.compaction.HorizontalGraphCompactor`
 
@@ -24,6 +25,10 @@ strategies only read snapshots of the layered graph (`CompactionMetadata`,
 `SpecialSpacingsHandler`, `NetworkSimplexCompaction.outgoingEdges`). The only arena change Rust
 makes during compaction (the port moves of `NetworkSimplexCompaction`) is replayed right after
 the compactor finished.
+
+Spline routes are read from the graph's spline segment table (`splineRouteAccess`: the
+`SPLINE_ROUTE_START` ids of `LEdgeInternals.splineRouteStart` index
+`LGraphInternals.splineSegments`; moved bounding boxes are written back there).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -119,9 +124,24 @@ def process (splines : SplineRouteAccess) (graph : LGraphId) (monitor : Progress
 def processorWith (splines : SplineRouteAccess) : LayeredProcessor :=
   { name := "HorizontalGraphCompactor", process := process splines }
 
-/-- `new HorizontalGraphCompactor()`. TODO(p5edges.splines): use the real `SplineRouteAccess` once
-`SplineSegment`/`SPLINE_ROUTE_START` are ported (until then spline routes are not compacted). -/
-def processor : LayeredProcessor := processorWith SplineRouteAccess.unavailable
+/-- The spline routes of `graph` (Rust: `SPLINE_ROUTE_START` on the edges, `SplineSegmentRef`s
+locked for reading and for moving their bounding boxes): the handles are the
+`SplineSegmentId.idx` of the graph's segment table. -/
+def splineRouteAccess (graph : LGraphId) : SplineRouteAccess :=
+  { routeStart := fun edge => do
+      return (← getEdge edge).internal.splineRouteStart.map (·.map (·.idx))
+    segment := fun handle => do
+      let s ← P5Edges.Splines.getSplineSegment graph ⟨handle⟩
+      return { edges := s.edges, isStraight := s.isStraight, boundingBox := s.boundingBox,
+               initialSegment := s.initialSegment, lastSegment := s.lastSegment,
+               sourceNode := s.sourceNode, targetNode := s.targetNode }
+    modifyBoundingBox := fun handle f =>
+      P5Edges.Splines.modifySplineSegment graph ⟨handle⟩ fun s => { s with boundingBox := f s.boundingBox } }
+
+/-- `new HorizontalGraphCompactor()`: the spline routes of the processed graph
+(`splineRouteAccess`). -/
+def processor : LayeredProcessor :=
+  { name := "HorizontalGraphCompactor", process := fun graph monitor => process (splineRouteAccess graph) graph monitor }
 
 end HorizontalGraphCompactor
 

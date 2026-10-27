@@ -439,6 +439,12 @@ def removerRun (routing : EdgeRouting) : IO (Built × BreakingPointInfo × LGrap
     LayeredM.modifyEdge info.originalEdge fun e => { e with internal := { e.internal with splineEdgeChain := #[⟨100⟩] } }
     LayeredM.modifyEdge info.nodeStartEdge fun e => { e with internal := { e.internal with splineEdgeChain := #[⟨101⟩] } }
     LayeredM.modifyEdge info.startEndEdge fun e => { e with internal := { e.internal with splineEdgeChain := #[⟨102⟩, ⟨103⟩] } }
+    -- spline routes: segments 0 (nodeStartEdge), 1 and 2 (startEndEdge), 3 (original edge)
+    LayeredM.modifyGraph b.graph fun g => { g with internal := { g.internal with
+      splineSegments := Array.replicate 4 {} } }
+    LayeredM.modifyEdge info.nodeStartEdge fun e => { e with internal := { e.internal with splineRouteStart := some #[⟨0⟩] } }
+    LayeredM.modifyEdge info.startEndEdge fun e => { e with internal := { e.internal with splineRouteStart := some #[⟨1⟩, ⟨2⟩] } }
+    LayeredM.modifyEdge info.originalEdge fun e => { e with internal := { e.internal with splineRouteStart := some #[⟨3⟩] } }
     LayeredM.modifyNode info.start fun n => { n with position := ⟨10, 0⟩ }
     LayeredM.modifyNode info.endNode fun n => { n with position := ⟨20, 0⟩ }
     runP BreakingPointRemover.processor b
@@ -477,6 +483,14 @@ def removerTests : Suite := suite "layered.wrapping.BreakingPointRemover" do
   checkEq "splines: surviving edge" (sa.edge sb.edges[0]!).internal.splineSurvivingEdge (some sb.edges[0]!)
   checkEq "splines: dummy chains cleared"
     ((sa.edge sinfo.nodeStartEdge).internal.splineEdgeChain.size, (sa.edge sinfo.startEndEdge).internal.splineEdgeChain.size) (0, 0)
+  checkEq "splines: joined SPLINE_ROUTE_START s1 ++ reverse(s2) ++ s3"
+    ((sa.edge sb.edges[0]!).internal.splineRouteStart.map (·.map (·.idx))) (some #[0, 2, 1, 3])
+  checkEq "splines: inverseOrder only on the startEndEdge segments"
+    ((sa.graph sb.graph).internal.splineSegments.map (·.inverseOrder)) #[false, true, true, false]
+  check "splines: dummy routes removed"
+    ((sa.edge sinfo.nodeStartEdge).internal.splineRouteStart.isNone && (sa.edge sinfo.startEndEdge).internal.splineRouteStart.isNone)
+  let (_, _, pa2) ← removerRun .polyline
+  check "polyline: segment table untouched" ((pa2.graph pb.graph).internal.splineSegments.all (!·.inverseOrder))
   -- a chain of two breaking points (cuts [2, 5], no merge) is removed from its last end marker
   let ((m, edgesInfo), ma) ← LayeredM.run (do
     let m ← build #[0, 1, 2, 3, 4, 5] #[(0, 5)]
