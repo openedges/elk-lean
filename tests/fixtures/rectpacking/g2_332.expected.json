@@ -1,0 +1,70 @@
+{
+  "children": [
+    {
+      "height": 74,
+      "id": "n0",
+      "width": 17,
+      "x": 20,
+      "y": 12.5
+    },
+    {
+      "height": 38,
+      "id": "n1",
+      "width": 42,
+      "x": 42,
+      "y": 12.5
+    },
+    {
+      "height": 23,
+      "id": "n2",
+      "width": 74,
+      "x": 89,
+      "y": 12.5
+    },
+    {
+      "height": 12,
+      "id": "n3",
+      "width": 79,
+      "x": 89,
+      "y": 40.5
+    },
+    {
+      "height": 54,
+      "id": "n4",
+      "width": 80,
+      "x": 20,
+      "y": 91.5
+    },
+    {
+      "height": 15,
+      "id": "n5",
+      "width": 5,
+      "x": 20,
+      "y": 150.5
+    },
+    {
+      "height": 77,
+      "id": "n6",
+      "width": 25,
+      "x": 105,
+      "y": 91.5
+    },
+    {
+      "height": 54,
+      "id": "n7",
+      "width": 48,
+      "x": 105,
+      "y": 173.5
+    }
+  ],
+  "height": 232.5,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.padding": "[top=12.5,left=20,bottom=5,right=100]",
+    "elk.spacing.nodeNode": "5"
+  },
+  "width": 268,
+  "x": 0,
+  "y": 0
+}

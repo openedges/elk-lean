@@ -1,0 +1,1 @@
+{"id": "root", "layoutOptions": {"elk.algorithm": "rectpacking", "elk.rectpacking.orderBySize": "true", "org.eclipse.elk.interactive": "true", "elk.rectpacking.widthApproximation.strategy": "GREEDY"}, "children": [{"id": "n0", "width": 30, "height": 30, "layoutOptions": {"elk.rectpacking.desiredPosition": "-1"}}]}

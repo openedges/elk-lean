@@ -2,14 +2,28 @@ import Tests.Framework
 import Elk.Api
 import Elk.Alg.RectPacking
 /-!
-# Tests for `org.eclipse.elk.alg.rectpacking` (foundation: options, util, intermediate, phase 1)
+# Tests for `org.eclipse.elk.alg.rectpacking`
 
-Ports of the elk-rs tests that only need these parts (`rectpacking_metadata_test.rs`), plus unit
-tests of the block/row/stack structures, the drawing data, the width approximation (filters,
-calculations, `AreaApproximation`, both approximators) and the intermediate processors. Expected
-values are derived by hand from the Rust code ("hand: …" comments). The layout tests of elk-rs
-(`rectpacking_compaction_test.rs`, `padding_test.rs`, `issue_583_test.rs`) need the packing
-phases and the provider (follow-up F8b).
+Ports of all elk-rs tests of the plugin (`rectpacking_metadata_test.rs`,
+`rectpacking_compaction_test.rs`, `padding_test.rs`, `issue_583_test.rs`), unit tests of the
+block/row/stack structures, the drawing data, the width approximation (filters, calculations,
+`AreaApproximation`, both approximators), the intermediate processors, the packing and
+whitespace elimination phases and the provider. Expected values are derived by hand from the Rust
+code ("hand: …" comments) unless they come from the elk-rs tests or the oracle.
+
+Two fixture suites compare `Elk.Api.layoutJson` byte-for-byte with the elk-rs oracle
+(`model_parity_layout_runner`, commit eb586b6d):
+* `rectpacking.fixtures` (`tests/fixtures/rectpacking/<name>.json` / `<name>.expected.json`): the
+  stock oracle, which registers the four enum options without a value parser (their strings are
+  ignored by the oracle and the port); includes the corpus models
+  `interactiveRectpacking_hierarchy` / `_oneBigNode` (`corpus_*`);
+* `rectpacking.fixtures.enum` (`tests/fixtures/rectpacking/enum`): an oracle build whose rectangle
+  packing metadata provider additionally registers the enum choices and parsers (the only change
+  to elk-rs), so every strategy is reachable from JSON; the suite installs `enumParserProvider`.
+  Inputs without an expected file are models on which elk-rs panics (`NONE` packing followed by a
+  whitespace eliminator); the port must report an error.
+`ELK_RECTPACKING_FIXTURES` / `ELK_RECTPACKING_FIXTURES_ENUM` point the suites to other directories
+(large parity runs).
 -/
 namespace Tests.RectPacking
 
@@ -523,8 +537,356 @@ def stackTests : Suite := suite "rectpacking.stack" do
   -- hand: 20 + (5 + 10)
   checkFloat "rows dimension height" dims.y 35.0
 
+/-! ### Packing phase (p2packing) -/
+
+def packingTests : Suite := suite "rectpacking.p2" do
+  LayoutMetaDataService.ensureInitialized
+  -- InitialPlacement.place: width 100, spacing 10: a 30x30, b 30x28, c 50x10, d 20x60
+  let (g, root, kids) := mkGraph #[(30.0, 30.0), (30.0, 28.0), (50.0, 10.0), (20.0, 60.0)]
+  let ((rows, rowData, blockData, sim), _, g1) ← runRP g do
+    let rows ← InitialPlacement.place kids 100.0 10.0
+    let mut rowData := #[]
+    let mut blockData := #[]
+    for r in rows do
+      let row ← RectPackingM.getRow r
+      rowData := rowData.push row
+      for b in row.children do
+        blockData := blockData.push (← RectPackingM.getBlock b)
+    let sim ← InitialPlacement.isSimilarHeight (← RectRow.getFirstBlock rows[0]!) kids[2]! 10.0
+    return (rows, rowData, blockData, sim)
+  -- hand: a at (0, 0), b at (40, 0) in the same block (28 within 50 % of 30); c: 70 + 50 + 10 > 100
+  -- → new row at y 30 + 10, new block; d: 50 + 20 + 10 = 80 fits, height 60 not similar to 10 →
+  -- new block at x 50 + 10
+  checkEq "initial rows" rows.size 2
+  checkEq "row 0 blocks" rowData[0]!.children.size 1
+  checkEq "row 1 blocks" rowData[1]!.children.size 2
+  checkFloat "row 1 y" rowData[1]!.y 40.0
+  checkFloat "row 0 width" rowData[0]!.width 70.0
+  checkFloat "block 0 width" blockData[0]!.width 70.0
+  checkFloat "block 2 x" blockData[2]!.x 60.0
+  check "c is not of similar height to the first block" (!sim)
+  checkPos "placed a" g1 kids[0]! 0.0 0.0
+  checkPos "placed b" g1 kids[1]! 40.0 0.0
+  checkPos "placed c" g1 kids[2]! 0.0 40.0
+  checkPos "placed d" g1 kids[3]! 60.0 40.0
+  -- IN_NEW_ROW forces a row break
+  let g2 := g.setNodeProp kids[1]! RectPackingOptions.IN_NEW_ROW true
+  let (rows2, _, _) ← runRP g2 (InitialPlacement.place kids 1000.0 10.0)
+  checkEq "in new row breaks the row" rows2.size 2
+  -- row height reevaluation on the parent: every rectangle opens a new block
+  let g3 := g.setNodeProp root RectPackingOptions.PACKING_COMPACTION_ROW_HEIGHT_REEVALUATION true
+  let (blocks3, _, _) ← runRP g3 do
+    let rows ← InitialPlacement.place #[kids[0]!, kids[1]!] 1000.0 10.0
+    return (← RectPackingM.getRow rows[0]!).children.size
+  checkEq "row height reevaluation: one block per rectangle" blocks3 2
+  -- SimplePlacement: target width 100 (set as TARGET_WIDTH), padding 0, spacing 10
+  let gs := ((g.setNodeProp root InternalProperties.TARGET_WIDTH 100.0).setNodeProp root
+    CoreOptions.SPACING_NODE_NODE 10.0).setNodeProp root CoreOptions.PADDING {}
+  let (_, arena, gs) ← runRP gs (SimplePlacement.phase.process root ProgressMonitor.null)
+  -- hand: rows 70x30 and (50 + 10 + 20)x60 → 80 x (30 + 10 + 60)
+  check "simple drawing width" ((gs.node root).props.get InternalProperties.DRAWING_WIDTH == some 80.0)
+  check "simple drawing height" ((gs.node root).props.get InternalProperties.DRAWING_HEIGHT == some 100.0)
+  check "simple rows stored" ((gs.node root).props.get InternalProperties.ROWS).isSome
+  checkEq "simple stacks (one per block)" arena.stacks.size 3
+  -- NoPlacement keeps the positions: (0,0) 30x30 ... drawing = bounding box of the nodes
+  let gn := (g.modifyNode kids[3]! fun n => { n with x := 100.0, y := 5.0 }).setNodeProp root CoreOptions.PADDING {}
+  let (_, _, gn) ← runRP gn (NoPlacement.phase.process root ProgressMonitor.null)
+  check "none drawing width" ((gn.node root).props.get InternalProperties.DRAWING_WIDTH == some 120.0)
+  check "none drawing height" ((gn.node root).props.get InternalProperties.DRAWING_HEIGHT == some 65.0)
+  check "none stores no rows" ((gn.node root).props.get InternalProperties.ROWS).isNone
+  -- MIN_HEIGHT larger than the drawing: the additional height is counted twice (Rust/Java)
+  let gm := (gn.setNodeProp root InternalProperties.MIN_HEIGHT 100.0)
+  let (_, _, gm) ← runRP gm (NoPlacement.phase.process root ProgressMonitor.null)
+  check "none additional height" ((gm.node root).props.get InternalProperties.ADDITIONAL_HEIGHT == some 35.0)
+  check "none drawing height with additional height" ((gm.node root).props.get InternalProperties.DRAWING_HEIGHT == some 135.0)
+  -- factories
+  checkEqR "packing phases" ((ElkEnum.values : Array PackingStrategy).map (·.createPhase.name))
+    #["Compactor", "SimplePlacement", "NoPlacement"]
+  checkEqR "whitespace phases" ((ElkEnum.values : Array WhiteSpaceEliminationStrategy).map (·.createPhase.name))
+    #["EqualWhitespaceEliminator", "ToAspectratioNodeExpander", "NoopWhitespaceEliminator"]
+
+/-! ### Whitespace elimination (p3whitespaceelimination) -/
+
+def whitespaceTests : Suite := suite "rectpacking.p3" do
+  LayoutMetaDataService.ensureInitialized
+  let (g, root, kids) := mkGraph #[(30.0, 30.0), (30.0, 28.0), (50.0, 10.0)]
+  let g := ((g.setNodeProp root InternalProperties.TARGET_WIDTH 100.0).setNodeProp root
+    CoreOptions.SPACING_NODE_NODE 10.0).setNodeProp root CoreOptions.PADDING {}
+  -- simple placement, then the equal whitespace eliminator expands to DRAWING_WIDTH 120 and
+  -- additional height 20 (10 per row)
+  let ((), _, g1) ← runRP g do
+    SimplePlacement.phase.process root ProgressMonitor.null
+    ElkM.setNodeProp root InternalProperties.DRAWING_WIDTH 120.0
+    ElkM.setNodeProp root InternalProperties.ADDITIONAL_HEIGHT 20.0
+    EqualWhitespaceEliminator.phase.process root ProgressMonitor.null
+  -- hand: row 0 (a b, one stack, width 70) grows by 50: the block grows to 120, both rectangles by
+  -- 25 → a 55 wide at 0, b at 40 + 25 = 65; row height 30 + 10; row 1 moves down by 10
+  checkShape "expanded a" g1 kids[0]! 0.0 0.0 55.0 40.0
+  checkShape "expanded b" g1 kids[1]! 65.0 0.0 55.0 40.0
+  checkShape "expanded c" g1 kids[2]! 0.0 50.0 120.0 20.0
+  -- without rows: UnsupportedConfigurationException
+  checkThrows "no rows" (do let _ ← runRP g (EqualWhitespaceEliminator.phase.process root ProgressMonitor.null))
+  -- ToAspectratioNodeExpander: 70 x 50 drawing (rows 70x30 and 50x10) with aspect ratio 2 → width
+  -- 50 * 2
+  let (_, _, g2) ← runRP (g.setNodeProp root CoreOptions.ASPECT_RATIO 2.0) do
+    SimplePlacement.phase.process root ProgressMonitor.null
+    ToAspectratioNodeExpander.phase.process root ProgressMonitor.null
+  check "to aspect ratio width" ((g2.node root).props.get InternalProperties.DRAWING_WIDTH == some 100.0)
+  -- … and aspect ratio 0.5 (1.4 ≥ 0.5) → additional height 70 / 0.5 - 50 = 90, height 50 + 90
+  let (_, _, g3) ← runRP (g.setNodeProp root CoreOptions.ASPECT_RATIO 0.5) do
+    SimplePlacement.phase.process root ProgressMonitor.null
+    ToAspectratioNodeExpander.phase.process root ProgressMonitor.null
+  check "to aspect ratio additional height" ((g3.node root).props.get InternalProperties.ADDITIONAL_HEIGHT == some 90.0)
+  check "to aspect ratio height" ((g3.node root).props.get InternalProperties.DRAWING_HEIGHT == some 140.0)
+  -- RectangleExpansion of no rows is a no-op
+  let (_, _, g4) ← runRP g (RectangleExpansion.expand #[] 100.0 10.0 0.0)
+  checkPos "no rows: unchanged" g4 kids[0]! 0.0 0.0
+
+/-! ### Provider: `rectpacking_compaction_test.rs`, `padding_test.rs`, `issue_583_test.rs` -/
+
+/-- Runs the provider directly (like the elk-rs tests, not through the engine). -/
+private def runLayout (g : ElkGraph) (root : NodeId) : IO ElkGraph := do
+  let (_, g) ← ElkM.run (RectPackingLayoutProvider.layout root ProgressMonitor.null) g
+  return g
+
+/-- `create_compaction_graph(target_width, spacing)` + `create_node`s. -/
+private def compactionGraph (targetWidth spacing : Float) (sizes : Array (Float × Float)) :
+    ElkGraph × NodeId × Array NodeId :=
+  let (g, root, kids) := mkGraph sizes
+  let g := g.setNodeProp root CoreOptions.ALGORITHM RectPackingOptions.ALGORITHM_ID
+  let g := g.setNodeProp root RectPackingOptions.WIDTH_APPROXIMATION_TARGET_WIDTH targetWidth
+  let g := g.setNodeProp root RectPackingOptions.WIDTH_APPROXIMATION_STRATEGY .targetWidth
+  let g := g.setNodeProp root CoreOptions.SPACING_NODE_NODE spacing
+  let g := g.setNodeProp root CoreOptions.PADDING (ElkPadding.ofAny 0.0)
+  (g, root, kids)
+
+private def checkSizeE (name : String) (g : ElkGraph) (n : NodeId) (w h : Float) : TestM Unit := do
+  checkFloat s!"{name} width" (g.node n).width w 1.0
+  checkFloat s!"{name} height" (g.node n).height h 1.0
+
+private def checkPosE (name : String) (g : ElkGraph) (n : NodeId) (x y : Float) : TestM Unit := do
+  checkFloat s!"{name} x" (g.node n).x x 1.0
+  checkFloat s!"{name} y" (g.node n).y y 1.0
+
+def providerTests : Suite := suite "rectpacking.provider" do
+  LayoutMetaDataService.ensureInitialized
+  check "provider registered" (← LayoutProvider.isRegistered RectPackingOptions.ALGORITHM_ID)
+  -- test_place_block_from_next_row_on_top
+  let (g, root, k) := compactionGraph 110.0 10.0
+    #[(30.0, 70.0), (30.0, 10.0), (30.0, 10.0), (30.0, 50.0), (30.0, 50.0), (100.0, 10.0), (100.0, 10.0)]
+  let g ← runLayout g root
+  checkSizeE "on top: graph" g root 110.0 110.0
+  checkPosE "on top: n1" g k[0]! 0.0 0.0
+  checkPosE "on top: n2" g k[1]! 40.0 0.0
+  checkPosE "on top: n3" g k[2]! 80.0 0.0
+  checkPosE "on top: n4" g k[3]! 40.0 20.0
+  checkPosE "on top: n5" g k[4]! 80.0 20.0
+  checkPosE "on top: n6" g k[5]! 0.0 80.0
+  -- test_place_block_from_next_row_on_top_does_not_work
+  let (g, root, k) := compactionGraph 110.0 10.0
+    #[(30.0, 70.0), (40.0, 10.0), (30.0, 10.0), (30.0, 50.0), (30.0, 50.0), (100.0, 10.0), (100.0, 10.0)]
+  let g ← runLayout g root
+  checkSizeE "on top fails: graph" g root 100.0 170.0
+  checkPosE "on top fails: n1" g k[0]! 0.0 0.0
+  checkPosE "on top fails: n2" g k[1]! 40.0 0.0
+  checkPosE "on top fails: n3" g k[2]! 40.0 20.0
+  checkPosE "on top fails: n4" g k[3]! 0.0 80.0
+  checkPosE "on top fails: n5" g k[4]! 40.0 80.0
+  -- test_absorb_block
+  let (g, root, k) := compactionGraph 110.0 10.0
+    #[(30.0, 70.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (100.0, 10.0), (100.0, 10.0)]
+  let g ← runLayout g root
+  checkSizeE "absorb: graph" g root 110.0 110.0
+  checkPosE "absorb: n1" g k[0]! 0.0 0.0
+  checkPosE "absorb: n2" g k[1]! 40.0 0.0
+  checkPosE "absorb: n3" g k[2]! 80.0 0.0
+  checkPosE "absorb: n4" g k[3]! 40.0 40.0
+  checkPosE "absorb: n5" g k[4]! 80.0 40.0
+  checkPosE "absorb: n6" g k[5]! 0.0 80.0
+  -- test_compact_block
+  let (g, root, k) := compactionGraph 190.0 10.0
+    #[(30.0, 70.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0)]
+  let g ← runLayout g root
+  checkSizeE "compact: graph" g root 110.0 70.0
+  checkPosE "compact: n1" g k[0]! 0.0 0.0
+  checkPosE "compact: n2" g k[1]! 40.0 0.0
+  checkPosE "compact: n3" g k[2]! 80.0 0.0
+  checkPosE "compact: n4" g k[3]! 40.0 40.0
+  checkPosE "compact: n5" g k[4]! 80.0 40.0
+  -- test_split_block
+  let (g, root, k) := compactionGraph 110.0 10.0
+    #[(30.0, 70.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (100.0, 10.0)]
+  let g ← runLayout g root
+  checkSizeE "split: graph" g root 110.0 130.0
+  checkPosE "split: n1" g k[0]! 0.0 0.0
+  checkPosE "split: n2" g k[1]! 40.0 0.0
+  checkPosE "split: n3" g k[2]! 80.0 0.0
+  checkPosE "split: n4" g k[3]! 40.0 40.0
+  checkPosE "split: n5" g k[4]! 80.0 40.0
+  checkPosE "split: n6" g k[5]! 0.0 80.0
+  checkPosE "split: n7" g k[6]! 0.0 120.0
+  -- test_place_block_from_next_row_right
+  let (g, root, k) := compactionGraph 110.0 10.0 #[(30.0, 70.0), (30.0, 30.0), (20.0, 20.0), (30.0, 70.0)]
+  let g ← runLayout g root
+  checkSizeE "right: graph" g root 110.0 70.0
+  checkPosE "right: n1" g k[0]! 0.0 0.0
+  checkPosE "right: n2" g k[1]! 40.0 0.0
+  checkPosE "right: n3" g k[2]! 40.0 40.0
+  checkPosE "right: n4" g k[3]! 80.0 0.0
+  -- test_place_block_from_current_row_on_top
+  let (g, root, k) := compactionGraph 150.0 10.0 #[(30.0, 70.0), (30.0, 10.0), (30.0, 10.0), (30.0, 50.0)]
+  let g ← runLayout g root
+  checkSizeE "current row: graph" g root 110.0 70.0
+  checkPosE "current row: n1" g k[0]! 0.0 0.0
+  checkPosE "current row: n2" g k[1]! 40.0 0.0
+  checkPosE "current row: n3" g k[2]! 80.0 0.0
+  checkPosE "current row: n4" g k[3]! 40.0 20.0
+  -- padding_test.rs: four 30x30 nodes, aspect ratio 1.3, spacing 10
+  let paddingGraph (p : ElkPadding) : ElkGraph × NodeId × Array NodeId :=
+    let (g, root, kids) := mkGraph #[(30.0, 30.0), (30.0, 30.0), (30.0, 30.0), (30.0, 30.0)]
+    let g := g.setNodeProp root CoreOptions.ALGORITHM RectPackingOptions.ALGORITHM_ID
+    let g := g.setNodeProp root RectPackingOptions.ASPECT_RATIO 1.3
+    let g := g.setNodeProp root CoreOptions.SPACING_NODE_NODE 10.0
+    (g.setNodeProp root CoreOptions.PADDING p, root, kids)
+  let (g, root, k) := paddingGraph { top := 1000.0 }
+  let g ← runLayout g root
+  checkSizeE "top padding: graph" g root 150.0 1030.0
+  for i in [0:4] do checkPosE s!"top padding: n{i}" g k[i]! (40.0 * i.toFloat) 1000.0
+  let (g, root, k) := paddingGraph { left := 1000.0 }
+  let g ← runLayout g root
+  checkSizeE "left padding: graph" g root 1030.0 150.0
+  for i in [0:4] do checkPosE s!"left padding: n{i}" g k[i]! 1000.0 (40.0 * i.toFloat)
+  let (g, root, k) := paddingGraph { bottom := 1000.0 }
+  let g ← runLayout g root
+  checkSizeE "bottom padding: graph" g root 150.0 1030.0
+  for i in [0:4] do checkPosE s!"bottom padding: n{i}" g k[i]! (40.0 * i.toFloat) 0.0
+  let (g, root, k) := paddingGraph { right := 1000.0 }
+  let g ← runLayout g root
+  checkSizeE "right padding: graph" g root 1030.0 150.0
+  for i in [0:4] do checkPosE s!"right padding: n{i}" g k[i]! 0.0 (40.0 * i.toFloat)
+  -- issue_583_test.rs: test_decrease_approximated_width
+  let (g, root, _) := mkGraph #[(30.0, 30.0), (10.0, 10.0), (30.0, 30.0), (40.0, 10.0)]
+  let g := g.setNodeProp root CoreOptions.ALGORITHM RectPackingOptions.ALGORITHM_ID
+  let g := g.setNodeProp root CoreOptions.SPACING_NODE_NODE 0.0
+  let g := g.setNodeProp root CoreOptions.PADDING (ElkPadding.ofAny 0.0)
+  let g := g.setNodeProp root RectPackingOptions.PACKING_STRATEGY .none
+  let g ← runLayout g root
+  checkFloat "issue 583: width with approximation only" (g.node root).width 60.0 1.0
+  let g := g.setNodeProp root RectPackingOptions.PACKING_STRATEGY .compaction
+  let g ← runLayout g root
+  checkFloat "issue 583: width with compaction" (g.node root).width 40.0 1.0
+  -- the assembled processors (ORDER_BY_SIZE, INTERACTIVE)
+  let (g, root, _) := mkGraph #[(10.0, 10.0)]
+  let g := (g.setNodeProp root RectPackingOptions.ORDER_BY_SIZE true).setNodeProp root
+    RectPackingOptions.INTERACTIVE true
+  let (algo, _, _) ← runRP g (RectPackingLayoutProvider.assembleAlgorithm root)
+  checkEqR "assembled algorithm" (algo.map (·.name))
+    #["NodeSizeReorderer", "InteractiveNodeReorderer", "MinSizePreProcessor", "GreedyWidthApproximator",
+      "MinSizePostProcessor", "Compactor", "NoopWhitespaceEliminator"]
+  -- TRYBOX: 70 ≥ 10 + 10 + 10 → stackable, packed; 20/20/20 → box layout (priority order)
+  let (g, root, k) := mkGraph #[(20.0, 20.0), (20.0, 20.0), (20.0, 20.0)]
+  let g := g.setNodeProp root RectPackingOptions.TRYBOX true
+  let g ← runLayout g root
+  check "trybox: priorities set" ((g.node k[0]!).props.get CoreOptions.PRIORITY == some 3)
+  -- box layout with the values of the engine snapshot: padding 12, spacing 20 (core defaults, not
+  -- the rectangle packing defaults); one box per row (oracle: (12, 12), (12, 52), (12, 92))
+  checkPosE "trybox: box n0" g k[0]! 12.0 12.0
+  checkPosE "trybox: box n1" g k[1]! 12.0 52.0
+  checkPosE "trybox: box n2" g k[2]! 12.0 92.0
+  checkSizeE "trybox: graph" g root 44.0 124.0
+  -- the interactive visitor
+  let (g, root, _) := mkGraph #[(10.0, 10.0)]
+  let g := g.setNodeProp root CoreOptions.ALGORITHM "rectpacking"
+  let (_, g) ← runElk g (InteractiveRectPackingGraphVisitor.visitor.visit (.node root))
+  check "visitor sets interactive" ((g.node root).props.get? RectPackingOptions.INTERACTIVE == some true)
+  let (g, root, _) := mkGraph #[]
+  let g := g.setNodeProp root CoreOptions.ALGORITHM "rectpacking"
+  let (_, g) ← runElk g (InteractiveRectPackingGraphVisitor.setInteractiveOptions root)
+  check "visitor skips nodes without children" ((g.node root).props.get? RectPackingOptions.INTERACTIVE).isNone
+
+/-! ### Fixtures -/
+
+/-- Fixture input names (`<name>.json` without `.expected.json`), sorted. -/
+private def fixtureNames (dir : System.FilePath) : IO (Array String) := do
+  let entries ← System.FilePath.readDir dir
+  let names := entries.filterMap fun e =>
+    if e.fileName.endsWith ".json" && !e.fileName.endsWith ".expected.json" then
+      some (e.fileName.dropEnd ".json".length).toString
+    else none
+  return stableSort names (fun a b => compare a b)
+
+private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit := do
+  let names ← fixtureNames dir
+  check s!"fixtures found in {dir}" (names.size >= minimum)
+  for name in names do
+    let input ← IO.FS.readFile (dir / s!"{name}.json")
+    let expectedFile := dir / s!"{name}.expected.json"
+    if ← expectedFile.pathExists then
+      let expected ← IO.FS.readFile expectedFile
+      match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
+      | .error e => report s!"{name}: layout" false e
+      | .ok actual => checkEq s!"{name}: matches oracle" actual expected
+    else
+      -- no oracle output: elk-rs panics (e.g. NONE packing + a whitespace eliminator)
+      match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
+      | .error _ => report s!"{name}: error like the oracle" true
+      | .ok _ => report s!"{name}: error like the oracle" false "layout succeeded"
+
+/-- The fixture directory: `ELK_RECTPACKING_FIXTURES<suffix>` overrides the default (used for
+large parity runs outside the repository). -/
+private def fixtureDir (envSuffix : String) (default : System.FilePath) : IO (System.FilePath × Nat) := do
+  match ← IO.getEnv s!"ELK_RECTPACKING_FIXTURES{envSuffix}" with
+  | some d => return (d, 1)
+  | none => return (default, 40)
+
+/-- `rectpacking.fixtures`: `Elk.Api.layoutJson` reproduces the stock elk-rs output byte-for-byte.
+The stock oracle registers the four enum options without a value parser, so their strings in the
+JSON are ignored (by the port as well). -/
+def fixtureTests : Suite := suite "rectpacking.fixtures" do
+  LayoutMetaDataService.ensureInitialized
+  let (dir, minimum) ← fixtureDir "" "tests/fixtures/rectpacking"
+  checkFixtures dir minimum
+
+/-- Java-like variant of the four enum options of the rectangle packing (the registration of
+`RectPackingMetaDataProvider.registerOptions` plus the enum choices and the lenient enum parser).
+Registering it replaces the entries in place. Test only: elk-rs registers no parser. -/
+def enumParserProvider : LayoutMetaDataProvider where
+  apply r :=
+    let withParser {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+        (name description group : String) : Registry :=
+      r.registerOption
+        { id := property.id, type := .enum, defaultValue := property.default.map PropCodec.enc,
+          name, description, targets := EnumSet.of #[.parents], visibility := .visible, group,
+          choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+    let r := withParser r RectPackingOptions.WIDTH_APPROXIMATION_STRATEGY "Width Approximation Strategy"
+      "Strategy for finding an initial width of the drawing." "widthApproximation"
+    let r := withParser r RectPackingOptions.WIDTH_APPROXIMATION_OPTIMIZATION_GOAL "Optimization Goal"
+      "Optimization goal for approximation of the bounding box given by the first iteration."
+      "widthApproximation"
+    let r := withParser r RectPackingOptions.PACKING_STRATEGY "Compaction Strategy"
+      "Strategy for finding an initial placement on nodes." "packing"
+    withParser r RectPackingOptions.WHITE_SPACE_ELIMINATION_STRATEGY "White Space Approximation Strategy"
+      "Strategy for expanding nodes to eliminate whitespace." "whiteSpaceElimination"
+
+/-- Runs `action` with `enumParserProvider` installed, then restores the registry. -/
+def withEnumParsers {α : Type} (action : IO α) : IO α := do
+  let snapshot ← LayoutMetaDataService.getInstance
+  LayoutMetaDataService.registerLayoutMetaDataProvider enumParserProvider
+  try action finally LayoutMetaDataService.instanceRef.set snapshot
+
+/-- `rectpacking.fixtures.enum`: with the enum parsers installed, the output equals the output of
+an elk-rs build whose rectangle packing provider registers the same parsers (the only change to
+elk-rs); this reaches every strategy from JSON. Inputs without an expected file are the models
+on which elk-rs panics (`NONE` packing with a whitespace eliminator). -/
+def enumFixtureTests : Suite := suite "rectpacking.fixtures.enum" do
+  LayoutMetaDataService.ensureInitialized
+  let (dir, minimum) ← fixtureDir "_ENUM" "tests/fixtures/rectpacking/enum"
+  let st ← get
+  let (_, st') ← withEnumParsers ((checkFixtures dir minimum).run st)
+  set st'
+
 def suites : Array Suite :=
   #[metadataTests, drawingTests, filterTests, calculationTests, approximationTests, intermediateTests,
-    blockTests, stackTests]
+    blockTests, stackTests, packingTests, whitespaceTests, providerTests, fixtureTests, enumFixtureTests]
 
 end Tests.RectPacking

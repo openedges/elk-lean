@@ -1,0 +1,46 @@
+{
+  "children": [
+    {
+      "height": 0,
+      "id": "n1",
+      "width": 0,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "children": [
+        {
+          "height": 0,
+          "id": "n2_1",
+          "width": 0,
+          "x": 15,
+          "y": 15
+        },
+        {
+          "height": 0,
+          "id": "n2_2",
+          "width": 0,
+          "x": 30,
+          "y": 15
+        }
+      ],
+      "height": 30,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.algorithm": "rectpacking"
+      },
+      "width": 45,
+      "x": 30,
+      "y": 15
+    }
+  ],
+  "height": 60,
+  "id": "n0",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.interactiveLayout": "true"
+  },
+  "width": 90,
+  "x": 0,
+  "y": 0
+}

@@ -1,0 +1,237 @@
+{
+  "children": [
+    {
+      "height": 286,
+      "id": "n0",
+      "width": 55.25,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n1",
+      "width": 54.25,
+      "x": 85.25,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n2",
+      "width": 53.25,
+      "x": 154.5,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n3",
+      "width": 40.25,
+      "x": 222.75,
+      "y": 15
+    },
+    {
+      "height": 20,
+      "id": "n4",
+      "labels": [
+        {
+          "height": 14,
+          "text": "L4",
+          "width": 30,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 20,
+      "x": 278,
+      "y": 15
+    },
+    {
+      "height": 160.5,
+      "id": "n5",
+      "width": 91,
+      "x": 278,
+      "y": 140.5
+    },
+    {
+      "height": 215.5,
+      "id": "n6",
+      "width": 96,
+      "x": 384,
+      "y": 15
+    },
+    {
+      "height": 20,
+      "id": "n7",
+      "labels": [
+        {
+          "height": 5,
+          "text": "L7",
+          "width": 22,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 20,
+      "x": 384,
+      "y": 245.5
+    },
+    {
+      "height": 286,
+      "id": "n8",
+      "labels": [
+        {
+          "height": 14,
+          "text": "L8",
+          "width": 33,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "width": 85,
+      "x": 495,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n9",
+      "width": 95,
+      "x": 595,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n10",
+      "width": 99,
+      "x": 705,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n11",
+      "width": 56.33333333333333,
+      "x": 819,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n12",
+      "labels": [
+        {
+          "height": 9,
+          "text": "L12",
+          "width": 31,
+          "x": -1.833333333333334,
+          "y": 138.5
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]"
+      },
+      "width": 27.333333333333332,
+      "x": 890.3333333333334,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n13",
+      "width": 34.33333333333333,
+      "x": 932.6666666666666,
+      "y": 15
+    },
+    {
+      "height": 20,
+      "id": "n14",
+      "labels": [
+        {
+          "height": 6,
+          "text": "L14",
+          "width": 20,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 20,
+      "x": 15,
+      "y": 316
+    },
+    {
+      "height": 36.5,
+      "id": "n15",
+      "width": 246.25,
+      "x": 266.25,
+      "y": 316
+    },
+    {
+      "height": 20,
+      "id": "n16",
+      "labels": [
+        {
+          "height": 10,
+          "text": "L16",
+          "width": 31,
+          "x": 0,
+          "y": -15
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_LEFT, V_TOP, OUTSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 62,
+      "x": 15,
+      "y": 367.5
+    },
+    {
+      "height": 20,
+      "id": "n17",
+      "labels": [
+        {
+          "height": 10,
+          "text": "L17",
+          "width": 10,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 20,
+      "x": 15,
+      "y": 409
+    },
+    {
+      "height": 159.5,
+      "id": "n18",
+      "width": 497.5,
+      "x": 15,
+      "y": 450.5
+    },
+    {
+      "height": 294,
+      "id": "n19",
+      "width": 439.5,
+      "x": 527.5,
+      "y": 316
+    }
+  ],
+  "height": 625,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "1.6",
+    "elk.rectpacking.packing.strategy": "COMPACTION",
+    "elk.rectpacking.whiteSpaceElimination.strategy": "TO_ASPECT_RATIO"
+  },
+  "width": 982,
+  "x": 0,
+  "y": 0
+}

@@ -1,0 +1,157 @@
+{
+  "children": [
+    {
+      "height": 17,
+      "id": "n0",
+      "width": 56,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 286,
+      "id": "n1",
+      "width": 17,
+      "x": 72,
+      "y": 15
+    },
+    {
+      "height": 53,
+      "id": "n2",
+      "width": 33,
+      "x": 90,
+      "y": 15
+    },
+    {
+      "height": 28,
+      "id": "n3",
+      "width": 38,
+      "x": 124,
+      "y": 15
+    },
+    {
+      "height": 38,
+      "id": "n4",
+      "width": 49,
+      "x": 163,
+      "y": 15
+    },
+    {
+      "height": 44,
+      "id": "n5",
+      "width": 43,
+      "x": 213,
+      "y": 15
+    },
+    {
+      "height": 37,
+      "id": "n6",
+      "width": 57,
+      "x": 90,
+      "y": 69
+    },
+    {
+      "height": 19,
+      "id": "n7",
+      "width": 19,
+      "x": 90,
+      "y": 107
+    },
+    {
+      "height": 46,
+      "id": "n8",
+      "width": 119,
+      "x": 90,
+      "y": 127
+    },
+    {
+      "height": 66,
+      "id": "n9",
+      "width": 62,
+      "x": 210,
+      "y": 127
+    },
+    {
+      "height": 68,
+      "id": "n10",
+      "width": 10,
+      "x": 273,
+      "y": 127
+    },
+    {
+      "height": 20,
+      "id": "n11",
+      "width": 64,
+      "x": 90,
+      "y": 196
+    },
+    {
+      "height": 47,
+      "id": "n12",
+      "width": 32,
+      "x": 90,
+      "y": 217
+    },
+    {
+      "height": 21,
+      "id": "n13",
+      "width": 23,
+      "x": 90,
+      "y": 265
+    },
+    {
+      "height": 73,
+      "id": "n14",
+      "width": 40,
+      "x": 284,
+      "y": 15
+    },
+    {
+      "height": 57,
+      "id": "n15",
+      "width": 68,
+      "x": 325,
+      "y": 15
+    },
+    {
+      "height": 37,
+      "id": "n16",
+      "width": 65,
+      "x": 284,
+      "y": 89
+    },
+    {
+      "height": 98,
+      "id": "n17",
+      "width": 107,
+      "x": 284,
+      "y": 127
+    },
+    {
+      "height": 53,
+      "id": "n18",
+      "width": 11,
+      "x": 284,
+      "y": 226
+    },
+    {
+      "height": 73,
+      "id": "n19",
+      "width": 21,
+      "x": 296,
+      "y": 226
+    }
+  ],
+  "height": 316,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "3",
+    "elk.contentAlignment": "[V_CENTER, H_CENTER]",
+    "elk.omitNodeMicroLayout": "true",
+    "elk.rectpacking.packing.compaction.iterations": "2",
+    "elk.spacing.nodeNode": "1"
+  },
+  "width": 408,
+  "x": 0,
+  "y": 0
+}

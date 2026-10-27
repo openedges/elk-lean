@@ -1,0 +1,228 @@
+{
+  "children": [
+    {
+      "height": 271,
+      "id": "n0",
+      "width": 15,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 109,
+      "id": "n1",
+      "width": 14,
+      "x": 45,
+      "y": 15
+    },
+    {
+      "height": 162,
+      "id": "n2",
+      "width": 14,
+      "x": 74,
+      "y": 15
+    },
+    {
+      "height": 159,
+      "id": "n3",
+      "width": 15,
+      "x": 103,
+      "y": 15
+    },
+    {
+      "height": 181,
+      "id": "n4",
+      "width": 39,
+      "x": 133,
+      "y": 15
+    },
+    {
+      "height": 258,
+      "id": "n5",
+      "width": 17,
+      "x": 187,
+      "y": 15
+    },
+    {
+      "height": 230,
+      "id": "n6",
+      "width": 19,
+      "x": 219,
+      "y": 15
+    },
+    {
+      "height": 60,
+      "id": "n7",
+      "width": 23,
+      "x": 253,
+      "y": 15
+    },
+    {
+      "height": 180,
+      "id": "n8",
+      "width": 34,
+      "x": 253,
+      "y": 90
+    },
+    {
+      "height": 73,
+      "id": "n9",
+      "width": 39,
+      "x": 302,
+      "y": 15
+    },
+    {
+      "height": 180,
+      "id": "n10",
+      "width": 30,
+      "x": 302,
+      "y": 103
+    },
+    {
+      "height": 296,
+      "id": "n11",
+      "width": 14,
+      "x": 356,
+      "y": 15
+    },
+    {
+      "height": 165,
+      "id": "n12",
+      "width": 31,
+      "x": 385,
+      "y": 15
+    },
+    {
+      "height": 184,
+      "id": "n13",
+      "width": 6,
+      "x": 431,
+      "y": 15
+    },
+    {
+      "height": 63,
+      "id": "n14",
+      "width": 12,
+      "x": 452,
+      "y": 15
+    },
+    {
+      "height": 6.082,
+      "id": "n15",
+      "width": 47.241,
+      "x": 452,
+      "y": 93
+    },
+    {
+      "height": 285,
+      "id": "n16",
+      "width": 27,
+      "x": 514.241,
+      "y": 15
+    },
+    {
+      "height": 146,
+      "id": "n17",
+      "width": 12,
+      "x": 556.241,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n18",
+      "width": 30,
+      "x": 583.241,
+      "y": 15
+    },
+    {
+      "height": 167,
+      "id": "n19",
+      "width": 25,
+      "x": 15,
+      "y": 326
+    },
+    {
+      "height": 147,
+      "id": "n20",
+      "width": 10,
+      "x": 55,
+      "y": 326
+    },
+    {
+      "height": 225,
+      "id": "n21",
+      "width": 15,
+      "x": 80,
+      "y": 326
+    },
+    {
+      "height": 250,
+      "id": "n22",
+      "width": 22,
+      "x": 110,
+      "y": 326
+    },
+    {
+      "height": 154,
+      "id": "n23",
+      "width": 8,
+      "x": 147,
+      "y": 326
+    },
+    {
+      "height": 229,
+      "id": "n24",
+      "width": 11,
+      "x": 170,
+      "y": 326
+    },
+    {
+      "height": 176,
+      "id": "n25",
+      "width": 26,
+      "x": 196,
+      "y": 326
+    },
+    {
+      "height": 78,
+      "id": "n26",
+      "width": 6,
+      "x": 237,
+      "y": 326
+    },
+    {
+      "height": 131,
+      "id": "n27",
+      "width": 38,
+      "x": 237,
+      "y": 419
+    },
+    {
+      "height": 197,
+      "id": "n28",
+      "width": 20,
+      "x": 290,
+      "y": 326
+    },
+    {
+      "height": 116,
+      "id": "n29",
+      "width": 27,
+      "x": 325,
+      "y": 326
+    }
+  ],
+  "height": 591,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "1.3",
+    "elk.contentAlignment": "[V_BOTTOM, H_RIGHT]",
+    "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+    "elk.nodeSize.minimum": "(300,300)",
+    "elk.rectpacking.packing.compaction.iterations": "5",
+    "elk.spacing.nodeNode": "15"
+  },
+  "width": 628.241,
+  "x": 0,
+  "y": 0
+}

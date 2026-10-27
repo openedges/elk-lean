@@ -1,0 +1,1 @@
+{"id": "root", "layoutOptions": {"elk.algorithm": "org.eclipse.elk.rectpacking", "elk.aspectRatio": "1.3", "elk.spacing.nodeNode": "0", "elk.nodeSize.constraints": "[MINIMUM_SIZE]", "elk.nodeSize.minimum": "(300,300)", "elk.rectpacking.whiteSpaceElimination.strategy": "EQUAL_BETWEEN_STRUCTURES"}, "children": [{"id": "n0", "width": 52.3, "height": 105.4}]}

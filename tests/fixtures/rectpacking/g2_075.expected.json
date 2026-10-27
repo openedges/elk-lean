@@ -1,0 +1,85 @@
+{
+  "children": [
+    {
+      "height": 10,
+      "id": "n0",
+      "width": 30,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 10,
+      "id": "n1",
+      "width": 100,
+      "x": 78.3,
+      "y": 15
+    },
+    {
+      "height": 50,
+      "id": "n2",
+      "width": 30,
+      "x": 211.60000000000002,
+      "y": 15
+    },
+    {
+      "height": 50,
+      "id": "n3",
+      "width": 30,
+      "x": 274.90000000000003,
+      "y": 15
+    },
+    {
+      "height": 20,
+      "id": "n4",
+      "width": 20,
+      "x": 15,
+      "y": 98.3
+    },
+    {
+      "height": 20,
+      "id": "n5",
+      "width": 20,
+      "x": 68.3,
+      "y": 98.3
+    },
+    {
+      "height": 10,
+      "id": "n6",
+      "width": 100,
+      "x": 121.6,
+      "y": 98.3
+    },
+    {
+      "height": 10,
+      "id": "n7",
+      "width": 30,
+      "x": 254.90000000000003,
+      "y": 98.3
+    },
+    {
+      "height": 70,
+      "id": "n8",
+      "width": 30,
+      "x": 15,
+      "y": 151.6
+    },
+    {
+      "height": 45,
+      "id": "n9",
+      "width": 92,
+      "x": 78.3,
+      "y": 151.6
+    }
+  ],
+  "height": 236.6,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.rectpacking.packing.compaction.iterations": "1",
+    "elk.rectpacking.trybox": "true",
+    "elk.spacing.nodeNode": "33.3"
+  },
+  "width": 319.90000000000003,
+  "x": 0,
+  "y": 0
+}

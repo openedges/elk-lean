@@ -1,0 +1,61 @@
+{
+  "children": [
+    {
+      "height": 21,
+      "id": "n0",
+      "width": 64,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 17,
+      "id": "n1",
+      "labels": [
+        {
+          "height": 9,
+          "text": "L1",
+          "width": 8,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 33,
+      "x": 112.3,
+      "y": 15
+    },
+    {
+      "height": 55,
+      "id": "n2",
+      "labels": [
+        {
+          "height": 12,
+          "text": "L2",
+          "width": 33,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "width": 77,
+      "x": 15,
+      "y": 69.3
+    }
+  ],
+  "height": 139.3,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "1.6",
+    "elk.omitNodeMicroLayout": "true",
+    "elk.rectpacking.packing.compaction.iterations": "3",
+    "elk.rectpacking.packing.compaction.rowHeightReevaluation": "true",
+    "elk.rectpacking.widthApproximation.strategy": "TARGET_WIDTH",
+    "elk.rectpacking.widthApproximation.targetWidth": "50",
+    "elk.spacing.nodeNode": "33.3"
+  },
+  "width": 160.3,
+  "x": 0,
+  "y": 0
+}

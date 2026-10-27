@@ -1,0 +1,25 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "-1"
+      },
+      "width": 30,
+      "x": 15,
+      "y": 15
+    }
+  ],
+  "height": 60,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.widthApproximation.strategy": "GREEDY",
+    "org.eclipse.elk.interactive": "true"
+  },
+  "width": 60,
+  "x": 0,
+  "y": 0
+}

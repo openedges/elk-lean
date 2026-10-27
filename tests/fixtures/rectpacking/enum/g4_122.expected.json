@@ -1,0 +1,123 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "width": 30,
+      "x": 234.744,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30,
+      "x": 274.744,
+      "y": 15
+    },
+    {
+      "height": 117.6,
+      "id": "n2",
+      "width": 149.744,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 30,
+      "x": 314.744,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n4",
+      "width": 30,
+      "x": 354.744,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n5",
+      "width": 30,
+      "x": 394.744,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n6",
+      "width": 30,
+      "x": 174.744,
+      "y": 70
+    },
+    {
+      "height": 30,
+      "id": "n7",
+      "width": 30,
+      "x": 214.744,
+      "y": 70
+    },
+    {
+      "height": 30,
+      "id": "n8",
+      "width": 30,
+      "x": 254.744,
+      "y": 70
+    },
+    {
+      "height": 30,
+      "id": "n9",
+      "width": 30,
+      "x": 294.744,
+      "y": 70
+    },
+    {
+      "height": 4,
+      "id": "n10",
+      "width": 71,
+      "x": 174.744,
+      "y": 110
+    },
+    {
+      "height": 45,
+      "id": "n11",
+      "width": 50,
+      "x": 174.744,
+      "y": 15
+    },
+    {
+      "height": 30,
+      "id": "n12",
+      "width": 30,
+      "x": 334.744,
+      "y": 70
+    },
+    {
+      "height": 30,
+      "id": "n13",
+      "width": 30,
+      "x": 374.744,
+      "y": 70
+    },
+    {
+      "height": 30,
+      "id": "n14",
+      "width": 30,
+      "x": 414.744,
+      "y": 70
+    }
+  ],
+  "height": 147.6,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "3",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.packing.compaction.iterations": "3",
+    "elk.rectpacking.packing.strategy": "COMPACTION",
+    "elk.rectpacking.widthApproximation.strategy": "GREEDY",
+    "elk.spacing.nodeNode": "10"
+  },
+  "width": 459.744,
+  "x": 0,
+  "y": 0
+}

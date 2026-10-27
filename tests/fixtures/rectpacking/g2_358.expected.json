@@ -1,0 +1,207 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 21,
+          "id": "n0_0",
+          "width": 92,
+          "x": 554.9085,
+          "y": 169.072
+        },
+        {
+          "height": 87.431,
+          "id": "n0_1",
+          "width": 63.5,
+          "x": 476.4085,
+          "y": 80
+        },
+        {
+          "height": 29.872,
+          "id": "n0_2",
+          "width": 147.3,
+          "x": 554.9085,
+          "y": 80
+        },
+        {
+          "height": 29.2,
+          "id": "n0_3",
+          "width": 50.4,
+          "x": 554.9085,
+          "y": 124.872
+        },
+        {
+          "height": 140,
+          "id": "n0_4",
+          "width": 142.65,
+          "x": 97.79150000000004,
+          "y": 80
+        },
+        {
+          "height": 121.2,
+          "id": "n0_5",
+          "width": 148.069,
+          "x": 313.33950000000004,
+          "y": 80
+        },
+        {
+          "height": 123.56,
+          "id": "n0_6",
+          "width": 42.898,
+          "x": 255.44150000000005,
+          "y": 80
+        },
+        {
+          "height": 5,
+          "id": "n0_7",
+          "width": 20,
+          "x": 554.9085,
+          "y": 205.072
+        }
+      ],
+      "height": 300,
+      "id": "n0",
+      "layoutOptions": {
+        "elk.algorithm": "rectpacking",
+        "elk.contentAlignment": "[V_CENTER, H_CENTER]",
+        "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+        "elk.nodeSize.minimum": "(800,300)",
+        "elk.rectpacking.orderBySize": "true",
+        "elk.rectpacking.packing.compaction.iterations": "5",
+        "elk.rectpacking.packing.compaction.rowHeightReevaluation": "true",
+        "elk.spacing.nodeNode": "15"
+      },
+      "width": 800,
+      "x": 0,
+      "y": 397.522
+    },
+    {
+      "height": 255,
+      "id": "n1",
+      "width": 26,
+      "x": 810,
+      "y": 397.522
+    },
+    {
+      "children": [
+        {
+          "height": 141.332,
+          "id": "n2_0",
+          "width": 36.1,
+          "x": 100,
+          "y": 100
+        },
+        {
+          "height": 104.805,
+          "id": "n2_1",
+          "width": 107.096,
+          "x": 141.1,
+          "y": 100
+        },
+        {
+          "height": 1.8,
+          "id": "n2_2",
+          "width": 60.5,
+          "x": 253.196,
+          "y": 100
+        },
+        {
+          "height": 100.3,
+          "id": "n2_3",
+          "width": 116.39,
+          "x": 100,
+          "y": 246.332
+        },
+        {
+          "height": 20.8,
+          "id": "n2_4",
+          "width": 115.82,
+          "x": 221.39,
+          "y": 246.332
+        },
+        {
+          "height": 5.89,
+          "id": "n2_5",
+          "width": 147.333,
+          "x": 100,
+          "y": 351.632
+        }
+      ],
+      "height": 367.522,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.algorithm": "rectpacking",
+        "elk.padding": "[top=100,left=100,bottom=10,right=10]",
+        "elk.rectpacking.packing.compaction.rowHeightReevaluation": "true",
+        "elk.rectpacking.widthApproximation.lastPlaceShift": "false",
+        "elk.spacing.nodeNode": "5"
+      },
+      "width": 347.21,
+      "x": 0,
+      "y": 20
+    },
+    {
+      "height": 144,
+      "id": "n3",
+      "width": 35,
+      "x": 230,
+      "y": 707.5219999999999
+    },
+    {
+      "height": 200,
+      "id": "n4",
+      "width": 220,
+      "x": 0,
+      "y": 707.5219999999999
+    },
+    {
+      "children": [
+        {
+          "height": 64,
+          "id": "n5_0",
+          "width": 16,
+          "x": 12.5,
+          "y": 20
+        },
+        {
+          "height": 111,
+          "id": "n5_1",
+          "width": 2,
+          "x": 38.5,
+          "y": 20
+        },
+        {
+          "height": 23,
+          "id": "n5_2",
+          "width": 39,
+          "x": 50.5,
+          "y": 20
+        }
+      ],
+      "height": 136,
+      "id": "n5",
+      "layoutOptions": {
+        "elk.algorithm": "org.eclipse.elk.rectpacking",
+        "elk.aspectRatio": "1",
+        "elk.padding": "[top=20,left=12.5,bottom=5,right=0]",
+        "elk.spacing.nodeNode": "10"
+      },
+      "width": 89.5,
+      "x": 275,
+      "y": 707.5219999999999
+    }
+  ],
+  "height": 0,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.nodeSize.fixedGraphSize": "true",
+    "elk.padding": "[top=20,left=0,bottom=12.5,right=12.5]",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.packing.compaction.rowHeightReevaluation": "true",
+    "elk.spacing.nodeNode": "10"
+  },
+  "width": 0,
+  "x": 0,
+  "y": 0
+}

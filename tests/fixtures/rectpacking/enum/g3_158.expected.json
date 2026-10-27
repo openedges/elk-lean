@@ -1,0 +1,126 @@
+{
+  "children": [
+    {
+      "height": 86,
+      "id": "n0",
+      "width": 109,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 117,
+      "id": "n1",
+      "width": 26,
+      "x": 15,
+      "y": 101
+    },
+    {
+      "height": 113,
+      "id": "n2",
+      "width": 41,
+      "x": 15,
+      "y": 218
+    },
+    {
+      "height": 12,
+      "id": "n3",
+      "width": 14,
+      "x": 15,
+      "y": 331
+    },
+    {
+      "height": 55,
+      "id": "n4",
+      "width": 43,
+      "x": 15,
+      "y": 343
+    },
+    {
+      "height": 66,
+      "id": "n5",
+      "width": 120,
+      "x": 15,
+      "y": 398
+    },
+    {
+      "height": 47,
+      "id": "n6",
+      "width": 44,
+      "x": 15,
+      "y": 464
+    },
+    {
+      "height": 43,
+      "id": "n7",
+      "width": 20,
+      "x": 15,
+      "y": 511
+    },
+    {
+      "height": 4,
+      "id": "n8",
+      "width": 64,
+      "x": 15,
+      "y": 554
+    },
+    {
+      "height": 55,
+      "id": "n9",
+      "width": 93,
+      "x": 15,
+      "y": 558
+    },
+    {
+      "height": 19,
+      "id": "n10",
+      "width": 62,
+      "x": 15,
+      "y": 613
+    },
+    {
+      "height": 65,
+      "id": "n11",
+      "width": 47,
+      "x": 15,
+      "y": 632
+    },
+    {
+      "height": 22,
+      "id": "n12",
+      "width": 117,
+      "x": 15,
+      "y": 697
+    },
+    {
+      "height": 35,
+      "id": "n13",
+      "width": 236,
+      "x": 15,
+      "y": 719
+    },
+    {
+      "height": 76,
+      "id": "n14",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 42,
+      "x": 15,
+      "y": 754
+    }
+  ],
+  "height": 845,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "3",
+    "elk.contentAlignment": "[V_CENTER, H_CENTER]",
+    "elk.rectpacking.packing.compaction.iterations": "1",
+    "elk.rectpacking.packing.strategy": "COMPACTION",
+    "elk.rectpacking.widthApproximation.strategy": "TARGET_WIDTH",
+    "elk.spacing.nodeNode": "0"
+  },
+  "width": 266,
+  "x": 0,
+  "y": 0
+}

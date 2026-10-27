@@ -1,0 +1,27 @@
+{
+  "children": [
+    {
+      "height": 10,
+      "id": "n0",
+      "width": 20,
+      "x": 0,
+      "y": 12.5
+    }
+  ],
+  "height": 122.5,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "2",
+    "elk.padding": "[top=12.5,left=0,bottom=100,right=20]",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.packing.strategy": "COMPACTION",
+    "elk.rectpacking.whiteSpaceElimination.strategy": "TO_ASPECT_RATIO",
+    "elk.rectpacking.widthApproximation.optimizationGoal": "MAX_SCALE_DRIVEN",
+    "elk.rectpacking.widthApproximation.targetWidth": "100",
+    "elk.spacing.nodeNode": "15"
+  },
+  "width": 40,
+  "x": 0,
+  "y": 0
+}

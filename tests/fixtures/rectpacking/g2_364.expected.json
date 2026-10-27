@@ -1,0 +1,67 @@
+{
+  "children": [
+    {
+      "height": 10,
+      "id": "n0",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "5"
+      },
+      "width": 15,
+      "x": 156.39999999999998,
+      "y": 20
+    },
+    {
+      "height": 10,
+      "id": "n1",
+      "width": 20,
+      "x": 12.5,
+      "y": 73.3
+    },
+    {
+      "height": 111,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "4"
+      },
+      "width": 14,
+      "x": 109.1,
+      "y": 20
+    },
+    {
+      "height": 10,
+      "id": "n3",
+      "width": 5,
+      "x": 65.8,
+      "y": 73.3
+    },
+    {
+      "height": 15,
+      "id": "n4",
+      "width": 15,
+      "x": 60.8,
+      "y": 20
+    },
+    {
+      "height": 20,
+      "id": "n5",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "-1"
+      },
+      "width": 15,
+      "x": 12.5,
+      "y": 20
+    }
+  ],
+  "height": 136,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.padding": "[top=20,left=12.5,bottom=5,right=12.5]",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.spacing.nodeNode": "33.3",
+    "org.eclipse.elk.interactive": "true"
+  },
+  "width": 183.89999999999998,
+  "x": 0,
+  "y": 0
+}

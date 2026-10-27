@@ -1,0 +1,63 @@
+{
+  "children": [
+    {
+      "height": 36,
+      "id": "n0",
+      "width": 34,
+      "x": 5,
+      "y": 10
+    },
+    {
+      "height": 23,
+      "id": "n1",
+      "width": 72,
+      "x": 54,
+      "y": 10
+    },
+    {
+      "height": 61,
+      "id": "n2",
+      "width": 34,
+      "x": 141,
+      "y": 10
+    },
+    {
+      "height": 43,
+      "id": "n3",
+      "width": 54,
+      "x": 190,
+      "y": 10
+    },
+    {
+      "height": 49,
+      "id": "n4",
+      "width": 61,
+      "x": 5,
+      "y": 86
+    },
+    {
+      "height": 68,
+      "id": "n5",
+      "width": 45,
+      "x": 81,
+      "y": 86
+    }
+  ],
+  "height": 174,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "1.908321167883212",
+    "elk.padding": "[top=10,left=5,bottom=20,right=100]",
+    "elk.rectpacking.packing.compaction.iterations": "2",
+    "elk.rectpacking.packing.strategy": "COMPACTION",
+    "elk.rectpacking.trybox": "true",
+    "elk.rectpacking.whiteSpaceElimination.strategy": "EQUAL_BETWEEN_STRUCTURES",
+    "elk.rectpacking.widthApproximation.optimizationGoal": "MAX_SCALE_DRIVEN",
+    "elk.rectpacking.widthApproximation.strategy": "GREEDY",
+    "elk.spacing.nodeNode": "15"
+  },
+  "width": 344,
+  "x": 0,
+  "y": 0
+}

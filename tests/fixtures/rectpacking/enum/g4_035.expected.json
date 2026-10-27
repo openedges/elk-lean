@@ -1,0 +1,44 @@
+{
+  "children": [
+    {
+      "height": 402.5,
+      "id": "n0",
+      "width": 659.5,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 224.75,
+      "id": "n1",
+      "width": 659.5,
+      "x": 15,
+      "y": 432.5
+    },
+    {
+      "height": 212.75,
+      "id": "n2",
+      "width": 659.5,
+      "x": 15,
+      "y": 672.25
+    },
+    {
+      "height": 870,
+      "id": "n3",
+      "width": 456.5,
+      "x": 689.5,
+      "y": 15
+    }
+  ],
+  "height": 900,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+    "elk.nodeSize.minimum": "(800,900)",
+    "elk.rectpacking.packing.strategy": "COMPACTION",
+    "elk.rectpacking.whiteSpaceElimination.strategy": "TO_ASPECT_RATIO"
+  },
+  "width": 1161,
+  "x": 0,
+  "y": 0
+}

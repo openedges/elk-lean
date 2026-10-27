@@ -1,0 +1,1 @@
+{"id": "root", "layoutOptions": {"elk.algorithm": "rectpacking", "elk.aspectRatio": "0.2", "elk.spacing.nodeNode": "33.3", "elk.rectpacking.widthApproximation.targetWidth": "50"}, "children": [{"id": "n0", "width": 35, "height": 51}]}
