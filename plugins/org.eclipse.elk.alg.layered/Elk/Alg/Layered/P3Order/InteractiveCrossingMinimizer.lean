@@ -4,6 +4,7 @@ import Elk.Alg.Layered.P3Order.NodeRelativePortDistributor
 import Elk.Alg.Layered.P3Order.Counting.IInitializable
 import Elk.Core.Util.Java
 import Elk.Core.Util.Sort
+import Elk.Core.Util.RustSort
 /-!
 # `org.eclipse.elk.alg.layered.p3order.InteractiveCrossingMinimizer` (elk-rs `interactive_crossing_minimizer.rs`)
 
@@ -23,7 +24,7 @@ points yields the second point's y (`|dx| <= f64::EPSILON`). The distributor rec
 order captured *before* sorting (`toNodeArray()` copies the layers), exactly like Rust and Java.
 
 Orders reproduced: layers in `graph.layers` order, ports numbered in the pre-sort node order,
-the layer sort is stable (`stableSort`; Rust `sort_by`, Java `Collections.sort`).
+the layer sort is Rust `sort_by` (`rustSortBy`; Java `Collections.sort`).
 -/
 namespace Elk.Alg.Layered.P3Order
 
@@ -175,7 +176,11 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       let successors := (← getNode node).internal.inLayerSuccessorConstraints
       entries := entries.push { node := node, pos := pos, successors := successors }
     -- sort the nodes by position
-    let sorted := stableSort entries compareEntries
+    -- Rust `sort_by(compare_nodes_by_pos)`: successor constraints can make the comparator
+    -- intransitive, so Rust's exact algorithm decides the result
+    let sorted ← match Elk.Core.Util.rustSortBy entries compareEntries with
+      | .ok r => pure r
+      | .error e => throw (IO.userError s!"java.lang.IllegalArgumentException: {e}")
     modifyLayer layer fun l => { l with nodes := sorted.map (·.node) }
     let _ ← portDistributor.distributePortsWhileSweeping nodeOrder layerIndex true
   monitor.done

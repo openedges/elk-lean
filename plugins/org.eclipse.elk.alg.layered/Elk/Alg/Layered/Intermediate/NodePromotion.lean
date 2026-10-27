@@ -3,6 +3,7 @@ import Std.Data.HashSet
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Core.Util.Sort
+import Elk.Core.Util.RustSort
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.NodePromotion`
 
@@ -32,7 +33,8 @@ Rust/Java differences (follows Rust):
 - existing `Layer` objects are reused (Java creates new ones).
 
 The Rust `BTreeMap<i32, Vec<LNodeRef>>` is an `Array (Int × Array LNodeId)` kept sorted by key; the reverse
-map (node → key) is a `Std.HashMap` (lookups only). Sorting uses `stableSort` (Rust `sort_by`).
+map (node → key) is a `Std.HashMap` (lookups only). Sorting uses `rustSortBy` (Rust `sort_by`: the
+model-order comparator is not a total order, so the exact Rust algorithm is needed).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -98,7 +100,11 @@ def fromGraph (graph : LGraphId) (leftToRight : Bool) : LayeredM LayerNodeMap :=
     let mut withOrder : Array (LNodeId × Option Int) := #[]
     for node in (← getLayer layers[layerId]).nodes do
       withOrder := withOrder.push (node, (← getNode node).internal.modelOrder)
-    let sorted := (stableSort withOrder fun a b => modelOrderCompare a.2 b.2 leftToRight).map (·.1)
+    -- Rust `nodes.sort_by(model_order_compare)`: the comparator is not a total order (nodes without
+    -- a model order compare equal), so Rust's exact algorithm decides the result
+    let sorted ← match Elk.Core.Util.rustSortBy withOrder (fun a b => modelOrderCompare a.2 b.2 leftToRight) with
+      | .ok r => pure (r.map (·.1))
+      | .error e => throw (IO.userError s!"java.lang.IllegalArgumentException: {e}")
     let mut reverse := m.reverse
     for node in sorted do
       reverse := reverse.insert node (layerId : Int)

@@ -3,6 +3,7 @@ import Tests.Core.Foundation
 import Tests.Core.Options
 import Tests.Core.Math
 import Tests.Core.Util
+import Tests.Core.RustSort
 import Tests.Core.Meta
 import Tests.Core.Validation
 import Tests.Core.Alg
@@ -29,7 +30,8 @@ import Tests.Radial
 def main : IO UInt32 := do
   let suites :=
     Tests.Core.Foundation.suites ++ Tests.Core.Options.suites ++ Tests.Core.Math.suites ++
-    Tests.Core.Util.suites ++ Tests.Core.Meta.suites ++ Tests.Core.Validation.suites ++
+    Tests.Core.Util.suites ++
+    Tests.Core.RustSort.suites ++ Tests.Core.Meta.suites ++ Tests.Core.Validation.suites ++
     Tests.Graph.suites ++ Tests.Json.suites ++ Tests.Json.Importer.suites ++ Tests.Text.suites ++
     Tests.AlgCommon.NetworkSimplex.suites ++ Tests.AlgCommon.Compaction.suites ++ Tests.AlgCommon.Polyomino.suites ++
     Tests.AlgCommon.Spore.suites ++ Tests.AlgCommon.Geometry.suites ++ Tests.AlgCommon.NodeSpacing.suites ++
