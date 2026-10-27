@@ -11,7 +11,7 @@ without `preserve_order` (elk-rs): compact, object keys sorted.
 
 C signatures (Lean ≥ 4.2x compiles `BaseIO` without a world token):
 ```c
-lean_object *elk_ffi_layout_json(b_lean_obj_arg graph, b_lean_obj_arg options);
+lean_object *elk_ffi_layout_json(lean_obj_arg graph, lean_obj_arg options);   /* consumes both */
 lean_object *elk_ffi_known_layout_algorithms(lean_obj_arg unit);
 lean_object *elk_ffi_known_layout_options(lean_obj_arg unit);
 lean_object *elk_ffi_known_layout_categories(lean_obj_arg unit);
@@ -34,7 +34,7 @@ def guard (act : IO (Except String String)) : BaseIO (Except String String) := d
 
 /-- elk-rs `layout_api::layout_json(graph_json, options_json)` (NAPI `layout_json`). -/
 @[export elk_ffi_layout_json]
-def layoutJson (graph options : @& String) : BaseIO (Except String String) :=
+def layoutJson (graph options : String) : BaseIO (Except String String) :=
   guard (Elk.Api.layoutJson graph options (sortKeys := true))
 
 /-- elk-rs `layout_api::known_layout_algorithms()`. -/

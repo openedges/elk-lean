@@ -1,0 +1,45 @@
+#!/bin/sh
+# Builds the elk-lean C library for embedding hosts (NAPI addon, WASM, others):
+#   .lake/build/ffi/libelklean.a   every Elk.* module object + C shims + include/elk_lean.h glue
+#   .lake/build/ffi/include/elk_lean.h
+#   .lake/build/ffi/smoke          native smoke test (tests/ffi/smoke.c)
+#   .lake/build/ffi/ldflags        extra linker flags (Lean runtime libraries) for hosts
+# usage: sh scripts/build_ffi.sh [--check]   (--check: compare the smoke output with `elk layout`)
+set -eu
+HERE=$(cd "$(dirname "$0")/.." && pwd)
+cd "$HERE"
+export PATH="$HOME/.elan/bin:$PATH"
+LEAN_PREFIX=$(lean --print-prefix)
+OUT="$HERE/.lake/build/ffi"
+mkdir -p "$OUT/include" "$OUT/obj"
+# `elk` links every Elk.* module; `ElkFfi:static` adds the objects of Elk.Ffi itself
+lake build elk ElkFfi:static >/dev/null
+cp plugins/org.eclipse.elk.ffi/include/elk_lean.h "$OUT/include/"
+CFLAGS="-O3 -DNDEBUG -fPIC -std=c11 -I $LEAN_PREFIX/include -I plugins/org.eclipse.elk.ffi/include"
+cc $CFLAGS -c plugins/org.eclipse.elk.ffi/c/elk_lean.c -o "$OUT/obj/elk_lean.o"
+find .lake/build/ir/Elk -name '*.c.o.export' | LC_ALL=C sort > "$OUT/objects.txt"
+echo "$HERE/.lake/build/c/elk_core_ffi.o" >> "$OUT/objects.txt"
+echo "$OUT/obj/elk_lean.o" >> "$OUT/objects.txt"
+rm -f "$OUT/libelklean.a"
+# shellcheck disable=SC2046
+ar rcs "$OUT/libelklean.a" $(cat "$OUT/objects.txt")
+case "$(uname -s)" in
+  Darwin) LDFLAGS="-L$LEAN_PREFIX/lib/lean -L$LEAN_PREFIX/lib -lInit -lStd -lleanrt -lgmp -luv -lc++ -Wl,-dead_strip" ;;
+  *) LDFLAGS="-L$LEAN_PREFIX/lib/lean -L$LEAN_PREFIX/lib -Wl,--start-group -lInit -lStd -lleanrt -Wl,--end-group -lgmp -luv -lstdc++ -lm -lpthread -ldl -Wl,--gc-sections" ;;
+esac
+echo "$LDFLAGS" > "$OUT/ldflags"
+# shellcheck disable=SC2086
+cc $CFLAGS tests/ffi/smoke.c "$OUT/libelklean.a" $LDFLAGS -o "$OUT/smoke"
+echo "built $OUT/libelklean.a ($(wc -l < "$OUT/objects.txt" | tr -d ' ') objects), $OUT/smoke"
+if [ "${1:-}" = "--check" ]; then
+  T=$(mktemp -d)
+  printf '%s' '{"id":"root","children":[{"id":"a","width":30,"height":20},{"id":"b","width":30,"height":20}],"edges":[{"id":"e","sources":["a"],"targets":["b"]}]}' > "$T/g.json"
+  "$OUT/smoke" "$T/g.json" '{}' > "$T/ffi.json"
+  .lake/build/bin/elk layout "$T/g.json" --sort-keys > "$T/cli.json"
+  if cmp -s "$T/ffi.json" "$T/cli.json"; then echo "smoke: layout identical to elk layout --sort-keys"; else echo "smoke: MISMATCH"; diff "$T/ffi.json" "$T/cli.json" | head; exit 1; fi
+  "$OUT/smoke" --algorithms > "$T/algs.json"
+  python3 -c "import json,sys; a=json.load(open(sys.argv[1])); print('smoke: algorithms', len(a))" "$T/algs.json"
+  if "$OUT/smoke" "$T/g.json" '{"elk.algorithm":"doesNotExist"}' 2> "$T/err.txt"; then echo "smoke: expected an error"; exit 1; fi
+  echo "smoke: error path ok: $(head -c 100 "$T/err.txt")"
+  rm -rf "$T"
+fi

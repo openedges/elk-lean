@@ -20,7 +20,7 @@ extern void lean_finalize_thread(void);
 extern lean_object *initialize_elk_x2dlean_Elk_Ffi(uint8_t builtin);
 
 /* `Elk.Ffi` exports. */
-extern lean_object *elk_ffi_layout_json(b_lean_obj_arg graph, b_lean_obj_arg options);
+extern lean_object *elk_ffi_layout_json(lean_obj_arg graph, lean_obj_arg options);
 extern lean_object *elk_ffi_known_layout_algorithms(lean_obj_arg unit);
 extern lean_object *elk_ffi_known_layout_options(lean_obj_arg unit);
 extern lean_object *elk_ffi_known_layout_categories(lean_obj_arg unit);
@@ -96,9 +96,7 @@ char *elk_lean_layout_json(const char *graph_json, const char *options_json, int
     /* lean_mk_string_from_bytes replaces invalid UTF-8 instead of trusting the host */
     lean_object *g = lean_mk_string_from_bytes(graph_json, strlen(graph_json));
     lean_object *o = lean_mk_string_from_bytes(options_json, strlen(options_json));
-    lean_object *r = elk_ffi_layout_json(g, o); /* borrowed arguments */
-    lean_dec_ref(g);
-    lean_dec_ref(o);
+    lean_object *r = elk_ffi_layout_json(g, o); /* consumes g and o (exports take owned arguments) */
     return take_result(r, is_error);
 }
 
