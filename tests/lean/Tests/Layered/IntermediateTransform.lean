@@ -231,6 +231,23 @@ def transformerMisc : Suite := suite "layered.intermediate.graphTransformer.misc
   let pre ← IntermediateProcessorStrategy.create .directionPreprocessor
   let post ← IntermediateProcessorStrategy.create .directionPostprocessor
   checkEq "registered pre/post processors" (pre.name, post.name) ("GraphTransformer", "GraphTransformer")
+  -- oracle (elk-rs trace, direction UP, two nodes 100×20 and 60×20 with one edge): the registered
+  -- preprocessor turns the north output port at (0,0) into an east port at (20,0) and the south
+  -- input port into a west port at (20,0); both nodes stay at (0,0).
+  let (ids, aUp) ← LayeredM.run (do
+      let g ← LayeredM.createGraph {}
+      LayeredM.setGraphProp g LayeredOptions.DIRECTION Direction.up
+      let n0 ← LayeredM.createNode g { size := ⟨100, 20⟩ }
+      let n1 ← LayeredM.createNode g { size := ⟨60, 20⟩ }
+      LayeredM.modifyGraph g fun gr => { gr with layerlessNodes := #[n0, n1] }
+      let p0 ← mkPort n0 .north ⟨0, 0⟩ ⟨0, 0⟩
+      let p1 ← mkPort n1 .south ⟨0, 0⟩ ⟨0, 0⟩
+      pre.process g ProgressMonitor.null
+      return (n1, p0, p1)) default
+  let (n1, p0, p1) := ids
+  checkEq "oracle UP preprocessor: output port east at (20,0)" ((aUp.port p0).side, (aUp.port p0).position) (.east, ⟨20, 0⟩)
+  checkEq "oracle UP preprocessor: input port west at (20,0)" ((aUp.port p1).side, (aUp.port p1).position) (.west, ⟨20, 0⟩)
+  checkEq "oracle UP preprocessor: second node stays at (0,0)" (aUp.node n1).position ⟨0, 0⟩
   check "transpose port side maps UNDEFINED to UNDEFINED" (GraphTransformer.transposePortSide .undefined == .undefined)
   checkEq "transposeNodeLabelPlacement keeps an unset placement"
     ((GraphTransformer.transposeNodeLabelPlacement {}).has LayeredOptions.NODE_LABELS_PLACEMENT) false

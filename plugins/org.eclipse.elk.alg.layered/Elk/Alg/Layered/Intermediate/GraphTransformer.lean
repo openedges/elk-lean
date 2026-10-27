@@ -12,9 +12,9 @@ graph offset/size/padding, nodes (position, size, padding, `POSITION`, `ALIGNMEN
 `PORT_INDEX`), the outgoing edges of each port (bend points, `JUNCTION_POINTS`, labels), node and
 port labels, and external port dummies (`EXT_PORT_SIDE`, layer constraints).
 
-The processor is registered twice: `DIRECTION_PREPROCESSOR` (`Mode.toInternalLtr`) and
-`DIRECTION_POSTPROCESSOR` (`Mode.toInputDirection`). Its trace name is the Rust `type_name`
-`GraphTransformer` for both.
+The processor is registered twice, with the elk-rs mode assignment (swapped relative to Java):
+`DIRECTION_PREPROCESSOR` uses `Mode.toInputDirection` and `DIRECTION_POSTPROCESSOR`
+`Mode.toInternalLtr`. Its trace name is the Rust `type_name` `GraphTransformer` for both.
 
 Like Rust (and Java) only the nodes of the processed graph are transformed: nested graphs are
 processed by their own layered run, so `LNode.nestedGraph` is not followed here.
@@ -516,10 +516,15 @@ def processor (mode : Mode) : LayeredProcessor :=
 
 end GraphTransformer
 
+-- elk-rs (the oracle) swaps the modes relative to Java: `DirectionPreprocessor` creates
+-- `GraphTransformer::new(ToInputDirection)` and `DirectionPostprocessor` `ToInternalLtr`
+-- (`intermediate_processor_strategy.rs`); only `UP` (reading direction) and the rotation variants
+-- are affected. Verified against the oracle trace (a north output port of a 100×20 node ends as an
+-- east port at (20, 0) for `UP`).
 builtin_initialize registerGraphTransformerDirectionPreprocessor : Unit ←
-  IntermediateProcessorStrategy.register .directionPreprocessor (GraphTransformer.processor .toInternalLtr)
+  IntermediateProcessorStrategy.register .directionPreprocessor (GraphTransformer.processor .toInputDirection)
 
 builtin_initialize registerGraphTransformerDirectionPostprocessor : Unit ←
-  IntermediateProcessorStrategy.register .directionPostprocessor (GraphTransformer.processor .toInputDirection)
+  IntermediateProcessorStrategy.register .directionPostprocessor (GraphTransformer.processor .toInternalLtr)
 
 end Elk.Alg.Layered.Intermediate
