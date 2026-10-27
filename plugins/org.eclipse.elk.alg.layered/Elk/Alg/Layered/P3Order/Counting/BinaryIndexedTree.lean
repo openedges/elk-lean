@@ -27,40 +27,43 @@ namespace BinaryIndexedTree
 def new (maxNum : Nat) : BinaryIndexedTree :=
   { binarySums := Array.replicate (maxNum + 1) 0, numsPerIndex := Array.replicate maxNum 0, size := 0, maxNum }
 
+/-- The update loop of `add`/`removeAll`: `sums[i] += delta` along the parents of `i`
+(tail recursive, so the loop state is not boxed). -/
+private partial def updateLoop (sums : Array Int) (i : Nat) (delta : Int) : Array Int :=
+  if h : i < sums.size then updateLoop (sums.set i (sums[i] + delta)) (i + lowbit i) delta
+  else sums
+
+/-- The prefix sum loop of `rank`. -/
+private partial def rankLoop (sums : Array Int) (i : Nat) (acc : Int) : Int :=
+  if i > 0 then rankLoop sums (i - lowbit i) (acc + sums[i]!) else acc
+
 /-- `add(index)`: one more entry at `index`. -/
-def add (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree := Id.run do
-  let t := { t with size := t.size + 1 }
-  if index >= t.numsPerIndex.size then return t
-  let mut nums := t.numsPerIndex
-  nums := nums.modify index (· + 1)
-  let mut sums := t.binarySums
-  let mut i := index + 1
-  while i < sums.size do
-    sums := sums.modify i (· + 1)
-    i := i + lowbit i
-  return { t with numsPerIndex := nums, binarySums := sums }
+def add (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
+  if index >= t.numsPerIndex.size then { t with size := t.size + 1 }
+  else
+    -- take the arrays out first so that they are updated in place
+    let nums := t.numsPerIndex
+    let sums := t.binarySums
+    let t := { t with numsPerIndex := #[], binarySums := #[] }
+    let nums := nums.modify index (· + 1)
+    { t with numsPerIndex := nums, binarySums := updateLoop sums (index + 1) 1, size := t.size + 1 }
 
 /-- `rank(index)`: number of entries at indices `< index`. -/
-def rank (t : BinaryIndexedTree) (index : Nat) : Int := Id.run do
-  let mut i := Nat.min index (t.binarySums.size - 1)
-  let mut sum : Int := 0
-  while i > 0 do
-    sum := sum + t.binarySums[i]!
-    i := i - lowbit i
-  return sum
+def rank (t : BinaryIndexedTree) (index : Nat) : Int :=
+  rankLoop t.binarySums (Nat.min index (t.binarySums.size - 1)) 0
 
 /-- `removeAll(index)`: drops all entries at `index`. -/
-def removeAll (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree := Id.run do
-  if index >= t.numsPerIndex.size then return t
-  let numEntries := t.numsPerIndex[index]!
-  if numEntries == 0 then return t
-  let nums := t.numsPerIndex.set! index 0
-  let mut sums := t.binarySums
-  let mut i := index + 1
-  while i < sums.size do
-    sums := sums.modify i (· - numEntries)
-    i := i + lowbit i
-  return { t with numsPerIndex := nums, binarySums := sums, size := t.size - numEntries }
+def removeAll (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
+  if h : index < t.numsPerIndex.size then
+    let numEntries := t.numsPerIndex[index]
+    if numEntries == 0 then t
+    else
+      let nums := t.numsPerIndex
+      let sums := t.binarySums
+      let t := { t with numsPerIndex := #[], binarySums := #[] }
+      let nums := nums.set! index 0
+      { t with numsPerIndex := nums, binarySums := updateLoop sums (index + 1) (-numEntries), size := t.size - numEntries }
+  else t
 
 /-- elk-rs `reset(maxNum)`: a fresh tree of the new size (Java creates a new tree). -/
 def reset (_t : BinaryIndexedTree) (maxNum : Nat) : BinaryIndexedTree := new maxNum
