@@ -1,0 +1,52 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "a",
+      "width": 30,
+      "x": 12,
+      "y": 30.034051707292164
+    },
+    {
+      "height": 30,
+      "id": "b",
+      "width": 30,
+      "x": 55.02558873600424,
+      "y": 12
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 55.02558873600424,
+            "y": 33.28720683566188
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 38.74684487163029
+          }
+        }
+      ],
+      "sources": [
+        "a"
+      ],
+      "targets": [
+        "b"
+      ]
+    }
+  ],
+  "height": 72.03405170729216,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.randomSeed": "-5"
+  },
+  "width": 97.02558873600424,
+  "x": 0,
+  "y": 0
+}

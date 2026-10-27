@@ -1,0 +1,56 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "force",
+  "elk.randomSeed": "3",
+  "elk.omitNodeMicroLayout": "true"
+ },
+ "children": [
+  {
+   "id": "a",
+   "width": 0,
+   "height": 0,
+   "labels": [
+    {
+     "text": "A long label",
+     "width": 80,
+     "height": 14
+    }
+   ],
+   "layoutOptions": {
+    "elk.nodeSize.constraints": "[NODE_LABELS]",
+    "elk.nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]"
+   }
+  },
+  {
+   "id": "b",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "c",
+   "width": 0,
+   "height": 0
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "b"
+   ],
+   "targets": [
+    "c"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,83 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "width": 30,
+      "x": 99.60159449962819,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30,
+      "x": 55.735620731833805,
+      "y": 56.465622535562375
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 30,
+      "x": 12,
+      "y": 101.05946426941121
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 85.53333566297356,
+            "y": 56.46562253556238
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 99.80387956848844,
+            "y": 42
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 41.71132078938034,
+            "y": 101.05946426941121
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 56.02429994245346,
+            "y": 86.46562253556237
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 143.0594642694112,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.force.model": "EADES",
+    "elk.randomSeed": "3"
+  },
+  "width": 141.6015944996282,
+  "x": 0,
+  "y": 0
+}

@@ -1,0 +1,148 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "layoutOptions": {
+        "elk.priority": "5"
+      },
+      "width": 30,
+      "x": 12,
+      "y": 88.24277540891902
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30,
+      "x": 27.57821121047173,
+      "y": 27.76768111470298
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.priority": "3"
+      },
+      "width": 30,
+      "x": 88.08970087850656,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 30,
+      "x": 72.4436640083121,
+      "y": 72.54305643336549
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "layoutOptions": {
+        "elk.priority": "4"
+      },
+      "sections": [
+        {
+          "endPoint": {
+            "x": 38.71425414047134,
+            "y": 57.76768111470298
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 30.863957070000385,
+            "y": 88.24277540891902
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 88.08970087850656,
+            "y": 30.90860013557861
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 57.57821121047173,
+            "y": 38.85908097912437
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 91.32008794325533,
+            "y": 72.54305643336549
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 99.21327694356333,
+            "y": 42
+          }
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "layoutOptions": {
+        "elk.priority": "2"
+      },
+      "sections": [
+        {
+          "endPoint": {
+            "x": 72.4436640083121,
+            "y": 91.43917670497771
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": 42,
+            "y": 99.34665513730678
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n3"
+      ]
+    }
+  ],
+  "height": 130.24277540891902,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.force.model": "EADES",
+    "elk.randomSeed": "1"
+  },
+  "width": 130.08970087850656,
+  "x": 0,
+  "y": 0
+}

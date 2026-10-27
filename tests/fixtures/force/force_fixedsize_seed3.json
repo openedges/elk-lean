@@ -1,0 +1,45 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "force",
+  "elk.randomSeed": "3",
+  "elk.nodeSize.fixedGraphSize": "true"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n2",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  }
+ ]
+}

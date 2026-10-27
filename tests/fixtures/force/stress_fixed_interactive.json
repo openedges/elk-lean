@@ -1,0 +1,88 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "stress",
+  "elk.interactive": "true"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 30,
+   "x": 10,
+   "y": 10,
+   "layoutOptions": {
+    "elk.stress.fixed": "true"
+   }
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30,
+   "x": 70,
+   "y": 40
+  },
+  {
+   "id": "n2",
+   "width": 30,
+   "height": 30,
+   "x": 130,
+   "y": 10
+  },
+  {
+   "id": "n3",
+   "width": 30,
+   "height": 30,
+   "x": 190,
+   "y": 40,
+   "layoutOptions": {
+    "elk.stress.fixed": "true"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 30,
+   "height": 30,
+   "x": 250,
+   "y": 10
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ]
+}
