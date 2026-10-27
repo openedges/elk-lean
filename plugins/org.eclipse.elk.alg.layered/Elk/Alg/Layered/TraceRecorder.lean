@@ -170,8 +170,18 @@ def writeSnapshot (a : LGraphArena) (g : LGraphId) (step : Nat) (processorName :
   IO.FS.createDirAll outputDir
   IO.FS.writeFile (System.FilePath.mk outputDir / fileName step processorName) (render (snapshot a g step processorName))
 
-/-- `ELK_TRACE_DIR`, read fresh on every call. -/
-def traceDir : IO (Option String) := IO.getEnv "ELK_TRACE_DIR"
+/-- Programmatic override of `ELK_TRACE_DIR` (used by `elk batch --trace-dir`, which records one
+sub-directory per model like the elk-rs parity runner). `none` falls back to the environment. -/
+builtin_initialize traceDirOverride : IO.Ref (Option String) ← IO.mkRef none
+
+/-- `ELK_TRACE_DIR` (or the programmatic override), read fresh on every call. -/
+def traceDir : IO (Option String) := do
+  match ← traceDirOverride.get with
+  | some dir => pure (some dir)
+  | none => IO.getEnv "ELK_TRACE_DIR"
+
+/-- Sets (or clears) the trace directory override. -/
+def setTraceDirOverride (dir : Option String) : IO Unit := traceDirOverride.set dir
 
 /-- `TRACE_STEP_COUNTER`. -/
 builtin_initialize stepCounter : IO.Ref Nat ← IO.mkRef 0

@@ -5,7 +5,7 @@ import Elk.Api
 ```
 elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)
 elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt
-elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--pretty]
+elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty]
 elk algorithms | options | categories
 elk --version
 ```
@@ -18,7 +18,7 @@ and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills th
 open Elk Elk.Json Elk.Api
 
 def usage : String :=
-  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
+  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
 
 structure LayoutArgs where
   input : Option String := none
@@ -111,6 +111,9 @@ structure BatchArgs where
   layoutDir : Option String := none
   pretty : Bool := false
   sortKeys : Bool := false
+  /-- `--trace-dir DIR`: records the layered phase-step traces of every model under
+  `DIR/<model_rel_path>/` (the elk-rs parity runner layout). -/
+  traceDir : Option String := none
 
 partial def parseBatchArgs (args : List String) (acc : BatchArgs) : Except String BatchArgs :=
   match args with
@@ -118,6 +121,7 @@ partial def parseBatchArgs (args : List String) (acc : BatchArgs) : Except Strin
   | "--input-manifest" :: v :: rest => parseBatchArgs rest { acc with inputManifest := some v }
   | "--output-manifest" :: v :: rest => parseBatchArgs rest { acc with outputManifest := some v }
   | "--layout-dir" :: v :: rest => parseBatchArgs rest { acc with layoutDir := some v }
+  | "--trace-dir" :: v :: rest => parseBatchArgs rest { acc with traceDir := some v }
   | "--pretty" :: rest => parseBatchArgs rest { acc with pretty := true }
   | "--sort-keys" :: rest => parseBatchArgs rest { acc with sortKeys := true }
   | a :: _ => .error s!"unknown argument: {a}"
@@ -146,6 +150,11 @@ def runBatch (args : List String) : IO UInt32 := do
       let rel := cols[0]!
       let inputPath := cols[1]!
       let outPath := layoutDir ++ "/" ++ rel ++ ".json"
+      if let some traceBase := a.traceDir then
+        let dir := traceBase ++ "/" ++ rel
+        IO.FS.createDirAll dir
+        Elk.Alg.Layered.TraceRecorder.setTraceDirOverride (some dir)
+        Elk.Alg.Layered.TraceRecorder.resetStepCounter
       let (status, err) ← (do
         let text ← IO.FS.readFile inputPath
         match ← layoutJson text "" false a.pretty a.sortKeys with
