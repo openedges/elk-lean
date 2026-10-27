@@ -7,10 +7,12 @@ matching what elk-rs accepts (`preprocess_lenient_json` + the `json5` crate):
 `//` and `/* */` comments, single-quoted strings, unquoted identifier keys,
 trailing commas, `;` as a separator, leading `+`, `Infinity`/`NaN`, `.5`/`5.`.
 
-Implementation: recursive descent over the byte array with the position threaded explicitly.
-Byte scanning (whitespace, comments, string bodies, digits) runs in tail-recursive functions on
-`(bytes, position)`, so it allocates nothing; every parsed value costs one `PR` result object.
-Strings without escapes are sliced out of the input in one step. Error messages and the byte
+Implementation: recursive descent over the UTF-8 bytes of the input string (read in place, no
+`ByteArray` copy) with the position threaded explicitly. Byte scanning (whitespace, comments,
+string bodies, digits) runs in tail-recursive functions on `(input, position)`, so it allocates
+nothing; every parsed value costs one `PR` result object. Strings without escapes are sliced out
+of the input in one step (no re-validation: the input is a valid string), and object keys that are
+ELK member names share a constant. Error messages and the byte
 positions they report are those of the previous `StateT` parser (kept as a test reference in
 `tests/lean/Tests/Json/ParserReference.lean`, compared by `Tests.Json.ParserFuzz`).
 -/
@@ -46,34 +48,48 @@ instance {α : Type} : Inhabited (PR α) := ⟨.err { pos := 0, message := "" }�
 
 @[inline] private def isIdentChar (x : UInt8) : Bool := isIdentStart x || isDigit x
 
-/-- The byte at `i`, or `0` past the end (callers test `i < bs.size` where `0` would be ambiguous). -/
-@[inline] private def byteAt (bs : ByteArray) (i : Nat) : UInt8 :=
-  if h : i < bs.size then bs[i] else 0
+/-- The byte at `i`, or `0` past the end (callers test `i < bs.utf8ByteSize` where `0` would be ambiguous). -/
+@[inline] private def byteAt (bs : String) (i : Nat) : UInt8 :=
+  if h : i < bs.utf8ByteSize then bs.getUTF8Byte ⟨i⟩ h else 0
+
+/-- The bytes `[b, e)` of `bs` as a string. Callers pass character boundaries (positions next to
+ASCII bytes), so this is the plain byte copy of `String.Pos.Raw.extract` (no UTF-8 validation:
+`bs` is a valid string). -/
+@[inline] private def slice (bs : String) (b e : Nat) : String := String.Pos.Raw.extract bs ⟨b⟩ ⟨e⟩
 
 /-- Whether position `i` holds byte `c`. -/
-@[inline] private def isAt (bs : ByteArray) (i : Nat) (c : UInt8) : Bool :=
-  i < bs.size && byteAt bs i == c
+@[inline] private def isAt (bs : String) (i : Nat) (c : UInt8) : Bool :=
+  i < bs.utf8ByteSize && byteAt bs i == c
 
 /-! ## Whitespace and comments -/
 
 /-- `//` comment body: up to (not including) the next `\n`. -/
-private partial def skipLineComment (bs : ByteArray) (i : Nat) : Nat :=
-  if i < bs.size then
+private partial def skipLineComment (bs : String) (i : Nat) : Nat :=
+  if i < bs.utf8ByteSize then
     if byteAt bs i == 10 then i else skipLineComment bs (i + 1)
   else i
 
 /-- `/* */` comment body: past the next `*/` (or to the end). -/
-private partial def skipBlockComment (bs : ByteArray) (i : Nat) : Nat :=
-  if i < bs.size then
+private partial def skipBlockComment (bs : String) (i : Nat) : Nat :=
+  if i < bs.utf8ByteSize then
     if byteAt bs i == 42 && isAt bs (i + 1) 47 then i + 2 else skipBlockComment bs (i + 1)
   else i
 
+/-- Index of the first non-whitespace byte from `i` (`n` is the input size; one bounds test per
+byte, space tested first: indentation dominates pretty-printed input). -/
+private partial def skipBlanks (bs : String) (n : Nat) (hn : n = bs.utf8ByteSize) (i : Nat) : Nat :=
+  if h : i < n then
+    let x := bs.getUTF8Byte ⟨i⟩ (show i < bs.utf8ByteSize from hn ▸ h)
+    if x == 32 || x == 10 || x == 13 || x == 9 then skipBlanks bs n hn (i + 1) else i
+  else i
+
 /-- Skips whitespace, and comments in lenient mode. -/
-private partial def skipWs (bs : ByteArray) (lenient : Bool) (i : Nat) : Nat :=
-  if i < bs.size then
+private partial def skipWs (bs : String) (lenient : Bool) (i : Nat) : Nat :=
+  let i := skipBlanks bs bs.utf8ByteSize rfl i
+  if i < bs.utf8ByteSize then
     let x := byteAt bs i
     if isWs x then skipWs bs lenient (i + 1)
-    else if x == 47 && lenient && i + 1 < bs.size then
+    else if x == 47 && lenient && i + 1 < bs.utf8ByteSize then
       let y := byteAt bs (i + 1)
       if y == 47 then skipWs bs lenient (skipLineComment bs (i + 2))
       else if y == 42 then skipWs bs lenient (skipBlockComment bs (i + 2))
@@ -82,8 +98,8 @@ private partial def skipWs (bs : ByteArray) (lenient : Bool) (i : Nat) : Nat :=
   else i
 
 /-- `expected 'c'` at `i`. -/
-@[inline] private def expectByte (bs : ByteArray) (i : Nat) (c : UInt8) (ch : Char) : PR Unit :=
-  if i < bs.size then
+@[inline] private def expectByte (bs : String) (i : Nat) (c : UInt8) (ch : Char) : PR Unit :=
+  if i < bs.utf8ByteSize then
     if byteAt bs i == c then .ok () (i + 1) else fail i s!"expected '{ch}'"
   else fail i s!"expected '{ch}' but reached end of input"
 
@@ -96,11 +112,11 @@ private def hexVal (x : UInt8) : Option Nat :=
   else none
 
 /-- Four hex digits from `i`. -/
-private def parseHex4 (bs : ByteArray) (i : Nat) : PR Nat := Id.run do
+private def parseHex4 (bs : String) (i : Nat) : PR Nat := Id.run do
   let mut v := 0
   let mut p := i
   for _ in [0:4] do
-    if p < bs.size then
+    if p < bs.utf8ByteSize then
       match hexVal (byteAt bs p) with
       | some h =>
         v := v * 16 + h
@@ -114,25 +130,28 @@ private def pushChar (buf : ByteArray) (code : Nat) : ByteArray :=
 
 /-- Fast scan of a string body from `i`: the index of the closing quote `q` when the body has no
 escape and (in strict mode) no control character; `none` when the general loop must decide. -/
-private partial def scanPlainString (bs : ByteArray) (q : UInt8) (lenient : Bool) (i : Nat) : Option Nat :=
-  if i < bs.size then
-    let x := byteAt bs i
-    if x == q then some i
-    else if x == 92 then none
-    else if x < 32 && !lenient then none
-    else scanPlainString bs q lenient (i + 1)
-  else none
+private partial def scanPlainString (bs : String) (q : UInt8) (lenient : Bool) (i : Nat) : Option Nat :=
+  go bs.utf8ByteSize rfl i
+where
+  go (n : Nat) (hn : n = bs.utf8ByteSize) (i : Nat) : Option Nat :=
+    if h : i < n then
+      let x := bs.getUTF8Byte ⟨i⟩ (show i < bs.utf8ByteSize from hn ▸ h)
+      if x == q then some i
+      else if x == 92 then none
+      else if x < 32 && !lenient then none
+      else go n hn (i + 1)
+    else none
 
 /-- The general string loop (escapes, errors) from position `i` with the decoded bytes `buf`. -/
-private partial def parseStringBody (bs : ByteArray) (q : UInt8) (lenient : Bool) (i : Nat)
+private partial def parseStringBody (bs : String) (q : UInt8) (lenient : Bool) (i : Nat)
     (buf : ByteArray) : PR ByteArray :=
-  if i >= bs.size then fail i "unterminated string"
+  if i >= bs.utf8ByteSize then fail i "unterminated string"
   else
     let x := byteAt bs i
     if x == q then .ok buf (i + 1)
     else if x == 92 then
       let i := i + 1
-      if i >= bs.size then fail i "unterminated escape"
+      if i >= bs.utf8ByteSize then fail i "unterminated escape"
       else
         let e := byteAt bs i
         let i := i + 1
@@ -167,9 +186,29 @@ private partial def parseStringBody (bs : ByteArray) (q : UInt8) (lenient : Bool
     else if x < 32 && !lenient then fail i "control character in string"
     else parseStringBody bs q lenient (i + 1) (buf.push x)
 
-/-- Parses a string literal starting at the opening quote (`"` or, lenient, `'`). -/
-private def parseStringLit (bs : ByteArray) (lenient : Bool) (i : Nat) : PR String :=
-  if i >= bs.size then fail i "expected string"
+/-- Member names of ELK JSON graphs, most frequent first. A plain key equal to one of them shares
+the constant instead of allocating a copy (and later lookups compare pointer-equal strings). -/
+private def knownKeys : Array String :=
+  #["id", "width", "height", "x", "y", "labels", "text", "ports", "layoutOptions", "properties",
+    "children", "edges", "sources", "targets", "source", "target", "sourcePort", "targetPort",
+    "sections", "startPoint", "endPoint", "bendPoints", "incomingShape", "outgoingShape",
+    "incomingSections", "outgoingSections", "junctionPoints", "container", "individualSpacings"]
+
+/-- Whether the bytes `[b, b + n)` of `bs` equal the first `n` bytes of `k` (from offset `i`). -/
+private partial def bytesEqAt (bs : String) (b : Nat) (k : String) (i n : Nat) : Bool :=
+  if i < n then byteAt bs (b + i) == byteAt k i && bytesEqAt bs b k (i + 1) n else true
+
+/-- The bytes `[b, e)` of `bs` as a string, shared with `knownKeys` when it is one of them. -/
+private partial def internSlice (bs : String) (b e : Nat) (j : Nat) : String :=
+  if h : j < knownKeys.size then
+    let k := knownKeys[j]
+    if k.utf8ByteSize == e - b && bytesEqAt bs b k 0 (e - b) then k else internSlice bs b e (j + 1)
+  else slice bs b e
+
+/-- Parses a string literal starting at the opening quote (`"` or, lenient, `'`); `intern` shares
+the strings of `knownKeys` (object keys). -/
+private def parseStringLit (bs : String) (lenient : Bool) (i : Nat) (intern : Bool := false) : PR String :=
+  if i >= bs.utf8ByteSize then fail i "expected string"
   else
     let q := byteAt bs i
     if q != 34 && !(q == 39 && lenient) then fail i "expected string"
@@ -177,9 +216,7 @@ private def parseStringLit (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Stri
       let body := i + 1
       match scanPlainString bs q lenient body with
       | some close =>
-        match String.fromUTF8? (bs.extract body close) with
-        | some s => .ok s (close + 1)
-        | none => fail (close + 1) "invalid UTF-8 in string"
+        .ok (if intern then internSlice bs body close 0 else slice bs body close) (close + 1)
       | none =>
         match parseStringBody bs q lenient body ByteArray.empty with
         | .err e => .err e
@@ -191,39 +228,39 @@ private def parseStringLit (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Stri
 /-! ## Numbers -/
 
 /-- Index of the first non-digit from `i`. -/
-private partial def skipDigits (bs : ByteArray) (i : Nat) : Nat :=
-  if i < bs.size && isDigit (byteAt bs i) then skipDigits bs (i + 1) else i
+private partial def skipDigits (bs : String) (i : Nat) : Nat :=
+  if i < bs.utf8ByteSize && isDigit (byteAt bs i) then skipDigits bs (i + 1) else i
 
 /-- Value of the decimal digits `bs[i:j]` (at most 18 digits, so it fits an `i64`). -/
-private partial def digitsValue (bs : ByteArray) (i j : Nat) (acc : Nat) : Nat :=
+private partial def digitsValue (bs : String) (i j : Nat) (acc : Nat) : Nat :=
   if i < j then digitsValue bs (i + 1) j (acc * 10 + (byteAt bs i - 48).toNat) else acc
 
 /-- Whether `bs[i:]` starts with the bytes of `lit`. -/
-private partial def startsWithAt (bs : ByteArray) (i : Nat) (lit : ByteArray) (k : Nat) : Bool :=
-  if k < lit.size then
-    i + k < bs.size && byteAt bs (i + k) == byteAt lit k && startsWithAt bs i lit (k + 1)
+private partial def startsWithAt (bs : String) (i : Nat) (lit : String) (k : Nat) : Bool :=
+  if k < lit.utf8ByteSize then
+    i + k < bs.utf8ByteSize && byteAt bs (i + k) == byteAt lit k && startsWithAt bs i lit (k + 1)
   else true
 
 /-- Parses a number lexeme starting at `start`. Values follow ELK Java's JSON input (Gson numbers read
 with `Double.parseDouble`): floats are correctly rounded (`strtod`), integers stay exact, and `-0` is
 `-0.0` (what Java computes with). elk-rs' serde_json, which reads long mantissas with two roundings,
 is not followed: the result reference is ELK Java. -/
-private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Number := Id.run do
+private def parseNumber (bs : String) (lenient : Bool) (start : Nat) : PR Number := Id.run do
   let mut pos := start
   -- sign
-  if pos < bs.size then
+  if pos < bs.utf8ByteSize then
     let x := byteAt bs pos
     if x == 45 then pos := pos + 1
     else if x == 43 && lenient then pos := pos + 1
   -- lenient Infinity / NaN
   if lenient then
-    if pos + 8 <= bs.size && startsWithAt bs pos "Infinity".toUTF8 0 then
+    if pos + 8 <= bs.utf8ByteSize && startsWithAt bs pos "Infinity" 0 then
       let neg := byteAt bs start == 45
       return .ok (.float (if neg then Float.negInf else Float.posInf)) (pos + 8)
-    if pos + 3 <= bs.size && startsWithAt bs pos "NaN".toUTF8 0 then
+    if pos + 3 <= bs.utf8ByteSize && startsWithAt bs pos "NaN" 0 then
       return .ok (.float Float.nan) (pos + 3)
   -- integer part (a leading zero may not be followed by more digits)
-  if isAt bs pos 48 && pos + 1 < bs.size && isDigit (byteAt bs (pos + 1)) then
+  if isAt bs pos 48 && pos + 1 < bs.utf8ByteSize && isDigit (byteAt bs (pos + 1)) then
     return fail pos "invalid number: leading zero"
   let intStart := pos
   pos := skipDigits bs pos
@@ -231,19 +268,19 @@ private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Num
   let mut isFloat := false
   -- fraction
   if isAt bs pos 46 then
-    let nextIsDigit := pos + 1 < bs.size && isDigit (byteAt bs (pos + 1))
+    let nextIsDigit := pos + 1 < bs.utf8ByteSize && isDigit (byteAt bs (pos + 1))
     if nextIsDigit || (lenient && intDigits > 0) then
       isFloat := true
       pos := skipDigits bs (pos + 1)
     else return fail pos "invalid number"
   if intDigits == 0 && !isFloat then return fail pos "invalid number"
   -- exponent
-  if pos < bs.size then
+  if pos < bs.utf8ByteSize then
     let x := byteAt bs pos
     if x == 101 || x == 69 then
       isFloat := true
       pos := pos + 1
-      if pos < bs.size then
+      if pos < bs.utf8ByteSize then
         let y := byteAt bs pos
         if y == 43 || y == 45 then pos := pos + 1
       let expStart := pos
@@ -255,7 +292,7 @@ private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Num
     let v := digitsValue bs intStart pos 0
     if neg && v == 0 then return .ok (.float (-0.0)) pos
     return .ok (.int (if neg then -(v : Int) else (v : Int))) pos
-  let lexeme := String.fromUTF8! (bs.extract start pos)
+  let lexeme := slice bs start pos
   let lexeme := if lexeme.startsWith "+" then (lexeme.drop 1).toString else lexeme
   if isFloat then
     return .ok (.float (strtodUnchecked lexeme)) pos
@@ -274,20 +311,20 @@ private def parseNumber (bs : ByteArray) (lenient : Bool) (start : Nat) : PR Num
 /-! ## Identifiers and literals -/
 
 /-- Index of the first non-identifier byte from `i`. -/
-private partial def skipIdent (bs : ByteArray) (i : Nat) : Nat :=
-  if i < bs.size && isIdentChar (byteAt bs i) then skipIdent bs (i + 1) else i
+private partial def skipIdent (bs : String) (i : Nat) : Nat :=
+  if i < bs.utf8ByteSize && isIdentChar (byteAt bs i) then skipIdent bs (i + 1) else i
 
 /-- An unquoted (lenient) key. -/
-private def parseIdent (bs : ByteArray) (i : Nat) : PR String :=
+private def parseIdent (bs : String) (i : Nat) : PR String :=
   let j := skipIdent bs i
   if j == i then fail i "expected identifier"
-  else .ok (String.fromUTF8! (bs.extract i j)) j
+  else .ok (slice bs i j) j
 
 /-- Position after the keyword `lit` at `i` when it is not followed by an identifier character. -/
-private def matchLiteral (bs : ByteArray) (i : Nat) (lit : ByteArray) : Option Nat :=
-  let j := i + lit.size
-  if j <= bs.size && startsWithAt bs i lit 0 then
-    if j < bs.size && isIdentChar (byteAt bs j) then none else some j
+private def matchLiteral (bs : String) (i : Nat) (lit : String) : Option Nat :=
+  let j := i + lit.utf8ByteSize
+  if j <= bs.utf8ByteSize && startsWithAt bs i lit 0 then
+    if j < bs.utf8ByteSize && isIdentChar (byteAt bs j) then none else some j
   else none
 
 /-! ## Values -/
@@ -295,9 +332,9 @@ private def matchLiteral (bs : ByteArray) (i : Nat) (lit : ByteArray) : Option N
 mutual
 
 /-- A value at `i` (after optional whitespace). -/
-partial def parseValue (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Value :=
+partial def parseValue (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
   let i := skipWs bs lenient i
-  if i >= bs.size then fail i "unexpected end of input"
+  if i >= bs.utf8ByteSize then fail i "unexpected end of input"
   else
     let x := byteAt bs i
     if x == 123 then parseObject bs lenient i
@@ -311,13 +348,13 @@ partial def parseValue (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Value :=
       | .ok n j => .ok (.num n) j
       | .err e => .err e
     else
-      match matchLiteral bs i "true".toUTF8 with
+      match matchLiteral bs i "true" with
       | some j => .ok (.bool true) j
       | none =>
-      match matchLiteral bs i "false".toUTF8 with
+      match matchLiteral bs i "false" with
       | some j => .ok (.bool false) j
       | none =>
-      match matchLiteral bs i "null".toUTF8 with
+      match matchLiteral bs i "null" with
       | some j => .ok .null j
       | none =>
         if lenient && (x == 73 || x == 78) then
@@ -327,20 +364,20 @@ partial def parseValue (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Value :=
         else fail i "unexpected character"
 
 /-- An array at `i` (the `[`). -/
-partial def parseArray (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Value :=
+partial def parseArray (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
   -- the caller checked the opening bracket
   let i := skipWs bs lenient (i + 1)
   if isAt bs i 93 then .ok (.arr #[]) (i + 1)
-  else parseArrayItems bs lenient i #[]
+  else parseArrayItems bs lenient i (Array.emptyWithCapacity 4)
 
 /-- Array elements from `i` (an element is expected). -/
-partial def parseArrayItems (bs : ByteArray) (lenient : Bool) (i : Nat) (xs : Array Value) : PR Value :=
+partial def parseArrayItems (bs : String) (lenient : Bool) (i : Nat) (xs : Array Value) : PR Value :=
   match parseValue bs lenient i with
   | .err e => .err e
   | .ok v i =>
     let xs := xs.push v
     let i := skipWs bs lenient i
-    if i < bs.size then
+    if i < bs.utf8ByteSize then
       let x := byteAt bs i
       if x == 44 || (x == 59 && lenient) then
         let i := skipWs bs lenient (i + 1)
@@ -351,21 +388,21 @@ partial def parseArrayItems (bs : ByteArray) (lenient : Bool) (i : Nat) (xs : Ar
     else fail i "unterminated array"
 
 /-- An object at `i` (the `{`). -/
-partial def parseObject (bs : ByteArray) (lenient : Bool) (i : Nat) : PR Value :=
+partial def parseObject (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
   -- the caller checked the opening brace
   let i := skipWs bs lenient (i + 1)
   if isAt bs i 125 then .ok (.obj #[]) (i + 1)
-  else parseObjectMembers bs lenient i #[]
+  else parseObjectMembers bs lenient i (Array.emptyWithCapacity 8)
 
 /-- Object members from `i` (a key is expected after optional whitespace). -/
-partial def parseObjectMembers (bs : ByteArray) (lenient : Bool) (i : Nat) (kvs : Array (String × Value)) :
+partial def parseObjectMembers (bs : String) (lenient : Bool) (i : Nat) (kvs : Array (String × Value)) :
     PR Value :=
   let i := skipWs bs lenient i
   let key : PR String :=
-    if i < bs.size then
+    if i < bs.utf8ByteSize then
       let x := byteAt bs i
-      if x == 34 then parseStringLit bs lenient i
-      else if lenient && x == 39 then parseStringLit bs lenient i
+      if x == 34 then parseStringLit bs lenient i true
+      else if lenient && x == 39 then parseStringLit bs lenient i true
       else if lenient && isIdentStart x then parseIdent bs i
       else fail i "expected object key"
     else fail i "unterminated object"
@@ -381,7 +418,7 @@ partial def parseObjectMembers (bs : ByteArray) (lenient : Bool) (i : Nat) (kvs 
       | .ok v i =>
         let kvs := kvs.push (key, v)
         let i := skipWs bs lenient i
-        if i < bs.size then
+        if i < bs.utf8ByteSize then
           let x := byteAt bs i
           if x == 44 || (x == 59 && lenient) then
             let i := skipWs bs lenient (i + 1)
@@ -396,25 +433,25 @@ end
 /-- The strict-mode value of a complete number lexeme, `none` when the lexeme is not a strict JSON
 number. Used by tests. -/
 def strictNumber? (lexeme : String) : Option Number :=
-  let bs := lexeme.toUTF8
-  if bs.size == 0 then none
+  let bs := lexeme
+  if bs.utf8ByteSize == 0 then none
   else match parseNumber bs false 0 with
-    | .ok n i => if i == bs.size then some n else none
+    | .ok n i => if i == bs.utf8ByteSize then some n else none
     | .err _ => none
 
 /-- Parses a complete document; trailing content (other than whitespace/comments) is an error. -/
-def parseDocument (bs : ByteArray) (lenient : Bool) : PR Value :=
+def parseDocument (bs : String) (lenient : Bool) : PR Value :=
   match parseValue bs lenient 0 with
   | .err e => .err e
   | .ok v i =>
     let i := skipWs bs lenient i
-    if i < bs.size then fail i "trailing characters" else .ok v i
+    if i < bs.utf8ByteSize then fail i "trailing characters" else .ok v i
 
 end Parser
 
 /-- Parses a JSON document. -/
 def parse (text : String) (lenient : Bool := false) : Except ParseError Value :=
-  match Parser.parseDocument text.toUTF8 lenient with
+  match Parser.parseDocument text lenient with
   | .ok v _ => .ok v
   | .err e => .error e
 
