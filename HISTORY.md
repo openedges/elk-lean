@@ -192,7 +192,7 @@
 | PL3b. P3 잔여(Forster 무할당, `SweepCopy.ofArena`, side-cache 검증, 포트 정렬) | Lean `P3Order/**` | opus | xhigh | 서브에이전트 PL3b(worktree) | 진행 중 |
 | PL5. P5 직교 라우팅 성능 | Lean `P5Edges/Orthogonal/**`(elk-rs `p5edges/orthogonal/**`) | opus | xhigh | 서브에이전트 PL5(worktree) | 진행 중 |
 | PN. `NodeMicroLayout`/nodespacing 공통 경로 성능 | Lean `Alg/Common/NodeSpacing/**`, `Core/Util/Adapters/**` | opus | xhigh | 서브에이전트 PN(worktree) | 진행 중 |
-| PF2. force/stress 쌍 루프·rectpacking 스캔 2차 | Lean `Alg/Force/**`, `Alg/RectPacking/**` | opus | high | 서브에이전트 PF2(worktree) | 진행 중 |
+| PF2. force/stress 쌍 루프·rectpacking 스캔 2차 | Lean `Alg/Force/**`, `Alg/RectPacking/**` | opus | high | 서브에이전트 PF2(worktree) | 완료(`merge PF2`, `3bbcb34`): FR 쌍 루프를 증명된 인덱스의 `USize` 꼬리 재귀(배열 크기 동치 검사 1회, 행 단위 연결 가중치, 라벨·bend point 없으면 반복마다의 arena 왕복 생략)로, stress Dijkstra 힙을 평탄 `FloatArray`(push마다 전체 복사하던 결함 제거)·`apsp`/`w`를 노드 순서로 1회 치환, rectpacking LPR/LPB 스캔을 채택 후보 간 점프 스캔·폭 이진 탐색을 순수 루프로. force/stress elk-rs 대비 2.1~2.4배 → **0.9~1.1배**(force_xlarge 337→158 ms, stress_xlarge 508→233 ms), rectpacking 1.6~2.3배(잔여 70%는 `NodeMicroLayout`, PN 담당). 무작위 그래프 570개 바이트 일치, Java 정확 1878/119(드리프트 집합 동일), elk-rs model 1447/1447, 합성 26/26 |
 | PJ. JSON import/transfer·엔진 고정 비용(소형 모델) | Lean `Elk/Json/**`, `Core/{Data,Alg}`, `Graph/Properties` | opus | high | 서브에이전트 PJ(worktree) | 진행 중 |
 
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
