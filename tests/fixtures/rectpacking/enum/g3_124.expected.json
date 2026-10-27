@@ -1,0 +1,69 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "n0",
+      "width": 20,
+      "x": 84,
+      "y": 143
+    },
+    {
+      "height": 24,
+      "id": "n1",
+      "width": 23,
+      "x": 10,
+      "y": 104
+    },
+    {
+      "height": 20,
+      "id": "n2",
+      "width": 10,
+      "x": 10,
+      "y": 182
+    },
+    {
+      "height": 79,
+      "id": "n3",
+      "width": 20,
+      "x": 10,
+      "y": 10
+    },
+    {
+      "height": 30,
+      "id": "n4",
+      "width": 30,
+      "x": 45,
+      "y": 10
+    },
+    {
+      "height": 24,
+      "id": "n5",
+      "width": 59,
+      "x": 10,
+      "y": 143
+    },
+    {
+      "height": 20,
+      "id": "n6",
+      "width": 59,
+      "x": 35,
+      "y": 182
+    }
+  ],
+  "height": 302,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "0.5",
+    "elk.padding": "[top=10,left=10,bottom=100,right=12.5]",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.packing.compaction.iterations": "5",
+    "elk.rectpacking.packing.compaction.rowHeightReevaluation": "true",
+    "elk.rectpacking.packing.strategy": "SIMPLE",
+    "elk.rectpacking.trybox": "true",
+    "elk.rectpacking.widthApproximation.strategy": "GREEDY"
+  },
+  "width": 116.5,
+  "x": 0,
+  "y": 0
+}

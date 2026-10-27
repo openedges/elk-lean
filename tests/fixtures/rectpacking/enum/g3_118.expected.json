@@ -1,0 +1,204 @@
+{
+  "children": [
+    {
+      "height": 144.6,
+      "id": "n0",
+      "width": 1.85,
+      "x": 15,
+      "y": 15
+    },
+    {
+      "height": 37.99,
+      "id": "n1",
+      "width": 135.8,
+      "x": 17.85,
+      "y": 15
+    },
+    {
+      "height": 25.5,
+      "id": "n2",
+      "width": 124.21,
+      "x": 154.65,
+      "y": 15
+    },
+    {
+      "height": 8.841,
+      "id": "n3",
+      "width": 83.44,
+      "x": 17.85,
+      "y": 53.99
+    },
+    {
+      "height": 25.87,
+      "id": "n4",
+      "width": 116.195,
+      "x": 17.85,
+      "y": 63.831
+    },
+    {
+      "height": 13.22,
+      "id": "n5",
+      "width": 42.1,
+      "x": 135.045,
+      "y": 63.831
+    },
+    {
+      "height": 122.64,
+      "id": "n6",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 30.1,
+      "x": 15,
+      "y": 160.6
+    },
+    {
+      "height": 39.54,
+      "id": "n7",
+      "width": 96.3,
+      "x": 46.1,
+      "y": 160.6
+    },
+    {
+      "height": 42,
+      "id": "n8",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 77,
+      "x": 15,
+      "y": 284.24
+    },
+    {
+      "height": 80.4,
+      "id": "n9",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 84.9,
+      "x": 15,
+      "y": 327.24
+    },
+    {
+      "height": 14.82,
+      "id": "n10",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 21.623,
+      "x": 15,
+      "y": 408.64
+    },
+    {
+      "height": 121.2,
+      "id": "n11",
+      "width": 119.538,
+      "x": 15,
+      "y": 424.46
+    },
+    {
+      "height": 69.99,
+      "id": "n12",
+      "width": 76.871,
+      "x": 135.538,
+      "y": 424.46
+    },
+    {
+      "height": 145.93,
+      "id": "n13",
+      "width": 23.6,
+      "x": 213.409,
+      "y": 408.64
+    },
+    {
+      "height": 16.26,
+      "id": "n14",
+      "width": 2.276,
+      "x": 238.009,
+      "y": 408.64
+    },
+    {
+      "height": 118.783,
+      "id": "n15",
+      "width": 123.08,
+      "x": 238.009,
+      "y": 425.9
+    },
+    {
+      "height": 108,
+      "id": "n16",
+      "width": 22,
+      "x": 362.089,
+      "y": 425.9
+    },
+    {
+      "height": 51.194,
+      "id": "n17",
+      "width": 55.25,
+      "x": 15,
+      "y": 555.5699999999999
+    },
+    {
+      "height": 146.8,
+      "id": "n18",
+      "width": 78.8,
+      "x": 71.25,
+      "y": 555.5699999999999
+    },
+    {
+      "height": 136.9,
+      "id": "n19",
+      "width": 57.016,
+      "x": 151.05,
+      "y": 555.5699999999999
+    },
+    {
+      "height": 127.625,
+      "id": "n20",
+      "width": 137.453,
+      "x": 209.066,
+      "y": 555.5699999999999
+    },
+    {
+      "height": 114.97,
+      "id": "n21",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 18.4,
+      "x": 15,
+      "y": 703.3699999999999
+    },
+    {
+      "height": 123.8,
+      "id": "n22",
+      "width": 147.8,
+      "x": 34.4,
+      "y": 703.3699999999999
+    },
+    {
+      "height": 107.56,
+      "id": "n23",
+      "width": 76.08,
+      "x": 183.20000000000002,
+      "y": 703.3699999999999
+    },
+    {
+      "height": 44.07,
+      "id": "n24",
+      "width": 10.33,
+      "x": 260.28000000000003,
+      "y": 703.3699999999999
+    }
+  ],
+  "height": 842.1699999999998,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "0.5",
+    "elk.spacing.nodeNode": "1"
+  },
+  "width": 399.08899999999994,
+  "x": 0,
+  "y": 0
+}

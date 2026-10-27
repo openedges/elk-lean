@@ -1,0 +1,49 @@
+{
+  "children": [
+    {
+      "height": 125.1,
+      "id": "n0",
+      "width": 46.6,
+      "x": 10,
+      "y": 12.5
+    },
+    {
+      "height": 37,
+      "id": "n1",
+      "width": 79.91,
+      "x": 56.6,
+      "y": 12.5
+    },
+    {
+      "height": 26,
+      "id": "n2",
+      "width": 130.9,
+      "x": 136.51,
+      "y": 12.5
+    },
+    {
+      "height": 149.51,
+      "id": "n3",
+      "width": 76.944,
+      "x": 267.41,
+      "y": 12.5
+    }
+  ],
+  "height": 432.99,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "3",
+    "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+    "elk.nodeSize.minimum": "(800,300)",
+    "elk.padding": "[top=12.5,left=10,bottom=5,right=0]",
+    "elk.rectpacking.packing.strategy": "SIMPLE",
+    "elk.rectpacking.widthApproximation.lastPlaceShift": "false",
+    "elk.rectpacking.widthApproximation.optimizationGoal": "ASPECT_RATIO_DRIVEN",
+    "elk.rectpacking.widthApproximation.strategy": "TARGET_WIDTH",
+    "elk.spacing.nodeNode": "0"
+  },
+  "width": 800,
+  "x": 0,
+  "y": 0
+}

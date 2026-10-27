@@ -1,0 +1,89 @@
+{
+  "children": [
+    {
+      "height": 3,
+      "id": "n0",
+      "width": 114,
+      "x": 0,
+      "y": 488
+    },
+    {
+      "height": 115,
+      "id": "n1",
+      "width": 55,
+      "x": 35,
+      "y": 100
+    },
+    {
+      "height": 10,
+      "id": "n2",
+      "width": 79,
+      "x": 132,
+      "y": 438
+    },
+    {
+      "height": 36,
+      "id": "n3",
+      "width": 60,
+      "x": 123,
+      "y": 374
+    },
+    {
+      "height": 138,
+      "id": "n4",
+      "width": 20,
+      "x": 0,
+      "y": 100
+    },
+    {
+      "height": 106,
+      "id": "n5",
+      "width": 108,
+      "x": 0,
+      "y": 253
+    },
+    {
+      "height": 49,
+      "id": "n6",
+      "width": 108,
+      "x": 0,
+      "y": 374
+    },
+    {
+      "height": 78,
+      "id": "n7",
+      "width": 49,
+      "x": 140,
+      "y": 253
+    },
+    {
+      "height": 35,
+      "id": "n8",
+      "width": 117,
+      "x": 0,
+      "y": 438
+    },
+    {
+      "height": 79,
+      "id": "n9",
+      "width": 2,
+      "x": 123,
+      "y": 253
+    }
+  ],
+  "height": 491,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "0.5",
+    "elk.omitNodeMicroLayout": "true",
+    "elk.padding": "[top=100,left=0,bottom=0,right=100]",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.widthApproximation.lastPlaceShift": "false",
+    "elk.rectpacking.widthApproximation.optimizationGoal": "ASPECT_RATIO_DRIVEN",
+    "elk.rectpacking.widthApproximation.strategy": "GREEDY"
+  },
+  "width": 311,
+  "x": 0,
+  "y": 0
+}

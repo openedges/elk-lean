@@ -1,0 +1,22 @@
+{
+  "children": [
+    {
+      "height": 51,
+      "id": "n0",
+      "width": 35,
+      "x": 15,
+      "y": 15
+    }
+  ],
+  "height": 81,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "0.2",
+    "elk.rectpacking.widthApproximation.targetWidth": "50",
+    "elk.spacing.nodeNode": "33.3"
+  },
+  "width": 65,
+  "x": 0,
+  "y": 0
+}

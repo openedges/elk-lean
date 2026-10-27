@@ -1,0 +1,228 @@
+{
+  "children": [
+    {
+      "height": 152,
+      "id": "n0",
+      "width": 17,
+      "x": 12.5,
+      "y": 0
+    },
+    {
+      "height": 20,
+      "id": "n1",
+      "labels": [
+        {
+          "height": 7,
+          "text": "L1",
+          "width": 25,
+          "x": 0,
+          "y": -12
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_LEFT, V_TOP, OUTSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 50,
+      "x": 39.5,
+      "y": 0
+    },
+    {
+      "height": 20,
+      "id": "n2",
+      "labels": [
+        {
+          "height": 10,
+          "text": "L2",
+          "width": 12,
+          "x": 5,
+          "y": 5
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 22,
+      "x": 99.5,
+      "y": 0
+    },
+    {
+      "height": 47,
+      "id": "n3",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 19,
+      "x": 12.5,
+      "y": 162
+    },
+    {
+      "height": 20,
+      "id": "n4",
+      "labels": [
+        {
+          "height": 7,
+          "text": "L4",
+          "width": 40,
+          "x": 0,
+          "y": -12
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_LEFT, V_TOP, OUTSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 80,
+      "x": 12.5,
+      "y": 219
+    },
+    {
+      "height": 23,
+      "id": "n5",
+      "labels": [
+        {
+          "height": 13,
+          "text": "L5",
+          "width": 28,
+          "x": 5,
+          "y": 5
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 38,
+      "x": 12.5,
+      "y": 249
+    },
+    {
+      "height": 20,
+      "id": "n6",
+      "labels": [
+        {
+          "height": 14,
+          "text": "L6",
+          "width": 22,
+          "x": 0,
+          "y": -19
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_LEFT, V_TOP, OUTSIDE]",
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]"
+      },
+      "width": 44,
+      "x": 12.5,
+      "y": 282
+    },
+    {
+      "height": 196,
+      "id": "n7",
+      "width": 38,
+      "x": 102.5,
+      "y": 162
+    },
+    {
+      "height": 49,
+      "id": "n8",
+      "labels": [
+        {
+          "height": 12,
+          "text": "L8",
+          "width": 28,
+          "x": -1.5,
+          "y": 18.5
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]"
+      },
+      "width": 25,
+      "x": 150.5,
+      "y": 162
+    },
+    {
+      "height": 54,
+      "id": "n9",
+      "width": 27,
+      "x": 150.5,
+      "y": 221
+    },
+    {
+      "height": 158,
+      "id": "n10",
+      "width": 33,
+      "x": 187.5,
+      "y": 162
+    },
+    {
+      "height": 20,
+      "id": "n11",
+      "labels": [
+        {
+          "height": 8,
+          "text": "L11",
+          "width": 23,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "[NODE_LABELS, MINIMUM_SIZE]",
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 20,
+      "x": 12.5,
+      "y": 368
+    },
+    {
+      "height": 46,
+      "id": "n12",
+      "labels": [
+        {
+          "height": 13,
+          "text": "L12",
+          "width": 23,
+          "x": 0,
+          "y": -18
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeLabels.placement": "[H_LEFT, V_TOP, OUTSIDE]"
+      },
+      "width": 12,
+      "x": 12.5,
+      "y": 398
+    },
+    {
+      "height": 160,
+      "id": "n13",
+      "width": 20,
+      "x": 42.5,
+      "y": 368
+    },
+    {
+      "height": 110.6,
+      "id": "n14",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 3.6,
+      "x": 12.5,
+      "y": 538
+    }
+  ],
+  "height": 658.6,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "1.6",
+    "elk.padding": "[top=0,left=12.5,bottom=10,right=0]",
+    "elk.spacing.nodeNode": "10"
+  },
+  "width": 220.5,
+  "x": 0,
+  "y": 0
+}

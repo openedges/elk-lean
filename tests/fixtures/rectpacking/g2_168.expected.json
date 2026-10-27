@@ -1,0 +1,239 @@
+{
+  "children": [
+    {
+      "height": 15,
+      "id": "n0",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "12"
+      },
+      "width": 10,
+      "x": 60,
+      "y": 127.5
+    },
+    {
+      "height": 20,
+      "id": "n1",
+      "width": 20,
+      "x": 85,
+      "y": 87.5
+    },
+    {
+      "height": 10,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "-1",
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 10,
+      "x": 20,
+      "y": 87.5
+    },
+    {
+      "height": 15,
+      "id": "n3",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "1"
+      },
+      "width": 20,
+      "x": 45,
+      "y": 12.5
+    },
+    {
+      "height": 5,
+      "id": "n4",
+      "width": 10,
+      "x": 125,
+      "y": 87.5
+    },
+    {
+      "height": 10,
+      "id": "n5",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "13"
+      },
+      "width": 15,
+      "x": 90,
+      "y": 127.5
+    },
+    {
+      "height": 15,
+      "id": "n6",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "12"
+      },
+      "width": 10,
+      "x": 125,
+      "y": 127.5
+    },
+    {
+      "height": 10,
+      "id": "n7",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "8"
+      },
+      "width": 15,
+      "x": 190,
+      "y": 87.5
+    },
+    {
+      "height": 20,
+      "id": "n8",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "2",
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 20,
+      "x": 20,
+      "y": 47.5
+    },
+    {
+      "height": 5,
+      "id": "n9",
+      "width": 15,
+      "x": 155,
+      "y": 87.5
+    },
+    {
+      "height": 5,
+      "id": "n10",
+      "width": 20,
+      "x": 225,
+      "y": 87.5
+    },
+    {
+      "height": 10,
+      "id": "n11",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "23"
+      },
+      "width": 15,
+      "x": 150,
+      "y": 242.5
+    },
+    {
+      "height": 15,
+      "id": "n12",
+      "width": 10,
+      "x": 265,
+      "y": 87.5
+    },
+    {
+      "height": 15,
+      "id": "n13",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "0"
+      },
+      "width": 5,
+      "x": 20,
+      "y": 12.5
+    },
+    {
+      "height": 10,
+      "id": "n14",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 20,
+      "x": 20,
+      "y": 127.5
+    },
+    {
+      "height": 15,
+      "id": "n15",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "4"
+      },
+      "width": 15,
+      "x": 50,
+      "y": 87.5
+    },
+    {
+      "height": 15,
+      "id": "n16",
+      "width": 20,
+      "x": 155,
+      "y": 127.5
+    },
+    {
+      "height": 20,
+      "id": "n17",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 20,
+      "x": 20,
+      "y": 162.5
+    },
+    {
+      "height": 10,
+      "id": "n18",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 20,
+      "x": 20,
+      "y": 202.5
+    },
+    {
+      "height": 10,
+      "id": "n19",
+      "width": 10,
+      "x": 60,
+      "y": 202.5
+    },
+    {
+      "height": 20,
+      "id": "n20",
+      "width": 20,
+      "x": 90,
+      "y": 202.5
+    },
+    {
+      "height": 10,
+      "id": "n21",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "24"
+      },
+      "width": 5,
+      "x": 185,
+      "y": 242.5
+    },
+    {
+      "height": 20,
+      "id": "n22",
+      "layoutOptions": {
+        "elk.rectpacking.inNewRow": "true"
+      },
+      "width": 15,
+      "x": 20,
+      "y": 242.5
+    },
+    {
+      "height": 10,
+      "id": "n23",
+      "width": 40,
+      "x": 55,
+      "y": 242.5
+    },
+    {
+      "height": 10,
+      "id": "n24",
+      "width": 15,
+      "x": 115,
+      "y": 242.5
+    }
+  ],
+  "height": 275,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "1.908321167883212",
+    "elk.interactive": "true",
+    "elk.padding": "[top=12.5,left=20,bottom=12.5,right=10]",
+    "elk.rectpacking.widthApproximation.targetWidth": "50",
+    "elk.spacing.nodeNode": "20"
+  },
+  "width": 285,
+  "x": 0,
+  "y": 0
+}

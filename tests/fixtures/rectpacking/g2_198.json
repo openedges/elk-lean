@@ -1,0 +1,1 @@
+{"id": "root", "layoutOptions": {"elk.algorithm": "rectpacking", "elk.spacing.nodeNode": "33.3", "elk.rectpacking.orderBySize": "true", "elk.rectpacking.packing.compaction.iterations": "3", "elk.nodeSize.fixedGraphSize": "true", "elk.omitNodeMicroLayout": "true"}, "children": [{"id": "n0", "width": 20, "height": 20}, {"id": "n1", "width": 20, "height": 20}]}

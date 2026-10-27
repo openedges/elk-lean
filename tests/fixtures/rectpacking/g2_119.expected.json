@@ -1,0 +1,31 @@
+{
+  "children": [
+    {
+      "height": 10,
+      "id": "n0",
+      "layoutOptions": {
+        "elk.rectpacking.desiredPosition": "1"
+      },
+      "width": 40,
+      "x": 12.5,
+      "y": 20
+    }
+  ],
+  "height": 50,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "0.5",
+    "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+    "elk.nodeSize.minimum": "(100,50)",
+    "elk.padding": "[top=20,left=12.5,bottom=0,right=5]",
+    "elk.rectpacking.orderBySize": "true",
+    "elk.rectpacking.packing.compaction.rowHeightReevaluation": "true",
+    "elk.rectpacking.widthApproximation.lastPlaceShift": "false",
+    "elk.rectpacking.widthApproximation.targetWidth": "250",
+    "org.eclipse.elk.interactive": "true"
+  },
+  "width": 100,
+  "x": 0,
+  "y": 0
+}

@@ -1,0 +1,34 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "a",
+      "width": 20,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 20,
+      "id": "b",
+      "width": 20,
+      "x": 12,
+      "y": 52
+    },
+    {
+      "height": 20,
+      "id": "c",
+      "width": 20,
+      "x": 12,
+      "y": 92
+    }
+  ],
+  "height": 124,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.rectpacking.trybox": "true"
+  },
+  "width": 44,
+  "x": 0,
+  "y": 0
+}

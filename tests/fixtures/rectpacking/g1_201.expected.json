@@ -1,0 +1,87 @@
+{
+  "children": [
+    {
+      "height": 79,
+      "id": "n0",
+      "width": 107,
+      "x": 0,
+      "y": 10
+    },
+    {
+      "height": 77,
+      "id": "n1",
+      "width": 2,
+      "x": 122,
+      "y": 10
+    },
+    {
+      "height": 114,
+      "id": "n2",
+      "width": 37,
+      "x": 139,
+      "y": 10
+    },
+    {
+      "height": 53,
+      "id": "n3",
+      "width": 63,
+      "x": 191,
+      "y": 10
+    },
+    {
+      "height": 13,
+      "id": "n4",
+      "width": 63,
+      "x": 0,
+      "y": 139
+    },
+    {
+      "height": 112,
+      "id": "n5",
+      "width": 26,
+      "x": 0,
+      "y": 167
+    },
+    {
+      "height": 235,
+      "id": "n6",
+      "width": 15,
+      "x": 78,
+      "y": 139
+    },
+    {
+      "height": 91,
+      "id": "n7",
+      "width": 87,
+      "x": 108,
+      "y": 139
+    },
+    {
+      "height": 70,
+      "id": "n8",
+      "width": 103,
+      "x": 108,
+      "y": 245
+    },
+    {
+      "height": 118,
+      "id": "n9",
+      "width": 105,
+      "x": 0,
+      "y": 389
+    }
+  ],
+  "height": 517,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.rectpacking",
+    "elk.aspectRatio": "0.5",
+    "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+    "elk.nodeSize.minimum": "(100,300)",
+    "elk.padding": "[top=10,left=0,bottom=10,right=20]",
+    "elk.rectpacking.packing.compaction.iterations": "2"
+  },
+  "width": 274,
+  "x": 0,
+  "y": 0
+}

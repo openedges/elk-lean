@@ -1,0 +1,96 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "n0",
+      "width": 20,
+      "x": 20,
+      "y": 12.5
+    },
+    {
+      "children": [
+        {
+          "height": 38,
+          "id": "n1_0",
+          "width": 75,
+          "x": 20,
+          "y": 20
+        },
+        {
+          "height": 31,
+          "id": "n1_1",
+          "width": 58,
+          "x": 110,
+          "y": 20
+        },
+        {
+          "height": 72,
+          "id": "n1_2",
+          "width": 14,
+          "x": 183,
+          "y": 20
+        },
+        {
+          "height": 47,
+          "id": "n1_3",
+          "width": 50,
+          "x": 212,
+          "y": 20
+        },
+        {
+          "height": 47,
+          "id": "n1_4",
+          "width": 20,
+          "x": 277,
+          "y": 20
+        },
+        {
+          "height": 30,
+          "id": "n1_5",
+          "width": 30,
+          "x": 312,
+          "y": 20
+        },
+        {
+          "height": 50,
+          "id": "n1_6",
+          "width": 29,
+          "x": 357,
+          "y": 20
+        },
+        {
+          "height": 35,
+          "id": "n1_7",
+          "width": 44,
+          "x": 20,
+          "y": 107
+        }
+      ],
+      "height": 0,
+      "id": "n1",
+      "layoutOptions": {
+        "elk.algorithm": "org.eclipse.elk.rectpacking",
+        "elk.aspectRatio": "1.908321167883212",
+        "elk.nodeSize.fixedGraphSize": "true",
+        "elk.padding": "[top=20,left=20,bottom=100,right=5]",
+        "elk.rectpacking.packing.compaction.iterations": "1"
+      },
+      "width": 0,
+      "x": 45,
+      "y": 12.5
+    }
+  ],
+  "height": 42.5,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "rectpacking",
+    "elk.aspectRatio": "0.5",
+    "elk.contentAlignment": "[V_CENTER, H_CENTER]",
+    "elk.padding": "[top=12.5,left=20,bottom=10,right=12.5]",
+    "elk.rectpacking.widthApproximation.targetWidth": "500",
+    "elk.spacing.nodeNode": "5"
+  },
+  "width": 57.5,
+  "x": 0,
+  "y": 0
+}
