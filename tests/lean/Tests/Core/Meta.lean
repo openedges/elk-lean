@@ -64,10 +64,10 @@ def countDependencies (ds : Array LayoutOptionData) : Nat :=
 
 def counts : Suite := suite "core.meta.counts" do
   let s ← LayoutMetaDataService.getInstance
-  checkEq "option count (core 95 + layered 89 + disco 4 + force 5 + mrtree 8 + radial 12 + spore 10 + stress 5 + vertiflex 4 + topdownpacking 2)" s.optionDataList.size 234
-  checkEq "option order size" s.optionOrder.size 234
+  checkEq "option count (core 95 + layered 89 + disco 4 + force 5 + mrtree 8 + radial 12 + rectpacking 13 + spore 10 + stress 5 + vertiflex 4 + topdownpacking 2)" s.optionDataList.size 247
+  checkEq "option order size" s.optionOrder.size 247
   checkEq "category count" s.categoryDataList.size 8
-  checkEq "algorithm count" s.algorithmDataList.size 13
+  checkEq "algorithm count" s.algorithmDataList.size 14
   checkEq "dependency count" (countDependencies s.optionDataList) 10
   checkEq "legacy options (layered Java ids)" s.legacyOptions.size 89
   -- elk-rs order (`layout_api.rs`): core, layered, disco, force, (mrtree, radial, rectpacking,)
@@ -75,7 +75,7 @@ def counts : Suite := suite "core.meta.counts" do
   checkEqR "algorithm order" s.algorithmOrder
     #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.layered",
       "org.eclipse.elk.disco", "org.eclipse.elk.force", "org.eclipse.elk.mrtree", "org.eclipse.elk.radial",
-      "org.eclipse.elk.sporeOverlap",
+      "org.eclipse.elk.rectpacking", "org.eclipse.elk.sporeOverlap",
       "org.eclipse.elk.sporeCompaction", "org.eclipse.elk.stress", "org.eclipse.elk.vertiflex",
       "org.eclipse.elk.topdownpacking"]
   checkEqR "category order" s.categoryOrder
@@ -353,7 +353,8 @@ def categories : Suite := suite "core.meta.categories" do
   checkEq "backup category name" (other.map (·.name)) (some "Other")
   checkEqR "backup category members" ((other.map (·.layouters)).getD #[])
     #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.disco",
-      "org.eclipse.elk.sporeOverlap", "org.eclipse.elk.sporeCompaction", "org.eclipse.elk.topdownpacking"]
+      "org.eclipse.elk.rectpacking", "org.eclipse.elk.sporeOverlap", "org.eclipse.elk.sporeCompaction",
+      "org.eclipse.elk.topdownpacking"]
   let radial ← LayoutMetaDataService.getCategoryData "org.eclipse.elk.radial"
   checkEq "radial description"
     (radial.map (·.description))

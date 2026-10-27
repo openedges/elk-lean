@@ -1,5 +1,6 @@
 import Elk.Core.Alg
 import Elk.Core.Util.Sort
+import Elk.Core.Util.RustSort
 import Elk.Alg.RectPacking.Util.RectPackingArena
 import Elk.Alg.RectPacking.Options.RectPackingOptions
 /-!
@@ -11,10 +12,8 @@ Port of `intermediate/interactive_node_reorderer.rs` (elk-rs): children with a
 children are stored in the new order.
 
 Sort order: the comparator returns `Less` for equal positions (Java `-1`), which is not a
-consistent order. Rust `sort_by` uses insertion sort for at most 20 elements; with this
-comparator it yields ascending positions with equal positions in **reverse** input order. That
-order is reproduced exactly (stable sort of the reversed list); for more than 20 nodes with equal
-desired positions Rust's driftsort may order the ties differently (not reproduced).
+consistent order, so the exact Rust algorithm (`rustSortBy`, Rust 1.97 `slice::sort_by`) decides
+the result (for at most 20 elements: ascending positions, equal positions in reverse input order).
 
 Rust deviation from Java kept: the insertion index is clamped at 0 (Java throws for a negative
 desired position).
@@ -30,9 +29,11 @@ def getDesiredPosition (graph : ElkGraph) (node : NodeId) : Int :=
   (graph.node node).props.getD RectPackingOptions.DESIRED_POSITION (-1)
 
 /-- Rust `fixed_nodes.sort_by(…)` with the `Less`-on-equal comparator (see the module doc). -/
-def sortFixedNodes (graph : ElkGraph) (fixedNodes : Array NodeId) : Array NodeId :=
-  stableSort fixedNodes.reverse fun a b =>
-    Ord.compare (getDesiredPosition graph a) (getDesiredPosition graph b)
+def sortFixedNodes (graph : ElkGraph) (fixedNodes : Array NodeId) : Except String (Array NodeId) :=
+  rustSortBy fixedNodes fun a b =>
+    let pa := getDesiredPosition graph a
+    let pb := getDesiredPosition graph b
+    if pa == pb then .lt else Ord.compare pa pb
 
 /-- `process(graph, progress_monitor)` on the `ElkGraph`. -/
 def run (graph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
@@ -44,7 +45,9 @@ def run (graph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       fixedNodes := fixedNodes.push rect
   rectangles := rectangles.filter fun n => !fixedNodes.contains n
   let g ← get
-  fixedNodes := sortFixedNodes g fixedNodes
+  fixedNodes ← match sortFixedNodes g fixedNodes with
+    | .ok sorted => pure sorted
+    | .error e => throw (IO.userError s!"java.lang.IllegalArgumentException: {e}")
   for node in fixedNodes do
     let position := getDesiredPosition g node
     let insertPos := (max (min position (rectangles.size : Int)) 0).toNat

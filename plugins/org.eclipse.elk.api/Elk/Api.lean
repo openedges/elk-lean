@@ -8,6 +8,7 @@ import Elk.Alg.Spore
 import Elk.Alg.VertiFlex
 import Elk.Alg.Radial
 import Elk.Alg.MrTree
+import Elk.Alg.RectPacking
 import Elk.Api.LayoutApi
 /-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API. -/
 namespace Elk.Api
