@@ -188,8 +188,8 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | **4. layered** | 4a 그래프 모델·importer/exporter·GraphConfigurator·ElkLayered 드라이버·trace recorder, 4b P1 cycles·P2 layers, 4c intermediate 프로세서(≈60), 4d P3 crossing minimization, 4e P4 node placement(BK, NetworkSimplex, Linear, Simple, Interactive), 4f P5 edge routing(orthogonal/polyline/splines)·self loops·components·compound·wrapping | trace parity 리포트 | 1,998 모델 중 layered 모델 전부 model parity + phase-step 일치 |
 | **5. 기타 알고리즘** | force/stress, mrtree, radial, rectpacking, spore, disco, topdownpacking, vertiflex, libavoid/graphviz 스텁 | 알고리즘별 parity | 해당 알고리즘 모델 model parity 100%, `known_layout_algorithms()` 일치 |
 | **6. 텍스트 포맷** | `.elkt` 파서(elk-rs `elkt_test_loader` + elk-live TS 파서 참고), CLI `convert` | `elk convert x.elkt --to json` | 898개 `.elkt` 변환 성공, Java export와 의미 동일 |
-| **7. 전수 검증·최적화** | 1,998 모델 model parity + phase-step trace, tickets/issue 시나리오, 메모리 수명 검사, 6-way 벤치마크 대비 성능 | `tests/model_parity/report.md`, `tests/perf/report.md` | parity 100%(알려진 예외 문서화), 성능 목표 달성 |
-| **8. 배포** | `Elk.Ffi` 진입점, NAPI 애드온(node-addon-api), WASM(emscripten 빌드), npm 패키지(elkjs 호환 로더/Worker/typings), vitest, elk-live 연동 | `@openedges/elk-lean` 유사 패키지 | JS parity(NAPI/WASM 각각 550/550), elkjs 테스트 이식 통과 |
+| **7. 전수 검증·최적화** (진행 중) | ELK Java 기준값·단계별 trace(`scripts/run_java_*`), elk-rs 보조 parity, 메모리 수명 검사, 성능 최적화(FastFloat·파서·zmij·force/stress·P3·P5·mrtree/rectpacking) | `HISTORY.md` 수치, `tests/perf/report.md` | Java 결과 정확 일치 1,878/1,997(나머지는 Java 컨텍스트 의존·NaN 예외), Java 단계별 1,817/1,997(나머지 Java 측 요인), elk-rs 1,447/1,447; 성능 목표(elk-rs 수준)는 미달 → 계속 |
+| **8. 배포** (대부분 완료) | `Elk.Ffi`+`elk_lean.h` C API, NAPI C 애드온, WASM(emscripten, MEMORY64=2), npm 패키지(elkjs 호환 로더/Worker/typings, WASM 폴백), `node:test` 51개 | `elk-lean` npm 패키지(미게시) | NAPI vs CLI 1,447/1,448 바이트 일치, WASM 550/550; 남은 일: Linux/Windows 빌드, 게시, GMP 라이선스 검토 |
 | **9. 릴리스** | CHANGELOG, 문서, 태그 | `v0.12.0` | 품질 게이트 전항목 통과 |
 
 병렬화: Phase 1~2는 규약을 정하는 단계이므로 직렬로 진행한다. Phase 3 이후는 플러그인/서브패키지 단위로 서브에이전트에 분배한다(각 작업은 "대응 Rust 파일 목록 + 규약 문서 + parity 명령"을 받고, 빌드 경고 0·테스트 통과·parity 수치를 보고한다).
