@@ -1,4 +1,5 @@
 import Elk.Alg.Layered.Graph
+import Elk.Core.Util.Sort
 /-!
 # `org.eclipse.elk.alg.layered.p3order.counting.CrossMinUtil`
 
@@ -9,6 +10,50 @@ out-of-line call) and `getPortSideView(side)` as an index range of the port list
 namespace Elk.Alg.Layered.P3Order.Counting
 
 open Elk.Core.Options Elk.Alg.Layered.Graph
+
+/-- `0.0` as a global: a `Float` literal inside a loop is converted (`Float.ofScientific`) on
+every evaluation, a global constant is a plain load. -/
+def floatZero : Float := 0.0
+
+/-- `1.0` as a global (see `floatZero`). -/
+def floatOne : Float := 1.0
+
+/-- `2.0` as a global (see `floatZero`). -/
+def floatTwo : Float := 2.0
+
+/-- Rust `f64::min` with inline NaN tests (`x != x`; `Float.isNaN` is an out-of-line call). -/
+@[inline] def fminInline (a b : Float) : Float :=
+  if a != a then b else if b != b then a else if a < b then a else b
+
+/-- Rust `f64::max` with inline NaN tests. -/
+@[inline] def fmaxInline (a b : Float) : Float :=
+  if a != a then b else if b != b then a else if a > b then a else b
+
+/-- The inner loop of `insertionSortFrom`: shifts `x` down from position `j` (`> lo`) while the
+element before it compares greater. -/
+@[specialize] partial def insertDown {α : Type} [Inhabited α] (cmp : α → α → Ordering) (lo : Nat) (x : α) (j : Nat)
+    (a : Array α) : Array α :=
+  if j > lo then
+    let y := a[j - 1]!
+    if cmp y x == .gt then insertDown cmp lo x (j - 1) (a.setIfInBounds j y)
+    else a.setIfInBounds j x
+  else a.setIfInBounds j x
+
+/-- Insertion sort of `a[lo:hi]` from position `i` on (positions `[lo, i)` are sorted). -/
+@[specialize] partial def insertionSortFrom {α : Type} [Inhabited α] (cmp : α → α → Ordering) (lo hi i : Nat)
+    (a : Array α) : Array α :=
+  if i < hi then
+    let x := a[i]!
+    insertionSortFrom cmp lo hi (i + 1) (insertDown cmp lo x i a)
+  else a
+
+/-- `Elk.Core.Util.stableSort` for arrays of at most 16 elements (one insertion-sort run, the same
+comparisons and moves, as tail-recursive loops without boxed loop state); longer arrays are
+handed to `stableSort`. -/
+@[inline] def stableSortSmall {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α :=
+  if as.size < 2 then as
+  else if as.size <= 16 then insertionSortFrom cmp 0 as.size 1 as
+  else Elk.Core.Util.stableSort as cmp
 
 /-- The constructor index of a `PortSide` (`ElkEnum.ordinal` as `UInt8`). -/
 @[inline] def sideCode : PortSide → UInt8

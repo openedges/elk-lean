@@ -1,6 +1,7 @@
 import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
 import Elk.Alg.Layered.P3Order.Counting.CrossMinUtil
+import Elk.Alg.Layered.P3Order.CrossMinSnapshot
 import Elk.Core.Util.Sort
 import Std.Data.HashSet
 /-!
@@ -14,8 +15,10 @@ and the elk-rs `graph_element().id` path.
 elk-rs additionally has a `CrossMinSnapshot` fast path (`set_snapshot`, used by the
 `GraphInfoHolder`'s `AllCrossingsCounter`). It reads the same ids from the snapshot and filters
 `node.ports` by side instead of `getPortSideView`; both coincide because ports are sorted by side
-during crossing minimisation and ids/edges do not change after the snapshot is built, so the
-plumbing is not ported (PORTING.md §15.1).
+during crossing minimisation and ids/edges do not change after the snapshot is built. Here the
+snapshot (`setSnapshot`) is only used by `countCrossingsBetweenLayers` to read the far ends of a
+port's edges (`port_predecessors`, then `port_successors`, which is `connectedEdges` order) as
+captured ids; the ports themselves are still numbered through `getPortSideView`.
 
 Rust semantics kept where they differ from Java:
 - the in-layer/two-port port sets are de-duplicated by port identity and *stably* sorted by
@@ -37,6 +40,8 @@ structure CrossingsCounter where
   indexTree : IO.Ref BinaryIndexedTree
   /-- `nodeCardinalities` (indexed by `LNode.id`). -/
   nodeCardinalities : IO.Ref (Array Int)
+  /-- elk-rs `snapshot` (`set_snapshot`). -/
+  snapshot : IO.Ref (Option CrossMinSnapshot)
 
 namespace CrossingsCounter
 
@@ -245,6 +250,38 @@ private partial def countOnPortsLoop (a : LGraphArena) (positions : Array Int) (
     countOnPortsLoop a positions ports (i + 1) tree crossings
   else (crossings, tree)
 
+/-- `tree.rank(position)` summed over the far ends `ends[i:]` (captured port ids) above `cur`. -/
+private partial def rankEndsSnap (positions : Array Int) (tree : BinaryIndexedTree) (cur : Int) (ends : Array Nat)
+    (i : Nat) (acc : Int) : Int :=
+  if h : i < ends.size then
+    let endPosition := positions[ends[i]]?.getD 0
+    rankEndsSnap positions tree cur ends (i + 1) (if endPosition > cur then acc + tree.rank (asUsize endPosition) else acc)
+  else acc
+
+/-- Adds the far-end positions `ends[i:]` above `cur` to the tree. -/
+private partial def addEndsSnap (positions : Array Int) (cur : Int) (ends : Array Nat) (i : Nat)
+    (tree : BinaryIndexedTree) : BinaryIndexedTree :=
+  if h : i < ends.size then
+    let endPosition := positions[ends[i]]?.getD 0
+    addEndsSnap positions cur ends (i + 1) (if endPosition > cur then tree.add (asUsize endPosition) else tree)
+  else tree
+
+/-- elk-rs `count_crossings_on_ports_snap(snapshot, port_ids)` on the ports' captured ids. -/
+private partial def countOnPortsSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (ports : Array LPortId) (i : Nat)
+    (tree : BinaryIndexedTree) (crossings : Int) : Int × BinaryIndexedTree :=
+  if h : i < ports.size then
+    let pid := s.portId ports[i]
+    let cur := positions[pid]?.getD 0
+    let tree := tree.removeAll (asUsize cur)
+    let preds := s.portPredecessors pid
+    let succs := s.portSuccessors pid
+    let crossings := rankEndsSnap positions tree cur preds 0 crossings
+    let crossings := rankEndsSnap positions tree cur succs 0 crossings
+    let tree := addEndsSnap positions cur preds 0 tree
+    let tree := addEndsSnap positions cur succs 0 tree
+    countOnPortsSnapLoop s positions ports (i + 1) tree crossings
+  else (crossings, tree)
+
 /-- `countCrossingsOnPorts(ports)`. -/
 def countCrossingsOnPorts (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (ports : Array LPortId) :
     Int × BinaryIndexedTree :=
@@ -392,7 +429,11 @@ def connectedPortsSortedByPosition (a : LGraphArena) (positions : Array Int) (up
 
 /-- `new CrossingsCounter(portPositions)` sharing the given position array. -/
 def new (portPositions : IO.Ref (Array Int)) : BaseIO CrossingsCounter := do
-  return { portPositions, indexTree := ← IO.mkRef (BinaryIndexedTree.new 0), nodeCardinalities := ← IO.mkRef #[] }
+  return { portPositions, indexTree := ← IO.mkRef (BinaryIndexedTree.new 0), nodeCardinalities := ← IO.mkRef #[],
+           snapshot := ← IO.mkRef none }
+
+/-- elk-rs `set_snapshot(snapshot)`. -/
+def setSnapshot (c : CrossingsCounter) (s : CrossMinSnapshot) : BaseIO Unit := c.snapshot.set (some s)
 
 /-- elk-rs `CrossingsCounter::new(port_positions)`: a counter owning a copy of the positions. -/
 def ofPositions (portPositions : Array Int) : BaseIO CrossingsCounter := do
@@ -453,8 +494,15 @@ def initForCountingBetween (c : CrossingsCounter) (leftLayer rightLayer : Array 
 /-- `countCrossingsBetweenLayers(leftLayerNodes, rightLayerNodes)`. -/
 def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : Array LNodeId) : LayeredM Int := do
   let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
-  c.indexTree.set (BinaryIndexedTree.new ports.size)
-  c.withTree countCrossingsOnPorts ports
+  match ← c.snapshot.get with
+  | some s =>
+    let positions ← c.portPositions.get
+    let (crossings, tree) := countOnPortsSnapLoop s positions ports 0 (BinaryIndexedTree.new ports.size) 0
+    c.indexTree.set tree
+    return crossings
+  | none =>
+    c.indexTree.set (BinaryIndexedTree.new ports.size)
+    c.withTree countCrossingsOnPorts ports
 
 /-- `countInLayerCrossingsOnSide(nodes, side)`. -/
 def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (side : PortSide) : LayeredM Int := do

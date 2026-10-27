@@ -30,8 +30,8 @@ the sweep type decision (`dontSweepInto`) and the model order settings.
 5. The holder's own initialisation pass (`cachePortSides` and child graph collection per node in
    order, port count, zero port positions), then
    `Initializable.init #[counter, decider, distributor, heuristic] order`.
-6. `CrossMinSnapshot.build order nPorts` and `heuristic.setSnapshot` (the counter's
-   `set_snapshot`/`set_arena_sync` have no Lean counterpart: it reads the arena).
+6. `CrossMinSnapshot.build order nPorts`, `heuristic.setSnapshot` and the counter's `setSnapshot`
+   (`set_arena_sync` has no Lean counterpart: the counter reads the arena).
 7. `useBottomUp := decider.useBottomUpWithBoundary order hierarchicalSweepiness`, then
    `updateGreedyContext none`.
 
@@ -209,6 +209,7 @@ def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : A
     crossMinimizer.initializable] currentNodeOrder
   let snapshot ← CrossMinSnapshot.build currentNodeOrder nPorts
   crossMinimizer.setSnapshot snapshot
+  crossingsCounter.setSnapshot snapshot
   let useBottomUp ← decider.useBottomUpWithBoundary currentNodeOrder s.hierarchicalSweepiness
   -- `update_greedy_context(None)`
   if let some g := greedySwitch then g.setDontSweepInto useBottomUp

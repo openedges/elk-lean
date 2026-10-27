@@ -80,6 +80,9 @@ end BinaryIndexedTree
 /-- Rust `x as usize` for an `i32` position/id: negative values wrap to huge indices (which
 every consumer treats as out of range). -/
 @[inline] def asUsize (v : Int) : Nat :=
-  if v < 0 then (v + 18446744073709551616).toNat else v.toNat
+  match v with
+  | .ofNat n => n
+  -- `-(m + 1) + 2^64`, `0` below `-2^64` (no `Int` comparison or big literal on the fast path)
+  | .negSucc m => if (m + 1) >>> 64 != 0 then 0 else ((0 : UInt64) - (m + 1).toUInt64).toNat
 
 end Elk.Alg.Layered.P3Order.Counting

@@ -380,15 +380,26 @@ def portSameLayer (a : LGraphArena) (port : LPortId) (node : LNodeId) : Bool :=
     | some pl, some nl => pl == nl
     | _, _ => false
 
-/-- `position_of(node)`: `node_positions[layer index][node id]` (snapshot or live ids). -/
-def positionOf (snap : Option CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId) : Nat :=
+/-- `node_positions.get(layer).and_then(|p| p.get(node)).unwrap_or(node)` on the positions table. -/
+@[inline] def positionInTable (positions : Array (Array Nat)) (layerIndex nodeIndex : Nat) : Nat :=
+  if h : layerIndex < positions.size then
+    let row := positions[layerIndex]
+    if h2 : nodeIndex < row.size then row[nodeIndex] else nodeIndex
+  else nodeIndex
+
+/-- `position_of(node)` on the positions table (snapshot or live ids). -/
+def positionOfIn (snap : Option CrossMinSnapshot) (a : LGraphArena) (positions : Array (Array Nat)) (node : LNodeId) : Nat :=
   match snap with
-  | some s => st.positionIn (s.nodeLayerIndex node) (s.nodeId node)
+  | some s => positionInTable positions (s.nodeLayerIndex node) (s.nodeId node)
   | none =>
     let layerIndex := match (a.node node).layer with
       | some l => asUsize (a.layer l).id
       | none => 0
-    st.positionIn layerIndex (asUsize (a.node node).id)
+    positionInTable positions layerIndex (asUsize (a.node node).id)
+
+/-- `position_of(node)`: `node_positions[layer index][node id]` (snapshot or live ids). -/
+def positionOf (snap : Option CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId) : Nat :=
+  positionOfIn snap a st.nodePositions node
 
 /-- Whether the dummy port's `ORIGIN` is `port`. -/
 @[inline] private def originIs (a : LGraphArena) (dummyPort port : LPortId) : Bool :=
@@ -397,8 +408,8 @@ def positionOf (snap : Option CrossMinSnapshot) (a : LGraphArena) (st : Barycent
   | _ => false
 
 /-- `deal_with_north_south_ports(absurdly_large_float, port, port_dummy)`: the sort key of a
-north/south port from the input/output role of its dummy's ports. -/
-def dealWithNorthSouthPorts (snap : Option CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState)
+north/south port from the input/output role of its dummy's ports (on the positions table). -/
+def dealWithNorthSouthPortsIn (snap : Option CrossMinSnapshot) (a : LGraphArena) (positions : Array (Array Nat))
     (absurdlyLargeFloat : Float) (port : LPortId) (portDummy : LNodeId) : Float := Id.run do
   let mut input := false
   let mut output := false
@@ -422,14 +433,19 @@ def dealWithNorthSouthPorts (snap : Option CrossMinSnapshot) (a : LGraphArena) (
     | none => (a.port port).side
   let exclusive := input != output
   if input && exclusive then
-    let pos := (positionOf snap a st portDummy).toFloat
+    let pos := (positionOfIn snap a positions portDummy).toFloat
     return if side == .north then -pos else absurdlyLargeFloat - pos
   else if output && exclusive then
-    return (positionOf snap a st portDummy).toFloat + 1.0
+    return (positionOfIn snap a positions portDummy).toFloat + 1.0
   else if input && output then
     return if side == .north then 0.0 else absurdlyLargeFloat / 2.0
   else
     return 0.0
+
+/-- `deal_with_north_south_ports(absurdly_large_float, port, port_dummy)`. -/
+@[inline] def dealWithNorthSouthPorts (snap : Option CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState)
+    (absurdlyLargeFloat : Float) (port : LPortId) (portDummy : LNodeId) : Float :=
+  dealWithNorthSouthPortsIn snap a st.nodePositions absurdlyLargeFloat port portDummy
 
 /-- The end of the Rust port loop: `sum / degree` (or the north/south sum) is stored and the
 running `f64` min/max are updated. -/
@@ -465,54 +481,67 @@ partial def anyEndInLayer (s : CrossMinSnapshot) (targets : Array Nat) (nodeLaye
     if s.portOwnerLayer targets[i] == nodeLayer then true else anyEndInLayer s targets nodeLayer (i + 1)
   else false
 
-/-- `f32` sum of the ranks of `targets[i:]` (`sign`: added, else subtracted). -/
+/-- `f32` sum of the ranks of `targets[i:]` (`add`: added, else subtracted). -/
 partial def rankSumOf (ranks : FloatArray) (targets : Array Nat) (add : Bool) (i : Nat) (sum : Float) : Float :=
   if h : i < targets.size then
     let r := f32t (ranks.get! targets[i])
     rankSumOf ranks targets add (i + 1) (if add then f32t (sum + r) else f32t (sum - r))
   else sum
 
-/-- The end of the Rust port loop on the state: `sum / degree` (or the north/south sum) is stored
-and the running `f64` min/max (scratch fields) are updated. -/
-@[inline] def recordBarycenterSt (st : BarycenterPortDistributorState) (pid : Nat) (degree : Nat) (sum : Float)
-    (northSouth : Bool) : BarycenterPortDistributorState :=
-  let st := st.ensurePortCapacity pid
-  if degree > 0 then
-    let value := f32t (sum / f32t degree.toFloat)
-    { st with portBarycenter := st.portBarycenter.set! pid value,
-              minBarycenter := fmin st.minBarycenter value, maxBarycenter := fmax st.maxBarycenter value }
-  else if northSouth then { st with portBarycenter := st.portBarycenter.set! pid sum }
-  else st
-
 /-- The port loop of `distribute_ports_for_iter_snap` over the captured ports `pids[i:]` on
-`side`: barycenters, in-layer ports and the min/max barycenter in the state's scratch fields. -/
+`side`: barycenters (`bary`), the running min/max barycenter and the in-layer ports. The state is
+split into its fields so that nothing is allocated per port; `ranks` and `bary` are only resized
+together (`ensure_port_capacity`, which does not happen for the captured ids of the graph). -/
 partial def iteratePortsSnapLoop (s : CrossMinSnapshot) (a : LGraphArena) (pids : Array Nat) (side : PortSide)
-    (absurdlyLargeFloat : Float) (nodeLayer i : Nat) (st : BarycenterPortDistributorState) : BarycenterPortDistributorState :=
+    (absurdlyLargeFloat : Float) (nodeLayer : Nat) (positions : Array (Array Nat)) (i : Nat)
+    (ranks bary : FloatArray) (minB maxB : Float) (inLayer : Array Nat) : BarycenterPortDistributorState :=
   if h : i < pids.size then
     let pid := pids[i]
     let pside := s.portSideOf pid
-    if !sideIs pside side then iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) st
+    if !sideIs pside side then
+      iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer positions (i + 1) ranks bary minB maxB inLayer
     else
       let preds := s.portPredecessors pid
       let succs := s.portSuccessors pid
-      let degree := preds.size + succs.size
-      if sideIs pside .north || sideIs pside .south then
-        match s.portRefOpt pid with
-        | none => iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) st
-        | some portRef =>
-          match (a.port portRef).internal.portDummy with
-          | none => iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) st
-          | some dummy =>
-            -- Rust: `self.snapshot` is taken while distributing, so the lock path runs
-            let sum := f32t (0.0 + f32t (dealWithNorthSouthPorts none a st absurdlyLargeFloat portRef dummy))
-            iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) (recordBarycenterSt st pid degree sum true)
-      else if anyEndInLayer s succs nodeLayer 0 || anyEndInLayer s preds nodeLayer 0 then
-        iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1)
-          { st with inLayerPortIds := st.inLayerPortIds.push pid }
-      else
-        let sum := rankSumOf st.portRanks preds false 0 (rankSumOf st.portRanks succs true 0 0.0)
-        iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) (recordBarycenterSt st pid degree sum false)
-  else st
+      let northSouth := sideIs pside .north || sideIs pside .south
+      -- the sum, or `none` to skip the port (no dummy) / collect it (in-layer)
+      let sum? : Option Float :=
+        if northSouth then
+          match s.portRefOpt pid with
+          | none => none
+          | some portRef =>
+            match (a.port portRef).internal.portDummy with
+            | none => none
+            | some dummy =>
+              -- Rust: `self.snapshot` is taken while distributing, so the lock path runs
+              some (f32t (floatZero + f32t (dealWithNorthSouthPortsIn none a positions absurdlyLargeFloat portRef dummy)))
+        else if anyEndInLayer s succs nodeLayer 0 || anyEndInLayer s preds nodeLayer 0 then none
+        else some (rankSumOf ranks preds false 0 (rankSumOf ranks succs true 0 floatZero))
+      match sum? with
+      | none =>
+        let inLayer := if northSouth then inLayer else inLayer.push pid
+        iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer positions (i + 1) ranks bary minB maxB inLayer
+      | some sum =>
+        -- `ensure_port_capacity(pid)`
+        let grow := pid >= ranks.size && pid >>> 32 == 0
+        let ranks := if grow then resizeFloats ranks (pid + 1) else ranks
+        let bary := if grow then resizeFloats bary (pid + 1) else bary
+        let degree := preds.size + succs.size
+        if degree > 0 then
+          let value := f32t (sum / f32t degree.toUInt64.toFloat)
+          iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer positions (i + 1) ranks (bary.set! pid value)
+            (fminInline minB value) (fmaxInline maxB value) inLayer
+        else if northSouth then
+          iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer positions (i + 1) ranks (bary.set! pid sum)
+            minB maxB inLayer
+        else
+          iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer positions (i + 1) ranks bary minB maxB inLayer
+  else { portRanks := ranks, portBarycenter := bary, nodePositions := positions, minBarycenter := minB,
+         maxBarycenter := maxB, inLayerPortIds := inLayer }
+
+/-- Whether one of the captured ports `pids[i:]` lies on `side`. -/
+partial def anyOnSide (s : CrossMinSnapshot) (pids : Array Nat) (side : PortSide) (i : Nat) : Bool :=
+  if h : i < pids.size then sideIs (s.portSideOf pids[i]) side || anyOnSide s pids side (i + 1) else false
 
 /-- `calculate_in_layer_ports_snap(node, node_id, layer_index, layer_size)`. -/
 def inLayerPortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState) (node : LNodeId) (nodeId : Int)
@@ -541,18 +570,24 @@ def inLayerPortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState
   return st
 
 /-- `distribute_ports_for_iter_snap(node, port_ids, node_id, layer_index, layer_size)` for the
-captured ports `portIds` on `side` (Rust partitions them into a buffer first). -/
+captured ports `portIds` on `side` (Rust partitions them into a buffer first; without such ports
+nothing changes). -/
 def distributePortsForSideSnap (s : CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState)
     (node : LNodeId) (portIds : Array Nat) (side : PortSide) (nodeId : Int) (layerIndex layerSize : Nat) :
     BarycenterPortDistributorState :=
-  let st := { st with minBarycenter := 0.0, maxBarycenter := 0.0, inLayerPortIds := #[] }
-  let st := iteratePortsSnapLoop s a portIds side (f32t (2 * layerSize + 1).toFloat) (s.nodeLayerIndex node) 0 st
-  if st.inLayerPortIds.isEmpty then st
+  if !anyOnSide s portIds side 0 then st
   else
-    let inLayer := st.inLayerPortIds
-    let minB := st.minBarycenter
-    let maxB := st.maxBarycenter
-    inLayerPortsSnap s { st with inLayerPortIds := #[] } node nodeId layerIndex layerSize inLayer minB maxB
+    match st with
+    | { portRanks, nodePositions, portBarycenter, nPorts, .. } =>
+      let st := iteratePortsSnapLoop s a portIds side (f32t (2 * layerSize + 1).toFloat) (s.nodeLayerIndex node)
+        nodePositions 0 portRanks portBarycenter floatZero floatZero #[]
+      let st := { st with nPorts }
+      if st.inLayerPortIds.isEmpty then st
+      else
+        let inLayer := st.inLayerPortIds
+        let minB := st.minBarycenter
+        let maxB := st.maxBarycenter
+        inLayerPortsSnap s { st with inLayerPortIds := #[] } node nodeId layerIndex layerSize inLayer minB maxB
 
 /-- Rust comparator on two barycenters of the same side: `0.0` (no barycenter) first, then
 `partial_cmp` (NaN compares equal). -/
@@ -659,21 +694,37 @@ def distributePortsForIterLock (a : LGraphArena) (st : BarycenterPortDistributor
   let (st, inLayer, minB, maxB) := iteratePortsLock a st node ports
   if inLayer.isEmpty then st else inLayerPortsLock a st node nodeId layerIndex layerSize inLayer minB maxB
 
+/-- The `sort_ports` comparator: by side, then `compareBarycenters` of the ports' barycenters. -/
+@[inline] def comparePortsBySideAndBarycenter (a : LGraphArena) (bary : FloatArray) (p q : LPortId) : Ordering :=
+  let pt := a.port p
+  let qt := a.port q
+  let s1 := sideCode pt.side
+  let s2 := sideCode qt.side
+  if s1 != s2 then compare s1 s2
+  else compareBarycenters (bary.get! (asUsize pt.id)) (bary.get! (asUsize qt.id))
+
+/-- Whether `ports[i:]` is already ordered by `comparePortsBySideAndBarycenter` with no NaN barycenter.
+Without NaN the comparator is a total preorder, so the stable sort returns such a list unchanged. -/
+partial def portsSortedFrom (a : LGraphArena) (bary : FloatArray) (ports : Array LPortId) (i : Nat) : Bool :=
+  if h : i < ports.size then
+    let p := ports[i]
+    let b := bary.get! (asUsize (a.port p).id)
+    if b.isNaN then false
+    else if h2 : i + 1 < ports.size then
+      if comparePortsBySideAndBarycenter a bary p ports[i + 1] == .gt then false
+      else portsSortedFrom a bary ports (i + 1)
+    else true
+  else true
+
 /-- `sort_ports(node)` (lock path): the current ports sorted by (side, barycenter, index). The
 stable sort only ever compares an element with one that was before it in the input, so the index
-tie-break never decides and the ports are sorted directly by (side, barycenter). -/
+tie-break never decides and the ports are sorted directly by (side, barycenter); an already sorted
+list is returned as it is. -/
 def sortPortsLock (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId) : Array LPortId :=
   let ports := (a.node node).ports
-  if ports.size < 2 then ports
-  else
-    let bary := st.portBarycenter
-    stableSort ports fun p q =>
-      let pt := a.port p
-      let qt := a.port q
-      let s1 := sideCode pt.side
-      let s2 := sideCode qt.side
-      if s1 != s2 then compare s1 s2
-      else compareBarycenters (bary.get! (asUsize pt.id)) (bary.get! (asUsize qt.id))
+  let bary := st.portBarycenter
+  if ports.size < 2 || portsSortedFrom a bary ports 0 then ports
+  else stableSortSmall ports (comparePortsBySideAndBarycenter a bary)
 
 /-- Whether ports `xs[i:]` and `ys[i:]` are the same. -/
 partial def samePortsFrom (xs ys : Array LPortId) (i : Nat) : Bool :=
@@ -684,26 +735,39 @@ partial def samePortsFrom (xs ys : Array LPortId) (i : Nat) : Bool :=
 /-- Whether two port lists are the same. -/
 @[inline] def samePorts (xs ys : Array LPortId) : Bool := xs.size == ys.size && samePortsFrom xs ys 0
 
-/-- Start of the run of ports on `side` that ends with `ports[j]`. -/
-partial def runStart (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (j : Nat) : Nat :=
-  if j == 0 then 0
-  else match ports[j - 1]? with
-    | some p => if sideIs (a.port p).side side then runStart a ports side (j - 1) else j
-    | none => j
+/-- End of the maximal run of ports on `side` starting before `j`. -/
+partial def runEnd (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (j : Nat) : Nat :=
+  if h : j < ports.size then
+    if sideIs (a.port ports[j]).side side then runEnd a ports side (j + 1) else j
+  else j
 
-/-- `LNode.findPortIndices()`'s entry of `side` for `ports[0:i]` (the last maximal run of ports on
-`side`), compared with a cached entry. -/
-partial def lastRunMatches (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (i : Nat)
-    (cached : Option (Nat × Nat)) : Bool :=
-  if i == 0 then cached.isNone
-  else match ports[i - 1]? with
-    | some p =>
-      if sideIs (a.port p).side side then
-        match cached with
-        | some (first, last) => last == i && first == runStart a ports side (i - 1)
-        | none => false
-      else lastRunMatches a ports side (i - 1) cached
-    | none => false
+/-- The final test of `runsMatch`: per side ordinal `o ≥ k`, a side with a run must have matched its
+last run, a side without one must have no cached entry. -/
+partial def sidesMatch (idx : Array (Option (Nat × Nat))) (k : Nat) (seen bad : UInt8) : Bool :=
+  if k < 5 then
+    let bit : UInt8 := (1 : UInt8) <<< k.toUInt8
+    let ok := if seen &&& bit != 0 then bad &&& bit == 0
+      else match idx[k]? with
+        | some none => true
+        | _ => false
+    ok && sidesMatch idx (k + 1) seen bad
+  else true
+
+/-- Whether `LNode.findPortIndices()` of `ports` equals `idx`: walks the maximal side runs from
+`ports[i]` (the entry of a side is its last run), `seen`/`bad` flag the sides with a run and those
+whose last run so far does not match. -/
+partial def runsMatch (a : LGraphArena) (ports : Array LPortId) (idx : Array (Option (Nat × Nat))) (i : Nat)
+    (seen bad : UInt8) : Bool :=
+  if h : i < ports.size then
+    let side := (a.port ports[i]).side
+    let o := ElkEnum.ordinal side
+    let l := runEnd a ports side (i + 1)
+    let ok := match idx[o]? with
+      | some (some (first, last)) => first == i && last == l
+      | _ => false
+    let bit : UInt8 := (1 : UInt8) <<< o.toUInt8
+    runsMatch a ports idx l (seen ||| bit) (if ok then bad &&& ~~~bit else bad ||| bit)
+  else sidesMatch idx 0 seen bad
 
 /-- Whether `cachePortSides()` on a node with port list `ports` would leave its cache unchanged:
 the cache is enabled and its stored indices equal `findPortIndices()` of `ports`. -/
@@ -711,12 +775,7 @@ def portSideCacheMatches (a : LGraphArena) (nd : LNode) (ports : Array LPortId) 
   if !nd.portSidesCached then false
   else match nd.portSideIndices with
     | none => false
-    | some idx =>
-      idx.size == 5 &&
-        (ElkEnum.values : Array PortSide).all fun side =>
-          match idx[ElkEnum.ordinal side]? with
-          | some entry => lastRunMatches a ports side ports.size entry
-          | none => false
+    | some idx => idx.size == 5 && runsMatch a ports idx 0 0 0
 
 /-! ## The distributor -/
 
