@@ -46,7 +46,47 @@ structure GlobalOptions where
   values : Array (String × Value) := #[]
   canonicalIds : Std.HashMap String String := {}
 
-/-- Importer scratch state (one import + one transfer). -/
+/-- Value of a table indexed by element ids (`none` for ids without an entry). -/
+@[inline] def tableGet? {α : Type} (t : Array (Option α)) (i : Nat) : Option α := (t[i]?).join
+
+/-- Stores `v` at index `i` of a table indexed by element ids, growing it with `none`. -/
+def tableSet {α : Type} (t : Array (Option α)) (i : Nat) (v : α) : Array (Option α) :=
+  if i < t.size then t.set! i (some v)
+  else (t ++ Array.replicate (i - t.size) none).push (some v)
+
+/-- Per-element results of `transferLayout` in one dense index space: nodes first, then ports,
+labels and edges (`ElementId` → `base + id`). Absent entries hold the hash-map defaults of the
+former representation (`0` for global coordinates, `PARENT`/`CONTAINER` for the modes). -/
+structure TransferTables where
+  portBase : Nat := 0
+  labelBase : Nat := 0
+  edgeBase : Nat := 0
+  size : Nat := 0
+  globalX : FloatArray := .empty
+  globalY : FloatArray := .empty
+  shapeCoords : Array ShapeCoords := #[]
+  edgeCoords : Array EdgeCoords := #[]
+
+namespace TransferTables
+
+/-- Tables for a graph with the given element counts. -/
+def create (nodes ports labels edges : Nat) : TransferTables :=
+  let size := nodes + ports + labels + edges
+  { portBase := nodes, labelBase := nodes + ports, edgeBase := nodes + ports + labels, size,
+    globalX := ⟨Array.replicate size 0.0⟩, globalY := ⟨Array.replicate size 0.0⟩,
+    shapeCoords := Array.replicate size .parent, edgeCoords := Array.replicate size .container }
+
+/-- Dense index of an element. -/
+@[inline] def index (t : TransferTables) : ElementId → Nat
+  | .node n => n.idx
+  | .port p => t.portBase + p.idx
+  | .label l => t.labelBase + l.idx
+  | .edge e => t.edgeBase + e.idx
+
+end TransferTables
+
+/-- Importer scratch state (one import + one transfer). Element-keyed tables are arrays indexed by
+the element id (the importer creates the elements densely). -/
 structure ImporterState where
   model : Value := .null
   defaults : Option GlobalOptions := none
@@ -55,20 +95,17 @@ structure ImporterState where
   portIdMap : Std.HashMap JsonId PortId := {}
   edgeIdMap : Std.HashMap JsonId EdgeId := {}
   sectionIdMap : Std.HashMap JsonId SectionId := {}
-  nodePath : Std.HashMap NodeId JsonPath := {}
-  portPath : Std.HashMap PortId JsonPath := {}
-  edgePath : Std.HashMap EdgeId JsonPath := {}
-  sectionPath : Std.HashMap SectionId JsonPath := {}
-  labelPath : Std.HashMap LabelId JsonPath := {}
-  nodeIds : Std.HashMap NodeId JsonId := {}
-  portIds : Std.HashMap PortId JsonId := {}
-  edgeIds : Std.HashMap EdgeId JsonId := {}
-  sectionIds : Std.HashMap SectionId JsonId := {}
-  edgeOriginalParent : Std.HashMap EdgeId NodeId := {}
-  globalX : Std.HashMap ElementId Float := {}
-  globalY : Std.HashMap ElementId Float := {}
-  shapeCoordsMap : Std.HashMap ElementId ShapeCoords := {}
-  edgeCoordsMap : Std.HashMap ElementId EdgeCoords := {}
+  nodePath : Array (Option JsonPath) := #[]
+  portPath : Array (Option JsonPath) := #[]
+  edgePath : Array (Option JsonPath) := #[]
+  sectionPath : Array (Option JsonPath) := #[]
+  labelPath : Array (Option JsonPath) := #[]
+  nodeIds : Array (Option JsonId) := #[]
+  portIds : Array (Option JsonId) := #[]
+  edgeIds : Array (Option JsonId) := #[]
+  sectionIds : Array (Option JsonId) := #[]
+  edgeOriginalParent : Array (Option NodeId) := #[]
+  tables : TransferTables := {}
   insideSelfLoopNodeXDelta : Std.HashMap NodeId Float := {}
   shiftedEastPortXDelta : Std.HashMap PortId Float := {}
   compactedVerticalNodeYDelta : Std.HashMap NodeId Float := {}

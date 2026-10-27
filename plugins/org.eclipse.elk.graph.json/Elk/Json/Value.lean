@@ -129,43 +129,56 @@ def getInt? : Value → Option Int
   | .num n => n.toInt?
   | _ => none
 
+/-- Index of the first member named `key` from `i` on (`kvs.size` if absent). A plain loop:
+`Array.find?`/`findIdx?` go through `forIn` and allocate their loop state on a hit. -/
+def keyIndex (kvs : Array (String × Value)) (key : String) (i : Nat := 0) : Nat :=
+  if h : i < kvs.size then
+    if kvs[i].1 == key then i else keyIndex kvs key (i + 1)
+  else kvs.size
+termination_by kvs.size - i
+
+/-- Member lookup on an object's entry array (first matching key). -/
+def lookup (kvs : Array (String × Value)) (key : String) : Option Value :=
+  let i := keyIndex kvs key
+  if h : i < kvs.size then some kvs[i].2 else none
+
 /-- Object member lookup (first matching key). -/
 def get? (v : Value) (key : String) : Option Value :=
   match v with
-  | .obj kvs => (kvs.find? (fun kv => kv.1 == key)).map (·.2)
+  | .obj kvs => lookup kvs key
   | _ => none
 
-def hasKey (v : Value) (key : String) : Bool := (v.get? key).isSome
+def hasKey (v : Value) (key : String) : Bool :=
+  match v with
+  | .obj kvs => keyIndex kvs key < kvs.size
+  | _ => false
 
-/-- Member lookup on an object's entry array. -/
-def lookup (kvs : Array (String × Value)) (key : String) : Option Value :=
-  (kvs.find? (fun kv => kv.1 == key)).map (·.2)
+/-- `obj[key] = x` on an entry array: replaces the first member named `key` in place or appends. -/
+@[inline] def setEntry (kvs : Array (String × Value)) (key : String) (x : Value) : Array (String × Value) :=
+  let i := keyIndex kvs key
+  if i < kvs.size then kvs.set! i (key, x) else kvs.push (key, x)
 
 /-- `obj[key] = x`: replaces an existing member in place or appends. Non-objects are unchanged. -/
 def set (v : Value) (key : String) (x : Value) : Value :=
   match v with
-  | .obj kvs =>
-    match kvs.findIdx? (fun kv => kv.1 == key) with
-    | some i => .obj (kvs.set! i (key, x))
-    | none => .obj (kvs.push (key, x))
+  | .obj kvs => .obj (setEntry kvs key x)
   | other => other
 
 /-- Removes a member (no-op if absent). -/
 def remove (v : Value) (key : String) : Value :=
   match v with
   | .obj kvs =>
-    match kvs.findIdx? (fun kv => kv.1 == key) with
-    | some i => .obj (kvs.eraseIdx! i)
-    | none => v
+    let i := keyIndex kvs key
+    if i < kvs.size then .obj (kvs.eraseIdx! i) else v
   | other => other
 
 /-- Applies `f` to a member, inserting `f default` when the member is absent. -/
 def modifyKey (v : Value) (key : String) (default : Value) (f : Value → Value) : Value :=
   match v with
   | .obj kvs =>
-    match kvs.findIdx? (fun kv => kv.1 == key) with
-    | some i => .obj (kvs.modify i fun kv => (kv.1, f kv.2))
-    | none => .obj (kvs.push (key, f default))
+    let i := keyIndex kvs key
+    if i < kvs.size then .obj (kvs.modify i fun kv => (kv.1, f kv.2))
+    else .obj (kvs.push (key, f default))
   | other => other
 
 /-- Value at a path, if present. -/
@@ -183,14 +196,45 @@ partial def modifyAt (v : Value) (path : List Seg) (f : Value → Value) : Value
   | .key k :: rest =>
     match v with
     | .obj kvs =>
-      match kvs.findIdx? (fun kv => kv.1 == k) with
-      | some i => .obj (kvs.modify i fun kv => (kv.1, kv.2.modifyAt rest f))
-      | none => v
+      let i := keyIndex kvs k
+      if i < kvs.size then .obj (kvs.modify i fun kv => (kv.1, kv.2.modifyAt rest f)) else v
     | other => other
   | .idx i :: rest =>
     match v with
     | .arr xs => if i < xs.size then .arr (xs.modify i (·.modifyAt rest f)) else v
     | other => other
+
+/-- `getAt` on the segments `path[i:]` (no list conversion). -/
+partial def getAtFrom (v : Value) (path : Array Seg) (i : Nat) : Option Value :=
+  if h : i < path.size then
+    match path[i] with
+    | .key k =>
+      match v with
+      | .obj kvs =>
+        let j := keyIndex kvs k
+        if hj : j < kvs.size then kvs[j].2.getAtFrom path (i + 1) else none
+      | _ => none
+    | .idx j =>
+      match v with
+      | .arr xs => if hj : j < xs.size then xs[j].getAtFrom path (i + 1) else none
+      | _ => none
+  else some v
+
+/-- `modifyAt` on the segments `path[i:]` (no list conversion). -/
+partial def modifyAtFrom (v : Value) (path : Array Seg) (i : Nat) (f : Value → Value) : Value :=
+  if h : i < path.size then
+    match path[i] with
+    | .key k =>
+      match v with
+      | .obj kvs =>
+        let j := keyIndex kvs k
+        if j < kvs.size then .obj (kvs.modify j fun kv => (kv.1, kv.2.modifyAtFrom path (i + 1) f)) else v
+      | other => other
+    | .idx j =>
+      match v with
+      | .arr xs => if j < xs.size then .arr (xs.modify j (·.modifyAtFrom path (i + 1) f)) else v
+      | other => other
+  else f v
 
 /-- Structural equality (objects compare in order). -/
 partial def beq : Value → Value → Bool
