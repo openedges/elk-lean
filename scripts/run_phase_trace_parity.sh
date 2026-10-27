@@ -24,4 +24,4 @@ ORACLE_TRACE="$OUT/oracle_trace/$(basename "$INPUT")"
 echo "oracle steps: $(ls "$ORACLE_TRACE" 2>/dev/null | wc -l | tr -d ' '), lean steps: $(ls "$OUT/lean_trace" 2>/dev/null | wc -l | tr -d ' ')"
 UNPORTED=$(ls "$OUT/lean_trace" 2>/dev/null | grep '_Unported_' | sed 's/^step_[0-9]*_Unported_//; s/\.json$//' | sort -u | tr '\n' ' ')
 [ -n "$UNPORTED" ] && echo "note: unported stand-ins in the elk-lean run: $UNPORTED"
-python3 "$HERE/scripts/compare_phase_traces.py" ${TRACE_COMPARE_LOOSE:---strict-order} "$ORACLE_TRACE" "$OUT/lean_trace" "$@" || true
+python3 "$HERE/scripts/compare_phase_traces.py" $( [ -n "${TRACE_COMPARE_LOOSE:-}" ] || echo --strict-order ) "$ORACLE_TRACE" "$OUT/lean_trace" "$@" || true
