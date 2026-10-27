@@ -1,6 +1,7 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Core.Util.Java
+import Elk.Alg.Layered.Intermediate.LongEdgeSplitter
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.LabelDummyInserter`
 
@@ -23,9 +24,7 @@ thickness, Rust uses a fresh vector with the same value) and grows per center la
 `y = max(y, label.y)` (`f64::max`). Finally `y += edgeLabelSpacing - labelLabelSpacing + thickness`
 (horizontal) or `x -= labelLabelSpacing; y += edgeLabelSpacing + thickness` (vertical).
 
-`splitEdge` is a private copy of elk-rs `LongEdgeSplitter::split_edge` (`set_dummy_node_properties`,
-`move_head_labels`); it is to be replaced by `LongEdgeSplitter.splitEdge` once that processor is in
-the tree.
+Edges are split with `LongEdgeSplitter.splitEdge` (elk-rs `LongEdgeSplitter::split_edge`).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -61,88 +60,6 @@ def retrieveThickness (edge : LEdgeId) : LayeredM Float := do
     return 0.0
   return thickness
 
-/-- Copy of elk-rs `long_edge_splitter::move_head_labels(old_edge, new_edge)`: moves the `HEAD`
-labels (only labels that store the placement) to the new edge and records the old edge as their
-`END_LABEL_EDGE` unless set. -/
-private def moveHeadLabels (oldEdge newEdge : LEdgeId) : LayeredM Unit := do
-  for label in (← getEdge oldEdge).labels do
-    let lb ← getLabel label
-    let placement := (if lb.props.has LayeredOptions.EDGE_LABELS_PLACEMENT then
-      lb.props.get LayeredOptions.EDGE_LABELS_PLACEMENT else none).getD EdgeLabelPlacement.center
-    if placement != .head then continue
-    modifyEdge oldEdge fun e => { e with labels := e.labels.filter (· != label) }
-    modifyEdge newEdge fun e => { e with labels := e.labels.push label }
-    modifyLabel label fun l =>
-      if l.internal.endLabelEdge.isSome then l
-      else { l with internal := { l.internal with endLabelEdge := some oldEdge } }
-
-/-- Copy of elk-rs `long_edge_splitter::set_dummy_node_properties(dummy, in_edge, out_edge)`. -/
-private def setDummyNodeProperties (dummyNode : LNodeId) (inEdge outEdge : LEdgeId) : LayeredM Unit := do
-  let inEdgeSource := (← getEdge inEdge).source
-  let outEdgeTarget := (← getEdge outEdge).target
-  let inEdgeSourceNode ← match inEdgeSource with
-    | some p => pure (← getPort p).owner
-    | none => pure none
-  let outEdgeTargetNode ← match outEdgeTarget with
-    | some p => pure (← getPort p).owner
-    | none => pure none
-  let inSourceType ← match inEdgeSourceNode with
-    | some n => pure (some (← getNode n).type)
-    | none => pure none
-  let outTargetType ← match outEdgeTargetNode with
-    | some n => pure (some (← getNode n).type)
-    | none => pure none
-  if inSourceType == some NodeType.longEdge then
-    if let some source := inEdgeSourceNode then
-      let src := (← getNode source).internal
-      modifyNode dummyNode fun d => { d with internal := { d.internal with
-        longEdgeSource := src.longEdgeSource, longEdgeTarget := src.longEdgeTarget,
-        longEdgeHasLabelDummies := src.longEdgeHasLabelDummies } }
-  else if inSourceType == some NodeType.label then
-    if let some source := inEdgeSourceNode then
-      let src := (← getNode source).internal
-      modifyNode dummyNode fun d => { d with internal := { d.internal with
-        longEdgeSource := src.longEdgeSource, longEdgeTarget := src.longEdgeTarget,
-        longEdgeHasLabelDummies := true } }
-  else if outTargetType == some NodeType.label then
-    if let some target := outEdgeTargetNode then
-      let tgt := (← getNode target).internal
-      modifyNode dummyNode fun d => { d with internal := { d.internal with
-        longEdgeSource := tgt.longEdgeSource, longEdgeTarget := tgt.longEdgeTarget,
-        longEdgeHasLabelDummies := true } }
-  else
-    modifyNode dummyNode fun d => { d with internal := { d.internal with
-      longEdgeSource := inEdgeSource, longEdgeTarget := outEdgeTarget } }
-
-/-- Copy of elk-rs `LongEdgeSplitter::split_edge(edge, dummy_node)`: the dummy gets the height
-`thickness`, a `WEST` input and an `EAST` output port at `floor(thickness / 2)`; `edge` now ends at the
-input port and a new edge (all properties of `edge` except `JUNCTION_POINTS`, Rust `copy_properties`
-into an empty map = the public map and the typed internals) leads from the output port to the old
-target. Returns the new edge. -/
-private def splitEdge (edge : LEdgeId) (dummyNode : LNodeId) : LayeredM LEdgeId := do
-  let oldEdgeTarget := (← getEdge edge).target
-  let thickness ← retrieveThickness edge
-  modifyNode dummyNode fun n => { n with size := { n.size with y := thickness } }
-  let portPos := Float.floor (thickness / 2.0)
-  let dummyInput ← createPort
-  modifyPort dummyInput fun p =>
-    let p := p.setSide .west
-    { p with position := { p.position with y := portPos } }
-  setPortNode dummyInput (some dummyNode)
-  let dummyOutput ← createPort
-  modifyPort dummyOutput fun p =>
-    let p := p.setSide .east
-    { p with position := { p.position with y := portPos } }
-  setPortNode dummyOutput (some dummyNode)
-  setEdgeTarget edge (some dummyInput)
-  let old ← getEdge edge
-  let dummyEdge ← createEdge { props := old.props.remove LayeredOptions.JUNCTION_POINTS, internal := old.internal }
-  setEdgeSource dummyEdge (some dummyOutput)
-  setEdgeTarget dummyEdge oldEdgeTarget
-  setDummyNodeProperties dummyNode edge dummyEdge
-  moveHeadLabels edge dummyEdge
-  return dummyEdge
-
 /-- Rust `create_label_dummy(graph, edge, thickness)` (Java `createLabelDummy`): a `LABEL` node with
 `ORIGIN = edge`, `PORT_CONSTRAINTS = FIXED_POS` and the edge's end ports as long edge source/target,
 then the edge is split at it and its ports are placed at `floor(thickness / 2)`. -/
@@ -156,7 +73,7 @@ def createLabelDummy (graph : LGraphId) (edge : LEdgeId) (thickness : Float) : L
         origin := some (.lEdge edge)
         longEdgeSource := ed.source
         longEdgeTarget := ed.target } }
-  let _ ← splitEdge edge dummy
+  let _ ← LongEdgeSplitter.splitEdge edge dummy
   let portPos := Float.floor (thickness / 2.0)
   for port in (← getNode dummy).ports do
     modifyPort port fun p => { p with position := { p.position with y := portPos } }

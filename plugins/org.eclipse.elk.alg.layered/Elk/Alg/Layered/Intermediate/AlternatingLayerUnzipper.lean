@@ -1,5 +1,6 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options.LayeredOptions
+import Elk.Alg.Layered.Intermediate.LongEdgeSplitter
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.unzipping.AlternatingLayerUnzipper`
 
@@ -10,9 +11,7 @@ the layer's nodes) sub-layers by moving the nodes alternately into the sub-layer
 the edges that now span several layers with long-edge dummies. Placeholder nodes keep the order
 of the remaining nodes during the process and are removed at the end.
 
-`LongEdgeSplitter.splitEdge` is not ported yet; `splitEdge` below is a private 1:1 port of the
-Rust `LongEdgeSplitter::split_edge` (with `set_dummy_node_properties`, `move_head_labels`).
-TODO(I5): replace it with `LongEdgeSplitter.splitEdge` once `LongEdgeSplitter.lean` exists.
+Edges are split with `LongEdgeSplitter.splitEdge` (Rust `LongEdgeSplitter::split_edge`).
 
 Differences to Java, following Rust:
 * layers with a split value `N <= 0` are skipped (Java would not terminate / throw);
@@ -30,97 +29,6 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Uti
 namespace AlternatingLayerUnzipper
 
 /-! ## `LongEdgeSplitter::split_edge` (private copy) -/
-
-/-- `LongEdgeSplitter::set_dummy_node_properties(dummy, in_edge, out_edge)`: the long edge source
-and target of the dummy, inherited from a preceding long edge/label dummy or a following label
-dummy, else the ends of the split edge. -/
-private def setDummyNodeProperties (dummy : LNodeId) (inEdge outEdge : LEdgeId) : LayeredM Unit := do
-  let inEdgeSource := (← getEdge inEdge).source
-  let outEdgeTarget := (← getEdge outEdge).target
-  let inSourceNode ← match inEdgeSource with
-    | some p => pure (← getPort p).owner
-    | none => pure none
-  let outTargetNode ← match outEdgeTarget with
-    | some p => pure (← getPort p).owner
-    | none => pure none
-  let inSourceType ← match inSourceNode with
-    | some n => pure (some (← getNode n).type)
-    | none => pure none
-  let outTargetType ← match outTargetNode with
-    | some n => pure (some (← getNode n).type)
-    | none => pure none
-  if inSourceType == some .longEdge then
-    if let some src := inSourceNode then
-      let s := (← getNode src).internal
-      modifyNode dummy fun x => { x with internal := { x.internal with
-        longEdgeSource := s.longEdgeSource, longEdgeTarget := s.longEdgeTarget,
-        longEdgeHasLabelDummies := s.longEdgeHasLabelDummies } }
-  else if inSourceType == some .label then
-    if let some src := inSourceNode then
-      let s := (← getNode src).internal
-      modifyNode dummy fun x => { x with internal := { x.internal with
-        longEdgeSource := s.longEdgeSource, longEdgeTarget := s.longEdgeTarget,
-        longEdgeHasLabelDummies := true } }
-  else if outTargetType == some .label then
-    if let some tgt := outTargetNode then
-      let t := (← getNode tgt).internal
-      modifyNode dummy fun x => { x with internal := { x.internal with
-        longEdgeSource := t.longEdgeSource, longEdgeTarget := t.longEdgeTarget,
-        longEdgeHasLabelDummies := true } }
-  else
-    modifyNode dummy fun x => { x with internal := { x.internal with
-      longEdgeSource := inEdgeSource, longEdgeTarget := outEdgeTarget } }
-
-/-- `LongEdgeSplitter::move_head_labels(old_edge, new_edge)`: labels placed at the `HEAD` move to
-the new edge and remember the original edge in `END_LABEL_EDGE` (unless already set). -/
-private def moveHeadLabels (oldEdge newEdge : LEdgeId) : LayeredM Unit := do
-  for l in (← getEdge oldEdge).labels do
-    let lb ← getLabel l
-    let placement : EdgeLabelPlacement :=
-      if lb.props.has LayeredOptions.EDGE_LABELS_PLACEMENT then
-        lb.props.getD LayeredOptions.EDGE_LABELS_PLACEMENT .center
-      else .center
-    if placement != .head then continue
-    modifyEdge oldEdge fun e => { e with labels := e.labels.filter (· != l) }
-    modifyEdge newEdge fun e => { e with labels := e.labels.push l }
-    if lb.internal.endLabelEdge.isNone then
-      modifyLabel l fun x => { x with internal := { x.internal with endLabelEdge := some oldEdge } }
-
-/-- `LongEdgeSplitter::split_edge(edge, dummy_node)`: the edge now ends at a new west input port
-of the dummy; a new edge (a copy of the edge's properties without `JUNCTION_POINTS`) leads from a
-new east output port of the dummy to the old target. The dummy's height is the edge thickness.
-Returns the new edge.
-
-The Rust property map also holds the `InternalProperties`, so `copy_properties` copies them as
-well: the new edge gets `internal := edge.internal`. -/
-private def splitEdge (edge : LEdgeId) (dummy : LNodeId) : LayeredM LEdgeId := do
-  let ed ← getEdge edge
-  let oldEdgeTarget := ed.target
-  let stored : Option Float :=
-    if ed.props.has CoreOptions.EDGE_THICKNESS then ed.props.get CoreOptions.EDGE_THICKNESS else none
-  let mut thickness := stored.getD 1.0
-  if thickness < 0.0 then
-    thickness := 0.0
-    setEdgeProp edge CoreOptions.EDGE_THICKNESS thickness
-  let th := thickness
-  modifyNode dummy fun x => { x with size := { x.size with y := th } }
-  let portPos := (th / 2.0).floor
-  let dummyInput ← createPort
-  modifyPort dummyInput fun p => let p := p.setSide .west; { p with position := { p.position with y := portPos } }
-  setPortNode dummyInput (some dummy)
-  let dummyOutput ← createPort
-  modifyPort dummyOutput fun p => let p := p.setSide .east; { p with position := { p.position with y := portPos } }
-  setPortNode dummyOutput (some dummy)
-  setEdgeTarget edge (some dummyInput)
-  let old ← getEdge edge
-  let dummyEdge ← createEdge {
-    props := (PropertyMap.empty.copyFrom old.props).remove LayeredOptions.JUNCTION_POINTS
-    internal := old.internal }
-  setEdgeSource dummyEdge (some dummyOutput)
-  setEdgeTarget dummyEdge oldEdgeTarget
-  setDummyNodeProperties dummy edge dummyEdge
-  moveHeadLabels edge dummyEdge
-  return dummyEdge
 
 /-! ## Unzipper -/
 
@@ -190,7 +98,7 @@ def shiftNode (graph : LGraphId) (subLayers : Array LayerId) (targetLayer nodeIn
       let layer := subLayers[layerIndex]!
       let dummyNode ← createDummyNode graph nextEdgeToSplit
       placeNodeAtIndex dummyNode layer (nodeIndex + edgeCount)
-      nextEdgeToSplit ← splitEdge nextEdgeToSplit dummyNode
+      nextEdgeToSplit ← LongEdgeSplitter.splitEdge nextEdgeToSplit dummyNode
     if targetLayer > 0 then
       edgeCount := edgeCount + 1
   if noIncomingEdges then
@@ -208,7 +116,7 @@ def shiftNode (graph : LGraphId) (subLayers : Array LayerId) (targetLayer nodeIn
       let layer := subLayers[layerIndex]!
       let dummyNode ← createDummyNode graph nextEdgeToSplit
       setNodeLayer dummyNode (some layer)
-      nextEdgeToSplit ← splitEdge nextEdgeToSplit dummyNode
+      nextEdgeToSplit ← LongEdgeSplitter.splitEdge nextEdgeToSplit dummyNode
     if extraEdge then
       for layerIndex in [0:min (targetLayer + 1) subLayers.size] do
         let layer := subLayers[layerIndex]!

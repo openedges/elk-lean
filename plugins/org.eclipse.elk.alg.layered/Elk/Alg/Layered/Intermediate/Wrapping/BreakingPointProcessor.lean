@@ -1,4 +1,5 @@
 import Elk.Alg.Layered.Intermediate.Wrapping.BreakingPointInserter
+import Elk.Alg.Layered.Intermediate.LongEdgeJoiner
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.wrapping.BreakingPointProcessor`
 
@@ -24,9 +25,7 @@ Rust deviations from Java (followed):
 * `setLayer(index, layer)` clamps the index to `[0, size]` (Rust `set_layer_at_index_clamped`);
 * `isAdjacentOrSeparatedByBreakingPoints` returns `false` for an index outside the layer.
 
-TODO(long-edge-joiner): `joinAt` is a private copy of `LongEdgeJoiner.joinAt` (elk-rs
-`LongEdgeJoiner::join_at`), which is ported in a parallel task; replace it by
-`Elk.Alg.Layered.Intermediate.LongEdgeJoiner.joinAt` once that module is merged.
+Dummies are joined with `LongEdgeJoiner.joinAt` (elk-rs `LongEdgeJoiner::join_at`).
 -/
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
@@ -34,42 +33,6 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Math Elk.Core.Option
   Elk.Alg.Layered.Graph Elk.Alg.Layered.Options Elk.Alg.Layered.Intermediate LayeredM
 
 namespace BreakingPointProcessor
-
-/-- Copy of `LongEdgeJoiner::join_at(long_edge_dummy, add_unnecessary_bendpoints)` (see the module
-doc): the edges of the first `WEST` port's incoming list survive and take over the targets, bend
-points, labels and junction points of the first `EAST` port's outgoing edges (paired by index). -/
-private def joinAt (longEdgeDummy : LNodeId) (addUnnecessaryBendpoints : Bool) : LayeredM Unit := do
-  let westPort := (← withArena (·.nodePortsBySide longEdgeDummy .west))[0]?
-  let eastPort := (← withArena (·.nodePortsBySide longEdgeDummy .east))[0]?
-  let (some westPort, some eastPort) := (westPort, eastPort) | return
-  let inputEdges := (← getPort westPort).incomingEdges
-  let outputEdges := (← getPort eastPort).outgoingEdges
-  let edgeCount := min inputEdges.size outputEdges.size
-  let unnecessaryBendpoint ← match (← getNode longEdgeDummy).ports[0]? with
-    | some p => withArena (·.portAbsoluteAnchor p)
-    | none => pure none
-  for i in [0:edgeCount] do
-    let survivingEdge := inputEdges[i]!
-    let droppedEdge := outputEdges[i]!
-    let some droppedTarget := (← getEdge droppedEdge).target | continue
-    let droppedEdgeListIndex := ((← getPort droppedTarget).incomingEdges.findIdx? (· == droppedEdge)).getD 0
-    setEdgeTargetAndInsertAtIndex survivingEdge (some droppedTarget) droppedEdgeListIndex
-    setEdgeSource droppedEdge none
-    setEdgeTarget droppedEdge none
-    if addUnnecessaryBendpoints then
-      if let some bp := unnecessaryBendpoint then
-        modifyEdge survivingEdge fun e => { e with bendPoints := e.bendPoints.push bp }
-    let dropped ← getEdge droppedEdge
-    modifyEdge survivingEdge fun e => { e with bendPoints := e.bendPoints ++ dropped.bendPoints }
-    modifyEdge droppedEdge fun e => { e with labels := #[] }
-    modifyEdge survivingEdge fun e => { e with labels := e.labels ++ dropped.labels }
-    let droppedJunctionPoints := if dropped.props.has LayeredOptions.JUNCTION_POINTS then
-      dropped.props.get LayeredOptions.JUNCTION_POINTS else none
-    if let some djp := droppedJunctionPoints then
-      modifyEdge survivingEdge fun e =>
-        let survivingJunctions := (if e.props.has LayeredOptions.JUNCTION_POINTS then
-          e.props.get LayeredOptions.JUNCTION_POINTS else none).getD #[]
-        { e with props := e.props.set LayeredOptions.JUNCTION_POINTS (survivingJunctions ++ djp) }
 
 /-- `node.id` (the index within its layer during the improvement steps). -/
 @[inline] private def nodeId (node : LNodeId) : LayeredM Int := do return (← getNode node).id
@@ -174,8 +137,8 @@ def dropDummies (bpNode inLayerDummy : LNodeId) (forwards force : Bool) : Layere
     updateIndexesAfter inLayerDummy
     updateIndexesAfter bpNode
     let newLayer := (← getNode p1).layer
-    joinAt p1 false
-    joinAt p2 false
+    LongEdgeJoiner.joinAt p1 false
+    LongEdgeJoiner.joinAt p2 false
     if let some nl := newLayer then
       moveIntoLayer bpNode inLayerDummy p1 p2 nl forwards
     setNodeLayer p1 none

@@ -1,6 +1,7 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Core.Util.Java
+import Elk.Alg.Layered.Intermediate.LongEdgeJoiner
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.LabelDummyRemover`
 
@@ -25,8 +26,7 @@ is first adjusted to the post-compaction bounds (`LEFT`/`RIGHT` compaction with 
 `adjust_horizontal_dummy_position_for_post_compaction`); a dummy whose `ORIGIN` is not an `LEdge` or
 that represents no labels is only joined and removed (Java would fail).
 
-`joinAt` is a private copy of elk-rs `LongEdgeJoiner::join_at`; it is to be replaced by
-`LongEdgeJoiner.joinAt` once that processor is in the tree.
+Dummies are joined with `LongEdgeJoiner.joinAt` (elk-rs `LongEdgeJoiner::join_at`).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -34,43 +34,6 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Uti
   Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
 
 namespace LabelDummyRemover
-
-/-- Copy of elk-rs `LongEdgeJoiner::join_at(long_edge_dummy, add_unnecessary_bendpoints)`: joins the
-edges of the first `WEST` port's incoming edges with the first `EAST` port's outgoing edges pairwise;
-the surviving (incoming) edge takes over the dropped edge's target (at the dropped edge's index),
-bend points, labels and junction points. -/
-private def joinAt (longEdgeDummy : LNodeId) (addUnnecessaryBendpoints : Bool) : LayeredM Unit := do
-  let westPort := (← withArena (·.nodePortsBySide longEdgeDummy .west))[0]?
-  let eastPort := (← withArena (·.nodePortsBySide longEdgeDummy .east))[0]?
-  let (some westPort, some eastPort) := (westPort, eastPort) | return
-  let inputEdges := (← getPort westPort).incomingEdges
-  let outputEdges := (← getPort eastPort).outgoingEdges
-  let edgeCount := min inputEdges.size outputEdges.size
-  let unnecessaryBendpoint ← match (← getNode longEdgeDummy).ports[0]? with
-    | some p => withArena (·.portAbsoluteAnchor p)
-    | none => pure none
-  for i in [0:edgeCount] do
-    let survivingEdge := inputEdges[i]!
-    let droppedEdge := outputEdges[i]!
-    let some droppedTarget := (← getEdge droppedEdge).target | continue
-    let droppedEdgeListIndex := ((← getPort droppedTarget).incomingEdges.findIdx? (· == droppedEdge)).getD 0
-    setEdgeTargetAndInsertAtIndex survivingEdge (some droppedTarget) droppedEdgeListIndex
-    setEdgeSource droppedEdge none
-    setEdgeTarget droppedEdge none
-    if addUnnecessaryBendpoints then
-      if let some bp := unnecessaryBendpoint then
-        modifyEdge survivingEdge fun e => { e with bendPoints := e.bendPoints.push bp }
-    let dropped ← getEdge droppedEdge
-    modifyEdge survivingEdge fun e => { e with bendPoints := e.bendPoints ++ dropped.bendPoints }
-    modifyEdge droppedEdge fun e => { e with labels := #[] }
-    modifyEdge survivingEdge fun e => { e with labels := e.labels ++ dropped.labels }
-    let droppedJunctionPoints := if dropped.props.has LayeredOptions.JUNCTION_POINTS then
-      dropped.props.get LayeredOptions.JUNCTION_POINTS else none
-    if let some djp := droppedJunctionPoints then
-      modifyEdge survivingEdge fun e =>
-        let survivingJunctions := (if e.props.has LayeredOptions.JUNCTION_POINTS then
-          e.props.get LayeredOptions.JUNCTION_POINTS else none).getD #[]
-        { e with props := e.props.set LayeredOptions.JUNCTION_POINTS (survivingJunctions ++ djp) }
 
 /-- Rust `edge_thickness(edge)`: the stored `EDGE_THICKNESS`, else `1.0`. -/
 def edgeThickness (edge : LEdgeId) : LayeredM Float := do
@@ -210,7 +173,7 @@ def process (layeredGraph : LGraphId) (monitor : ProgressMonitor) : LayeredM Uni
       if (← getNode node).type != .label then continue
       placeLabelsAndRestoreEdge node edgeLabelSpacing labelLabelSpacing layoutDirection edgeRouting
         compactionStrategy spacings
-      joinAt node (edgeRouting == .polyline)
+      LongEdgeJoiner.joinAt node (edgeRouting == .polyline)
       setNodeLayer node none
   monitor.done
 
