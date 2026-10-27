@@ -16,7 +16,12 @@ namespace Elk.Alg.Layered.Graph
 
 open Elk.Graph Elk.Core.Math
 
-/-- All elements of a layered run. -/
+/-- All elements of a layered run.
+
+Performance note: the update helpers take the element array out of the arena before changing it
+(`let arr := a.nodes; let a := { a with nodes := #[] }; { a with nodes := arr.modify … }`), so the
+array stays uniquely referenced and is updated in place; `{ a with nodes := a.nodes.modify … }`
+keeps a second reference alive during the update and copies the whole array. -/
 structure LGraphArena where
   graphs : Array LGraph := #[]
   nodes : Array LNode := #[]
@@ -36,41 +41,71 @@ namespace LGraphArena
 @[inline] def layer (a : LGraphArena) (l : LayerId) : Layer := a.layers[l.idx]!
 
 @[inline] def modifyGraph (a : LGraphArena) (g : LGraphId) (f : LGraph → LGraph) : LGraphArena :=
-  { a with graphs := a.graphs.modify g.idx f }
+  let arr := a.graphs
+  let a := { a with graphs := #[] }
+  { a with graphs := arr.modify g.idx f }
 @[inline] def modifyNode (a : LGraphArena) (n : LNodeId) (f : LNode → LNode) : LGraphArena :=
-  { a with nodes := a.nodes.modify n.idx f }
+  let arr := a.nodes
+  let a := { a with nodes := #[] }
+  { a with nodes := arr.modify n.idx f }
 @[inline] def modifyPort (a : LGraphArena) (p : LPortId) (f : LPort → LPort) : LGraphArena :=
-  { a with ports := a.ports.modify p.idx f }
+  let arr := a.ports
+  let a := { a with ports := #[] }
+  { a with ports := arr.modify p.idx f }
 @[inline] def modifyEdge (a : LGraphArena) (e : LEdgeId) (f : LEdge → LEdge) : LGraphArena :=
-  { a with edges := a.edges.modify e.idx f }
+  let arr := a.edges
+  let a := { a with edges := #[] }
+  { a with edges := arr.modify e.idx f }
 @[inline] def modifyLabel (a : LGraphArena) (l : LLabelId) (f : LLabel → LLabel) : LGraphArena :=
-  { a with labels := a.labels.modify l.idx f }
+  let arr := a.labels
+  let a := { a with labels := #[] }
+  { a with labels := arr.modify l.idx f }
 @[inline] def modifyLayer (a : LGraphArena) (l : LayerId) (f : Layer → Layer) : LGraphArena :=
-  { a with layers := a.layers.modify l.idx f }
+  let arr := a.layers
+  let a := { a with layers := #[] }
+  { a with layers := arr.modify l.idx f }
 
 /-- `new LGraph()`. -/
 def createGraph (a : LGraphArena) (g : LGraph := {}) : LGraphArena × LGraphId :=
-  ({ a with graphs := a.graphs.push g }, ⟨a.graphs.size⟩)
+  let id := a.graphs.size
+  let arr := a.graphs
+  let a := { a with graphs := #[] }
+  ({ a with graphs := arr.push g }, ⟨id⟩)
 
 /-- `new LNode(graph)`: the node knows its graph but is not added to `layerlessNodes`. -/
 def createNode (a : LGraphArena) (graph : LGraphId) (n : LNode := {}) : LGraphArena × LNodeId :=
-  ({ a with nodes := a.nodes.push { n with graph := some graph } }, ⟨a.nodes.size⟩)
+  let id := a.nodes.size
+  let arr := a.nodes
+  let a := { a with nodes := #[] }
+  ({ a with nodes := arr.push { n with graph := some graph } }, ⟨id⟩)
 
 /-- `new LPort()`. -/
 def createPort (a : LGraphArena) (p : LPort := {}) : LGraphArena × LPortId :=
-  ({ a with ports := a.ports.push p }, ⟨a.ports.size⟩)
+  let id := a.ports.size
+  let arr := a.ports
+  let a := { a with ports := #[] }
+  ({ a with ports := arr.push p }, ⟨id⟩)
 
 /-- `new LEdge()`. -/
 def createEdge (a : LGraphArena) (e : LEdge := {}) : LGraphArena × LEdgeId :=
-  ({ a with edges := a.edges.push e }, ⟨a.edges.size⟩)
+  let id := a.edges.size
+  let arr := a.edges
+  let a := { a with edges := #[] }
+  ({ a with edges := arr.push e }, ⟨id⟩)
 
 /-- `new LLabel(text)`. -/
 def createLabel (a : LGraphArena) (text : String := "") (l : LLabel := {}) : LGraphArena × LLabelId :=
-  ({ a with labels := a.labels.push { l with text := text } }, ⟨a.labels.size⟩)
+  let id := a.labels.size
+  let arr := a.labels
+  let a := { a with labels := #[] }
+  ({ a with labels := arr.push { l with text := text } }, ⟨id⟩)
 
 /-- `new Layer(graph)`: not added to the graph's `layers` (callers do). -/
 def createLayer (a : LGraphArena) (graph : LGraphId) : LGraphArena × LayerId :=
-  ({ a with layers := a.layers.push { owner := graph } }, ⟨a.layers.size⟩)
+  let id := a.layers.size
+  let arr := a.layers
+  let a := { a with layers := #[] }
+  ({ a with layers := arr.push { owner := graph } }, ⟨id⟩)
 
 /-- `LNode.getGraph()`: the stored graph, else the layer's graph. -/
 def nodeGraph (a : LGraphArena) (n : LNodeId) : Option LGraphId :=

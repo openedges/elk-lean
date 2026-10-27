@@ -83,7 +83,9 @@ structure ElkEdgeSection where
   incomingSections : Array SectionId := #[]
   deriving Inhabited
 
-/-- The arena holding a whole ELK graph (a root node plus everything below it). -/
+/-- The arena holding a whole ELK graph (a root node plus everything below it). Update helpers take
+an element array out before changing it so that it stays uniquely referenced
+(`{ g with nodes := g.nodes.modify … }` would copy the whole array). -/
 structure ElkGraph where
   nodes : Array ElkNode := #[]
   ports : Array ElkPort := #[]
@@ -139,15 +141,25 @@ namespace ElkGraph
 @[inline] def edgeSection (g : ElkGraph) (s : SectionId) : ElkEdgeSection := g.sections[s.idx]!
 
 @[inline] def modifyNode (g : ElkGraph) (n : NodeId) (f : ElkNode → ElkNode) : ElkGraph :=
-  { g with nodes := g.nodes.modify n.idx f }
+  let arr := g.nodes
+  let g := { g with nodes := #[] }
+  { g with nodes := arr.modify n.idx f }
 @[inline] def modifyPort (g : ElkGraph) (p : PortId) (f : ElkPort → ElkPort) : ElkGraph :=
-  { g with ports := g.ports.modify p.idx f }
+  let arr := g.ports
+  let g := { g with ports := #[] }
+  { g with ports := arr.modify p.idx f }
 @[inline] def modifyEdge (g : ElkGraph) (e : EdgeId) (f : ElkEdge → ElkEdge) : ElkGraph :=
-  { g with edges := g.edges.modify e.idx f }
+  let arr := g.edges
+  let g := { g with edges := #[] }
+  { g with edges := arr.modify e.idx f }
 @[inline] def modifyLabel (g : ElkGraph) (l : LabelId) (f : ElkLabel → ElkLabel) : ElkGraph :=
-  { g with labels := g.labels.modify l.idx f }
+  let arr := g.labels
+  let g := { g with labels := #[] }
+  { g with labels := arr.modify l.idx f }
 @[inline] def modifySection (g : ElkGraph) (s : SectionId) (f : ElkEdgeSection → ElkEdgeSection) : ElkGraph :=
-  { g with sections := g.sections.modify s.idx f }
+  let arr := g.sections
+  let g := { g with sections := #[] }
+  { g with sections := arr.modify s.idx f }
 
 @[inline] def nodeCount (g : ElkGraph) : Nat := g.nodes.size
 @[inline] def portCount (g : ElkGraph) : Nat := g.ports.size
@@ -188,7 +200,9 @@ def identifierOf (g : ElkGraph) : ElementId → Option String
 /-- `ElkGraphFactory.createElkNode()` + `setParent`. -/
 def createNode (g : ElkGraph) (parent : Option NodeId := none) : ElkGraph × NodeId :=
   let id : NodeId := ⟨g.nodes.size⟩
-  let g := { g with nodes := g.nodes.push { parent := parent } }
+  let arr := g.nodes
+  let g := { g with nodes := #[] }
+  let g := { g with nodes := arr.push { parent := parent } }
   let g := match parent with
     | some p => g.modifyNode p fun n => { n with children := n.children.push id }
     | none => g
@@ -197,7 +211,9 @@ def createNode (g : ElkGraph) (parent : Option NodeId := none) : ElkGraph × Nod
 /-- `ElkGraphFactory.createElkPort()` + `setParent`. -/
 def createPort (g : ElkGraph) (parent : Option NodeId := none) : ElkGraph × PortId :=
   let id : PortId := ⟨g.ports.size⟩
-  let g := { g with ports := g.ports.push { parent := parent } }
+  let arr := g.ports
+  let g := { g with ports := #[] }
+  let g := { g with ports := arr.push { parent := parent } }
   let g := match parent with
     | some p => g.modifyNode p fun n => { n with ports := n.ports.push id }
     | none => g
@@ -206,7 +222,9 @@ def createPort (g : ElkGraph) (parent : Option NodeId := none) : ElkGraph × Por
 /-- `ElkGraphFactory.createElkEdge()` + `setContainingNode`. -/
 def createEdge (g : ElkGraph) (containingNode : Option NodeId := none) : ElkGraph × EdgeId :=
   let id : EdgeId := ⟨g.edges.size⟩
-  let g := { g with edges := g.edges.push { containingNode := containingNode } }
+  let arr := g.edges
+  let g := { g with edges := #[] }
+  let g := { g with edges := arr.push { containingNode := containingNode } }
   let g := match containingNode with
     | some p => g.modifyNode p fun n => { n with containedEdges := n.containedEdges.push id }
     | none => g
@@ -229,7 +247,9 @@ private def removeLabelFromParent (g : ElkGraph) (parent : ElementId) (l : Label
 /-- `ElkGraphFactory.createElkLabel()` + `setParent` + `setText`. -/
 def createLabel (g : ElkGraph) (parent : Option ElementId := none) (text : String := "") : ElkGraph × LabelId :=
   let id : LabelId := ⟨g.labels.size⟩
-  let g := { g with labels := g.labels.push { parent := parent, text := text } }
+  let arr := g.labels
+  let g := { g with labels := #[] }
+  let g := { g with labels := arr.push { parent := parent, text := text } }
   let g := match parent with
     | some p => addLabelToParent g p id
     | none => g
@@ -238,7 +258,9 @@ def createLabel (g : ElkGraph) (parent : Option ElementId := none) (text : Strin
 /-- `ElkGraphFactory.createElkEdgeSection()` + `setParent`. -/
 def createSection (g : ElkGraph) (parent : Option EdgeId := none) : ElkGraph × SectionId :=
   let id : SectionId := ⟨g.sections.size⟩
-  let g := { g with sections := g.sections.push { parent := parent } }
+  let arr := g.sections
+  let g := { g with sections := #[] }
+  let g := { g with sections := arr.push { parent := parent } }
   let g := match parent with
     | some e => g.modifyEdge e fun x => { x with sections := x.sections.push id }
     | none => g

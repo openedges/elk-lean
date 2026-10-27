@@ -88,14 +88,20 @@ def ensurePortCapacity (st : BarycenterPortDistributorState) (pid : Nat) : Baryc
 
 /-- `port_ranks[pid] = v`. -/
 @[inline] def setRank (st : BarycenterPortDistributorState) (pid : Nat) (v : Float) : BarycenterPortDistributorState :=
-  { st with portRanks := st.portRanks.setIfInBounds pid v }
+  -- take the array out first so that it is updated in place (`{ st with f := st.f.set … }` keeps
+  -- a second reference alive during the update and copies the array)
+  let ranks := st.portRanks
+  let st := { st with portRanks := #[] }
+  { st with portRanks := ranks.setIfInBounds pid v }
 
 /-- `port_ranks.get(pid).unwrap_or(0.0)`. -/
 @[inline] def rankOf (st : BarycenterPortDistributorState) (pid : Nat) : Float := st.portRanks[pid]?.getD 0.0
 
 /-- `port_barycenter[pid] = v`. -/
 @[inline] def setBarycenter (st : BarycenterPortDistributorState) (pid : Nat) (v : Float) : BarycenterPortDistributorState :=
-  { st with portBarycenter := st.portBarycenter.setIfInBounds pid v }
+  let bary := st.portBarycenter
+  let st := { st with portBarycenter := #[] }
+  { st with portBarycenter := bary.setIfInBounds pid v }
 
 /-- `port_barycenter.get(pid).unwrap_or(0.0)`. -/
 @[inline] def barycenterOf (st : BarycenterPortDistributorState) (pid : Nat) : Float := st.portBarycenter[pid]?.getD 0.0
