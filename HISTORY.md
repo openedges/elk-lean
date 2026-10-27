@@ -111,7 +111,7 @@
 | P2. layerers 9종(NetworkSimplexLayerer 포함) | `p2layers/*`(2.5K줄) | opus | xhigh | 서브에이전트 P2(worktree) | 완료(`merge P2`, 218 검사): 9 layerer 등록, 재귀는 동일 방문 순서의 반복문으로. Coffman-Graham/StretchWidth는 self-loop 그래프에서 무한 루프(Java/Rust 동일, SelfLoopPreprocessor가 선행) |
 | P3a. crossing counters + `CrossMinSnapshot` + greedyswitch | `p3order/counting/*`, `cross_min_snapshot.rs`, `intermediate/greedyswitch/*`(3.8K줄) + `tests/p3_order/counting/*`(4.8K줄) | opus | xhigh | 서브에이전트 P3a(worktree) | 진행 중 |
 | P3b/P3c. port distributors + forster(2.9K) → heuristics/type decider/sweep copy(3.0K) → GraphInfoHolder + LayerSweepCrossingMinimizer(2.5K) | `p3order/*` | opus | xhigh | P3a 이후 순차 | 대기 |
-| P4a. NetworkSimplexPlacer/Simple/Interactive/LinearSegments | `p4nodes/*.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P4a(worktree) | 진행 중 |
+| P4a. NetworkSimplexPlacer/Simple/Interactive/LinearSegments | `p4nodes/*.rs`(2.9K줄) | opus | xhigh | 서브에이전트 P4a(worktree) | 완료(`merge P4a`, 90 검사): simple/interactive/linearSegments/networkSimplex 등록. 발견: elk-rs `ArenaSync` 수신 엣지 순서는 발견 순서(`LGraphArena.arenaIncomingEdges`로 재현, PORTING §15.1 정정), `Layer.id`=인덱스 전제 |
 | P4b. BK node placer | `p4nodes/bk/*`(2.4K줄) | opus | xhigh | 서브에이전트 P4b(worktree) | 진행 중 |
 | P5a. `OrthogonalEdgeRouter`/`PolylineEdgeRouter` + `OrthogonalRoutingGenerator`·direction strategies | `p5edges/{orthogonal_edge_router,polyline_edge_router}.rs`, `p5edges/orthogonal/**`(3.3K줄) | opus | xhigh | 서브에이전트 P5a(worktree) | 진행 중 |
 | P5b. `SplineEdgeRouter` + `splines/*` | `p5edges/{spline_edge_router}.rs`, `p5edges/splines/**`(3.1K줄) | opus | xhigh | 대기 |

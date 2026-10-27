@@ -239,6 +239,37 @@ def layerToString (a : LGraphArena) (l : LayerId) : String :=
   let nodes := ", ".intercalate ((a.layer l).nodes.toList.map (a.nodeToString ·))
   s!"L_{index}[{nodes}]"
 
+/-- elk-rs `ArenaSync` pass 2 (`arena_sync.rs`): the incoming edges of every port of the graph
+in *edge discovery order* — nodes of the layers then layerless nodes, their ports in order, each
+port's outgoing edges (first occurrence only, both ends inside the graph). This is the order of
+`ArenaSync::port_incoming_edges(p)`, which differs from `LPort.incomingEdges`; code ported from
+Rust that reads the arena snapshot's incoming lists must use this (PORTING.md §15.1). -/
+def arenaIncomingEdges (a : LGraphArena) (g : LGraphId) : Std.HashMap LPortId (Array LEdgeId) := Id.run do
+  let gr := a.graph g
+  let mut nodes : Array LNodeId := #[]
+  for l in gr.layers do
+    nodes := nodes ++ (a.layer l).nodes
+  nodes := nodes ++ gr.layerlessNodes
+  let mut inGraph : Std.HashSet LPortId := {}
+  for n in nodes do
+    for p in (a.node n).ports do
+      inGraph := inGraph.insert p
+  let mut seen : Std.HashSet LEdgeId := {}
+  let mut incoming : Std.HashMap LPortId (Array LEdgeId) := {}
+  for n in nodes do
+    for p in (a.node n).ports do
+      for e in (a.port p).outgoingEdges do
+        if seen.contains e then
+          continue
+        let ed := a.edge e
+        let some s := ed.source | continue
+        let some t := ed.target | continue
+        if !inGraph.contains s || !inGraph.contains t then
+          continue
+        seen := seen.insert e
+        incoming := incoming.insert t ((incoming.getD t #[]).push e)
+  return incoming
+
 /-- `LGraph.toNodeArray()`: the nodes of each layer. -/
 def graphToNodeArray (a : LGraphArena) (g : LGraphId) : Array (Array LNodeId) :=
   (a.graph g).layers.map fun l => (a.layer l).nodes

@@ -175,34 +175,9 @@ def getNodeState (a : LGraphArena) (n : LNodeId) : Int := Id.run do
     return JUNCTION
   return OTHER
 
-/-- Rust `ArenaSync` pass 2: the incoming edges of every port of the graph in discovery order
-(nodes of the layers, then layerless nodes; their ports; each port's outgoing edges, the first
-occurrence only, both ends inside the graph). -/
-def arenaIncomingEdges (a : LGraphArena) (g : LGraphId) : Std.HashMap LPortId (Array LEdgeId) := Id.run do
-  let gr := a.graph g
-  let mut nodes : Array LNodeId := #[]
-  for l in gr.layers do
-    nodes := nodes ++ (a.layer l).nodes
-  nodes := nodes ++ gr.layerlessNodes
-  let mut inGraph : Std.HashSet LPortId := {}
-  for n in nodes do
-    for p in (a.node n).ports do
-      inGraph := inGraph.insert p
-  let mut seen : Std.HashSet LEdgeId := {}
-  let mut incoming : Std.HashMap LPortId (Array LEdgeId) := {}
-  for n in nodes do
-    for p in (a.node n).ports do
-      for e in (a.port p).outgoingEdges do
-        if seen.contains e then
-          continue
-        let ed := a.edge e
-        let some s := ed.source | continue
-        let some t := ed.target | continue
-        if !inGraph.contains s || !inGraph.contains t then
-          continue
-        seen := seen.insert e
-        incoming := incoming.insert t ((incoming.getD t #[]).push e)
-  return incoming
+/-- Rust `ArenaSync` pass 2 incoming lists (`LGraphArena.arenaIncomingEdges`, `LGraphQueries`). -/
+def arenaIncomingEdges (a : LGraphArena) (g : LGraphId) : Std.HashMap LPortId (Array LEdgeId) :=
+  a.arenaIncomingEdges g
 
 /-- Phase-local state of one `process` run (the Rust placer fields). -/
 structure State where
