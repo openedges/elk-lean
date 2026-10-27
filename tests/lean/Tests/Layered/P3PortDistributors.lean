@@ -369,14 +369,13 @@ def handBarycenterTests : Suite := suite "layered.p3order.barycenter_port_distri
     checkEqR s!"node-relative cross sorted ({m}) (hand: [p1, p0])" after #[ps[1]!, ps[0]!]
     checkRanks s!"node-relative barycenters ({m}) (hand: e0 1/3, e1 2/3, p0 -0.5, p1 -1.5)" barys
       #[1.0 / 3.0, 2.0 / 3.0, -0.5, -1.5]
-  -- equal barycenters keep the order the sort starts from: the captured one with a snapshot,
-  -- the current one without
+  -- equal barycenters keep the current port order, also with a snapshot: Rust's `sort_ports`
+  -- runs while `distribute_ports` holds the snapshot taken out of `self`, so its lock fallback
+  -- sorts the live order (oracle trace: ptolemy_test_auto_GeneratorRegulatorProtectorWithProcessor,
+  -- step 79 `LayerSweepCrossingMinimizer`)
   for m in allModes do
     let (after, ps) ← runL (tieStep m)
-    if m.snapshot then
-      checkEqR s!"tie keeps the snapshot's port order ({m}) (hand: [u0, u1])" after ps
-    else
-      checkEqR s!"tie keeps the current port order ({m}) (hand: [u1, u0])" after #[ps[1]!, ps[0]!]
+    checkEqR s!"tie keeps the current port order ({m}) (hand: [u1, u0])" after #[ps[1]!, ps[0]!]
   -- node-relative: a0 0.5, b0 1.25, b2 1.75 → p -1.25 < q (-0.5 - 1.75) / 2 = -1.125;
   -- layer-total: a0 1, b0 2, b2 4 → p -2 > q -2.5
   for m in allModes do

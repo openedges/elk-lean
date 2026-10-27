@@ -22,8 +22,11 @@ Two code paths, as in elk-rs:
 - **snapshot path** (a `CrossMinSnapshot` was handed over with `setSnapshot`; the
   `GraphInfoHolder` does this through the barycenter heuristic): ids, port sides, edge
   end points, owner layers and the *port order captured when the snapshot was built* are read
-  from the snapshot. In particular `distributePorts` partitions and `sortPorts` sorts the
-  captured port order, so ties keep the build-time order rather than the current one.
+  from the snapshot. In particular `distributePorts` partitions the captured port order.
+  Rust's `distribute_ports` takes the snapshot out of `self.snapshot` while it runs, so the
+  helpers it calls that test `self.snapshot` run their lock fallbacks: `sort_ports` sorts the
+  *current* port order (index tie-break, `sortPortsLock`; `sort_ports_snap`/`sortPortsSnap` is
+  unreachable from there) and `deal_with_north_south_ports` reads the live dummy ports.
   Ranks iterate the node's current ports mapped to captured ids.
 - **lock path** (no snapshot): everything is read from the live arena; ties keep the current
   port order.
@@ -396,7 +399,8 @@ def iteratePortsSnap (s : CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPo
     if northSouth then
       let some portRef := s.portRefOpt pid | continue
       let some dummy := (a.port portRef).internal.portDummy | continue
-      sum := f32t (sum + f32t (dealWithNorthSouthPorts (some s) a st absurdlyLargeFloat portRef dummy))
+      -- Rust: `self.snapshot` is taken while distributing, so the lock path runs
+      sum := f32t (sum + f32t (dealWithNorthSouthPorts none a st absurdlyLargeFloat portRef dummy))
     else
       match connectedRankSumSnap s st pid nodeLayer with
       | none =>
@@ -447,7 +451,9 @@ def compareBarycenters (b1 b2 : Float) : Ordering :=
   else if b2 == 0.0 then .gt
   else Float.comparePartial b1 b2
 
-/-- `sort_ports_snap(node)`: the *captured* port order stably sorted by (side, barycenter). -/
+/-- `sort_ports_snap(node)`: the *captured* port order stably sorted by (side, barycenter).
+Unreachable in elk-rs (`sort_ports` only reaches it while `self.snapshot` is set, but its only
+caller with a snapshot, `distribute_ports`, has taken the snapshot out); kept for reference. -/
 def sortPortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState) (node : LNodeId) : Array LPortId :=
   let pids := s.nodePorts (s.nodeFlatIndex node)
   let sorted := stableSort pids fun x y =>
@@ -625,7 +631,9 @@ private def distributePortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistr
   let st := distributePortsForIterSnap s a st node sideIds nodeId layerIndex layerSize
   let st := distributePortsForIterSnap s a st node southIds nodeId layerIndex layerSize
   let st := distributePortsForIterSnap s a st node northIds nodeId layerIndex layerSize
-  setPorts node (sortPortsSnap s st node)
+  -- Rust `sort_ports(node)` runs while `distribute_ports` holds the snapshot taken out of
+  -- `self.snapshot`, so its lock fallback sorts the *current* port order (index tie-break)
+  setPorts node (sortPortsLock a st node)
   return st
 
 /-- `distribute_ports(node, side, layer_index, layer_size)` (lock path). -/
