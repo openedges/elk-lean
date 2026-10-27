@@ -26,10 +26,10 @@ def addend : UInt64 := 0xB
 def mask : UInt64 := ((1 : UInt64) <<< 48) - 1
 
 /-- `new Random(seed)` for a Java `long` seed given as `Int` (sign-extended like `(long) intSeed`). -/
-def ofInt (seed : Int) : Random := ⟨(Int.toUInt64Wrap seed ^^^ multiplier) &&& mask⟩
+def ofInt (seed : Int) : Random := { seed := (Int.toUInt64Wrap seed ^^^ multiplier) &&& mask }
 
 /-- `new Random(seed)` with a raw 64-bit seed (Rust `Random::new(u64)`). -/
-def ofUInt64 (seed : UInt64) : Random := ⟨(seed ^^^ multiplier) &&& mask⟩
+def ofUInt64 (seed : UInt64) : Random := { seed := (seed ^^^ multiplier) &&& mask }
 
 /-- `setSeed` (keeps the test mocks). -/
 def setSeed (r : Random) (seed : Int) : Random := { r with seed := (ofInt seed).seed }
