@@ -346,62 +346,75 @@ private structure Numbering where
   /-- `max_rank`. -/
   maxRank : Int := -1
 
+/-- The arrays one step of `topologicalNumbering` changes (built once per dequeued segment). -/
+private structure NumberingStep where
+  slot : Array Int
+  weight : Array Int
+  queue : Array Nat
+  maxRank : Int
+  deriving Inhabited
+
 /-- First pass over the outgoing dependencies `deps[k:]` of a dequeued source with slot `nodeSlot`:
 every target gets at least slot `nodeSlot + 1` and becomes a source when its last incoming dependency
-is processed. -/
-private partial def numberTargets (g : SegmentGraph) (deps : Array Nat) (nodeSlot : Int) (k : Nat) (st : Numbering) :
-    Numbering :=
+is processed (`weight` = the in-weights). The changed arrays are parameters, so a step does not
+rebuild `Numbering`. -/
+private partial def numberTargets (g : SegmentGraph) (deps : Array Nat) (nodeSlot : Int) (k : Nat)
+    (slots weight : Array Int) (queue : Array Nat) (maxRank : Int) : NumberingStep :=
   if h : k < deps.size then
     let targetCode := g.depTargetCode deps[k]
     if targetCode != 0 then
       let target := targetCode - 1
       let newSlot := nodeSlot + 1
-      let current := st.slot[target]!
+      let current := slots[target]!
       let slot := if current < newSlot then newSlot else current
-      let inWeight := st.inWeight[target]! - 1
-      let st := { st with slot := st.slot.set! target slot, inWeight := st.inWeight.set! target inWeight,
-                          maxRank := max st.maxRank slot }
-      let st := if inWeight == 0 then { st with queue := st.queue.push target } else st
-      numberTargets g deps nodeSlot (k + 1) st
-    else numberTargets g deps nodeSlot (k + 1) st
-  else st
+      let inWeight := weight[target]! - 1
+      let queue := if inWeight == 0 then queue.push target else queue
+      numberTargets g deps nodeSlot (k + 1) (slots.set! target slot) (weight.set! target inWeight) queue
+        (max maxRank slot)
+    else numberTargets g deps nodeSlot (k + 1) slots weight queue maxRank
+  else ⟨slots, weight, queue, maxRank⟩
 
 /-- Longest-path numbering from the queued sources. -/
 private partial def numberFromSources (g : SegmentGraph) (st : Numbering) : Numbering :=
-  if h : st.head < st.queue.size then
-    let node := st.queue[st.head]
-    let st := { st with head := st.head + 1 }
-    let nodeSlot := st.slot[node]!
-    numberFromSources g (numberTargets g (g.segment node).outgoingSegmentDependencies nodeSlot 0 st)
-  else st
+  match st with
+  | ⟨slots, inWeight, outWeight, queue, head, maxRank⟩ =>
+    if h : head < queue.size then
+      let node := queue[head]
+      let nodeSlot := slots[node]!
+      let ⟨slots, inWeight, queue, maxRank⟩ :=
+        numberTargets g (g.segment node).outgoingSegmentDependencies nodeSlot 0 slots inWeight queue maxRank
+      numberFromSources g ⟨slots, inWeight, outWeight, queue, head + 1, maxRank⟩
+    else ⟨slots, inWeight, outWeight, queue, head, maxRank⟩
 
 /-- Second pass over the incoming dependencies `deps[k:]` of a dequeued rightward target with slot
 `nodeSlot`: sources without incoming connections are pulled to at most slot `nodeSlot - 1` and queued
-when their last outgoing dependency is processed. -/
-private partial def pullSources (g : SegmentGraph) (deps : Array Nat) (nodeSlot : Int) (k : Nat) (st : Numbering) :
-    Numbering :=
+when their last outgoing dependency is processed (`weight` = the out-weights). -/
+private partial def pullSources (g : SegmentGraph) (deps : Array Nat) (nodeSlot : Int) (k : Nat)
+    (slots weight : Array Int) (queue : Array Nat) : NumberingStep :=
   if h : k < deps.size then
     let sourceCode := g.depSourceCode deps[k]
     if sourceCode != 0 && (g.segment (sourceCode - 1)).incomingConnectionCoordinates.isEmpty then
       let source := sourceCode - 1
       let newSlot := nodeSlot - 1
-      let current := st.slot[source]!
+      let current := slots[source]!
       let slot := if current > newSlot then newSlot else current
-      let outWeight := st.outWeight[source]! - 1
-      let st := { st with slot := st.slot.set! source slot, outWeight := st.outWeight.set! source outWeight }
-      let st := if outWeight == 0 then { st with queue := st.queue.push source } else st
-      pullSources g deps nodeSlot (k + 1) st
-    else pullSources g deps nodeSlot (k + 1) st
-  else st
+      let outWeight := weight[source]! - 1
+      let queue := if outWeight == 0 then queue.push source else queue
+      pullSources g deps nodeSlot (k + 1) (slots.set! source slot) (weight.set! source outWeight) queue
+    else pullSources g deps nodeSlot (k + 1) slots weight queue
+  else ⟨slots, weight, queue, 0⟩
 
 /-- Pulls the predecessors of the queued rightward targets. -/
 private partial def pullFromTargets (g : SegmentGraph) (st : Numbering) : Numbering :=
-  if h : st.head < st.queue.size then
-    let node := st.queue[st.head]
-    let st := { st with head := st.head + 1 }
-    let nodeSlot := st.slot[node]!
-    pullFromTargets g (pullSources g (g.segment node).incomingSegmentDependencies nodeSlot 0 st)
-  else st
+  match st with
+  | ⟨slots, inWeight, outWeight, queue, head, maxRank⟩ =>
+    if h : head < queue.size then
+      let node := queue[head]
+      let nodeSlot := slots[node]!
+      let ⟨slots, outWeight, queue, _⟩ :=
+        pullSources g (g.segment node).incomingSegmentDependencies nodeSlot 0 slots outWeight queue
+      pullFromTargets g ⟨slots, inWeight, outWeight, queue, head + 1, maxRank⟩
+    else ⟨slots, inWeight, outWeight, queue, head, maxRank⟩
 
 /-- Stores the routing slots and weights of `topologicalNumbering` in the segments `i, i + 1, …`. -/
 private partial def writeNumbering (segments : Array HyperEdgeSegment) (st : Numbering) (i : Nat) :
@@ -415,30 +428,23 @@ private partial def writeNumbering (segments : Array HyperEdgeSegment) (st : Num
 segments with only outgoing connections and no outgoing dependencies ("rightward targets") are moved to
 the highest slot and their predecessors without incoming connections pulled after them. Slots and
 in/out weights are computed in local arrays and stored in the segments at the end. -/
-def topologicalNumbering (g : SegmentGraph) : SegmentGraph := Id.run do
+def topologicalNumbering (g : SegmentGraph) : SegmentGraph :=
   let n := g.segments.size
-  let mut slots : Array Int := Array.emptyWithCapacity n
-  let mut inWeights : Array Int := Array.emptyWithCapacity n
-  let mut outWeights : Array Int := Array.emptyWithCapacity n
-  let mut sources : Array Nat := #[]
-  let mut rightwardTargets : Array Nat := #[]
-  for h : i in [0:n] do
-    let seg := g.segments[i]
-    let inWeight : Int := seg.incomingSegmentDependencies.size
-    let outWeight : Int := seg.outgoingSegmentDependencies.size
-    slots := slots.push seg.routingSlot
-    inWeights := inWeights.push inWeight
-    outWeights := outWeights.push outWeight
-    if inWeight == 0 then sources := sources.push i
-    if outWeight == 0 && seg.incomingConnectionCoordinates.isEmpty then
-      rightwardTargets := rightwardTargets.push i
-  let st := numberFromSources g { slot := slots, inWeight := inWeights, outWeight := outWeights, queue := sources }
-  let st := if st.maxRank > -1 then
-      let maxRank := st.maxRank
-      let slot := rightwardTargets.foldl (init := st.slot) fun slot node => slot.set! node maxRank
-      pullFromTargets g { st with slot := slot, queue := rightwardTargets, head := 0 }
-    else st
-  return { g with segments := writeNumbering g.segments st 0 }
+  let inWeights : Array Int := g.segments.map fun seg => (seg.incomingSegmentDependencies.size : Int)
+  let outWeights : Array Int := g.segments.map fun seg => (seg.outgoingSegmentDependencies.size : Int)
+  -- both lists in segment order
+  let sources := (Array.range n).filter fun i => inWeights[i]! == 0
+  let rightwardTargets := (Array.range n).filter fun i =>
+    outWeights[i]! == 0 && (g.segment i).incomingConnectionCoordinates.isEmpty
+  let st := numberFromSources g
+    { slot := g.segments.map (·.routingSlot), inWeight := inWeights, outWeight := outWeights, queue := sources }
+  let st := match st with
+    | ⟨slots, inWeight, outWeight, queue, head, maxRank⟩ =>
+      if maxRank > -1 then
+        let slots := rightwardTargets.foldl (init := slots) fun slots node => slots.set! node maxRank
+        pullFromTargets g ⟨slots, inWeight, outWeight, rightwardTargets, 0, maxRank⟩
+      else ⟨slots, inWeight, outWeight, queue, head, maxRank⟩
+  { g with segments := writeNumbering g.segments st 0 }
 
 /-- Rust `{:?}` of a coordinate list (approximation used by the trace output only). -/
 private def showCoords (cs : Array Float) : String :=

@@ -115,10 +115,19 @@ private def initializeState (g : SegmentGraph) (ls : Lists) (criticalOnly : Bool
     order := (Array.range n).reverse,
     nextSinkMark := (n : Int) - 1, nextSourceMark := (n : Int) + 1 }
 
+/-- The weights and queue one half of `updateNeighbors` changes (built once per processed node). -/
+private structure NeighborUpdate where
+  weight : Array Int
+  criticalWeight : Array Int
+  queue : Array Nat
+  deriving Inhabited
+
 /-- Outgoing half of `updateNeighbors`: for the dependencies `deps[k:]` of the processed node, removes
-the (critical) weight from unmarked targets and queues those that became sources. -/
-private partial def updateTargets (g : SegmentGraph) (deps : Array Nat) (criticalOnly : Bool) (k : Nat) (st : State) :
-    State :=
+the (critical) weight from unmarked targets (`inWeight`, `criticalInWeight`) and queues those that
+became sources (`sources`). The changed arrays are parameters, not fields of `State`, so a step does
+not rebuild the state. -/
+private partial def updateTargets (g : SegmentGraph) (deps : Array Nat) (criticalOnly : Bool) (mark outWeight : Array Int)
+    (k : Nat) (inWeight criticalInWeight : Array Int) (sources : Array Nat) : NeighborUpdate :=
   if h : k < deps.size then
     let d := deps[k]
     let critical := g.depIsCritical d
@@ -126,23 +135,21 @@ private partial def updateTargets (g : SegmentGraph) (deps : Array Nat) (critica
     if (!criticalOnly || critical) && targetCode != 0 then
       let target := targetCode - 1
       let weight := g.depWeight d
-      if st.mark[target]! < 0 && weight > 0 then
-        let newInWeight := st.inWeight[target]! - weight
-        let st := { st with inWeight := st.inWeight.set! target newInWeight }
-        let st := if critical then
-            { st with criticalInWeight := st.criticalInWeight.set! target (st.criticalInWeight[target]! - weight) }
-          else st
-        let st := if newInWeight <= 0 && st.outWeight[target]! > 0 then { st with sources := st.sources.push target }
-          else st
-        updateTargets g deps criticalOnly (k + 1) st
-      else updateTargets g deps criticalOnly (k + 1) st
-    else updateTargets g deps criticalOnly (k + 1) st
-  else st
+      if mark[target]! < 0 && weight > 0 then
+        let newInWeight := inWeight[target]! - weight
+        let inWeight := inWeight.set! target newInWeight
+        let criticalInWeight := if critical then criticalInWeight.set! target (criticalInWeight[target]! - weight)
+          else criticalInWeight
+        let sources := if newInWeight <= 0 && outWeight[target]! > 0 then sources.push target else sources
+        updateTargets g deps criticalOnly mark outWeight (k + 1) inWeight criticalInWeight sources
+      else updateTargets g deps criticalOnly mark outWeight (k + 1) inWeight criticalInWeight sources
+    else updateTargets g deps criticalOnly mark outWeight (k + 1) inWeight criticalInWeight sources
+  else ⟨inWeight, criticalInWeight, sources⟩
 
 /-- Incoming half of `updateNeighbors`: removes the (critical) weight from unmarked sources of
-`deps[k:]` and queues those that became sinks. -/
-private partial def updateSources (g : SegmentGraph) (deps : Array Nat) (criticalOnly : Bool) (k : Nat) (st : State) :
-    State :=
+`deps[k:]` (`outWeight`, `criticalOutWeight`) and queues those that became sinks (`sinks`). -/
+private partial def updateSources (g : SegmentGraph) (deps : Array Nat) (criticalOnly : Bool) (mark inWeight : Array Int)
+    (k : Nat) (outWeight criticalOutWeight : Array Int) (sinks : Array Nat) : NeighborUpdate :=
   if h : k < deps.size then
     let d := deps[k]
     let critical := g.depIsCritical d
@@ -150,25 +157,31 @@ private partial def updateSources (g : SegmentGraph) (deps : Array Nat) (critica
     if (!criticalOnly || critical) && sourceCode != 0 then
       let source := sourceCode - 1
       let weight := g.depWeight d
-      if st.mark[source]! < 0 && weight > 0 then
-        let newOutWeight := st.outWeight[source]! - weight
-        let st := { st with outWeight := st.outWeight.set! source newOutWeight }
-        let st := if critical then
-            { st with criticalOutWeight := st.criticalOutWeight.set! source (st.criticalOutWeight[source]! - weight) }
-          else st
-        let st := if newOutWeight <= 0 && st.inWeight[source]! > 0 then { st with sinks := st.sinks.push source }
-          else st
-        updateSources g deps criticalOnly (k + 1) st
-      else updateSources g deps criticalOnly (k + 1) st
-    else updateSources g deps criticalOnly (k + 1) st
-  else st
+      if mark[source]! < 0 && weight > 0 then
+        let newOutWeight := outWeight[source]! - weight
+        let outWeight := outWeight.set! source newOutWeight
+        let criticalOutWeight := if critical then criticalOutWeight.set! source (criticalOutWeight[source]! - weight)
+          else criticalOutWeight
+        let sinks := if newOutWeight <= 0 && inWeight[source]! > 0 then sinks.push source else sinks
+        updateSources g deps criticalOnly mark inWeight (k + 1) outWeight criticalOutWeight sinks
+      else updateSources g deps criticalOnly mark inWeight (k + 1) outWeight criticalOutWeight sinks
+    else updateSources g deps criticalOnly mark inWeight (k + 1) outWeight criticalOutWeight sinks
+  else ⟨outWeight, criticalOutWeight, sinks⟩
 
 /-- `updateNeighbors(node, sources, sinks, criticalOnly)`: removes the node's (critical) dependency
-weights from its unmarked neighbours and queues neighbours that became sources or sinks. -/
+weights from its unmarked neighbours and queues neighbours that became sources or sinks (targets
+first; the sources' half sees the updated in-weights). -/
 private def updateNeighbors (g : SegmentGraph) (ls : Lists) (st : State) (node : Nat) (criticalOnly : Bool) : State :=
   if h : node < ls.outgoing.size then
-    let st := updateTargets g ls.outgoing[node] criticalOnly 0 st
-    updateSources g ls.incoming[node]! criticalOnly 0 st
+    match st with
+    | ⟨mark, inWeight, criticalInWeight, outWeight, criticalOutWeight, sources, sourcesHead, sinks, sinksHead,
+        unprocessed, unprocessedCount, order, nextSinkMark, nextSourceMark⟩ =>
+      let ⟨inWeight, criticalInWeight, sources⟩ :=
+        updateTargets g ls.outgoing[node] criticalOnly mark outWeight 0 inWeight criticalInWeight sources
+      let ⟨outWeight, criticalOutWeight, sinks⟩ :=
+        updateSources g ls.incoming[node]! criticalOnly mark inWeight 0 outWeight criticalOutWeight sinks
+      ⟨mark, inWeight, criticalInWeight, outWeight, criticalOutWeight, sources, sourcesHead, sinks, sinksHead,
+        unprocessed, unprocessedCount, order, nextSinkMark, nextSourceMark⟩
   else st
 
 /-- Rust `remove_segment(unprocessed, segment)` followed by `segment.mark = mark` and
