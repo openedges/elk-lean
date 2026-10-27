@@ -166,6 +166,10 @@
 - `scripts/compare_bytes.sh`(`elk layout --pretty --sort-keys` vs oracle 파일): 코퍼스 1,447/1,447 바이트 일치(이전 1,395). **이후 숫자 의미론을 ELK Java로 바꾸면서(아래 절) elk-rs와의 바이트 일치는 1,060/1,447로 내려갔고(차이는 `-0.0`/스냅 표기와 ≤4e-12 값), 정확 일치 검사는 Java 기준으로 옮겼다.**
 - 남은 점검 대상: Rust 복합 대입(`a += b + c`)을 평탄한 합으로 옮긴 곳이 더 있을 수 있다(코퍼스에서는 더 드러나지 않음).
 
+### 성능 3차 (2026-10-28): 기준선 갱신
+- 병합본(`c898287`: FastFloat·파서·zmij·force/stress·P5·mrtree/rectpacking·P3·enum 정규화) 재측정, Apple M1 조용한 상태, 20회/워밍업 3회(`tests/perf/report.md`, 기준선 `baseline_lean_api.csv` 갱신): **lean/rust_api 기하평균 6.41배 → 1.66배**. 시나리오별: layered 1.35~2.84배(xlarge 2.84), force/stress 2.1~2.4배(1차 26~32배), mrtree 1.5배, radial 0.34~0.63배(elk-rs보다 빠름), rectpacking 2.2~2.5배, routing/crossmin 1.7~2.0배. 합성 26개 출력은 oracle과 1e-6 안에서 일치.
+- 남은 격차(프로파일): layered는 P3 Forster(`ExceptT/StateM` 할당)·`SweepCopy.ofArena`·P5 직교 라우팅, 모든 알고리즘 공통 `NodeMicroLayout`(1000노드당 2.5~3 ms), rectpacking 배치 스캔 O(n²), force/stress 쌍 루프 자체.
+
 ### 성능 2차 (2026-10-27~31): 공통 경로
 - **CSE가 리터럴 상수 추출을 막는 문제**: 컴파일러가 `true`·작은 `Nat` 인자를 같은 값의 변수로 치환하면 `Float.ofScientific m s e` 호출이 closed term으로 추출되지 않아 매번 실행된다. 가수가 `2^53` 이상인 리터럴(`18446744073709551616.0`, `9007199254740992.0` 등)은 빠른 경로 밖이라 GMP 모델 경로를 탄다. `Number.ofFloatElk`(모든 좌표)와 `Random.nextDouble`을 `Float.ofBits` 최상위 상수로 바꿨다. 빠른 경로 밖 리터럴은 이제 최상위 상수에만 남아 있다(초기화 시 1회).
 - **구조체 갱신**: `{ s with a := s.a.set! i v }`는 `s`가 유일하면 배열을 옮겨 제자리 수정한다(생성 C 확인). 복사는 `s`나 원소가 공유될 때만 생긴다 → 일괄 치환하지 않고 프로파일의 `lean_copy_expand_array` 호출자만 고친다(예: stress 힙).
