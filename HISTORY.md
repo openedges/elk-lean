@@ -165,7 +165,7 @@
 |---|---|---|---|---|---|
 | PF0. 전역 Float 변환(`FastFloat` csimp), 큰 리터럴 제거, force/stress 루프 | 코어 `Init/Data/OfScientific.lean`, `fruchterman_reingold_model.rs`, `stress_majorization.rs` | fable(주) | xhigh | 주 에이전트 | 완료(`67f906b`, `779b9fa`): force_xlarge 4670→348 ms, stress_xlarge 5429→592 ms, 코퍼스 parity 유지 |
 | Z1. JSON 실수 출력 zmij C 포팅 | zmij 1.0.19 `src/lib.rs`(serde_json 1.0.149) | opus | xhigh | 서브에이전트 Z1(worktree) | 진행 중 |
-| N1. NAPI 애드온 + elkjs 호환 npm 패키지 | elk-rs `plugins/org.eclipse.elk.{napi,js}` | opus | high | 서브에이전트 N1(worktree) | 진행 중 |
+| N1. NAPI 애드온 + elkjs 호환 npm 패키지 | elk-rs `plugins/org.eclipse.elk.{napi,js}` | opus | high | 서브에이전트 N1(worktree) | 완료(`merge N1`, 사용량 한도로 1회 중단 후 재개): Node-API C 애드온(`elk_napi.c`, worker_threads 지원·프로세스 전역 뮤텍스, Lean 런타임이 덮어쓰는 SIGSEGV/SIGBUS 핸들러 복원), `scripts/build_napi.sh`, npm 패키지(`plugins/org.eclipse.elk.js`, elkjs API·worker·typings·플랫폼 패키지 템플릿, WASM 백엔드는 스텁), `node:test` 51개 통과. 애드온 vs CLI 바이트 비교: JSON 550/550, elkt 897/898(나머지 1건은 양쪽 동일 실패). 참고: elkjs 0.12.0과는 JSON 530/550, elkt 778/898 일치(Ptolemy 모델 드리프트 — elk-rs/elk-lean 대 elkjs 차이, Java 기준값 없음). 남은 일: Linux/Windows 빌드, 게시, GMP(LGPL) 정적 링크 검토 |
 | W1. WASM 빌드(emscripten) | elk-rs `plugins/org.eclipse.elk.wasm`, Lean 런타임 | opus | xhigh | 서브에이전트 W1(worktree) | 진행 중 |
 | PL3. layered P3 교차 최소화 성능 | Lean `P3Order/**`(elk-rs `p3_order/**`) | opus | xhigh | 서브에이전트 PL3(worktree) | 진행 중 |
 | PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 진행 중 |

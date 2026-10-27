@@ -225,7 +225,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 ## 8. 배포 설계
 - **CLI**: `elk layout [-f json|elkt] [-a <algorithm>] [-o out] [--pretty] [--sort-keys] [--trace-dir DIR] [--lenient] input`, `elk convert`, `elk algorithms|options|categories`, `elk --version`.
 - **FFI**: `@[export elk_layout_json] (graph options : String) : String`(오류는 JSON `{"error": "..."}`), `elk_known_layout_algorithms/options/categories`, `elk_init`(모듈 initializer + `ensureInitialized`).
-- **NAPI**: `node-addon-api` C++ 셸이 Lean 정적 라이브러리를 링크(`lean_initialize_runtime_module`, `initialize_Elk_Ffi`), elk-rs와 같은 6개 플랫폼 패키지 구조.
+- **NAPI**: Node-API C 애드온(`plugins/org.eclipse.elk.napi/src/elk_napi.c`)이 `libelklean.a`(`elk_lean.h` C API, `scripts/build_ffi.sh`)를 링크, elk-rs와 같은 6개 플랫폼 패키지 구조(`scripts/build_napi.sh`).
 - **WASM**: Lean 런타임(`src/runtime`)·stdlib C(`stage0/stdlib/Init,Std`)·프로젝트 C를 emscripten으로 컴파일, `-s MODULARIZE -s EXPORT_ES6`, 브라우저 ESM + Node CJS 두 산출물. 스레드 없이 빌드(`LEAN_MULTI_THREAD` off) 가능 여부를 Phase 8 초기에 검증한다.
 - **npm**: elk-rs `plugins/org.eclipse.elk.js`의 로더(플랫폼 NAPI → 로컬 .node → WASM 폴백, Worker 모드)와 typings 구조를 그대로 이식.
 
