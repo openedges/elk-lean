@@ -1,5 +1,6 @@
 import Elk.Json
-/-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API (filled in Phase 2). -/
+import Elk.Api.LayoutApi
+/-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API. -/
 namespace Elk.Api
 /-- elk-lean package version. -/
 def version : String := "0.12.0"

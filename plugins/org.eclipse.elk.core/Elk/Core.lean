@@ -8,4 +8,5 @@ import Elk.Core.Labels
 import Elk.Core.Validation
 import Elk.Core.Init
 import Elk.Core.LayoutProvider
+import Elk.Core.RecursiveGraphLayoutEngine
 /-! Root module of the `org.eclipse.elk.core` plugin. Each package has its own aggregator module. -/
