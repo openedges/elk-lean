@@ -1,0 +1,299 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "UNDEFINED",
+  "org.eclipse.elk.spacing.nodeNode": 0,
+  "org.eclipse.elk.padding": "[top=20,left=0,bottom=5,right=0]",
+  "org.eclipse.elk.mrtree.edgeEndTextureLength": 7
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 58.0,
+   "height": 74.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 1,
+    "org.eclipse.elk.priority": 5
+   }
+  },
+  {
+   "id": "n1",
+   "width": 43.0,
+   "height": 26.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 0,
+    "org.eclipse.elk.mrtree.positionConstraint": 4
+   }
+  },
+  {
+   "id": "n2",
+   "width": 36.482,
+   "height": 5.365
+  },
+  {
+   "id": "n3",
+   "width": 45.0,
+   "height": 14.572,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n4",
+   "width": 46.0,
+   "height": 79.6,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 1
+   }
+  },
+  {
+   "id": "n5",
+   "width": 58.2,
+   "height": 56.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 2,
+    "org.eclipse.elk.priority": 3
+   }
+  },
+  {
+   "id": "n6",
+   "width": 22.0,
+   "height": 61.0
+  },
+  {
+   "id": "n7",
+   "width": 0,
+   "height": 35.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 4
+   }
+  },
+  {
+   "id": "n8",
+   "width": 30,
+   "height": 30.753,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 6
+   }
+  },
+  {
+   "id": "n9",
+   "width": 36.3,
+   "height": 51.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 5,
+    "org.eclipse.elk.priority": 4
+   }
+  },
+  {
+   "id": "n10",
+   "width": 73.1,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 5
+   }
+  },
+  {
+   "id": "n11",
+   "width": 5.898,
+   "height": 67.7,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n12",
+   "width": 36.3,
+   "height": 38.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 6
+   }
+  },
+  {
+   "id": "n13",
+   "width": 30,
+   "height": 66.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n14",
+   "width": 22.0,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 9
+   }
+  },
+  {
+   "id": "n15",
+   "width": 46.3,
+   "height": 37.623
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n6"
+   ]
+  }
+ ]
+}

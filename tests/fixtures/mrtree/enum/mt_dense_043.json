@@ -1,0 +1,547 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "UP",
+  "org.eclipse.elk.aspectRatio": 0.5,
+  "org.eclipse.elk.mrtree.compaction": true,
+  "org.eclipse.elk.mrtree.edgeRoutingMode": "MIDDLE_TO_MIDDLE",
+  "org.eclipse.elk.mrtree.weighting": "CONSTRAINT"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 75.0,
+   "height": 17.276
+  },
+  {
+   "id": "n1",
+   "width": 68.5,
+   "height": 10.3
+  },
+  {
+   "id": "n2",
+   "width": 77.0,
+   "height": 59.199
+  },
+  {
+   "id": "n3",
+   "width": 10,
+   "height": 54.438
+  },
+  {
+   "id": "n4",
+   "width": 39.0,
+   "height": 64.442
+  },
+  {
+   "id": "n5",
+   "width": 1,
+   "height": 56.0
+  },
+  {
+   "id": "n6",
+   "width": 58.0,
+   "height": 47.0
+  },
+  {
+   "id": "n7",
+   "width": 14.0,
+   "height": 1
+  },
+  {
+   "id": "n8",
+   "width": 61.0,
+   "height": 26.0
+  },
+  {
+   "id": "n9",
+   "width": 63.6,
+   "height": 66.0
+  },
+  {
+   "id": "n10",
+   "width": 27.1,
+   "height": 30,
+   "layoutOptions": {
+    "org.eclipse.elk.priority": 2
+   }
+  },
+  {
+   "id": "n11",
+   "width": 8.0,
+   "height": 62.6
+  },
+  {
+   "id": "n12",
+   "width": 66.0,
+   "height": 71.943
+  },
+  {
+   "id": "n13",
+   "width": 25.0,
+   "height": 0
+  },
+  {
+   "id": "n14",
+   "width": 0,
+   "height": 29.0
+  },
+  {
+   "id": "n15",
+   "width": 30,
+   "height": 0
+  },
+  {
+   "id": "n16",
+   "width": 13.441,
+   "height": 45.84,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": -1
+   }
+  },
+  {
+   "id": "n17",
+   "width": 32.0,
+   "height": 1
+  },
+  {
+   "id": "n18",
+   "width": 32.992,
+   "height": 39.0
+  },
+  {
+   "id": "n19",
+   "width": 0,
+   "height": 70.3
+  },
+  {
+   "id": "n20",
+   "width": 72.0,
+   "height": 78.0
+  },
+  {
+   "id": "n21",
+   "width": 32.071,
+   "height": 40.0
+  },
+  {
+   "id": "n22",
+   "width": 15.0,
+   "height": 67.0,
+   "layoutOptions": {
+    "org.eclipse.elk.priority": 4
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n9"
+   ],
+   "sections": [
+    {
+     "id": "s8",
+     "startPoint": {
+      "x": 1,
+      "y": 2
+     },
+     "endPoint": {
+      "x": 3,
+      "y": 4
+     },
+     "bendPoints": [
+      {
+       "x": 5,
+       "y": 6
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n11"
+   ],
+   "sections": [
+    {
+     "id": "s10",
+     "startPoint": {
+      "x": 1,
+      "y": 2
+     },
+     "endPoint": {
+      "x": 3,
+      "y": 4
+     },
+     "bendPoints": [
+      {
+       "x": 5,
+       "y": 6
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n19"
+   ]
+  },
+  {
+   "id": "e19",
+   "sources": [
+    "n19"
+   ],
+   "targets": [
+    "n20"
+   ]
+  },
+  {
+   "id": "e20",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n21"
+   ]
+  },
+  {
+   "id": "e21",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n22"
+   ]
+  },
+  {
+   "id": "e22",
+   "sources": [
+    "n22"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e23",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e24",
+   "sources": [
+    "n21"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e25",
+   "sources": [
+    "n14"
+   ],
+   "targets": [
+    "n20"
+   ]
+  },
+  {
+   "id": "e26",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n20"
+   ]
+  },
+  {
+   "id": "e27",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n19"
+   ]
+  },
+  {
+   "id": "e28",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n19"
+   ]
+  },
+  {
+   "id": "e29",
+   "sources": [
+    "n19"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e30",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e31",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e32",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n22"
+   ]
+  },
+  {
+   "id": "e33",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e34",
+   "sources": [
+    "n19"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e35",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e36",
+   "sources": [
+    "n22"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e37",
+   "sources": [
+    "n17"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e38",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e39",
+   "sources": [
+    "n21"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "hyper",
+   "sources": [
+    "n0",
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  }
+ ]
+}

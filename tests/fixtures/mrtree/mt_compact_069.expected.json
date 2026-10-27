@@ -1,0 +1,108 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 18.671,
+          "id": "n0",
+          "width": 62.433,
+          "x": 12,
+          "y": 12
+        },
+        {
+          "height": 1,
+          "id": "n1",
+          "layoutOptions": {
+            "org.eclipse.elk.mrtree.treeLevel": 1
+          },
+          "width": 54,
+          "x": 94.2165,
+          "y": 20.8355
+        }
+      ],
+      "edges": [
+        {
+          "container": "inner",
+          "id": "e0",
+          "sections": [
+            {
+              "bendPoints": [
+                {
+                  "x": 89.43299999999999,
+                  "y": 21.3355
+                }
+              ],
+              "endPoint": {
+                "x": 94.2165,
+                "y": 21.3355
+              },
+              "id": "e0_s0",
+              "startPoint": {
+                "x": 74.43299999999999,
+                "y": 21.3355
+              }
+            }
+          ],
+          "sources": [
+            "n0"
+          ],
+          "targets": [
+            "n1"
+          ]
+        }
+      ],
+      "height": 42.671,
+      "id": "inner",
+      "layoutOptions": {
+        "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+        "org.eclipse.elk.direction": "RIGHT",
+        "org.eclipse.elk.mrtree.compaction": true,
+        "org.eclipse.elk.mrtree.edgeEndTextureLength": 0,
+        "org.eclipse.elk.spacing.edgeNode": 15
+      },
+      "width": 164.433,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 20,
+      "id": "other",
+      "width": 20,
+      "x": 84.2165,
+      "y": 74.3355
+    }
+  ],
+  "edges": [
+    {
+      "container": "outer",
+      "id": "oe",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 94.2165,
+            "y": 74.3355
+          },
+          "id": "oe_s0",
+          "startPoint": {
+            "x": 94.2165,
+            "y": 54.67099999999999
+          }
+        }
+      ],
+      "sources": [
+        "inner"
+      ],
+      "targets": [
+        "other"
+      ]
+    }
+  ],
+  "height": 117.67099999999999,
+  "id": "outer",
+  "layoutOptions": {
+    "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree"
+  },
+  "width": 188.433,
+  "x": 0,
+  "y": 0
+}

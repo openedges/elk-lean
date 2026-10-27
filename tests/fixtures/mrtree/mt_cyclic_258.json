@@ -1,0 +1,304 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "UP",
+  "org.eclipse.elk.spacing.nodeNode": 10,
+  "org.eclipse.elk.spacing.edgeNode": 15
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 35.384,
+   "height": 79.957
+  },
+  {
+   "id": "n1",
+   "width": 51.0,
+   "height": 30,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 1
+   }
+  },
+  {
+   "id": "n2",
+   "width": 36.574,
+   "height": 0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 2
+   }
+  },
+  {
+   "id": "n3",
+   "width": 28.0,
+   "height": 50.2
+  },
+  {
+   "id": "n4",
+   "width": 0,
+   "height": 18.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n5",
+   "width": 71.0,
+   "height": 5.3,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 6
+   }
+  },
+  {
+   "id": "n6",
+   "width": 57.9,
+   "height": 30
+  },
+  {
+   "id": "n7",
+   "width": 29.6,
+   "height": 0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 1,
+    "org.eclipse.elk.mrtree.positionConstraint": 1
+   }
+  },
+  {
+   "id": "n8",
+   "width": 72.0,
+   "height": 30.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 6
+   }
+  },
+  {
+   "id": "n9",
+   "width": 30.0,
+   "height": 25.5,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 7
+   }
+  },
+  {
+   "id": "n10",
+   "width": 39.347,
+   "height": 60.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 1
+   }
+  },
+  {
+   "id": "n11",
+   "width": 22.0,
+   "height": 1,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 3
+   }
+  },
+  {
+   "id": "n12",
+   "width": 64.1,
+   "height": 76.588,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 4
+   }
+  },
+  {
+   "id": "n13",
+   "width": 30,
+   "height": 30,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 2
+   }
+  },
+  {
+   "id": "n14",
+   "width": 50.0,
+   "height": 12.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 5
+   }
+  },
+  {
+   "id": "n15",
+   "width": 28.287,
+   "height": 5.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 1
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n7"
+   ]
+  }
+ ]
+}

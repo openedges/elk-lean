@@ -1,0 +1,142 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "RIGHT"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 10,
+   "height": 30
+  },
+  {
+   "id": "n1",
+   "width": 11,
+   "height": 29
+  },
+  {
+   "id": "n2",
+   "width": 12,
+   "height": 28
+  },
+  {
+   "id": "n3",
+   "width": 13,
+   "height": 27
+  },
+  {
+   "id": "n4",
+   "width": 14,
+   "height": 26
+  },
+  {
+   "id": "n5",
+   "width": 15,
+   "height": 25
+  },
+  {
+   "id": "n6",
+   "width": 16,
+   "height": 24
+  },
+  {
+   "id": "n7",
+   "width": 17,
+   "height": 23
+  },
+  {
+   "id": "n8",
+   "width": 18,
+   "height": 22
+  },
+  {
+   "id": "n9",
+   "width": 19,
+   "height": 21
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n9"
+   ]
+  }
+ ]
+}

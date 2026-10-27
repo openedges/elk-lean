@@ -1,0 +1,697 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.aspectRatio": 3.0
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 19.0,
+   "height": 54.0
+  },
+  {
+   "id": "n1",
+   "width": 25.0,
+   "height": 17.122
+  },
+  {
+   "id": "n2",
+   "width": 56.0,
+   "height": 51.0
+  },
+  {
+   "id": "n3",
+   "width": 51.588,
+   "height": 20.0
+  },
+  {
+   "id": "n4",
+   "width": 10,
+   "height": 27.9
+  },
+  {
+   "id": "n5",
+   "width": 18.189,
+   "height": 53.1,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 2
+   }
+  },
+  {
+   "id": "n6",
+   "width": 72.2,
+   "height": 7.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 0
+   }
+  },
+  {
+   "id": "n7",
+   "width": 74.0,
+   "height": 39.0
+  },
+  {
+   "id": "n8",
+   "width": 53.0,
+   "height": 17.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": -1
+   }
+  },
+  {
+   "id": "n9",
+   "width": 10.0,
+   "height": 77.0
+  },
+  {
+   "id": "n10",
+   "width": 31.0,
+   "height": 70.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 4
+   }
+  },
+  {
+   "id": "n11",
+   "width": 31.9,
+   "height": 72.0
+  },
+  {
+   "id": "n12",
+   "width": 72.3,
+   "height": 58.4
+  },
+  {
+   "id": "n13",
+   "width": 15.0,
+   "height": 63.0
+  },
+  {
+   "id": "n14",
+   "width": 55.0,
+   "height": 54.3
+  },
+  {
+   "id": "n15",
+   "width": 74.0,
+   "height": 8.222,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 4
+   }
+  },
+  {
+   "id": "n16",
+   "width": 46.0,
+   "height": 1
+  },
+  {
+   "id": "n17",
+   "width": 10.4,
+   "height": 1
+  },
+  {
+   "id": "n18",
+   "width": 13.0,
+   "height": 0
+  },
+  {
+   "id": "n19",
+   "width": 24.0,
+   "height": 22.0
+  },
+  {
+   "id": "n20",
+   "width": 75.513,
+   "height": 0
+  },
+  {
+   "id": "n21",
+   "width": 13.0,
+   "height": 68.0
+  },
+  {
+   "id": "n22",
+   "width": 66.0,
+   "height": 10
+  },
+  {
+   "id": "n23",
+   "width": 76.0,
+   "height": 36.225
+  },
+  {
+   "id": "n24",
+   "width": 34.515,
+   "height": 48.241
+  },
+  {
+   "id": "n25",
+   "width": 0,
+   "height": 35.938
+  },
+  {
+   "id": "n26",
+   "width": 45.6,
+   "height": 1
+  },
+  {
+   "id": "n27",
+   "width": 21.0,
+   "height": 71.679
+  },
+  {
+   "id": "n28",
+   "width": 30,
+   "height": 0
+  },
+  {
+   "id": "n29",
+   "width": 64.0,
+   "height": 7.349
+  },
+  {
+   "id": "n30",
+   "width": 60.0,
+   "height": 75.0
+  },
+  {
+   "id": "n31",
+   "width": 25.0,
+   "height": 77.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 2
+   }
+  },
+  {
+   "id": "n32",
+   "width": 27.0,
+   "height": 19.0
+  },
+  {
+   "id": "n33",
+   "width": 24.8,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 4
+   }
+  },
+  {
+   "id": "n34",
+   "width": 56.0,
+   "height": 80.0
+  },
+  {
+   "id": "n35",
+   "width": 36.0,
+   "height": 49.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 0
+   }
+  },
+  {
+   "id": "n36",
+   "width": 61.891,
+   "height": 55.2,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": -1,
+    "org.eclipse.elk.priority": 0
+   }
+  },
+  {
+   "id": "n37",
+   "width": 69.0,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.priority": 4
+   }
+  },
+  {
+   "id": "n38",
+   "width": 10,
+   "height": 13.0
+  },
+  {
+   "id": "n39",
+   "width": 72.774,
+   "height": 7.5,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 3
+   }
+  },
+  {
+   "id": "n40",
+   "width": 55.0,
+   "height": 66.0
+  },
+  {
+   "id": "n41",
+   "width": 26.0,
+   "height": 20.0
+  },
+  {
+   "id": "n42",
+   "width": 32.0,
+   "height": 34.0,
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.positionConstraint": 3
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n12"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n19"
+   ]
+  },
+  {
+   "id": "e19",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n20"
+   ]
+  },
+  {
+   "id": "e20",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n21"
+   ]
+  },
+  {
+   "id": "e21",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n22"
+   ]
+  },
+  {
+   "id": "e22",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n23"
+   ]
+  },
+  {
+   "id": "e23",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n24"
+   ]
+  },
+  {
+   "id": "e24",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n25"
+   ]
+  },
+  {
+   "id": "e25",
+   "sources": [
+    "n16"
+   ],
+   "targets": [
+    "n26"
+   ],
+   "sections": [
+    {
+     "id": "s25",
+     "startPoint": {
+      "x": 1,
+      "y": 2
+     },
+     "endPoint": {
+      "x": 3,
+      "y": 4
+     },
+     "bendPoints": [
+      {
+       "x": 5,
+       "y": 6
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e26",
+   "sources": [
+    "n12"
+   ],
+   "targets": [
+    "n27"
+   ]
+  },
+  {
+   "id": "e27",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n28"
+   ]
+  },
+  {
+   "id": "e28",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n29"
+   ]
+  },
+  {
+   "id": "e29",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n30"
+   ]
+  },
+  {
+   "id": "e30",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n31"
+   ]
+  },
+  {
+   "id": "e31",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n32"
+   ]
+  },
+  {
+   "id": "e32",
+   "sources": [
+    "n25"
+   ],
+   "targets": [
+    "n33"
+   ]
+  },
+  {
+   "id": "e33",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n34"
+   ]
+  },
+  {
+   "id": "e34",
+   "sources": [
+    "n34"
+   ],
+   "targets": [
+    "n35"
+   ]
+  },
+  {
+   "id": "e35",
+   "sources": [
+    "n33"
+   ],
+   "targets": [
+    "n36"
+   ]
+  },
+  {
+   "id": "e36",
+   "sources": [
+    "n20"
+   ],
+   "targets": [
+    "n37"
+   ]
+  },
+  {
+   "id": "e37",
+   "sources": [
+    "n19"
+   ],
+   "targets": [
+    "n38"
+   ]
+  },
+  {
+   "id": "e38",
+   "sources": [
+    "n25"
+   ],
+   "targets": [
+    "n39"
+   ]
+  },
+  {
+   "id": "e39",
+   "sources": [
+    "n31"
+   ],
+   "targets": [
+    "n40"
+   ]
+  },
+  {
+   "id": "e40",
+   "sources": [
+    "n17"
+   ],
+   "targets": [
+    "n41"
+   ],
+   "sections": [
+    {
+     "id": "s40",
+     "startPoint": {
+      "x": 1,
+      "y": 2
+     },
+     "endPoint": {
+      "x": 3,
+      "y": 4
+     },
+     "bendPoints": [
+      {
+       "x": 5,
+       "y": 6
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e41",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n42"
+   ]
+  },
+  {
+   "id": "e42",
+   "sources": [
+    "n36"
+   ],
+   "targets": [
+    "n23"
+   ]
+  },
+  {
+   "id": "e43",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n23"
+   ]
+  }
+ ]
+}

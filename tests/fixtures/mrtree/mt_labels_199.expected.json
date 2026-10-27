@@ -1,0 +1,36 @@
+{
+  "children": [
+    {
+      "height": 79,
+      "id": "n0",
+      "labels": [
+        {
+          "height": 10,
+          "id": "l0",
+          "text": "label0",
+          "width": 10,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "layoutOptions": {
+        "org.eclipse.elk.mrtree.treeLevel": 0
+      },
+      "width": 0,
+      "x": 12,
+      "y": 12
+    }
+  ],
+  "edges": [],
+  "height": 103,
+  "id": "root",
+  "layoutOptions": {
+    "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+    "org.eclipse.elk.aspectRatio": 100.0,
+    "org.eclipse.elk.direction": "UP",
+    "org.eclipse.elk.mrtree.compaction": true
+  },
+  "width": 25,
+  "x": 0,
+  "y": 0
+}

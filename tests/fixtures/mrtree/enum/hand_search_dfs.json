@@ -1,0 +1,104 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.mrtree.searchOrder": "DFS"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 10,
+   "height": 10
+  },
+  {
+   "id": "n1",
+   "width": 10,
+   "height": 10
+  },
+  {
+   "id": "n2",
+   "width": 10,
+   "height": 10
+  },
+  {
+   "id": "n3",
+   "width": 10,
+   "height": 10
+  },
+  {
+   "id": "n4",
+   "width": 10,
+   "height": 10
+  },
+  {
+   "id": "n5",
+   "width": 10,
+   "height": 10
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n3"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "UP",
+  "org.eclipse.elk.spacing.nodeNode": 20,
+  "org.eclipse.elk.mrtree.edgeRoutingMode": "NONE",
+  "org.eclipse.elk.mrtree.weighting": "MODEL_ORDER"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 59.0,
+   "height": 63.0
+  },
+  {
+   "id": "n1",
+   "width": 49.0,
+   "height": 36.0
+  },
+  {
+   "id": "n2",
+   "width": 32.0,
+   "height": 63.0
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  }
+ ]
+}

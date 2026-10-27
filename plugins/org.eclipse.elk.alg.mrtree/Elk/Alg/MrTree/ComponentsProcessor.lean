@@ -177,11 +177,13 @@ def pack (components : Array TGraphId) : MrTreeM TGraphId := do
     let size := KVector.sub (g.internal.bbLowright.getD {}) min
     if xpos + size.x > maxRowWidth then
       xpos := 0.0
-      ypos := ypos + highestBox + spacing
+      -- Rust `ypos += highest_box + spacing` (the sum first)
+      ypos := ypos + (highestBox + spacing)
       highestBox := 0.0
     moveGraph (some result) graph (xpos - min.x) (ypos - min.y)
     highestBox := fmax highestBox size.y
-    xpos := xpos + size.x + spacing
+    -- Rust `xpos += size.x + spacing`
+    xpos := xpos + (size.x + spacing)
   GraphBoundsProcessor.process result ProgressMonitor.null
   applyPaddingAndNormalizePositions result
   return result

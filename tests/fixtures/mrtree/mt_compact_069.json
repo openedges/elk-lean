@@ -1,0 +1,62 @@
+{
+ "id": "outer",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree"
+ },
+ "children": [
+  {
+   "id": "inner",
+   "layoutOptions": {
+    "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+    "org.eclipse.elk.direction": "RIGHT",
+    "org.eclipse.elk.spacing.edgeNode": 15,
+    "org.eclipse.elk.mrtree.compaction": true,
+    "org.eclipse.elk.mrtree.edgeEndTextureLength": 0
+   },
+   "children": [
+    {
+     "id": "n0",
+     "width": 62.433,
+     "height": 18.671
+    },
+    {
+     "id": "n1",
+     "width": 54.0,
+     "height": 1,
+     "layoutOptions": {
+      "org.eclipse.elk.mrtree.treeLevel": 1
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "e0",
+     "sources": [
+      "n0"
+     ],
+     "targets": [
+      "n1"
+     ]
+    }
+   ],
+   "width": 10,
+   "height": 10
+  },
+  {
+   "id": "other",
+   "width": 20,
+   "height": 20
+  }
+ ],
+ "edges": [
+  {
+   "id": "oe",
+   "sources": [
+    "inner"
+   ],
+   "targets": [
+    "other"
+   ]
+  }
+ ]
+}

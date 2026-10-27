@@ -1,0 +1,28 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+  "org.eclipse.elk.direction": "UP",
+  "org.eclipse.elk.aspectRatio": 100.0,
+  "org.eclipse.elk.mrtree.compaction": true
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 0,
+   "height": 79.0,
+   "labels": [
+    {
+     "id": "l0",
+     "text": "label0",
+     "width": 10,
+     "height": 10
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.mrtree.treeLevel": 0
+   }
+  }
+ ],
+ "edges": []
+}
