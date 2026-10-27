@@ -47,7 +47,7 @@ def runLayout (args : List String) : IO UInt32 := do
       match a.output with
       | some path =>
         if let some dir := (System.FilePath.mk path).parent then IO.FS.createDirAll dir
-        IO.FS.writeFile path (out ++ "\n")
+        IO.FS.writeFile path out  -- no trailing newline, like the elk-rs parity runner
       | none => IO.println out
       return 0
 

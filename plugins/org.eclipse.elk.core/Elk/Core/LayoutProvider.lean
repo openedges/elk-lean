@@ -1,6 +1,7 @@
 import Elk.Graph
-import Elk.Core.Util
+import Elk.Core.Util.ProgressMonitor
 import Elk.Core.Data
+import Elk.Core.Math
 /-!
 # `org.eclipse.elk.core.AbstractLayoutProvider` and the provider registry
 
@@ -11,7 +12,7 @@ Algorithm plugins register themselves through `Elk.Api.ensureInitialized`.
 -/
 namespace Elk.Core
 
-open Elk.Graph Elk.Core.Util
+open Elk.Graph Elk.Core.Util Elk.Core.Math
 
 /-- `AbstractLayoutProvider`. -/
 structure LayoutProvider where
@@ -23,6 +24,8 @@ structure LayoutProvider where
   layout : NodeId → ProgressMonitor → ElkM Unit
   /-- `dispose()`. -/
   dispose : IO Unit := pure ()
+  /-- `ITopdownLayoutProvider.getPredictedGraphSize`, for top-down capable providers. -/
+  predictedGraphSize : Option (NodeId → ElkM KVector) := none
 
 namespace LayoutProvider
 

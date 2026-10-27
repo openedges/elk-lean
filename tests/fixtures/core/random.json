@@ -1,0 +1,1 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"random","elk.randomSeed":"7"},"children":[{"id":"n1","width":30,"height":30},{"id":"n2","width":40,"height":20},{"id":"n3","width":10,"height":50}],"edges":[{"id":"e1","sources":["n1"],"targets":["n2"]},{"id":"e2","sources":["n2"],"targets":["n3"]}]}

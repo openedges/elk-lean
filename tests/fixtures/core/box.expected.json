@@ -1,0 +1,53 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30,
+      "x": 51,
+      "y": 72
+    },
+    {
+      "height": 20,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.priority": "2"
+      },
+      "width": 40,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "height": 50,
+      "id": "n3",
+      "width": 10,
+      "x": 62,
+      "y": 12
+    },
+    {
+      "children": [
+        {
+          "height": 5,
+          "id": "n41",
+          "width": 5,
+          "x": 12,
+          "y": 12
+        }
+      ],
+      "height": 29,
+      "id": "n4",
+      "width": 29,
+      "x": 12,
+      "y": 72
+    }
+  ],
+  "height": 114,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "box",
+    "elk.spacing.nodeNode": "10"
+  },
+  "width": 93,
+  "x": 0,
+  "y": 0
+}

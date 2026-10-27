@@ -1,0 +1,90 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 60,
+          "id": "h1a",
+          "width": 80,
+          "x": 113.24999999999997,
+          "y": 15.749999999999998
+        },
+        {
+          "height": 70,
+          "id": "h1b",
+          "width": 90,
+          "x": 113.24999999999997,
+          "y": 155.75
+        },
+        {
+          "height": 40,
+          "id": "h1c",
+          "width": 120,
+          "x": 113.24999999999997,
+          "y": 95.75
+        }
+      ],
+      "height": 230,
+      "id": "h1",
+      "layoutOptions": {
+        "elk.algorithm": "box",
+        "elk.contentAlignment": "H_CENTER V_CENTER",
+        "elk.padding": "[top=10,left=10,bottom=10,right=10]",
+        "elk.topdown.hierarchicalNodeAspectRatio": "1.5",
+        "elk.topdown.hierarchicalNodeWidth": "200",
+        "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+        "elk.topdownLayout": "true"
+      },
+      "width": 140,
+      "x": 5,
+      "y": 155.08203677510608
+    },
+    {
+      "children": [
+        {
+          "height": 60,
+          "id": "h2a",
+          "width": 80,
+          "x": 16.968,
+          "y": 16.968
+        },
+        {
+          "height": 70,
+          "id": "h2b",
+          "width": 90,
+          "x": 16.968,
+          "y": 96.968
+        }
+      ],
+      "height": 174,
+      "id": "h2",
+      "layoutOptions": {
+        "elk.algorithm": "box",
+        "elk.topdown.nodeType": "HIERARCHICAL_NODE",
+        "elk.topdown.sizeApproximator": "COUNT_CHILDREN",
+        "elk.topdownLayout": "true"
+      },
+      "width": 114,
+      "x": 65,
+      "y": 5
+    },
+    {
+      "height": 40,
+      "id": "leaf",
+      "width": 40,
+      "x": 5,
+      "y": 5
+    }
+  ],
+  "height": 313.41537010843945,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "box",
+    "elk.padding": "[top=5,left=5,bottom=5,right=5]",
+    "elk.topdown.nodeType": "ROOT_NODE",
+    "elk.topdownLayout": "true"
+  },
+  "width": 244,
+  "x": 0,
+  "y": 0
+}

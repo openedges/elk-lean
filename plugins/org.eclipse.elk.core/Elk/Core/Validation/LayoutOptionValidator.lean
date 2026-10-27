@@ -127,7 +127,9 @@ private def optionTypeName : LayoutOptionType → String
 /-- `LayoutOptionValidator.checkProperty(option, value, element)`: the issue for an invalid
 value, if any. -/
 def checkProperty (optionData : LayoutOptionData) (value : PropValue) (el : ElementId) : Option GraphIssue := Id.run do
-  if !isValidType optionData value then
+  -- `elk.resolvedAlgorithm` holds the algorithm id (Java: a LayoutAlgorithmData instance, always valid).
+  let typeOk := optionData.id == "org.eclipse.elk.resolvedAlgorithm" || isValidType optionData value
+  if !typeOk then
     return some { element := some el, severity := .error,
                   message := s!"The assigned value {formatValue value} of the option '{optionLabel optionData}' does not match the type {optionTypeName optionData.type}." }
   if let some bound := optionData.lowerBound then

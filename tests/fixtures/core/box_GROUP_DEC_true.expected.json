@@ -1,0 +1,115 @@
+{
+  "children": [
+    {
+      "height": 45,
+      "id": "n0",
+      "width": 120,
+      "x": 7,
+      "y": 73
+    },
+    {
+      "height": 60,
+      "id": "n1",
+      "width": 50,
+      "x": 135,
+      "y": 126
+    },
+    {
+      "height": 60,
+      "id": "n2",
+      "width": 50,
+      "x": 193,
+      "y": 126
+    },
+    {
+      "height": 60,
+      "id": "n3",
+      "width": 47,
+      "x": 251,
+      "y": 126
+    },
+    {
+      "height": 45,
+      "id": "n4",
+      "width": 163,
+      "x": 135,
+      "y": 73
+    },
+    {
+      "height": 15,
+      "id": "n5",
+      "width": 80,
+      "x": 7,
+      "y": 262
+    },
+    {
+      "height": 15,
+      "id": "n6",
+      "width": 115,
+      "x": 183,
+      "y": 262
+    },
+    {
+      "height": 60,
+      "id": "n7",
+      "width": 35,
+      "x": 7,
+      "y": 194
+    },
+    {
+      "height": 60,
+      "id": "n8",
+      "width": 120,
+      "x": 50,
+      "y": 194
+    },
+    {
+      "height": 60,
+      "id": "n9",
+      "width": 120,
+      "x": 7,
+      "y": 126
+    },
+    {
+      "height": 60,
+      "id": "n10",
+      "width": 163,
+      "x": 135,
+      "y": 5
+    },
+    {
+      "height": 15,
+      "id": "n11",
+      "width": 80,
+      "x": 95,
+      "y": 262
+    },
+    {
+      "height": 60,
+      "id": "n12",
+      "width": 120,
+      "x": 178,
+      "y": 194
+    },
+    {
+      "height": 60,
+      "id": "n13",
+      "width": 120,
+      "x": 7,
+      "y": 5
+    }
+  ],
+  "height": 286,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "box",
+    "elk.aspectRatio": "1.6",
+    "elk.box.packingMode": "GROUP_DEC",
+    "elk.expandNodes": "true",
+    "elk.padding": "[top=5,left=7,bottom=9,right=11]",
+    "elk.spacing.nodeNode": "8"
+  },
+  "width": 309,
+  "x": 0,
+  "y": 0
+}

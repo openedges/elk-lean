@@ -1,0 +1,1 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"box","elk.box.packingMode":"GROUP_MIXED","elk.expandNodes":"true"},"children":[{"id":"a","width":30,"height":30},{"id":"b","width":60,"height":20},{"id":"c","width":10,"height":50},{"id":"d","width":80,"height":80},{"id":"e","width":15,"height":15},{"id":"f","width":45,"height":35}]}

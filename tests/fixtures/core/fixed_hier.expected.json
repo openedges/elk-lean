@@ -1,0 +1,233 @@
+{
+  "children": [
+    {
+      "height": 40,
+      "id": "n1",
+      "labels": [
+        {
+          "height": 10,
+          "layoutOptions": {
+            "elk.position": "(2,2)"
+          },
+          "text": "N1",
+          "width": 20,
+          "x": 2,
+          "y": 2
+        }
+      ],
+      "layoutOptions": {
+        "elk.nodeSize.constraints": "MINIMUM_SIZE",
+        "elk.nodeSize.minimum": "(50,40)",
+        "elk.position": "(10,20)"
+      },
+      "ports": [
+        {
+          "height": 4,
+          "id": "p1",
+          "labels": [
+            {
+              "height": 6,
+              "layoutOptions": {
+                "elk.position": "(2,-8)"
+              },
+              "text": "P",
+              "width": 8,
+              "x": 2,
+              "y": -8
+            }
+          ],
+          "layoutOptions": {
+            "elk.position": "(30,10)"
+          },
+          "width": 4,
+          "x": 30,
+          "y": 10
+        }
+      ],
+      "width": 50,
+      "x": 10,
+      "y": 20
+    },
+    {
+      "children": [
+        {
+          "height": 10,
+          "id": "n21",
+          "layoutOptions": {
+            "elk.position": "(5,5)"
+          },
+          "width": 10,
+          "x": 5,
+          "y": 5
+        },
+        {
+          "height": 10,
+          "id": "n22",
+          "layoutOptions": {
+            "elk.position": "(40,40)"
+          },
+          "width": 10,
+          "x": 40,
+          "y": 40
+        }
+      ],
+      "edges": [
+        {
+          "container": "n2",
+          "id": "ie",
+          "layoutOptions": {
+            "elk.bendPoints": "(15,10),(15,45)"
+          },
+          "sections": [
+            {
+              "endPoint": {
+                "x": 15,
+                "y": 45
+              },
+              "id": "ie_s0",
+              "startPoint": {
+                "x": 15,
+                "y": 10
+              }
+            }
+          ],
+          "sources": [
+            "n21"
+          ],
+          "targets": [
+            "n22"
+          ]
+        }
+      ],
+      "height": 74,
+      "id": "n2",
+      "layoutOptions": {
+        "elk.algorithm": "fixed",
+        "elk.position": "(100,50)"
+      },
+      "width": 74,
+      "x": 100,
+      "y": 50
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "labels": [
+        {
+          "height": 8,
+          "layoutOptions": {
+            "elk.position": "(60,20)"
+          },
+          "text": "E1",
+          "width": 12,
+          "x": 60,
+          "y": 20
+        }
+      ],
+      "layoutOptions": {
+        "elk.bendPoints": "(44,32),(80,32),(80,65)"
+      },
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 80,
+              "y": 32
+            }
+          ],
+          "endPoint": {
+            "x": 80,
+            "y": 65
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 44,
+            "y": 32
+          }
+        }
+      ],
+      "sources": [
+        "p1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "layoutOptions": {
+        "elk.bendPoints": "(40,45),(80,45),(80,65)"
+      },
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 80,
+              "y": 45
+            }
+          ],
+          "endPoint": {
+            "x": 80,
+            "y": 65
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 40,
+            "y": 45
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n21"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "layoutOptions": {
+        "elk.bendPoints": "(40,45),(80,45),(80,70)"
+      },
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 80,
+              "y": 45
+            }
+          ],
+          "endPoint": {
+            "x": 80,
+            "y": 70
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": 40,
+            "y": 45
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 144,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "fixed",
+    "elk.edgeRouting": "ORTHOGONAL",
+    "elk.padding": "[top=10,left=10,bottom=10,right=10]"
+  },
+  "width": 194,
+  "x": 0,
+  "y": 0
+}
