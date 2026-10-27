@@ -18,6 +18,7 @@ import Tests.AlgCommon.Spore
 import Tests.AlgCommon.Geometry
 import Tests.AlgCommon.NodeSpacing
 import Tests.Layered
+import Tests.TopdownPacking
 
 /-- Test driver (`lake test`). Add each plugin's `suites` here. -/
 def main : IO UInt32 := do
@@ -28,6 +29,7 @@ def main : IO UInt32 := do
     Tests.AlgCommon.NetworkSimplex.suites ++ Tests.AlgCommon.Compaction.suites ++ Tests.AlgCommon.Polyomino.suites ++
     Tests.AlgCommon.Spore.suites ++ Tests.AlgCommon.Geometry.suites ++ Tests.AlgCommon.NodeSpacing.suites ++
     Tests.Layered.suites ++
+    Tests.TopdownPacking.suites ++
     Tests.Core.Alg.suites ++
     -- keep `Tests.Core.Engine` last: it registers an extra test algorithm (`core.meta.counts` expects 4)
     Tests.Core.Engine.suites

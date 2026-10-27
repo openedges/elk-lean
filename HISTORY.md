@@ -147,7 +147,7 @@
 | F1. force/stress(`org.eclipse.elk.force`, `org.eclipse.elk.stress`) | `alg.force/src/**`(3.1K줄) | sonnet | high | 서브에이전트 F1(worktree) | 진행 중 |
 | F2. spore(`sporeOverlap`, `sporeCompaction`) | `alg.spore/src/**`(2.2K줄) | sonnet | high | 서브에이전트 F2(worktree) | 진행 중 |
 | F3. disco | `alg.disco/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F3(worktree) | 진행 중 |
-| F4. topdownpacking | `alg.topdownpacking/src/**`(1K줄) | sonnet | medium | 서브에이전트 F4(worktree) | 진행 중 |
+| F4. topdownpacking | `alg.topdownpacking/src/**`(1K줄) | sonnet | medium | 서브에이전트 F4(worktree) | 완료(`merge F4`): oracle 하네스(stock runner는 topdownpacking 미등록 → scratchpad에 등록판 빌드)로 fixture 9/9 바이트 일치. **oracle 특이점**: elk-rs는 `as_topdown_layout_provider()`가 `None`이라 predicted graph size를 엔진에 노출하지 않음(Java는 노출) → Rust 따름, Java 동작은 `providerWithPrediction`(미등록) |
 | F5. mrtree / radial / rectpacking / vertiflex | `alg.{mrtree,radial,rectpacking,vertiflex}/src/**`(6.5K/3.5K/4.9K/2.3K줄) | opus(mrtree·rectpacking)/sonnet | high | 대기 | |
 
 ### Phase 4 진행 메모 (2026-10-27): 파이프라인 첫 가동

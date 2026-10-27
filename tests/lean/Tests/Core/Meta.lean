@@ -64,14 +64,15 @@ def countDependencies (ds : Array LayoutOptionData) : Nat :=
 
 def counts : Suite := suite "core.meta.counts" do
   let s ← LayoutMetaDataService.getInstance
-  checkEq "option count (core 95 + layered 89)" s.optionDataList.size 184
-  checkEq "option order size" s.optionOrder.size 184
+  checkEq "option count (core 95 + layered 89 + topdownpacking 2)" s.optionDataList.size 186
+  checkEq "option order size" s.optionOrder.size 186
   checkEq "category count" s.categoryDataList.size 8
-  checkEq "algorithm count" s.algorithmDataList.size 4
+  checkEq "algorithm count" s.algorithmDataList.size 5
   checkEq "dependency count" (countDependencies s.optionDataList) 10
   checkEq "legacy options (layered Java ids)" s.legacyOptions.size 89
   checkEqR "algorithm order" s.algorithmOrder
-    #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.layered"]
+    #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.layered",
+      "org.eclipse.elk.topdownpacking"]
   checkEqR "category order" s.categoryOrder
     #["org.eclipse.elk.layered", "org.eclipse.elk.orthogonal", "org.eclipse.elk.force",
       "org.eclipse.elk.circle", "org.eclipse.elk.tree", "org.eclipse.elk.planar",
@@ -346,7 +347,7 @@ def categories : Suite := suite "core.meta.categories" do
   let other ← LayoutMetaDataService.getCategoryData ""
   checkEq "backup category name" (other.map (·.name)) (some "Other")
   checkEqR "backup category members" ((other.map (·.layouters)).getD #[])
-    #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box"]
+    #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.topdownpacking"]
   let radial ← LayoutMetaDataService.getCategoryData "org.eclipse.elk.radial"
   checkEq "radial description"
     (radial.map (·.description))

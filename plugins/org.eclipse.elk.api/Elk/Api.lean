@@ -1,6 +1,7 @@
 import Elk.Json
 import Elk.Text
 import Elk.Alg.Layered
+import Elk.Alg.TopdownPacking
 import Elk.Api.LayoutApi
 /-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API. -/
 namespace Elk.Api
