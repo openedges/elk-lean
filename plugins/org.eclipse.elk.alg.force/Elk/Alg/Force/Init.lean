@@ -23,10 +23,10 @@ namespace Elk.Alg.Force
 open Elk.Core Elk.Core.Data Elk.Alg.Force.Options
 
 builtin_initialize initForceMetaData : Unit ←
-  LayoutMetaDataService.addInitHook ForceMetaDataProvider.register
+  LayoutMetaDataService.addInitHook ForceMetaDataProvider.register (rank := 30)
 
 builtin_initialize initStressMetaData : Unit ←
-  LayoutMetaDataService.addInitHook StressMetaDataProvider.register
+  LayoutMetaDataService.addInitHook StressMetaDataProvider.register (rank := 80)
 
 builtin_initialize registerForceLayoutProvider : Unit ←
   LayoutProvider.register ForceOptions.ALGORITHM_ID (fun _ => ForceLayoutProvider.provider)

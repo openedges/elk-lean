@@ -5,7 +5,7 @@ after the core hook) and the layout provider at module initialisation. -/
 namespace Elk.Alg.TopdownPacking
 
 builtin_initialize initTopdownPackingMetaData : Unit ←
-  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.TopdownpackingMetaDataProvider.register
+  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.TopdownpackingMetaDataProvider.register (rank := 100)
 
 builtin_initialize registerTopdownPackingLayoutProvider : Unit ←
   Elk.Core.LayoutProvider.register Options.TopdownpackingOptions.ALGORITHM_ID

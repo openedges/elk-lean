@@ -52,11 +52,9 @@ namespace ElkGraphImporter
 /-- `ElkGraphImporter::new()`. -/
 def new : IO ElkGraphImporter := return ⟨← IO.mkRef {}⟩
 
-/-- Rust `KVector::wiggle(random, amount)`: `x += r1 * amount - amount / 2`, then the same for `y`. -/
-private def wiggle (v : KVector) (random : Random) (amount : Float) : KVector × Random :=
-  let (dx, random) := random.nextDouble
-  let (dy, random) := random.nextDouble
-  (⟨v.x + (dx * amount - amount / 2.0), v.y + (dy * amount - amount / 2.0)⟩, random)
+/-- Rust `KVector::wiggle(random, amount)` (`Elk.Core.Math.KVector.wiggle`). -/
+@[inline] private def wiggle (v : KVector) (random : Random) (amount : Float) : KVector × Random :=
+  KVector.wiggle v random amount
 
 /-- Creates the vertex of a node (unique center, wiggled with `random`) and its rectangle. -/
 private def createNode (nodeMap : Std.HashMap KVector NodeId) (random : Random)

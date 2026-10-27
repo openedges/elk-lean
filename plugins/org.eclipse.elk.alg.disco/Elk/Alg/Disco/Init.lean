@@ -5,6 +5,6 @@ import Elk.Alg.Disco.Options.DisCoMetaDataProvider
 namespace Elk.Alg.Disco
 
 builtin_initialize initDisCoMetaData : Unit ←
-  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.DisCoMetaDataProvider.register
+  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.DisCoMetaDataProvider.register (rank := 20)
 
 end Elk.Alg.Disco

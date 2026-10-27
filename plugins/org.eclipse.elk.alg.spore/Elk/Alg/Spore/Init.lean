@@ -5,6 +5,6 @@ import Elk.Alg.Spore.Options.SporeMetaDataProvider
 namespace Elk.Alg.Spore
 
 builtin_initialize initSporeMetaData : Unit ←
-  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.SporeMetaDataProvider.register
+  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.SporeMetaDataProvider.register (rank := 70)
 
 end Elk.Alg.Spore

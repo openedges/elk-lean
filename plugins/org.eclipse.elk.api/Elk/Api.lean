@@ -4,6 +4,7 @@ import Elk.Alg.Layered
 import Elk.Alg.TopdownPacking
 import Elk.Alg.Force
 import Elk.Alg.Disco
+import Elk.Alg.Spore
 import Elk.Api.LayoutApi
 /-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API. -/
 namespace Elk.Api

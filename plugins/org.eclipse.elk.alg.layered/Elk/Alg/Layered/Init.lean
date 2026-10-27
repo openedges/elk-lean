@@ -4,6 +4,6 @@ import Elk.Alg.Layered.Options
 namespace Elk.Alg.Layered
 
 builtin_initialize initLayeredMetaData : Unit ←
-  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.LayeredMetaDataProvider.register
+  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.LayeredMetaDataProvider.register (rank := 10)
 
 end Elk.Alg.Layered

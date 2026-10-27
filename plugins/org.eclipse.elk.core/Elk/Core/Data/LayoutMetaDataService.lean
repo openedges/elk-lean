@@ -1,6 +1,7 @@
 import Std.Data.HashMap
 import Elk.Core.Data.LayoutOptionData
 import Elk.Core.Data.LayoutAlgorithmData
+import Elk.Core.Util.Sort
 /-!
 # `org.eclipse.elk.core.data.{ILayoutMetaDataProvider, LayoutMetaDataService}`
 
@@ -191,16 +192,21 @@ builtin_initialize initializedRef : IO.Ref Bool ← IO.mkRef false
 builtin_initialize instanceRef : IO.Ref LayoutMetaDataService ← IO.mkRef {}
 
 /-- Hooks of the algorithm plugins (run after the core hook, in registration order). -/
-builtin_initialize extraInitHooksRef : IO.Ref (Array (IO Unit)) ← IO.mkRef #[]
+builtin_initialize extraInitHooksRef : IO.Ref (Array (Nat × IO Unit)) ← IO.mkRef #[]
 
 /-- Registers the lazy core initialisation (called at module initialisation of `Elk.Core.Init`). -/
 def setInitHook (hook : IO Unit) : IO Unit := initHookRef.set (some hook)
 
 /-- Adds a plugin initialisation hook (e.g. the layered metadata provider); runs after the core
-hook the first time the service is used. Hooks added after initialisation run immediately. -/
-def addInitHook (hook : IO Unit) : IO Unit := do
+hook the first time the service is used. Hooks added after initialisation run immediately.
+
+Hooks run by ascending `rank` (stable), independent of module initialisation order, so the
+registry order is the elk-rs one (`layout_api.rs`/`model_parity_layout_runner.rs`: layered 10,
+disco 20, force 30, mrtree 40, radial 50, rectpacking 60, spore 70, stress 80, vertiflex 90);
+algorithms elk-rs does not register (topdownpacking) use larger ranks. -/
+def addInitHook (hook : IO Unit) (rank : Nat := 1000) : IO Unit := do
   if ← initializedRef.get then hook
-  else extraInitHooksRef.modify (·.push hook)
+  else extraInitHooksRef.modify (·.push (rank, hook))
 
 /-- Runs the core initialisation once (`get_instance()` semantics). -/
 def ensureInitialized : IO Unit := do
@@ -209,7 +215,8 @@ def ensureInitialized : IO Unit := do
     match ← initHookRef.get with
     | some hook => hook
     | none => pure ()
-    for hook in (← extraInitHooksRef.get) do hook
+    let hooks := Elk.Core.Util.stableSort (← extraInitHooksRef.get) fun a b => Ord.compare a.1 b.1
+    for (_, hook) in hooks do hook
 
 /-- `LayoutMetaDataService.getInstance()`: a snapshot of the registry. -/
 def getInstance : IO LayoutMetaDataService := do
