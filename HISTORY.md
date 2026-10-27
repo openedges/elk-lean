@@ -148,7 +148,10 @@
 | F2. spore(`sporeOverlap`, `sporeCompaction`) | `alg.spore/src/**`(2.2K줄) | sonnet | high | 서브에이전트 F2(worktree) | 진행 중 |
 | F3. disco | `alg.disco/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F3(worktree) | 진행 중 |
 | F4. topdownpacking | `alg.topdownpacking/src/**`(1K줄) | sonnet | medium | 서브에이전트 F4(worktree) | 완료(`merge F4`): oracle 하네스(stock runner는 topdownpacking 미등록 → scratchpad에 등록판 빌드)로 fixture 9/9 바이트 일치. **oracle 특이점**: elk-rs는 `as_topdown_layout_provider()`가 `None`이라 predicted graph size를 엔진에 노출하지 않음(Java는 노출) → Rust 따름, Java 동작은 `providerWithPrediction`(미등록) |
-| F5. mrtree / radial / rectpacking / vertiflex | `alg.{mrtree,radial,rectpacking,vertiflex}/src/**`(6.5K/3.5K/4.9K/2.3K줄) | opus(mrtree·rectpacking)/sonnet | high | 대기 | |
+| F5. vertiflex | `alg.vertiflex/src/**`(2.3K줄) | sonnet | high | 서브에이전트 F5(worktree) | 진행 중 |
+| F6. radial | `alg.radial/src/**`(3.5K줄) | sonnet | high | 서브에이전트 F6(worktree) | 진행 중 |
+| F7a/F7b. mrtree(그래프·importer·intermediate → p1~p4·provider) | `alg.mrtree/src/**`(6.5K줄) | opus | high | 대기 | |
+| F8a/F8b. rectpacking(util·options·p1 → p2·p3·provider) | `alg.rectpacking/src/**`(4.9K줄) | opus | high | 대기 | |
 
 ### Phase 4 진행 메모 (2026-10-27): 파이프라인 첫 가동
 - `LayeredLayoutProvider`(import → `ElkLayered.doLayout`/`doCompoundLayout` → apply) 등록. `ELK_LEAN_SKIP_UNPORTED=1`이면 미이식 프로세서/phase가 `Unported_*` no-op으로 대체되어 첫 누락 지점까지 trace 비교 가능.
