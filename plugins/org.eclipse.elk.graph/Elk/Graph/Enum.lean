@@ -43,7 +43,14 @@ def ofJavaName? (s : String) : Option α := (values : Array α).find? (fun v => 
 keep ASCII letters and digits only, upper-cased. `H_CENTER`, `hCenter` and
 `h-center` all normalise to `HCENTER`. -/
 def normalizeName (s : String) : String :=
-  String.ofList ((s.toList.filter Char.isAlphanum).map Char.toUpper)
+  -- byte-wise (`Char.isAlphanum` is ASCII-only, so every other byte, including all bytes of
+  -- multi-byte characters, is dropped); the `List Char` round trip showed up in import profiles
+  let bs := s.toUTF8
+  let out := bs.foldl (init := ByteArray.emptyWithCapacity bs.size) fun acc b =>
+    if (b >= 48 && b <= 57) || (b >= 65 && b <= 90) then acc.push b
+    else if b >= 97 && b <= 122 then acc.push (b - 32)
+    else acc
+  (String.fromUTF8? out).getD ""
 
 /-- Lenient lookup (elk-rs `parse_enum_value`): a decimal token selects by
 ordinal, otherwise names are compared after `normalizeName`. -/

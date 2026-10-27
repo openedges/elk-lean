@@ -116,6 +116,12 @@ def graphIdentifierGeneratorTests : Suite := suite "graph.GraphIdentifierGenerat
     check "ids differ" (id1 != id2)
     checkEq "suffix is four digits" id2.length 9
 
-def suites : Array Tests.Suite := #[elkGraphUtilTests, graphIdentifierGeneratorTests]
+/-- `ElkEnum.normalizeName` (byte-wise) agrees with the `List Char` definition it replaced. -/
+def enumNormalizeTests : Tests.Suite := Tests.suite "graph.enum.normalizeName" do
+  let reference (s : String) : String := String.ofList ((s.toList.filter Char.isAlphanum).map Char.toUpper)
+  for s in ["H_CENTER", "hCenter", "h-center", "  Orthogonal ", "é_x1ß", "", "a1_B2-c3", "日本SPLINES", "node_size.minimum"] do
+    Tests.checkEq s!"normalizeName {repr s}" (Elk.ElkEnum.normalizeName s) (reference s)
+
+def suites : Array Tests.Suite := #[elkGraphUtilTests, graphIdentifierGeneratorTests, enumNormalizeTests]
 
 end Tests.Graph
