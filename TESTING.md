@@ -86,6 +86,12 @@ sh scripts/run_phase_trace_parity.sh external/elk-models/<model>.elkt tests/tmp/
 sh scripts/compare_bytes.sh tests/model_parity   # byte identity of every model against the oracle files of that run
 ```
 
+`run_model_parity.sh` reuses `<out>/oracle.tsv` + `<out>/oracle/` when both exist and regenerates
+the oracle layouts otherwise (`PARITY_REFRESH_ORACLE=1` forces it). The manifests and reports under
+`tests/model_parity/` are tracked, the layouts are not, so in a fresh git worktree run the whole
+corpus into a new directory (e.g. `tests/tmp/model_parity`) and read `compare errors` in the report,
+not only the "no diffs" tail. In a worktree pass the Java baseline directory as an absolute path.
+
 Inputs: the 550 `realworld/*.json` models are used directly; the 898 `.elkt` models are
 converted to JSON with `elk convert`. The 550 `.elkg` files are XMI copies of the realworld
 graphs; elk-rs does not read them either, so they are not compared. In trace mode the oracle

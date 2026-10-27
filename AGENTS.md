@@ -84,9 +84,9 @@
 - **빌드 상태**: `lake build` 경고 0, `lake test` 13777 통과/0 실패(1 skip: BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요).
 - **Parity(ELK Java 기준)**: 코퍼스 1,998개 중 1,997개 비교(1건은 양쪽 동일 예외): 최종 출력 정확 일치(tol 0) 1,878, 나머지 119는 Java 자체가 실행 컨텍스트(identity hash 순서)에 따라 결과가 바뀌는 모델(패치 0001 적용 Java와는 전부 일치), ticket 213은 Java가 NaN을 내는 의도적 예외. 단계별 trace(tol 0, 엄격 순서): 1,817/1,997 전 단계 정확 일치, 나머지 180은 모두 Java 측 요인(170 비유한 중간 포트 좌표·7 self-loop 변 순서·3 partition 포트 순서, 상세 `HISTORY.md`).
 - **Parity(elk-rs 보조)**: model parity(1e-6) 1447/1447, strict trace 1447/1447. 바이트 일치는 숫자 의미론을 Java에 맞춘 뒤(1e-6 스냅 없음, 정확 반올림 입력) 1060/1447이며 나머지 차이는 `-0.0`/스냅·≤4e-12 값 차이뿐 — elk-rs 바이트 일치는 더 이상 게이트가 아니다.
-- **성능**: 합성 26개 시나리오 lean/rust_api 기하평균 **1.66배**(1차 6.41배; `tests/perf/report.md`, 5% 회귀 게이트 기준선 `baseline_lean_api.csv`). 2차 최적화 병합(`09e3128`, PF2·PN·PJ·PL5, 에이전트 A/B 측정): force/stress 0.9~1.1배, rectpacking_xlarge −40%, mrtree_xlarge −22%, radial_xlarge −27%, layered_xlarge −44%(P5 3~4.7배), 코퍼스 총합 1.53배. 조용한 머신에서의 전체 벤치마크·기준선 갱신은 PL3b 병합 후. 남은 병목: P3 Forster·SweepCopy(PL3b), `NodeMarginCalculator` 어댑터 클로저, JSON 고정 비용, `ElkGraph.modifyNode` 류 인라인 람다 재할당(전역, PLAN §7.1 참조).
+- **성능**: 합성 26개 시나리오 lean/rust_api 기하평균 **0.91배**(1차 6.41배 → 2차 1.66배 → 2차 최적화 병합 PF2·PN·PJ·PL5·PL3b + 전역 `Array.modifyIn`; `tests/perf/report.md`, 5% 회귀 게이트 기준선 `baseline_lean_api.csv` 갱신, `d94f161`). layered 1.07~1.13배, force 0.86~0.88배, stress 1.01~1.06배, mrtree 1.0배, rectpacking 0.87~1.03배, radial 0.2~0.4배, routing_splines 1.25배, hierarchy 1.17~1.22배. 남은 병목: `NodeMarginCalculator` 어댑터 클로저, JSON 고정 비용, P5 비임계 사이클·의존성 생성, 스플라인 라우팅.
 - **Phase 8**: C API(`elk_lean.h`)·NAPI 애드온·npm 패키지(JS 테스트 51/51, WASM 3모드 포함; 애드온 vs CLI 1447/1448 바이트 일치)·WASM(realworld 550/550, 네이티브 대비 1.34배, npm 로더 연결 완료) 완료. 남은 일: 깊은 재귀용 Worker 모드, Linux/Windows 빌드, 게시, GMP(LGPL) 정적 링크 검토.
-- **다음 우선순위**: PL3b 병합 → 전체 벤치마크·기준선 갱신 → `modifyNode`/`modifyPort`/`modifyEdge` 재할당 수정(전역) → 남은 고정 비용(JSON·`NodeMarginCalculator`) → 릴리스 준비(Linux/Windows, npm 게시).
+- **다음 우선순위**: 메모리 수명 재측정 → 남은 고정 비용(JSON·`NodeMarginCalculator`, 스플라인 라우팅) → 릴리스 준비(깊은 재귀용 Worker 모드, Linux/Windows 빌드, npm 게시, GMP 링크 검토) → `--trace-dir` 유무에 따라 출력이 다른 interactive 모델 3개 조사.
 - **작업 위치 규칙**: 서브에이전트는 worktree에서만 작업한다. worktree가 사라지면 메인 체크아웃으로 옮기지 말고 보고하게 한다(공유 체크아웃에서의 동시 작업은 커밋 범위 혼동을 일으킨다).
 
 ## 기본 실행 명령
