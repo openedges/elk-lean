@@ -107,7 +107,7 @@
 | M3a. `ElkLayered`/`LayeredLayoutProvider` | `elk_layered.rs`, `layered_layout_provider.rs`(1.1K줄) | fable(주) | xhigh | M3b 이후 | 대기 |
 | M3b. components + compound | `components/*`, `compound/*`(4.4K줄) | opus | xhigh | 서브에이전트 M3b(worktree) | 진행 중 |
 | M1. `ElkGraphImporter`/`ElkGraphTransformer`/`LGraphAdapters` | (위 참조; `NodeLabelAndSizeCalculator`에 의존) | opus | xhigh | N3 이후 | 대기 |
-| P1. cycle breakers 9종 + `GroupModelOrderCalculator` | `p1cycles/*`(2K줄) | opus | high | 서브에이전트 P1(worktree) | 진행 중 |
+| P1. cycle breakers 9종 + `GroupModelOrderCalculator` | `p1cycles/*`(2K줄) | opus | high | 서브에이전트 P1(worktree) | 완료(`merge P1`, 104 검사): 페이즈 이름은 elk-rs `type_name`(`GreedyModelOrderCycleBreaker` 등, trace 파일명과 일치). Rust 우선 편차: ModelOrder `bigOffset`의 `max(…,1)`, SccNodeType의 미설정 선호 id=0, Interactive는 CYCLIC 미설정 |
 | P2. layerers 9종(NetworkSimplexLayerer 포함) | `p2layers/*`(2.5K줄) | opus | xhigh | 서브에이전트 P2(worktree) | 진행 중 |
 | P3a. crossing counters + `CrossMinSnapshot` + greedyswitch | `p3order/counting/*`, `cross_min_snapshot.rs`, `intermediate/greedyswitch/*`(3.8K줄) + `tests/p3_order/counting/*`(4.8K줄) | opus | xhigh | 서브에이전트 P3a(worktree) | 진행 중 |
 | P3b/P3c. port distributors + forster(2.9K) → heuristics/type decider/sweep copy(3.0K) → GraphInfoHolder + LayerSweepCrossingMinimizer(2.5K) | `p3order/*` | opus | xhigh | P3a 이후 순차 | 대기 |
