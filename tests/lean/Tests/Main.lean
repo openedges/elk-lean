@@ -13,6 +13,7 @@ import Tests.Graph.All
 import Tests.Json.All
 import Tests.Json.Importer
 import Tests.Json.ParserFuzz
+import Tests.Json.Zmij
 import Tests.Text.All
 import Tests.AlgCommon.NetworkSimplex
 import Tests.AlgCommon.Compaction
@@ -37,7 +38,8 @@ def main : IO UInt32 := do
     Tests.Core.Foundation.suites ++ Tests.Core.Options.suites ++ Tests.Core.Math.suites ++
     Tests.Core.Util.suites ++
     Tests.Core.RustSort.suites ++ Tests.Core.FastFloat.suites ++ Tests.Core.Meta.suites ++ Tests.Core.Validation.suites ++
-    Tests.Graph.suites ++ Tests.Json.suites ++ Tests.Json.Importer.suites ++ Tests.Json.ParserFuzz.suites ++ Tests.Text.suites ++
+    Tests.Graph.suites ++ Tests.Json.suites ++ Tests.Json.Importer.suites ++ Tests.Json.ParserFuzz.suites ++
+    Tests.Json.Zmij.suites ++ Tests.Text.suites ++
     Tests.AlgCommon.NetworkSimplex.suites ++ Tests.AlgCommon.Compaction.suites ++ Tests.AlgCommon.Polyomino.suites ++
     Tests.AlgCommon.Spore.suites ++ Tests.AlgCommon.Geometry.suites ++ Tests.AlgCommon.NodeSpacing.suites ++
     Tests.Layered.suites ++

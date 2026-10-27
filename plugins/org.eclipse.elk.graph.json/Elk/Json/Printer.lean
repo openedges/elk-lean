@@ -15,24 +15,40 @@ namespace Printer
 private def hexDigit (n : Nat) : Char :=
   if n < 10 then Char.ofNat ('0'.toNat + n) else Char.ofNat ('a'.toNat + n - 10)
 
+/-- Appends `c` with serde_json string escaping. -/
+private def pushEscaped (out : String) (c : Char) : String :=
+  match c with
+  | '"' => out ++ "\\\""
+  | '\\' => out ++ "\\\\"
+  | '\n' => out ++ "\\n"
+  | '\r' => out ++ "\\r"
+  | '\t' => out ++ "\\t"
+  | '\x08' => out ++ "\\b"
+  | '\x0c' => out ++ "\\f"
+  | c =>
+    if c.toNat < 0x20 then
+      ((out ++ "\\u00").push (hexDigit (c.toNat / 16))).push (hexDigit (c.toNat % 16))
+    else
+      out.push c
+
+/-- Whether `s` has a character that serde_json escapes (`"`, `\`, control characters), checked on
+the UTF-8 bytes from byte `i` (bytes of multi-byte characters are `≥ 0x80`). -/
+private def hasEscapes (s : String) (i : Nat) : Bool :=
+  if h : i < s.utf8ByteSize then
+    let b := s.getUTF8Byte ⟨i⟩ h
+    b < 0x20 || b == 0x22 || b == 0x5c || hasEscapes s (i + 1)
+  else
+    false
+termination_by s.utf8ByteSize - i
+
+/-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
+def escapeInto (out s : String) : String :=
+  let out := out.push '"'
+  let out := if hasEscapes s 0 then s.foldl pushEscaped out else out ++ s
+  out.push '"'
+
 /-- serde_json string escaping. -/
-def escapeString (s : String) : String := Id.run do
-  let mut out := "\""
-  for c in s.toList do
-    match c with
-    | '"' => out := out ++ "\\\""
-    | '\\' => out := out ++ "\\\\"
-    | '\n' => out := out ++ "\\n"
-    | '\r' => out := out ++ "\\r"
-    | '\t' => out := out ++ "\\t"
-    | '\x08' => out := out ++ "\\b"
-    | '\x0c' => out := out ++ "\\f"
-    | c =>
-      if c.toNat < 0x20 then
-        out := out ++ "\\u00" ++ String.singleton (hexDigit (c.toNat / 16)) ++ String.singleton (hexDigit (c.toNat % 16))
-      else
-        out := out.push c
-  return out.push '"'
+def escapeString (s : String) : String := escapeInto "" s
 
 private def sortEntries (kvs : Array (String × Value)) : Array (String × Value) :=
   Elk.Core.Util.stableSort kvs (fun a b => compare a.1 b.1)
@@ -43,29 +59,25 @@ partial def compact (sortKeys : Bool) (v : Value) (out : String) : String :=
   | .null => out ++ "null"
   | .bool b => out ++ (if b then "true" else "false")
   | .num n => out ++ n.render
-  | .str s => out ++ escapeString s
+  | .str s => escapeInto out s
   | .arr xs => Id.run do
     let mut out := out.push '['
-    let mut first := true
-    for x in xs do
-      if !first then out := out.push ','
-      first := false
-      out := compact sortKeys x out
+    for h : i in [0:xs.size] do
+      if i != 0 then out := out.push ','
+      out := compact sortKeys xs[i] out
     return out.push ']'
   | .obj kvs => Id.run do
     let kvs := if sortKeys then sortEntries kvs else kvs
     let mut out := out.push '{'
-    let mut first := true
-    for (k, x) in kvs do
-      if !first then out := out.push ','
-      first := false
-      out := out ++ escapeString k
-      out := out.push ':'
+    for h : i in [0:kvs.size] do
+      if i != 0 then out := out.push ','
+      let (k, x) := kvs[i]
+      out := (escapeInto out k).push ':'
       out := compact sortKeys x out
     return out.push '}'
 
-private def indent (out : String) (level : Nat) : String :=
-  out ++ String.ofList (List.replicate (2 * level) ' ')
+@[inline] private def indent (out : String) (level : Nat) : String :=
+  out.pushn ' ' (2 * level)
 
 /-- Pretty rendering (`serde_json::to_string_pretty`, two-space indentation). -/
 partial def pretty (sortKeys : Bool) (v : Value) (level : Nat) (out : String) : String :=
@@ -74,12 +86,10 @@ partial def pretty (sortKeys : Bool) (v : Value) (level : Nat) (out : String) : 
     if xs.isEmpty then out ++ "[]"
     else Id.run do
       let mut out := out ++ "[\n"
-      let mut first := true
-      for x in xs do
-        if !first then out := out ++ ",\n"
-        first := false
+      for h : i in [0:xs.size] do
+        if i != 0 then out := out ++ ",\n"
         out := indent out (level + 1)
-        out := pretty sortKeys x (level + 1) out
+        out := pretty sortKeys xs[i] (level + 1) out
       out := out.push '\n'
       out := indent out level
       return out.push ']'
@@ -88,12 +98,11 @@ partial def pretty (sortKeys : Bool) (v : Value) (level : Nat) (out : String) : 
     else Id.run do
       let kvs := if sortKeys then sortEntries kvs else kvs
       let mut out := out ++ "{\n"
-      let mut first := true
-      for (k, x) in kvs do
-        if !first then out := out ++ ",\n"
-        first := false
+      for h : i in [0:kvs.size] do
+        if i != 0 then out := out ++ ",\n"
+        let (k, x) := kvs[i]
         out := indent out (level + 1)
-        out := out ++ escapeString k ++ ": "
+        out := escapeInto out k ++ ": "
         out := pretty sortKeys x (level + 1) out
       out := out.push '\n'
       out := indent out level
