@@ -7,15 +7,19 @@ import Elk.Core.Util.Java
 # `org.eclipse.elk.alg.layered.p3order.SweepCopy`
 
 A copy of the node order and of the port order of every node, taken after a sweep and written
-back to the graph for the best sweep (elk-rs `sweep_copy.rs`). Like elk-rs the copy stores
-`CrossMinSnapshot` indices: per layer the *flat node indices*, per node the *port ids* (captured
-`LPort.id`s); `snapshot.nodeRef`/`portRefOpt` map them back. It is a pure value (`copyFromSweep`
-is the source itself).
+back to the graph for the best sweep (elk-rs `sweep_copy.rs`). elk-rs stores `CrossMinSnapshot`
+indices: per layer the *flat node indices*, per node the *port ids* (captured `LPort.id`s), and
+maps them back with `snapshot.nodeRef`/`portRefOpt` when the copy is used. Here the copy keeps the
+node and port *lists* themselves (the arrays are shared with the current order and the arena, so a
+copy costs one pointer per node instead of one lookup per port) together with the snapshot, and
+applies the same round trip (`nodeRef ∘ nodeFlatIndex`, `portRefOpt ∘ portId`, which is the
+identity for the captured elements) where the indices are read. `nodeIndices`/`portOrders` give
+the elk-rs index form. It is a pure value (`copyFromSweep` is the source itself).
 
 ## API (for `GraphInfoHolder`/`LayerSweepCrossingMinimizer`)
 * `SweepCopy.new order snapshot : LayeredM SweepCopy` (`ofArena` is the pure form);
   `copyFrom` is `new` (Rust reuses the allocations), `copyFromSweep _ source = source`.
-* `nodeIndices`: the flat node indices per layer.
+* `nodeIndices`: the flat node indices per layer; `nodeRefs`: the nodes they map back to.
 * `transferNodeAndPortOrdersToGraph sc graph setPortConstraints snapshot` (Rust
   `transfer_node_and_port_orders_to_graph`; the `_guard` variant is the same in Lean).
 
@@ -43,19 +47,26 @@ open Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Option
 
 /-- `SweepCopy`. -/
 structure SweepCopy where
-  /-- `node_order`: flat node indices (`CrossMinSnapshot`) per layer. -/
-  nodeOrder : Array (Array Nat) := #[]
-  /-- `port_orders`: port ids per node per layer. -/
-  portOrders : Array (Array (Array Nat)) := #[]
-  deriving Inhabited, BEq, Repr
+  /-- `node_order` as nodes (elk-rs: their flat node indices). -/
+  nodes : Array (Array LNodeId) := #[]
+  /-- `port_orders` as port lists per node per layer (elk-rs: their captured port ids). -/
+  ports : Array (Array (Array LPortId)) := #[]
+  /-- The snapshot the indices refer to. -/
+  snapshot : CrossMinSnapshot := {}
+  deriving Inhabited
 
 namespace SweepCopy
 
-/-- `SweepCopy::new(node_order, snapshot)` on an arena: the flat indices of the nodes and the
-captured ids of their current ports (`0` for unknown ones, like Rust). -/
+/-- The port lists of the nodes of `layer[i:]` pushed onto `out`. -/
+private partial def portListsFrom (a : LGraphArena) (layer : Array LNodeId) (i : Nat)
+    (out : Array (Array LPortId)) : Array (Array LPortId) :=
+  if h : i < layer.size then portListsFrom a layer (i + 1) (out.push (a.node layer[i]).ports) else out
+
+/-- `SweepCopy::new(node_order, snapshot)` on an arena: the nodes and their current port lists. -/
 def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (s : CrossMinSnapshot) : SweepCopy where
-  nodeOrder := order.map (·.map s.nodeFlatIndex)
-  portOrders := order.map (·.map fun n => (a.node n).ports.map s.portId)
+  nodes := order
+  ports := order.map fun layer => portListsFrom a layer 0 (Array.emptyWithCapacity layer.size)
+  snapshot := s
 
 /-- `SweepCopy::new(node_order, snapshot)`. -/
 def new (order : Array (Array LNodeId)) (s : CrossMinSnapshot) : LayeredM SweepCopy := do
@@ -68,8 +79,20 @@ def copyFrom (_sc : SweepCopy) (order : Array (Array LNodeId)) (s : CrossMinSnap
 /-- `copy_from_sweep(source)`. -/
 @[inline] def copyFromSweep (_sc : SweepCopy) (source : SweepCopy) : SweepCopy := source
 
-/-- `node_indices()`. -/
-@[inline] def nodeIndices (sc : SweepCopy) : Array (Array Nat) := sc.nodeOrder
+/-- `node_indices()`: the flat node indices per layer. -/
+def nodeIndices (sc : SweepCopy) : Array (Array Nat) := sc.nodes.map (·.map sc.snapshot.nodeFlatIndex)
+
+/-- `port_orders`: the captured port ids per node per layer (`0` for unknown ports, like Rust). -/
+def portOrders (sc : SweepCopy) : Array (Array (Array Nat)) := sc.ports.map (·.map (·.map sc.snapshot.portId))
+
+/-- The nodes the flat indices of `nodeIndices` map back to (`snapshot.nodeRef`). -/
+def nodeRefs (sc : SweepCopy) : Array (Array LNodeId) :=
+  let s := sc.snapshot
+  sc.nodes.map (·.map fun n => s.nodeRef (s.nodeFlatIndex n))
+
+/-- Equal flat node indices and port ids (the elk-rs value). -/
+instance : BEq SweepCopy where
+  beq x y := x.nodeIndices == y.nodeIndices && x.portOrders == y.portOrders
 
 /-- Rust `compare_ports(p1, p2, constraints)`: by side (ordinal), equal unless the order is fixed,
 then with `FIXED_ORDER` different `PORT_INDEX`es, then the position along the side (`x` north,
@@ -137,12 +160,13 @@ def assertCorrectPortSides (dummy : LNodeId) : LayeredM (Option LNodeId) := do
   return some origin
 
 /-- One saved node of layer `layerIndex` written back (`apply_to_layers` inner loop): id, ports,
-port constraints and the layer slot; whether it is a north/south port dummy. -/
-def applyNode (sc : SweepCopy) (layer : LayerId) (layerIndex nodeIndex : Nat) (flat : Nat) (setPortConstraints : Bool)
+port constraints and the layer slot; whether it is a north/south port dummy. The saved node and
+ports go through the snapshot's index round trip (`nodeRef (nodeFlatIndex n)`, `portRefOpt (portId p)`). -/
+def applyNode (sc : SweepCopy) (layer : LayerId) (layerIndex nodeIndex : Nat) (saved : LNodeId) (setPortConstraints : Bool)
     (s : CrossMinSnapshot) : LayeredM (LNodeId × Bool) := do
-  let node := s.nodeRef flat
-  let savedPorts := ((sc.portOrders[layerIndex]?).bind (·[nodeIndex]?)).getD #[]
-  let ports := savedPorts.filterMap s.portRefOpt
+  let node := s.nodeRef (s.nodeFlatIndex saved)
+  let savedPorts := ((sc.ports[layerIndex]?).bind (·[nodeIndex]?)).getD #[]
+  let ports := savedPorts.filterMap fun p => s.portRefOpt (s.portId p)
   modifyNode node fun x => { x with id := nodeIndex, ports }
   let isNorthSouth := (← getNode node).type == .northSouthPort
   if setPortConstraints then
@@ -160,10 +184,10 @@ def applyToLayers (sc : SweepCopy) (layers : Array LayerId) (setPortConstraints 
   let mut updatePortOrder : Array LNodeId := #[]
   for h : layerIndex in [0:layers.size] do
     let layer := layers[layerIndex]
-    let flats := sc.nodeOrder[layerIndex]?.getD #[]
+    let saved := sc.nodes[layerIndex]?.getD #[]
     let mut northSouthPortDummies : Array LNodeId := #[]
-    for h2 : nodeIndex in [0:flats.size] do
-      let (node, isNorthSouth) ← sc.applyNode layer layerIndex nodeIndex flats[nodeIndex] setPortConstraints s
+    for h2 : nodeIndex in [0:saved.size] do
+      let (node, isNorthSouth) ← sc.applyNode layer layerIndex nodeIndex saved[nodeIndex] setPortConstraints s
       if isNorthSouth then northSouthPortDummies := northSouthPortDummies.push node
     for dummy in northSouthPortDummies do
       if let some origin ← assertCorrectPortSides dummy then
