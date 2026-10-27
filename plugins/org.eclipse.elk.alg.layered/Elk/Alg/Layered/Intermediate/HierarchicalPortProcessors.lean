@@ -3,6 +3,7 @@ import Elk.Alg.Layered.Intermediate.HierarchicalPortDummySizeProcessor
 import Elk.Alg.Layered.Intermediate.HierarchicalPortPositionProcessor
 import Elk.Alg.Layered.Intermediate.HierarchicalNodeResizingProcessor
 import Elk.Alg.Layered.Intermediate.InteractiveExternalPortPositioner
+import Elk.Alg.Layered.Intermediate.HierarchicalPortOrthogonalEdgeRouter
 /-!
 # Hierarchical (external) port processors
 

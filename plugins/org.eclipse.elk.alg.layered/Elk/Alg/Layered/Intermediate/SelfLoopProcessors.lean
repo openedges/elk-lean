@@ -2,6 +2,8 @@ import Elk.Alg.Layered.Intermediate.Loops
 import Elk.Alg.Layered.Intermediate.SelfLoopPreprocessor
 import Elk.Alg.Layered.Intermediate.SelfLoopPortRestorer
 import Elk.Alg.Layered.Intermediate.SelfLoopPostprocessor
+import Elk.Alg.Layered.Intermediate.Loops.Routing
+import Elk.Alg.Layered.Intermediate.SelfLoopRouter
 /-!
 # Self-loop intermediate processors
 
