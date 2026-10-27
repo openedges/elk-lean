@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"n1","layoutOptions":{"elk.portConstraints":"FIXED_ORDER"}}],"layoutOptions":{"elk.edgeRouting":"SPLINES"},"edges":[{"id":"e0","sources":["n1"],"targets":["n1"]}]}

@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"A","ports":[{"id":"A_enter","layoutOptions":{"elk.port.side":"NORTH"}},{"id":"A_exit","layoutOptions":{"elk.port.side":"SOUTH"}}],"layoutOptions":{"elk.portConstraints":"FIXED_SIDE"}}],"edges":[{"id":"e0","sources":["A_exit"],"targets":["A_enter"],"labels":[{"text":"E"}]}]}

@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"n1","labels":[{"text":"n1"}],"width":200.0,"height":200.0},{"id":"n2","labels":[{"text":"n2"}],"x":100.0}],"layoutOptions":{"elk.direction":"RIGHT","elk.separateConnectedComponents":"false","elk.alg.layered.cycleBreaking.strategy":"INTERACTIVE","elk.alg.layered.layering.strategy":"INTERACTIVE"}}

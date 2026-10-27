@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N0"},{"id":"N1"}],"layoutOptions":{"elk.algorithm":"layered","elk.direction":"RIGHT","elk.alg.layered.edgeLabels.sideSelection":"SMART_DOWN"},"edges":[{"id":"e0","sources":["N0"],"targets":["N1"],"labels":[{"text":"An excellent edge label"}]}]}

@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"ExcellentHierarchicalNode","children":[{"id":"N1"},{"id":"N2"}],"layoutOptions":{"elk.nodeLabels.placement":"[H_CENTER, V_TOP, INSIDE]"},"edges":[{"id":"e0","sources":["N1"],"targets":["N2"]}]}]}

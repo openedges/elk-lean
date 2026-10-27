@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","ports":[{"id":"P1"},{"id":"P2"}],"children":[{"id":"N2"}],"layoutOptions":{"elk.insideSelfLoops.activate":"true"}}],"layoutOptions":{"elk.algorithm":"layered"},"edges":[{"id":"E1","sources":["P1"],"targets":["P2"],"layoutOptions":{"elk.insideSelfLoops.yo":"true"}},{"id":"E2","sources":["P2"],"targets":["P1"]}]}

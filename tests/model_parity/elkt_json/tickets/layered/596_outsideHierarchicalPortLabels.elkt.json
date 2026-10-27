@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"outer","ports":[{"id":"p1","labels":[{"text":"A long port label"}]}],"children":[{"id":"inner"}],"edges":[{"id":"e0","sources":["p1"],"targets":["inner"]}]}],"layoutOptions":{"elk.hierarchyHandling":"INCLUDE_CHILDREN"}}

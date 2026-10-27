@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","labels":[{"text":"Label 1"},{"text":"Label 2"},{"text":"Label 3"}],"ports":[{"id":"P1"},{"id":"P2"}],"children":[{"id":"N2"}],"edges":[{"id":"e0","sources":["N2"],"targets":["P1"]},{"id":"e1","sources":["P2"],"targets":["N2"]}]}]}

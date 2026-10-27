@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"n0_g000000","children":[{"id":"n1"}],"layoutOptions":{"elk.portConstraints":"FIXED_ORDER"}},{"id":"n2"}],"layoutOptions":{"elk.algorithm":"org.eclipse.elk.layered","elk.hierarchyHandling":"INCLUDE_CHILDREN","elk.direction":"RIGHT"},"edges":[{"id":"e0","sources":["n2"],"targets":["n1"]}]}

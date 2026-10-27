@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","ports":[{"id":"P1"}]},{"id":"N2","ports":[{"id":"P2_1","layoutOptions":{"elk.port.index":"1"}},{"id":"P2_2","layoutOptions":{"elk.port.index":"2"}}]}],"edges":[{"id":"e0","sources":["P1"],"targets":["P2_1"],"labels":[{"text":"L","layoutOptions":{"elk.edgeLabels.placement":"TAIL"}}]}]}

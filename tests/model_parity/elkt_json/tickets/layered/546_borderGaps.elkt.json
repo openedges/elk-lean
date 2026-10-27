@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"outer","ports":[{"id":"p1"},{"id":"p2"}],"children":[{"id":"inner","ports":[{"id":"p1_g000000"},{"id":"p2_g000001"}]}],"edges":[{"id":"e0","sources":["p1"],"targets":["p1_g000000"]},{"id":"e1","sources":["p2_g000001"],"targets":["p2"]}]}]}

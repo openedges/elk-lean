@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","ports":[{"id":"P1"},{"id":"P2"},{"id":"P3"}],"children":[{"id":"N2","width":20.0,"height":20.0}],"edges":[{"id":"E2","sources":["P1"],"targets":["N2"]}]}],"layoutOptions":{"elk.hierarchyHandling":"INCLUDE_CHILDREN"},"edges":[{"id":"E1","sources":["P3"],"targets":["P2"]}]}

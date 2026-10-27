@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"n1"},{"id":"n2","layoutOptions":{"elk.alg.layered.crossingMinimization.positionChoiceConstraint":"1"}},{"id":"n3"}],"layoutOptions":{"elk.interactiveLayout":"true"},"edges":[{"id":"e0","sources":["n1"],"targets":["n2"]},{"id":"e1","sources":["n1"],"targets":["n3"]}]}

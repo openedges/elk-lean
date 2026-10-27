@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"A1"},{"id":"A2","children":[{"id":"B1"}]}],"layoutOptions":{"elk.hierarchyHandling":"INCLUDE_CHILDREN","elk.edgeRouting":"SPLINES"},"edges":[{"id":"e0","sources":["A2"],"targets":["A2"]},{"id":"e1","sources":["A1"],"targets":["B1"]}]}

@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","ports":[{"id":"P1","layoutOptions":{"elk.port.side":"WEST"}}],"layoutOptions":{"elk.portAlignment.default":"BEGIN","elk.portConstraints":"FIXED_SIDE"},"width":200.0,"height":200.0}]}

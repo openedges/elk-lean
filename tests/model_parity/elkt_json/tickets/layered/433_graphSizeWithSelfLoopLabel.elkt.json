@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","ports":[{"id":"P1"},{"id":"P2"}]},{"id":"N2"}],"edges":[{"id":"e0","sources":["P1"],"targets":["P2"],"labels":[{"text":"A rather long self loop label that should contribute to the graph's size"}]},{"id":"e1","sources":["N1"],"targets":["N2"]}]}

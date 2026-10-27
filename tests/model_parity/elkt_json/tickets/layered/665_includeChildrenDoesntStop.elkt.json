@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"outside","children":[{"id":"insideOtherLayout","children":[{"id":"child1"},{"id":"child2"}],"layoutOptions":{"elk.algorithm":"elk.stress"},"edges":[{"id":"e0","sources":["child1"],"targets":["child2"]}]}]}],"layoutOptions":{"elk.algorithm":"elk.layered","elk.hierarchyHandling":"INCLUDE_CHILDREN"}}

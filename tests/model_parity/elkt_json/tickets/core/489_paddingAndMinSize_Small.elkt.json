@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"N1","children":[{"id":"N2","width":50.0,"height":50.0}],"layoutOptions":{"elk.algorithm":"org.eclipse.elk.box","elk.expandNodes":"true","elk.padding":"[top=5,left=5,bottom=5,right=5]","elk.nodeSize.constraints":"[MINIMUM_SIZE]","elk.nodeSize.minimum":"(100,100)"}}]}

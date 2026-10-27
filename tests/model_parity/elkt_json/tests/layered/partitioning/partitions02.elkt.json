@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"n1","layoutOptions":{"elk.partitioning.partition":"1"}},{"id":"n2","layoutOptions":{"elk.partitioning.partition":"2"}},{"id":"n3","layoutOptions":{"elk.partitioning.partition":"3"}}],"layoutOptions":{"elk.partitioning.activate":"true"},"edges":[{"id":"e0","sources":["n1"],"targets":["n2"]},{"id":"e1","sources":["n1"],"targets":["n3"]}]}

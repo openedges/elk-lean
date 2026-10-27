@@ -1,0 +1,1 @@
+{"id":"n0","children":[{"id":"n1"},{"id":"n2"},{"id":"n3"}],"layoutOptions":{"elk.edgeRouting":"SPLINES"},"edges":[{"id":"e0","sources":["n1"],"targets":["n2"]},{"id":"e1","sources":["n1"],"targets":["n2"]},{"id":"e2","sources":["n1"],"targets":["n2"]},{"id":"e3","sources":["n1"],"targets":["n3"]}]}
