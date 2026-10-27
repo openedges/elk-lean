@@ -153,6 +153,13 @@
 - Apple M1 8GB, 20회/워밍업 3회 기준 lean/rust_api 기하평균 **6.41배**. force·stress 26~32배, layered 5.7~8배(small 1.8배), mrtree·rectpacking 4~5배, radial 1.3~2.3배.
 - 1차 원인(생성 C 확인): `for` 루프의 가변 Float가 2개 이상이면 루프 상태가 `MProd`로 묶여 반복마다 `lean_box_float` 할당이 일어난다(예: stress `computeNewPosition`). Float 1개 상태는 unboxed `double`로 컴파일된다.
 
+### 성능 2차 (2026-10-27~31): 공통 경로
+- **CSE가 리터럴 상수 추출을 막는 문제**: 컴파일러가 `true`·작은 `Nat` 인자를 같은 값의 변수로 치환하면 `Float.ofScientific m s e` 호출이 closed term으로 추출되지 않아 매번 실행된다. 가수가 `2^53` 이상인 리터럴(`18446744073709551616.0`, `9007199254740992.0` 등)은 빠른 경로 밖이라 GMP 모델 경로를 탄다. `Number.ofFloatElk`(모든 좌표)와 `Random.nextDouble`을 `Float.ofBits` 최상위 상수로 바꿨다. 빠른 경로 밖 리터럴은 이제 최상위 상수에만 남아 있다(초기화 시 1회).
+- **구조체 갱신**: `{ s with a := s.a.set! i v }`는 `s`가 유일하면 배열을 옮겨 제자리 수정한다(생성 C 확인). 복사는 `s`나 원소가 공유될 때만 생긴다 → 일괄 치환하지 않고 프로파일의 `lean_copy_expand_array` 호출자만 고친다(예: stress 힙).
+- **JSON 파서 재작성**: `StateT`+`Option` 바이트 단위 할당 제거, 오류 메시지·위치 동일(기존 파서를 테스트 참조로 두고 32k 변이 퍼징 + 코퍼스 550개 비교).
+- **메모리 수명**: 7개 시나리오 × 500회(3,500 레이아웃) 후 최대 RSS 21.0 MB, 50회 때 20.9 MB → 증가 없음. 코퍼스 실행 로그에 `PANIC` 0건.
+- 측정(조용한 상태, ms): layered_large 120→87, force_large 392→41, stress_large 428→47, mrtree_xlarge 37→21, radial_xlarge 41→33, rectpacking_xlarge 32→16.
+
 ### 성능 최적화·Phase 8 작업 할당표 (2026-10-27)
 | 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
@@ -162,7 +169,7 @@
 | W1. WASM 빌드(emscripten) | elk-rs `plugins/org.eclipse.elk.wasm`, Lean 런타임 | opus | xhigh | 서브에이전트 W1(worktree) | 진행 중 |
 | PL3. layered P3 교차 최소화 성능 | Lean `P3Order/**`(elk-rs `p3_order/**`) | opus | xhigh | 서브에이전트 PL3(worktree) | 진행 중 |
 | PT. mrtree·radial·rectpacking 성능 | Lean `Elk/Alg/{MrTree,Radial,RectPacking}/**` | opus | high | 서브에이전트 PT(worktree) | 진행 중 |
-| PF1. P5 직교 라우팅, JSON transfer, force/stress 나머지 | Lean `P5Edges/Orthogonal/**`, `Elk/Json/*` | fable(주) | xhigh | 주 에이전트 | 진행 중 |
+| PF1. P5 직교 라우팅, JSON 경로, force/stress 나머지 | Lean `P5Edges/Orthogonal/**`, `Elk/Json/*` | fable(주) | xhigh | 주 에이전트 | 진행 중: `c8cfb52`(P5 conflict/crossing 루프, `ofFloatElk`·`nextDouble` 정확 상수), `815e079`(FR 결과 구조체, stress 힙), `b532257`(JSON 파서 재작성) |
 
 ### Phase 5 작업 할당표 (병렬 시작, 2026-10-27)
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
