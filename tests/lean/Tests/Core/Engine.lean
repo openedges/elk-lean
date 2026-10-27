@@ -341,7 +341,7 @@ private def fixtureDir : System.FilePath := "tests/fixtures/core"
 /-- Fixtures whose oracle output needs `org.eclipse.elk.layered` (a nested node without an
 algorithm falls back to the default algorithm): skipped while the layered pipeline is incomplete.
 `box`: node `n4` has a child and no `elk.algorithm`. -/
-private def layeredFixtures : Array String := #["box"]
+private def layeredFixtures : Array String := #[]
 
 /-- `core.engine.fixtures`: `Elk.Api.layoutJson` on every `tests/fixtures/core/<name>.json` must
 reproduce `<name>.expected.json` (the elk-rs oracle output) byte-for-byte. The directory is
