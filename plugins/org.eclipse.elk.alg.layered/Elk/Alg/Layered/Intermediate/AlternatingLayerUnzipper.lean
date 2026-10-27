@@ -28,7 +28,7 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Uti
 
 namespace AlternatingLayerUnzipper
 
-/-! ## `LongEdgeSplitter::split_edge` (private copy) -/
+/-! ## Unzipping -/
 
 /-! ## Unzipper -/
 
