@@ -25,7 +25,9 @@ static int shortest_digits(double x, char *buf, size_t n) {
     return 17;
 }
 
-LEAN_EXPORT lean_obj_res elk_float_to_shortest(double x) {
+/* `plus_exp`: write positive exponents with a sign (`1e+21`), as serde_json >= 1.0.149
+ * (zmij) does; otherwise ryu style (`1e21`). */
+static lean_obj_res format_shortest(double x, int plus_exp) {
     char out[64];
     if (isnan(x)) {
         return lean_mk_string("NaN");
@@ -94,9 +96,24 @@ LEAN_EXPORT lean_obj_res elk_float_to_shortest(double x) {
             memcpy(o, digits + 1, (size_t)(nd - 1));
             o += nd - 1;
         }
-        sprintf(o, "e%d", kk - 1);
+        if (plus_exp && kk - 1 >= 0) {
+            sprintf(o, "e+%d", kk - 1);
+        } else {
+            sprintf(o, "e%d", kk - 1);
+        }
     }
     return lean_mk_string(out);
+}
+
+LEAN_EXPORT lean_obj_res elk_float_to_shortest(double x) {
+    return format_shortest(x, 0);
+}
+
+/* JSON number of a finite double exactly as the elk-rs oracle prints it: serde_json 1.0.149
+ * (zmij 1.0.19) shortest round-trip digits, positional for decimal exponents -5..15
+ * (`12.0`, `0.001234`, `1234567890123456.0`), otherwise `d.ddde+XX` / `d.ddde-XX`. */
+LEAN_EXPORT lean_obj_res elk_float_to_json(double x) {
+    return format_shortest(x, 1);
 }
 
 /* Java `Double.toString` style is not needed for JSON, but `%.17g` is handy for traces. */

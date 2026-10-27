@@ -8,6 +8,12 @@ namespace Elk.Core.Util
 @[extern "elk_float_to_shortest"]
 opaque Float.toShortest (x : Float) : String
 
+/-- A finite double as the elk-rs oracle writes it into JSON (serde_json 1.0.149 / zmij):
+shortest round-trip digits, positional for decimal exponents `-5..15`, otherwise `1e+21`,
+`1.7976931348623157e+308`, `3e-6`. -/
+@[extern "elk_float_to_json"]
+opaque Float.toJsonNumber (x : Float) : String
+
 /-- `%.17g` formatting (debug traces). -/
 @[extern "elk_float_to_g17"]
 opaque Float.toG17 (x : Float) : String

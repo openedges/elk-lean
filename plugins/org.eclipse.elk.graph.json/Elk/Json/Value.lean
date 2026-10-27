@@ -36,7 +36,14 @@ integers, non-finite values become `0`. Used for all layout results. -/
 def ofFloatElk (x : Float) : Number :=
   if x.isFinite then
     let r := x.round
-    if (x - r).abs <= 1e-6 then .int r.toIntTrunc else .float x
+    if (x - r).abs <= 1e-6 then
+      -- `rounded as u64` for `0 <= rounded <= u64::MAX as f64` (= 2^64, saturating), else
+      -- `rounded as i64` within `[i64::MIN as f64, i64::MAX as f64]`, else the float itself
+      if r >= 0.0 && r <= 18446744073709551616.0 then
+        .int (if r >= 18446744073709551616.0 then 18446744073709551615 else (r.toUInt64.toNat : Int))
+      else if r >= -9223372036854775808.0 && r <= 9223372036854775808.0 then .int r.toIntTrunc
+      else .float x
+    else .float x
   else .int 0
 
 /-- Rust `Display` of the underlying value (elk-rs `number_to_string`). -/
@@ -44,12 +51,12 @@ def toRustString : Number → String
   | .int i => toString i
   | .float f => Float.toRustDisplay f
 
-/-- serde_json rendering: integers as decimals, doubles via the shortest
-round-trip form (`12.0`, `0.1`, `1e21`); non-finite values render as `null`
+/-- serde_json 1.0.149 rendering (the oracle's): integers as decimals, doubles via the zmij
+shortest round-trip form (`12.0`, `0.1`, `1e+21`, `3e-6`); non-finite values render as `null`
 (serde_json refuses them; elk-rs converts them to `0` beforehand). -/
 def render : Number → String
   | .int i => toString i
-  | .float f => if f.isFinite then Float.toShortest f else "null"
+  | .float f => if f.isFinite then Float.toJsonNumber f else "null"
 
 end Number
 

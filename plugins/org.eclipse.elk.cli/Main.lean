@@ -3,7 +3,7 @@ import Elk.Api
 # `elk` command line interface
 
 ```
-elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)
+elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)
 elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt
 elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty]
 elk algorithms | options | categories
@@ -18,7 +18,7 @@ and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills th
 open Elk Elk.Json Elk.Api
 
 def usage : String :=
-  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
+  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
 
 structure LayoutArgs where
   input : Option String := none
@@ -28,6 +28,9 @@ structure LayoutArgs where
   sortKeys : Bool := false
   lenient : Bool := false
   defaults : Bool := false
+  /-- `--force-algorithm ID`: sets the root `elk.algorithm` after the import (the elk-rs parity
+  runner does this with layered in trace mode). -/
+  forceAlgorithm : Option String := none
 
 /-- Writes `out` to `path` (creating directories) or prints it. Files get no trailing newline,
 like the elk-rs parity runner (`fs::write`). -/
@@ -58,6 +61,7 @@ partial def parseLayoutArgs (args : List String) (acc : LayoutArgs) : Except Str
   | "--pretty" :: rest => parseLayoutArgs rest { acc with pretty := true }
   | "--sort-keys" :: rest => parseLayoutArgs rest { acc with sortKeys := true }
   | "--lenient" :: rest => parseLayoutArgs rest { acc with lenient := true }
+  | "--force-algorithm" :: v :: rest => parseLayoutArgs rest { acc with forceAlgorithm := some v }
   | "--defaults" :: rest => parseLayoutArgs rest { acc with defaults := true }
   | a :: rest => if a.startsWith "-" then .error s!"unknown argument: {a}" else parseLayoutArgs rest { acc with input := some a }
 
@@ -74,7 +78,7 @@ def runLayout (args : List String) : IO UInt32 := do
         | .ok json => return some json
       else return some raw)
     let some text := text | return 1
-    match ← layoutJson text a.options a.lenient a.pretty a.sortKeys with
+    match ← layoutJson text a.options a.lenient a.pretty a.sortKeys a.forceAlgorithm with
     | .error e => IO.eprintln e; return 1
     | .ok out => writeOutput a.output out; return 0
 
@@ -157,7 +161,9 @@ def runBatch (args : List String) : IO UInt32 := do
         Elk.Alg.Layered.TraceRecorder.resetStepCounter
       let (status, err) ← (do
         let text ← IO.FS.readFile inputPath
-        match ← layoutJson text "" false a.pretty a.sortKeys with
+        -- like the elk-rs runner, trace mode lays out every model with layered
+        let force := if a.traceDir.isSome then some "org.eclipse.elk.layered" else none
+        match ← layoutJson text "" false a.pretty a.sortKeys force with
         | .error e => pure ("error", e)
         | .ok res =>
           if let some dir := (System.FilePath.mk outPath).parent then IO.FS.createDirAll dir

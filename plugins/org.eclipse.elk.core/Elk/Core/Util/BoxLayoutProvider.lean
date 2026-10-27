@@ -135,14 +135,14 @@ partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPad
           last := none
         bottoms := #[]
       xpos := padding.left
-      ypos := ypos + highestBox + minSpacing
+      ypos := ypos + (highestBox + minSpacing)
       highestBox := 0.0
       broadestRow := fmax broadestRow (padding.left + padding.right + w)
     bottoms := bottoms.push gi
     groupTranslate gi xpos ypos
     broadestRow := fmax broadestRow (xpos + w + padding.right)
     highestBox := fmax highestBox hgt
-    xpos := xpos + w + minSpacing
+    xpos := xpos + (w + minSpacing)
     last := some gi
   let bottomsFinal := bottoms
   modGroup group fun gr => { gr with bottom := gr.bottom ++ bottomsFinal }
@@ -176,7 +176,7 @@ partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPad
         let oldWidth ← groupWidth gi
         groupSetWidth gi newWidth
         groupTranslateInnerNodes gi ((newWidth - oldWidth) / 2.0) 0.0
-      xpos := xpos + (← groupWidth gi) + minSpacing
+      xpos := xpos + ((← groupWidth gi) + minSpacing)
   return ⟨broadestRow, totalHeight⟩
 
 /-- `mergeAndPlaceDec`. -/
@@ -359,7 +359,7 @@ def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding 
         rowHeights := rowHeights.push highestBox
         rowIndices := rowIndices.push index
       xpos := padding.left
-      ypos := ypos + highestBox + minSpacing
+      ypos := ypos + (highestBox + minSpacing)
       highestBox := 0.0
       broadestRow := fmax broadestRow (padding.left + padding.right + nd.width)
     let xp := xpos
@@ -367,7 +367,7 @@ def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding 
     ElkM.modifyNode b fun x => { x with x := xp, y := yp }
     broadestRow := fmax broadestRow (xpos + nd.width + padding.right)
     highestBox := fmax highestBox nd.height
-    xpos := xpos + nd.width + minSpacing
+    xpos := xpos + (nd.width + minSpacing)
   broadestRow := fmax broadestRow minTotalWidth
   let mut totalHeight := ypos + highestBox + padding.bottom
   if totalHeight < minTotalHeight then
@@ -399,7 +399,7 @@ def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding 
         let oldWidth := (← ElkM.getNode b).width
         ElkM.modifyNode b fun x => { x with width := newWidth }
         ElkUtil.translateNodeWithSizes b ⟨newWidth, newHeight⟩ ⟨oldWidth, oldHeight⟩
-      xpos := xpos + (← ElkM.getNode b).width + minSpacing
+      xpos := xpos + ((← ElkM.getNode b).width + minSpacing)
   return ⟨broadestRow, totalHeight⟩
 
 /-- `placeBoxes` (SIMPLE mode). -/

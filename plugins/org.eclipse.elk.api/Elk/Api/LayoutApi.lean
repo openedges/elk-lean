@@ -26,13 +26,19 @@ def catchLayout {α : Type} (act : IO α) : IO (Except String α) := do
     else return .error s!"{unsupportedConfigurationExceptionClass}: {msg}"
 
 /-- `layout_value`: lays out a parsed document. Returns the laid-out document. -/
-def layoutValue (input : Value) (optionsJson : String := "") : IO (Except String Value) := do
+def layoutValue (input : Value) (optionsJson : String := "") (forceRootAlgorithm : Option String := none) :
+    IO (Except String Value) := do
   ensureInitialized
   catchLayout do
     let defaults ← match ← GlobalOptions.parse optionsJson with
       | .ok g => pure g
       | .error e => throw (IO.userError e)
     let ((root, st), g) ← (ImportM.run (JsonImporter.transform input) { defaults := some defaults }).run {}
+    -- elk-rs `model_parity_layout_runner` in trace mode sets the root `ALGORITHM` to layered right
+    -- after the import (`force_layered_algorithm`); `forceRootAlgorithm` reproduces that
+    let g := match forceRootAlgorithm with
+      | some alg => g.modifyNode root fun n => { n with props := n.props.set Elk.Core.Options.CoreOptions.ALGORITHM alg }
+      | none => g
     let ((), g) ← (RecursiveGraphLayoutEngine.layout root (ProgressMonitor.null)).run g
     let materialized ← (st.defaults.getD defaults).materialize st.model
     let st := { st with model := materialized }
@@ -41,11 +47,12 @@ def layoutValue (input : Value) (optionsJson : String := "") : IO (Except String
 
 /-- `layout_json`: string in, string out (elkjs `layout()` contract). -/
 def layoutJson (graphJson : String) (optionsJson : String := "") (lenient : Bool := false)
-    (pretty : Bool := false) (sortKeys : Bool := false) : IO (Except String String) := do
+    (pretty : Bool := false) (sortKeys : Bool := false) (forceRootAlgorithm : Option String := none) :
+    IO (Except String String) := do
   match Elk.Json.parse graphJson lenient with
   | .error e => return .error s!"Failed to parse graph JSON: {e}"
   | .ok input =>
-    match ← layoutValue input optionsJson with
+    match ← layoutValue input optionsJson forceRootAlgorithm with
     | .error e => return .error e
     | .ok v => return .ok (if pretty then v.renderPretty sortKeys else v.render sortKeys)
 
