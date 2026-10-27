@@ -20,6 +20,7 @@ node_modules/
 /plugins/org.eclipse.elk.js/dist/
 /plugins/org.eclipse.elk.napi/build/
 /plugins/org.eclipse.elk.wasm/build/
+/plugins/org.eclipse.elk.wasm/dist/
 
 # Parity / perf outputs (large, regenerated)
 /tests/model_parity*/inputs/
