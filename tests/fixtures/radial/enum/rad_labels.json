@@ -1,0 +1,59 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "nodeLabels.placement": "[H_CENTER, V_CENTER, INSIDE]",
+  "nodeSize.constraints": "[NODE_LABELS]"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 30,
+   "labels": [
+    {
+     "text": "root node",
+     "width": 50,
+     "height": 12
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30,
+   "labels": [
+    {
+     "text": "x",
+     "width": 8,
+     "height": 12
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  }
+ ]
+}

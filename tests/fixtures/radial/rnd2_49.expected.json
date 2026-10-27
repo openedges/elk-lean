@@ -1,0 +1,127 @@
+{
+  "children": [
+    {
+      "height": 55,
+      "id": "n0",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "4"
+      },
+      "width": 15,
+      "x": 151.1370849898476,
+      "y": 58.068542494923804
+    },
+    {
+      "height": 29,
+      "id": "n1",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "3"
+      },
+      "width": 34,
+      "x": 85.0685424949238,
+      "y": 127.63708498984761
+    },
+    {
+      "height": 34,
+      "id": "n2",
+      "width": 52,
+      "x": 76.06854249492379,
+      "y": 12
+    },
+    {
+      "height": 34,
+      "id": "n3",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "0"
+      },
+      "width": 67,
+      "x": 12,
+      "y": 181.7056274847714
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 116.5685424949238,
+            "y": 127.63708498984761
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 151.1370849898476,
+            "y": 93.0685424949238
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 119.06854249492379,
+            "y": 46
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 151.1370849898476,
+            "y": 78.0685424949238
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 62.5,
+            "y": 181.7056274847714
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 87.5685424949238,
+            "y": 156.6370849898476
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n3"
+      ]
+    }
+  ],
+  "height": 227.7056274847714,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "compactor": "RADIAL_COMPACTION",
+    "optimizationCriteria": "EDGE_LENGTH",
+    "radius": "80",
+    "rotation.outgoingEdgeAngles": "true",
+    "sorter": "POLAR_COORDINATE",
+    "spacing.nodeNode": "3",
+    "wedgeCriteria": "LEAF_NUMBER"
+  },
+  "width": 178.1370849898476,
+  "x": 0,
+  "y": 0
+}

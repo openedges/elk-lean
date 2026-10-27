@@ -1,0 +1,88 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "rotate": "true",
+  "rotation.outgoingEdgeAngles": "true",
+  "rotation.targetAngle": "2.0"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n2",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n3",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n4",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "n5",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n5"
+   ]
+  }
+ ]
+}

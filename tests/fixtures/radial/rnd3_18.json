@@ -1,0 +1,151 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "RADIAL_COMPACTION",
+  "sorter": "POLAR_COORDINATE",
+  "wedgeCriteria": "NODE_SIZE",
+  "optimizationCriteria": "NONE",
+  "centerOnRoot": "true",
+  "radius": "45",
+  "spacing.nodeNode": "0",
+  "compactionStepSize": "5"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 32,
+   "height": 57,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "5"
+   }
+  },
+  {
+   "id": "n1",
+   "width": 41,
+   "height": 10
+  },
+  {
+   "id": "n2",
+   "width": 39,
+   "height": 53,
+   "layoutOptions": {
+    "position": "(-4,-56)",
+    "org.eclipse.elk.radial.orderId": "5"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 37,
+   "height": 51,
+   "layoutOptions": {
+    "position": "(30,-4)"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 45,
+   "height": 57
+  },
+  {
+   "id": "n5",
+   "width": 15,
+   "height": 16,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "1"
+   }
+  },
+  {
+   "id": "n6",
+   "width": 67,
+   "height": 58
+  },
+  {
+   "id": "n7",
+   "width": 15,
+   "height": 52,
+   "layoutOptions": {
+    "position": "(36,15)"
+   }
+  },
+  {
+   "id": "n8",
+   "width": 15,
+   "height": 22
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n8"
+   ]
+  }
+ ]
+}

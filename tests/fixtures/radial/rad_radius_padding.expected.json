@@ -1,0 +1,143 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "width": 30,
+      "x": 140,
+      "y": 67.42562584220406
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30,
+      "x": 84.57437415779594,
+      "y": 99.42562584220408
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 30,
+      "x": 108,
+      "y": 12
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 30,
+      "x": 76,
+      "y": 178.27687752661222
+    },
+    {
+      "height": 30,
+      "id": "n4",
+      "width": 30,
+      "x": 12,
+      "y": 67.42562584220413
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 114.57437415779594,
+            "y": 105.76537180435969
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 140,
+            "y": 91.08587988004845
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 131.66025403784437,
+            "y": 42
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 146.3397459621556,
+            "y": 67.42562584220406
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 92.63111694005453,
+            "y": 178.27687752661222
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 97.94325721774145,
+            "y": 129.42562584220408
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 42,
+            "y": 89.03953062016821
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": 84.57437415779594,
+            "y": 107.81172106424
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n4"
+      ]
+    }
+  ],
+  "height": 220.27687752661222,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "padding": "[top=20,left=5,bottom=7,right=30]",
+    "radius": "64"
+  },
+  "width": 182,
+  "x": 0,
+  "y": 0
+}

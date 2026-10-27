@@ -1,0 +1,189 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "WEDGE_COMPACTION",
+  "sorter": "ID",
+  "wedgeCriteria": "NODE_SIZE",
+  "optimizationCriteria": "EDGE_LENGTH_BY_POSITION",
+  "radius": "45",
+  "spacing.nodeNode": "30",
+  "compactionStepSize": "3"
+ },
+ "children": [
+  {
+   "id": "n11",
+   "width": 15,
+   "height": 42
+  },
+  {
+   "id": "n10",
+   "width": 53,
+   "height": 58
+  },
+  {
+   "id": "n1",
+   "width": 11,
+   "height": 36,
+   "layoutOptions": {
+    "position": "(31,44)",
+    "org.eclipse.elk.radial.orderId": "3"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 45,
+   "height": 31
+  },
+  {
+   "id": "n8",
+   "width": 57,
+   "height": 42
+  },
+  {
+   "id": "n6",
+   "width": 48,
+   "height": 40,
+   "layoutOptions": {
+    "position": "(45,11)"
+   }
+  },
+  {
+   "id": "n0",
+   "width": 52,
+   "height": 25
+  },
+  {
+   "id": "n9",
+   "width": 14,
+   "height": 25
+  },
+  {
+   "id": "n5",
+   "width": 22,
+   "height": 14,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "3"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 54,
+   "height": 59,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "1"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 43,
+   "height": 18
+  },
+  {
+   "id": "n7",
+   "width": 54,
+   "height": 14
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n11"
+   ]
+  }
+ ]
+}

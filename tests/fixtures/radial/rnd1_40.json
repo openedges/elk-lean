@@ -1,0 +1,73 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "WEDGE_COMPACTION",
+  "sorter": "ID",
+  "wedgeCriteria": "NODE_SIZE",
+  "optimizationCriteria": "EDGE_LENGTH_BY_POSITION",
+  "rotate": "true",
+  "rotation.targetAngle": "-0.385",
+  "rotation.computeAdditionalWedgeSpace": "true",
+  "centerOnRoot": "true",
+  "spacing.nodeNode": "15",
+  "compactionStepSize": "5"
+ },
+ "children": [
+  {
+   "id": "n1",
+   "width": 40,
+   "height": 32
+  },
+  {
+   "id": "n0",
+   "width": 10,
+   "height": 51
+  },
+  {
+   "id": "n2",
+   "width": 15,
+   "height": 26,
+   "layoutOptions": {
+    "position": "(-42,-34)"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 41,
+   "height": 56,
+   "layoutOptions": {
+    "position": "(40,53)"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  }
+ ]
+}

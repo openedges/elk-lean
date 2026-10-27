@@ -1,0 +1,73 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "RADIAL_COMPACTION",
+  "sorter": "POLAR_COORDINATE",
+  "wedgeCriteria": "LEAF_NUMBER",
+  "optimizationCriteria": "EDGE_LENGTH",
+  "rotation.outgoingEdgeAngles": "true",
+  "radius": "80",
+  "spacing.nodeNode": "3"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 15,
+   "height": 55,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "4"
+   }
+  },
+  {
+   "id": "n1",
+   "width": 34,
+   "height": 29,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "3"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 52,
+   "height": 34
+  },
+  {
+   "id": "n3",
+   "width": 67,
+   "height": 34,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n3"
+   ]
+  }
+ ]
+}

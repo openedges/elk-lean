@@ -1,0 +1,334 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "RADIAL_COMPACTION",
+  "sorter": "ID",
+  "wedgeCriteria": "LEAF_NUMBER",
+  "optimizationCriteria": "NONE",
+  "spacing.nodeNode": "8"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 48,
+   "height": 55,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "1"
+   }
+  },
+  {
+   "id": "n1",
+   "width": 33,
+   "height": 57,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 51,
+   "height": 30,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "4"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 44,
+   "height": 47,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "1"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 48,
+   "height": 10,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n5",
+   "width": 44,
+   "height": 25,
+   "layoutOptions": {
+    "position": "(37,-51)",
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n6",
+   "width": 61,
+   "height": 30,
+   "layoutOptions": {
+    "position": "(0,38)"
+   }
+  },
+  {
+   "id": "n7",
+   "width": 31,
+   "height": 49,
+   "layoutOptions": {
+    "position": "(45,-5)"
+   }
+  },
+  {
+   "id": "n8",
+   "width": 36,
+   "height": 42
+  },
+  {
+   "id": "n9",
+   "width": 35,
+   "height": 15,
+   "layoutOptions": {
+    "position": "(-21,52)",
+    "org.eclipse.elk.radial.orderId": "5"
+   }
+  },
+  {
+   "id": "n10",
+   "width": 45,
+   "height": 20,
+   "layoutOptions": {
+    "position": "(38,39)"
+   }
+  },
+  {
+   "id": "n11",
+   "width": 57,
+   "height": 21,
+   "layoutOptions": {
+    "position": "(-48,-3)"
+   }
+  },
+  {
+   "id": "n12",
+   "width": 13,
+   "height": 57,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "3"
+   }
+  },
+  {
+   "id": "n13",
+   "width": 69,
+   "height": 21,
+   "layoutOptions": {
+    "position": "(-27,0)"
+   }
+  },
+  {
+   "id": "n14",
+   "width": 50,
+   "height": 48
+  },
+  {
+   "id": "n15",
+   "width": 31,
+   "height": 36,
+   "layoutOptions": {
+    "position": "(-19,-17)",
+    "org.eclipse.elk.radial.orderId": "0"
+   }
+  },
+  {
+   "id": "n16",
+   "width": 10,
+   "height": 42
+  },
+  {
+   "id": "n17",
+   "width": 26,
+   "height": 32
+  },
+  {
+   "id": "n18",
+   "width": 45,
+   "height": 19,
+   "layoutOptions": {
+    "position": "(-23,19)"
+   }
+  },
+  {
+   "id": "n19",
+   "width": 29,
+   "height": 19
+  }
+ ],
+ "edges": [
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n11"
+   ]
+  },
+  {
+   "id": "e18",
+   "sources": [
+    "n18"
+   ],
+   "targets": [
+    "n19"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n16"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n11"
+   ],
+   "targets": [
+    "n13"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e17",
+   "sources": [
+    "n17"
+   ],
+   "targets": [
+    "n18"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n14"
+   ],
+   "targets": [
+    "n15"
+   ]
+  },
+  {
+   "id": "e16",
+   "sources": [
+    "n15"
+   ],
+   "targets": [
+    "n17"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n13"
+   ],
+   "targets": [
+    "n14"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n12"
+   ]
+  }
+ ]
+}

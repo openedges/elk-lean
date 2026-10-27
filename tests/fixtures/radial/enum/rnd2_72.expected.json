@@ -1,0 +1,60 @@
+{
+  "children": [
+    {
+      "height": 17,
+      "id": "n1",
+      "width": 13,
+      "x": 54.633766740839505,
+      "y": 12
+    },
+    {
+      "height": 40,
+      "id": "n0",
+      "layoutOptions": {
+        "org.eclipse.elk.radial.orderId": "2",
+        "position": "(34,-36)"
+      },
+      "width": 33,
+      "x": 12,
+      "y": 40.79934575529083
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 54.633766740839505,
+            "y": 28.52683151747783
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 44.69568066390015,
+            "y": 40.79934575529083
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    }
+  ],
+  "height": 92.79934575529083,
+  "id": "root",
+  "layoutOptions": {
+    "algorithm": "org.eclipse.elk.radial",
+    "compactionStepSize": "1",
+    "compactor": "WEDGE_COMPACTION",
+    "optimizationCriteria": "EDGE_LENGTH",
+    "sorter": "NONE",
+    "wedgeCriteria": "NODE_SIZE"
+  },
+  "width": 79.6337667408395,
+  "x": 0,
+  "y": 0
+}

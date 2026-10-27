@@ -1,0 +1,190 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "algorithm": "org.eclipse.elk.radial",
+  "compactor": "NONE",
+  "sorter": "NONE",
+  "wedgeCriteria": "LEAF_NUMBER",
+  "optimizationCriteria": "EDGE_LENGTH",
+  "radius": "45",
+  "compactionStepSize": "1"
+ },
+ "children": [
+  {
+   "id": "n9",
+   "width": 30,
+   "height": 18,
+   "layoutOptions": {
+    "position": "(-5,-35)"
+   }
+  },
+  {
+   "id": "n8",
+   "width": 25,
+   "height": 58
+  },
+  {
+   "id": "n11",
+   "width": 18,
+   "height": 39
+  },
+  {
+   "id": "n6",
+   "width": 18,
+   "height": 44
+  },
+  {
+   "id": "n0",
+   "width": 59,
+   "height": 38
+  },
+  {
+   "id": "n2",
+   "width": 11,
+   "height": 28,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "5"
+   }
+  },
+  {
+   "id": "n7",
+   "width": 51,
+   "height": 22,
+   "layoutOptions": {
+    "position": "(-42,-46)"
+   }
+  },
+  {
+   "id": "n4",
+   "width": 57,
+   "height": 31,
+   "layoutOptions": {
+    "org.eclipse.elk.radial.orderId": "3"
+   }
+  },
+  {
+   "id": "n3",
+   "width": 51,
+   "height": 13,
+   "layoutOptions": {
+    "position": "(55,5)"
+   }
+  },
+  {
+   "id": "n10",
+   "width": 49,
+   "height": 27
+  },
+  {
+   "id": "n5",
+   "width": 48,
+   "height": 40
+  },
+  {
+   "id": "n1",
+   "width": 60,
+   "height": 13
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n10"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n11"
+   ]
+  }
+ ]
+}
