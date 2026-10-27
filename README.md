@@ -51,7 +51,7 @@ phase-step traces) is described in [`TESTING.md`](TESTING.md).
 | Document | Description |
 |----------|-------------|
 | `PLAN.md` | Porting plan: goals, reference pins, architecture decisions, phases, risks |
-| `.rules` (`AGENTS.md`, `CLAUDE.md`) | Working rules, quality gates, current snapshot |
+| `AGENTS.md` | Working rules, quality gates, current snapshot |
 | `HISTORY.md` | Detailed progress log |
 | `TESTING.md` | Validation guide |
 | `VERSIONING.md` | Version and reference pinning policy |

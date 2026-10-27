@@ -1,4 +1,7 @@
 import Elk.Graph
-import Elk.Core.Math.KVector
-import Elk.Core.Util.Ffi
-/-! Root module of the `org.eclipse.elk.core` plugin. Submodules are added here as they are ported. -/
+import Elk.Core.Exceptions
+import Elk.Core.Util
+import Elk.Core.Math
+import Elk.Core.Options
+import Elk.Core.Data
+/-! Root module of the `org.eclipse.elk.core` plugin. Each package has its own aggregator module. -/

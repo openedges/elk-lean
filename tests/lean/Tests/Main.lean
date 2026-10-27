@@ -1,11 +1,13 @@
-import Elk.Api
+import Tests.Framework
+import Tests.Core.Foundation
+import Tests.Core.Options
+import Tests.Core.Math
+import Tests.Core.Util
+import Tests.Graph.All
 
-/-- Test driver (`lake test`). Test suites are registered here as they are ported. -/
+/-- Test driver (`lake test`). Add each plugin's `suites` here. -/
 def main : IO UInt32 := do
-  let mut failures := 0
-  let check (name : String) (ok : Bool) : IO Unit := do
-    if ok then IO.println s!"ok   {name}" else IO.println s!"FAIL {name}"
-  check "ffi.float.toShortest" (Elk.Core.Util.Float.toShortest 12.0 == "12.0")
-  if Elk.Core.Util.Float.toShortest 12.0 != "12.0" then failures := failures + 1
-  IO.println s!"{if failures == 0 then "all tests passed" else s!"{failures} failures"}"
-  return (if failures == 0 then 0 else 1)
+  let suites :=
+    Tests.Core.Foundation.suites ++ Tests.Core.Options.suites ++ Tests.Core.Math.suites ++
+    Tests.Core.Util.suites ++ Tests.Graph.suites
+  Tests.runSuites suites

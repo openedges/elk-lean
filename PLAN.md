@@ -2,7 +2,7 @@
 
 - 문서 버전: 2026-10-27 (Phase 0 완료 시점)
 - 대상: Eclipse Layout Kernel(ELK) **0.12.0**의 순수 Lean 4 포팅
-- 관련 문서: `.rules`(작업 방식·품질 게이트, `AGENTS.md`/`CLAUDE.md`로 심볼릭 링크), `HISTORY.md`(진행 이력), `TESTING.md`(검증 절차), `VERSIONING.md`(버전/핀 정책)
+- 관련 문서: `AGENTS.md`(작업 방식·품질 게이트·작업 할당 규칙), `HISTORY.md`(진행 이력), `TESTING.md`(검증 절차), `VERSIONING.md`(버전/핀 정책)
 
 ---
 
@@ -180,7 +180,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 
 | Phase | 범위 | 산출물 | 완료 기준(게이트) |
 |---|---|---|---|
-| **0. 초기 설정** (완료) | 툴체인, lakefile(17 lib + 2 exe + C shim), 서브모듈 핀, oracle 빌드, 문서, 스크립트 골격 | 본 문서, `.rules`, `HISTORY.md`, `TESTING.md`, `VERSIONING.md`, `scripts/` | `lake build`·`lake test` 통과, oracle 실행 가능 |
+| **0. 초기 설정** (완료) | 툴체인, lakefile(17 lib + 2 exe + C shim), 서브모듈 핀, oracle 빌드, 문서, 스크립트 골격 | 본 문서, `AGENTS.md`, `HISTORY.md`, `TESTING.md`, `VERSIONING.md`, `scripts/` | `lake build`·`lake test` 통과, oracle 실행 가능 |
 | **1. 기반 계층** | `Elk.Graph`(ids, enum 매크로, PropValue/Property/PropertyMap, ElkGraph arena, ElkGraphUtil), `Elk.Core.Math`(KVector, KVectorChain, Spacing/Padding/Margin, Rectangle, ElkMath, BezierSpline, CubicSplineInterpolator), `Elk.Core.Util`(Random, Sort, Java 헬퍼, EnumSet, IndividualSpacings, ProgressMonitor, ElkUtil, ElkSpacings), `Elk.Core.Options`(열거형 전부, CoreOptions, 메타데이터), `Elk.Core.Data`(LayoutMetaDataService, Option/Algorithm/CategoryData, Resolver, DeprecatedReplacer), `Elk.Core.Alg`(AlgorithmAssembler, LayoutProcessorConfiguration), validation, labels | 단위 테스트(elk-rs `core/tests` 중 해당분) | `lake test` 통과, 옵션 메타데이터 수/ID/기본값이 elk-rs `known_layout_options()` 출력과 일치 |
 | **2. JSON·엔진·CLI** | `Elk.Json`(Value/Parser/Printer, Importer, Exporter, Adapter, MetaDataConverter), `RecursiveGraphLayoutEngine`, Fixed/Box/Random/Topdown provider, GraphValidator, `Elk.Api.layoutJson`, CLI(`layout`, `algorithms/options/categories`, `--trace-dir`), parity 파이프라인(입력 생성→oracle→lean→비교) | `elk layout in.json` 동작, `scripts/run_model_parity.sh` | fixed/box/random 알고리즘 모델에서 model parity 100% |
 | **3. alg.common** | nodespacing(cellsystem, NodeLabelAndSizeCalculator, NodeDimensionCalculation), networksimplex, compaction(oned, polyomino, recthull), spore(상호 모듈), overlaps, utils(SVGImage 제외), `ElkGraphAdapters` | 단위 테스트 | elk-rs `alg.common/tests` 이식분 통과 |
@@ -232,7 +232,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | 내부 속성 typed 필드 전환 누락 | 포팅 오류 | 대응표 문서 + 컴파일 타임 타입 검사가 누락을 드러냄 |
 | Java 기준값 부재(JDK 없음) | 3자 검증 불가 | elk-rs를 대리 기준값으로 사용(2장), JDK 확보 시 `TESTING.md` 절차로 확장 |
 
-## 10. 코딩 규약 요약 (상세: `.rules`)
+## 10. 코딩 규약 요약 (상세: `AGENTS.md`)
 - 파일 1개 = Java 클래스 1개, 모듈 경로는 Java 패키지 경로를 CamelCase로 변환.
 - `namespace Elk.<Plugin>...`; 공개 API에는 docstring, Java 원본 클래스명을 docstring 첫 줄에 기재.
 - `partial def`는 종료 증명이 비자명한 루프에 한해 허용. `panic!`, `unsafe`, `sorry` 금지(`Dynamic`의 `TypeName`은 예외).
@@ -241,7 +241,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 
 ## 11. 작업 할당과 진행 기록
 
-### 11.1 에이전트 모델·노력 추정 (규칙: `.rules` "작업 할당 규칙")
+### 11.1 에이전트 모델·노력 추정 (규칙: `AGENTS.md` "작업 할당 규칙")
 작업 시작 시 항목별로 모델과 effort를 추정해 할당하고, 결과를 `HISTORY.md`의 작업 할당표에 기록한다. Phase별 초기 추정:
 
 | Phase / 작업 | 대응 원본 | 모델 | effort | 비고 |
@@ -270,5 +270,5 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | 8. FFI/NAPI/WASM/npm | elk-rs `js/`, `napi/`, `wasm/` | opus | xhigh | 런타임 빌드 리스크 |
 
 ### 11.2 진행 기록
-- 단계 완료 시 `HISTORY.md`에 범위/수치/이슈와 작업 할당표(추정 vs 실제)를 기록하고 `.rules`의 "현재 핵심 스냅샷"을 갱신한다.
+- 단계 완료 시 `HISTORY.md`에 범위/수치/이슈와 작업 할당표(추정 vs 실제)를 기록하고 `AGENTS.md`의 "현재 핵심 스냅샷"을 갱신한다.
 - parity 수치는 항상 "모델 수 / 비교 수 / 일치 수 / 드리프트 / 스킵"으로 기록한다.

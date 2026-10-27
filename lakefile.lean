@@ -165,6 +165,12 @@ lean_exe elk where
   root := `Main
   moreLinkObjs := #[libelkcoreffi]
 
+/-- Test suites (`tests/lean/Tests/**`). -/
+lean_lib ElkTests where
+  srcDir := "tests/lean"
+  roots := #[`Tests]
+  globs := #[.andSubmodules `Tests]
+
 /-- Unit/regression test driver: `lake test`. -/
 @[test_driver]
 lean_exe elktest where

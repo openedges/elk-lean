@@ -1,4 +1,4 @@
-# ELK Layout Kernel for Pure Lean 4 (elk-lean)
+# ELK Layout Kernel for Pure Lean 4 (elk-lean) — AGENTS.md
 
 ## 프로젝트 목표
 - ELK Layout Kernel Java 0.12.0(및 elkjs 0.12.0, elk-rs 0.12.1)을 순수 Lean 4로 포팅한다.
@@ -10,11 +10,11 @@
 
 ## 문서 운영 원칙
 - `PLAN.md`: 포팅 계획(목표, 기준 버전, 아키텍처 결정, 단계, 검증, 리스크). 설계 변경 시 함께 갱신한다.
-- `.rules`(= `AGENTS.md` = `CLAUDE.md`): 작업 방식, 품질 게이트, 현재 핵심 우선순위만 관리한다.
+- `AGENTS.md`(이 문서): 작업 방식, 품질 게이트, 작업 할당 규칙, 현재 핵심 우선순위만 관리한다. 심볼릭 링크나 `CLAUDE.md` 사본을 두지 않는다.
 - `HISTORY.md`: 단계별 구현/검증/수치 변화/이슈 분석 등 진행 이력을 모두 기록한다.
 - `TESTING.md`: 검증 환경 준비, 항목 명세, 절차, 릴리즈 체크리스트.
 - `VERSIONING.md`: 버전 관리, 서브모듈/oracle 고정 정책.
-- 새 단계 완료 시 `HISTORY.md`를 먼저 갱신하고, 필요 시 `.rules`의 핵심 스냅샷만 동기화한다.
+- 새 단계 완료 시 `HISTORY.md`를 먼저 갱신하고, 필요 시 `AGENTS.md`의 핵심 스냅샷만 동기화한다.
 - 본문 설명은 한글로 작성한다(코드/명령어/식별자/경로는 원문 영문 유지).
 
 ## 자동 진행 규칙
@@ -43,7 +43,7 @@
 | `xhigh` | 알고리즘 핵심부, 정밀 parity(단계별 trace 일치) 요구, 수치/순서 민감 코드 |
 | `max` | 설계 결정, 원인 불명 drift, 성능 병목 분석 |
 
-- **브리프 형식**(할당 시 반드시 포함): 목표와 범위, 대응 Rust/Java 파일 목록(경로), 따라야 할 규약 문서(`.rules`, `PLAN.md` 4장, 해당 플러그인 `PORTING.md`), 이미 확정된 설계·제외 사항, 빌드/테스트/parity 명령, 보고 형식.
+- **브리프 형식**(할당 시 반드시 포함): 목표와 범위, 대응 Rust/Java 파일 목록(경로), 따라야 할 규약 문서(`AGENTS.md`, `PLAN.md` 4장, 해당 플러그인 `PORTING.md`), 이미 확정된 설계·제외 사항, 빌드/테스트/parity 명령, 보고 형식.
 - **보고 형식**(서브에이전트 → 주 에이전트): 변경 파일 목록, `lake build` 경고/오류 수, `lake test` 결과, parity 수치(모델 수/일치/드리프트), 남은 TODO와 사유, 규약 위반 가능성(`import Lean`, `panic!`, 불안정 정렬, 스냅샷 보유 갱신).
 - 병렬화: 서로 의존하지 않는 플러그인/서브패키지는 동시에 할당한다. 규약(속성 시스템, 모나드, 그래프 모델)을 바꾸는 작업은 직렬로 주 에이전트가 수행한다.
 - 하나의 할당은 한 번에 검증 가능한 크기(Rust 기준 ≤ 3,000줄, 프로세서 ≤ 10개)로 나눈다. 더 크면 분할한다.
@@ -61,7 +61,7 @@
    - **Model parity**: 최종 레이아웃 출력 비교 (oracle elk-rs vs Lean layout JSON)
    - **Phase-step trace**: layered 프로세서별 중간 상태 비교
 5. 성능 게이트: 기준선 대비 5% 이상 느려지면 원인 분석 후 진행
-6. 문서 갱신: `.rules` 핵심 스냅샷의 parity 수치, `HISTORY.md` 변경 내역/수치
+6. 문서 갱신: `AGENTS.md` 핵심 스냅샷의 parity 수치, `HISTORY.md` 변경 내역/수치
 7. 커밋 (`<scope>: <summary>`)
 8. 불가/예외 사항은 `HISTORY.md`에 사유와 대안을 기록
 

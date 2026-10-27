@@ -1,2 +1,7 @@
 import Elk.Graph.Ids
-/-! Root module of the `org.eclipse.elk.graph` plugin. Submodules are added here as they are ported. -/
+import Elk.Graph.Enum
+import Elk.Graph.Properties
+import Elk.Graph.Model
+import Elk.Graph.Util
+import Elk.Graph.Monad
+/-! Root module of the `org.eclipse.elk.graph` plugin. -/

@@ -20,7 +20,7 @@
 
 ### 산출물
 - `lakefile.lean`: 17개 `lean_lib`(플러그인 1:1) + `elk` CLI + `elktest` 테스트 드라이버 + C shim 타깃. `lake build` 21 jobs 경고 0, `lake test` 통과.
-- `PLAN.md`, `.rules`(`AGENTS.md`/`CLAUDE.md` 링크), `HISTORY.md`, `TESTING.md`, `VERSIONING.md`, `CHANGELOG.md`, `README.md`, `LICENSE`, `NOTICE`.
+- `PLAN.md`, `AGENTS.md`(처음에는 `.rules` + 심볼릭 링크였으나 사용자 요청으로 실제 파일 `AGENTS.md` 하나로 정리, `CLAUDE.md` 제거), `HISTORY.md`, `TESTING.md`, `VERSIONING.md`, `CHANGELOG.md`, `README.md`, `LICENSE`, `NOTICE`.
 - `scripts/`: `build_oracle.sh`, `oracle_layout.sh`, elk-rs 비교 스크립트 복사(`compare_model_parity_layouts.py`, `compare_phase_traces.py`), `README.md`.
 
 ### 미해결/다음
@@ -29,5 +29,25 @@
 - oracle 스모크 실행 확인: `scripts/oracle_layout.sh tests/tmp/smoke.json …` → 정렬된 키, 정수 스냅(`f64_to_number`: 정수와 1e-6 이내면 정수 출력), trace 19단계 생성(`<trace_dir>/<model>/step_NNN_*.json`).
 
 ## 2026-10-27 — 작업 규칙 추가: 에이전트 모델·노력 추정 할당
-- 사용자 요청으로 `.rules`에 "작업 할당 규칙"(작업 시작 시 모델·effort 추정 → 할당 → 재검증, 브리프/보고 형식, 분할 기준)을 추가하고 `PLAN.md` 11.1에 Phase별 초기 추정표를 기록했다.
+- 사용자 요청으로 `AGENTS.md`에 "작업 할당 규칙"(작업 시작 시 모델·effort 추정 → 할당 → 재검증, 브리프/보고 형식, 분할 기준)을 추가하고 `PLAN.md` 11.1에 Phase별 초기 추정표를 기록했다.
 - Phase 1 착수: 주 에이전트(fable, max)가 규약 모듈(Ids, Enum/EnumSet 매크로, Java 의미론 헬퍼, stableSort, Random, KVector/KVectorChain/Spacing/Rectangle)을 작성 중. 빌드 검증 후 옵션/데이터/수학/유틸 나머지를 할당표대로 분배한다.
+
+## 2026-10-27 — Phase 1 (1차): 기반 규약 모듈 완료, 병렬 할당 시작
+
+### 완료
+- `Elk.Graph`: `Ids`(typed id, `ConnectableId`, `ElementId`), `Enum`(`ElkEnum` 클래스, `elk_enum` 매크로, `EnumSet` 비트셋), `Properties`(`PropKey`/`PropValue`/`PropCodec`/`Property`/`PropertyMap`), `Model`(ElkGraph arena + EMF 반대참조 유지 연산), `Util`(`ElkGraphUtil` 순수 함수), `Monad`(`ElkM := StateRefT ElkGraph IO`).
+- `Elk.Core`: `Exceptions`(Java 예외 클래스명 규약), `Util.Java`(Float/Int/String 의미론, Rust 문법 실수 파싱), `Util.Sort`(안정 병합 정렬), `Util.Random`(java.util.Random 1:1; Python 재구현으로 seed 42의 nextInt/nextDouble/nextLong/nextFloat 교차 검증), `Math.{KVector,KVectorChain,Spacing(ElkPadding/ElkMargin),ElkRectangle}`.
+- 테스트 프레임워크 `Tests.Framework`(`lake test`), 기반 테스트 126개 통과. `PORTING.md`(Rust/Java→Lean 규약) 작성.
+- 결정: enum 느슨 파싱은 elk-rs `parse_enum_value`(숫자=ordinal, 영숫자만 남겨 대문자 비교)와 동일. `Spacing` 프록시 파싱은 elk-rs `parse_spacing_value`(key=value만)와 동일. `RESOLVED_ALGORITHM`은 알고리즘 id 문자열, `LABEL_MANAGER`는 `Dynamic`으로 표현.
+- Lean 4.35 특이점 기록: `String.trimAscii`/`dropEnd`는 `String.Slice` 반환, `section`은 예약어, 구조체 필드명이 네임스페이스 안에서 전역 함수를 가린다(`hash`).
+
+### Phase 1 작업 할당표 (추정 → 결과)
+| 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| 규약 모듈 + 테스트 프레임워크 + `PORTING.md` | `graph/*`, `core/util/mod.rs`, `core/math/{kvector,kvector_chain,spacing,elk_padding,elk_margin,elk_rectangle}.rs` | fable(주) | max | 주 에이전트 | 완료(126 테스트) |
+| A. Options 열거형 전부 + `CoreOptions` 상수 + `TopdownSizeApproximator` | `core/options/*.rs` (`core_options_meta.rs` 제외, ≈1.3K줄) | sonnet | high | 서브에이전트 A(worktree) | 진행 중 |
+| B. Math 나머지 + 테스트 | `core/math/{elk_math,bezier_spline,cubic_spline_interpolator,ispline_interpolator}.rs`, `core/tests/all/{elk_math,bezier_spline,cubic_spline_interpolator,kvector,kvector_chain}_test.rs` (≈1.4K+1K줄) | sonnet | medium | 서브에이전트 B(worktree) | 진행 중 |
+| C. Util 보조 + graph/property 테스트 이식 | `core/util/{progress_monitor,elk_trace,exclusive_bounds,abstract_random_list_accessor}.rs`, `graph/util/graph_identifier_generator.rs`, `graph/tests/*`, `core/tests/all/{basic_progress_monitor,property,util_misc}_test.rs` (≈1.2K+1K줄) | sonnet | medium | 서브에이전트 C(worktree) | 진행 중 |
+| D. `Elk.Core.Data` 레지스트리·resolver·deprecated replacer | `core/data/*.rs` (≈1.9K줄) | fable(주) | high | 주 에이전트 | 진행 중 |
+| E. `CoreOptionsMeta` 등록 | `core/options/core_options_meta.rs` (1,966줄) | sonnet | high | D 완료 후 | 대기 |
+| F. `ElkUtil`/`ElkSpacings`/adapters/validation/labels/`IndividualSpacings` | `core/util/{elk_util,elk_spacings,adapters/*}.rs`, `core/validation/*`, `core/labels/*` (≈3.5K줄) | opus | high | A·D 완료 후 | 대기 |

@@ -82,7 +82,7 @@ dependencies, supported features).
 ## 3. Release checklist
 1. `lake build` and `lake test` clean.
 2. Model parity and phase-step trace reports regenerated and recorded in
-   `HISTORY.md` and the `.rules` snapshot.
+   `HISTORY.md` and the `AGENTS.md` snapshot.
 3. Metadata parity clean.
 4. Performance within 5% of the recorded baseline.
 5. `CHANGELOG.md` updated, tag `vX.Y.Z` (see `VERSIONING.md`).
