@@ -64,12 +64,12 @@ def countDependencies (ds : Array LayoutOptionData) : Nat :=
 
 def counts : Suite := suite "core.meta.counts" do
   let s ← LayoutMetaDataService.getInstance
-  checkEq "option count" s.optionDataList.size 95
-  checkEq "option order size" s.optionOrder.size 95
+  checkEq "option count (core 95 + layered 89)" s.optionDataList.size 184
+  checkEq "option order size" s.optionOrder.size 184
   checkEq "category count" s.categoryDataList.size 8
   checkEq "algorithm count" s.algorithmDataList.size 4
   checkEq "dependency count" (countDependencies s.optionDataList) 10
-  checkEq "legacy options" s.legacyOptions.size 0
+  checkEq "legacy options (layered Java ids)" s.legacyOptions.size 89
   checkEqR "algorithm order" s.algorithmOrder
     #["org.eclipse.elk.fixed", "org.eclipse.elk.random", "org.eclipse.elk.box", "org.eclipse.elk.layered"]
   checkEqR "category order" s.categoryOrder
@@ -293,7 +293,7 @@ def algorithms : Suite := suite "core.meta.algorithms" do
   checkEq "layered category" layered.categoryId (some "org.eclipse.elk.layered")
   checkEq "layered defining bundle" layered.definingBundleId (some "org.eclipse.elk.alg.layered")
   checkEq "layered bundle name" layered.bundleName none
-  checkEq "layered known option count" layered.knownOptions.size 28
+  checkEq "layered known option count (28 core + 125 supports)" layered.knownOptions.size 153
   check "layered supports self loops" (layered.supportsFeature .selfLoops)
   check "layered supports clusters" (layered.supportsFeature .clusters)
   check "layered does not support disconnected" (!layered.supportsFeature .disconnected)
@@ -305,7 +305,7 @@ def algorithms : Suite := suite "core.meta.algorithms" do
   check "layered random seed 1" (isInt (layered.defaultValueRaw "org.eclipse.elk.randomSeed") 1)
   check "layered node type default" (isVal (layered.defaultValueRaw "org.eclipse.elk.topdown.nodeType") TopdownNodeTypes.hierarchicalNode)
   check "layered knows noLayout" (layered.knowsOption "org.eclipse.elk.noLayout")
-  check "layered nodeNode no default" (layered.defaultValueRaw "org.eclipse.elk.spacing.nodeNode").isNone
+  checkEq "layered nodeNode default 20 (option support)" (layered.defaultValueRaw "org.eclipse.elk.spacing.nodeNode") (some (.double 20.0))
   check "layered knows nodeNode" (layered.knowsOption "org.eclipse.elk.spacing.nodeNode")
   -- typed default access
   check "layered typed edge routing default"
@@ -315,7 +315,7 @@ def lookup : Suite := suite "core.meta.lookup" do
   let nn ← LayoutMetaDataService.getOptionDataBySuffix "nodeNode"
   checkEq "suffix nodeNode" (nn.map (·.id)) (some "org.eclipse.elk.spacing.nodeNode")
   let dir ← LayoutMetaDataService.getOptionDataBySuffix "direction"
-  checkEq "suffix direction" (dir.map (·.id)) (some "org.eclipse.elk.direction")
+  checkEq "suffix direction is ambiguous once layered (priority.direction) is registered" (dir.map (·.id)) none
   checkNone "suffix unknown option" (← LayoutMetaDataService.getOptionDataBySuffix "doesNotExist")
   checkNone "suffix empty option" (← LayoutMetaDataService.getOptionDataBySuffix "  ")
   let layered ← LayoutMetaDataService.getAlgorithmDataBySuffix "layered"

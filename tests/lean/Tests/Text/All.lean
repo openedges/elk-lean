@@ -116,7 +116,7 @@ algorithm: layered
 
 node compound {
   layout [ size: 120, 80 ]
-  direction: RIGHT
+  elk.direction: RIGHT
   edgeRouting: ORTHOGONAL
   nodeLabels.placement: "[OUTSIDE, V_TOP, H_CENTER]"
   portLabels.placement: "[OUTSIDE, NEXT_TO_PORT_IF_POSSIBLE]"
@@ -136,7 +136,7 @@ node compound {
 /-- Counterpart of `elkt_parser_nested_blocks.elkt`. -/
 def nestedBlocks : String := r#"
 algorithm: layered
-direction: DOWN
+elk.direction: DOWN
 portLabels.placement: "[OUTSIDE, NEXT_TO_PORT_IF_POSSIBLE]"
 
 node root {
@@ -164,7 +164,7 @@ node root {
 /-- Counterpart of `elkt_parser_hyperedge_and_labels.elkt`. -/
 def hyperedgeAndLabels : String := r#"
 algorithm: layered
-direction: RIGHT
+elk.direction: RIGHT
 
 node root {
   node a { layout [ size: 30, 20 ] }
@@ -191,7 +191,7 @@ node root {
 /-- Counterpart of `elkt_parser_sections_and_label_ids.elkt`. -/
 def sectionsAndLabelIds : String := r#"
 algorithm: layered
-direction: RIGHT
+elk.direction: RIGHT
 
 node source {
   layout [ size: 40, 26 ]
@@ -472,9 +472,9 @@ elk.edgeRouting: "ORTHOGONAL"
 spacing.nodeNode: 17
 org.eclipse.elk.padding: "[top=1,left=2,bottom=3,right=4]"
 unknown.option: 5
-direction: NOT_A_DIRECTION
+elk.direction: NOT_A_DIRECTION
 node n {
-  elk.^direction: 'UP'
+  elk.^elk.direction: 'UP'
   priority: null
 }
 "# fun root g => do
@@ -498,7 +498,7 @@ node n {
       | _ => false)
   | .error e => report "keepUnknownOptions" false e
   -- duplicate keys: last one wins
-  withGraph "duplicate key" "direction: DOWN\ndirection: UP" fun root g => do
+  withGraph "duplicate key" "elk.direction: DOWN\ndirection: UP" fun root g => do
     checkEq "last wins" (g.getNodeProp root CoreOptions.DIRECTION) (some Direction.up)
     checkEq "one entry" (g.node root).props.size 1
 

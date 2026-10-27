@@ -33,6 +33,8 @@ import Elk.Alg.Layered.Options.WrappingStrategy
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.Options.LayeredMetaDataProvider
 import Elk.Alg.Layered.Options.LayeredSpacings
+import Elk.Alg.Layered.Options.Spacings
+import Elk.Alg.Layered.Options.InternalProperties
 /-!
 # `org.eclipse.elk.alg.layered.options`
 

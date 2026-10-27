@@ -6,6 +6,7 @@ import Elk.Alg.Layered.Options.EdgeConstraint
 import Elk.Alg.Layered.Options.InLayerConstraint
 import Elk.Alg.Layered.Options.GraphProperties
 import Elk.Alg.Layered.Compound.CrossHierarchyEdge
+import Elk.Alg.Layered.Options.Spacings
 /-!
 # `org.eclipse.elk.alg.layered.options.InternalProperties`
 
@@ -65,6 +66,8 @@ structure LGraphInternals where
   inLayerSuccessorConstraintsBetweenNonDummies : Bool := false
   /-- `CROSS_HIERARCHY_MAP` (`crossHierarchyMap`): original edge → dummy edges, insertion order. -/
   crossHierarchyMap : Array (LEdgeId × Array CrossHierarchyEdge) := #[]
+  /-- `SPACINGS` (`spacings`). -/
+  spacings : Option Spacings := none
   deriving Inhabited
 
 /-- Internal properties set on `LNode`s. -/

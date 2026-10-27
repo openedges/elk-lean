@@ -190,8 +190,17 @@ builtin_initialize initializedRef : IO.Ref Bool ← IO.mkRef false
 
 builtin_initialize instanceRef : IO.Ref LayoutMetaDataService ← IO.mkRef {}
 
+/-- Hooks of the algorithm plugins (run after the core hook, in registration order). -/
+builtin_initialize extraInitHooksRef : IO.Ref (Array (IO Unit)) ← IO.mkRef #[]
+
 /-- Registers the lazy core initialisation (called at module initialisation of `Elk.Core.Init`). -/
 def setInitHook (hook : IO Unit) : IO Unit := initHookRef.set (some hook)
+
+/-- Adds a plugin initialisation hook (e.g. the layered metadata provider); runs after the core
+hook the first time the service is used. Hooks added after initialisation run immediately. -/
+def addInitHook (hook : IO Unit) : IO Unit := do
+  if ← initializedRef.get then hook
+  else extraInitHooksRef.modify (·.push hook)
 
 /-- Runs the core initialisation once (`get_instance()` semantics). -/
 def ensureInitialized : IO Unit := do
@@ -200,6 +209,7 @@ def ensureInitialized : IO Unit := do
     match ← initHookRef.get with
     | some hook => hook
     | none => pure ()
+    for hook in (← extraInitHooksRef.get) do hook
 
 /-- `LayoutMetaDataService.getInstance()`: a snapshot of the registry. -/
 def getInstance : IO LayoutMetaDataService := do
