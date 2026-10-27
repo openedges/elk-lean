@@ -551,6 +551,15 @@ def interactiveReferencePoint (node : LNodeId) : LayeredM (Option KVector) := do
     | .center => ⟨nd.position.x + nd.size.x / 2.0, nd.position.y + nd.size.y / 2.0⟩
     | .topLeft => nd.position)
 
+/-- Draws from the graph's random generator (`InternalProperties.RANDOM`, shared by all users
+in Java/elk-rs) and stores the advanced generator back; a missing generator starts at seed 0
+like elk-rs `Random::default()`. -/
+def drawRandom {α : Type} (graph : LGraphId) (f : Random → α × Random) : LayeredM α := do
+  let random := (← getGraph graph).internal.random.getD (Random.ofInt 0)
+  let (value, random') := f random
+  modifyGraph graph fun g => { g with internal := { g.internal with random := some random' } }
+  return value
+
 /-- `Spacings.getHorizontalSpacing(n1, n2)` on arena nodes. -/
 def horizontalSpacing (s : Spacings) (n1 n2 : LNodeId) : LayeredM Float := do
   let a ← getNode n1

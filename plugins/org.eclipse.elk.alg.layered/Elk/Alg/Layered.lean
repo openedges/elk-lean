@@ -5,6 +5,7 @@ import Elk.Alg.Layered.Compound
 import Elk.Alg.Layered.TraceRecorder
 import Elk.Alg.Layered.Intermediate.IntermediateProcessorStrategy
 import Elk.Alg.Layered.LayeredPhases
+import Elk.Alg.Layered.P3Order
 import Elk.Alg.Layered.P5Edges
 import Elk.Alg.Layered.GraphConfigurator
 import Elk.Alg.Layered.ElkLayered
