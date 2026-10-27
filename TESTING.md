@@ -11,8 +11,9 @@ procedures; the parity pipeline becomes operational in Phase 2 (see `PLAN.md`).
 | cc (clang) | any C11 | `plugins/org.eclipse.elk.core/c/elk_core_ffi.c` |
 | Rust | 1.97.1 (`../elk-rs/rust-toolchain.toml`, via `mise`) | building the elk-rs oracle |
 | Python | 3.9+ | comparison scripts |
-| Node.js | 24 | JS package tests (Phase 8) |
-| emscripten | latest | WASM build (Phase 8) |
+| Node.js | 24 (`mise`) | JS package tests, WASM tests |
+| emscripten | emsdk 6.0.13 (`.reference/emsdk`, `scripts/build_wasm.sh`) | WASM build |
+| JDK / Maven | temurin 21.0.13 / 3.9.16 (`mise`) | ELK Java result baseline (`scripts/run_java_baseline.sh`) |
 
 `~/.elan/bin` is not on the shell PATH by default in this environment:
 
@@ -20,19 +21,34 @@ procedures; the parity pipeline becomes operational in Phase 2 (see `PLAN.md`).
 export PATH=$HOME/.elan/bin:$PATH
 ```
 
-### Oracle
+### References
 
-elk-lean is verified against the **elk-rs 0.12.1** checkout in `../elk-rs`
-(commit `eb586b6d`), which itself matches Java ELK 0.12.0 on all 1,998 corpus
-models (plus three documented, intentional corrections). Build it once:
+**Result reference: ELK Java 0.12.0**, unmodified Maven Central artifacts driven by
+`scripts/java/` (`ElkJavaBaseline`, with `ElkPhaseTraceExporter` from elk-rs for the layered
+phase-step traces). JDK and Maven come from `mise` (installed on first use):
+
+```sh
+mise install java@temurin-21.0.13+9.0.LTS maven@3.9.16
+sh scripts/run_java_baseline.sh external/elk-models .reference/java-baseline/corpus            # layouts
+sh scripts/run_java_baseline.sh external/elk-models .reference/java-baseline/corpus_reverse --reverse true
+sh scripts/run_java_baseline.sh external/elk-models out --include a,b --trace true           # + layered traces
+```
+
+`.json` models are laid out as they are; `.elkt`/`.elkg` models are loaded through EMF, get
+`RANDOM_SEED` 1 and are exported to JSON by ELK itself, and that JSON is what both ELK Java and
+elk-lean lay out. `--reverse` / `--shuffle SEED` run the models in another order: ELK iterates a
+few `HashMap`/`HashSet`s keyed by objects without their own `hashCode` (self-loop port sides,
+partition members), so for those models its result depends on the identity hash codes handed out
+earlier in the JVM, i.e. on the run. `ELK_JAVA_PATCHES=<dir>` compiles patched ELK sources into an
+overlay (unsigned jar copies) when the effect of a patch has to be isolated.
+
+**Performance reference (and secondary trace oracle): elk-rs 0.12.1** in `../elk-rs`
+(commit `eb586b6d`). Build it once:
 
 ```sh
 sh scripts/build_oracle.sh
 # → .reference/elk-rs-target/release/model_parity_layout_runner, perf_benchmark
 ```
-
-When a JDK and Maven become available, the Java baseline can be regenerated with
-elk-rs's `scripts/java_model_parity_trace.sh` and compared three ways.
 
 ## 2. Verification Items
 
@@ -47,8 +63,10 @@ elk-rs's `scripts/java_model_parity_trace.sh` and compared three ways.
 
 | Item | Comparison | Tool |
 |------|------------|------|
-| Model parity | oracle layout JSON vs Lean layout JSON, semantic, abs tol 1e-6 | `scripts/compare_model_parity_layouts.py` |
-| Phase-step trace | per-processor LGraph snapshots, positional, tol 1e-3; node/port storage order compared strictly (`--strict-order`, default in the run scripts) | `scripts/compare_phase_traces.py --batch --strict-order` |
+| **Java result parity** | ELK Java layout JSON vs Lean layout JSON, values compared exactly (abs tol 0; formatting differs by design: Gson `12.0`, elk-lean `12`) and at 1e-6 | `scripts/run_java_parity.sh <java_baseline_dir> <out>` |
+| **Java phase-step trace** | ELK Java LGraph after every layered processor vs Lean, tolerance 0, strict node/port order | `scripts/run_java_trace_parity.sh <models> <out>` |
+| elk-rs model parity | elk-rs layout JSON vs Lean, semantic, abs tol 1e-6; byte identity with `compare_bytes.sh` | `scripts/run_model_parity.sh`, `scripts/compare_bytes.sh` |
+| elk-rs phase-step trace | per-processor LGraph snapshots, tol 1e-3, strict storage order (`--strict-order`) | `scripts/run_trace_parity.sh` |
 
 ```sh
 # single model against the oracle
@@ -57,7 +75,11 @@ ELK_TRACE_DIR=out/lean_trace .lake/build/bin/elk layout input.json -o out/lean.j
 python3 scripts/compare_model_parity_layouts.py out/oracle.json out/lean.json
 python3 scripts/compare_phase_traces.py out/oracle_trace out/lean_trace
 
-# whole corpus
+# ELK Java (result reference)
+sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity   # report_exact.md (tol 0), report.md (1e-6)
+sh scripts/run_java_trace_parity.sh external/elk-models tests/tmp/java_trace          # generates Java traces, compares every step
+
+# elk-rs (secondary), whole corpus
 sh scripts/run_model_parity.sh external/elk-models tests/model_parity   # .json + .elkt (converted with `elk convert`; PARITY_INCLUDE_ELKT=0 to skip)
 sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus   # every model: oracle vs elk-lean step traces (strict order)
 sh scripts/run_phase_trace_parity.sh external/elk-models/<model>.elkt tests/tmp/trace_<model>   # one model
@@ -106,8 +128,9 @@ dependencies, supported features).
 
 ## 3. Release checklist
 1. `lake build` and `lake test` clean.
-2. Model parity and phase-step trace reports regenerated and recorded in
-   `HISTORY.md` and the `AGENTS.md` snapshot.
+2. ELK Java result parity (exact) and Java phase-step trace parity regenerated, the models whose
+   Java result is context-dependent listed, elk-rs parity/byte identity regenerated; all recorded
+   in `HISTORY.md` and the `AGENTS.md` snapshot.
 3. Metadata parity clean.
 4. Performance within 5% of the recorded baseline (`scripts/run_perf_benchmark.sh`), memory check
    clean, FFI smoke test (`scripts/build_ffi.sh --check`) passing.

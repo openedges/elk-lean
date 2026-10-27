@@ -79,12 +79,14 @@
 - **버전**: elk-lean `0.12.0`(미공개), 레퍼런스 ELK/elkjs `0.12.0`, oracle elk-rs `0.12.1`(`../elk-rs` HEAD `eb586b6d`).
 - **툴체인**: Lean `v4.35.0` / Lake 5.0 (`~/.elan/bin`, 셸 PATH 미수정: `export PATH=$HOME/.elan/bin:$PATH`). Node 24·Rust 1.97.1은 `../elk-rs`에서 `mise exec --`로 사용.
 - **서브모듈 고정**: `external/elk` → `32331291`(v0.12.0), `external/elkjs` → `ff5771d7`(0.12.0), `external/elk-models` → `ac5af2ba`, `external/elk-live` → `cbf63a24`.
-- **oracle**: `.reference/elk-rs-target/release/model_parity_layout_runner`, `perf_benchmark`(`scripts/build_oracle.sh`로 재빌드). 스크립트는 worktree에서도 메인 체크아웃의 `.reference/`를 자동으로 찾는다.
+- **기준**: 결과(최종 출력·layered 단계별 상태)는 **ELK Java 0.12.0 미수정 아티팩트**(`scripts/run_java_baseline.sh`, JDK 21·Maven via mise, 기준값 `.reference/java-baseline/`), 성능은 **elk-rs**(`perf_benchmark`). elk-rs trace/model parity는 보조 검사로 유지(`.reference/elk-rs-target/release/`, `scripts/build_oracle.sh`). 스크립트는 worktree에서도 메인 체크아웃의 `.reference/`를 자동으로 찾는다.
 - **완료**: Phase 0~6. layered 전 프로세서(P1~P5, intermediate 59개, components/compound/wrapping/self loops), Phase 5 전 알고리즘(force/stress, mrtree, radial, rectpacking, spore, disco, topdownpacking, vertiflex), `.elkt` 파서·`elk convert`, `elk bench`(elk-rs `perf_benchmark` rust_api와 동일 시나리오·CSV).
 - **빌드 상태**: `lake build` 경고 0, `lake test` 12899 통과/0 실패(1 skip: BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요).
-- **Parity**: 코퍼스(json 550 + elkt 898) model parity 1447/1447 일치, phase-step trace 1447/1447 전 단계 일치(`--strict-order`), 1건(`tickets/layered/588_hierarchicalLayoutNPE.elkt`)은 양쪽이 같은 예외로 실패. 합성 벤치마크 26개 출력도 oracle과 바이트 일치. `.elkg` 550개는 같은 그래프의 XMI 표현이며 oracle(elk-rs)도 읽지 않는다.
-- **성능(1차 측정)**: elk-rs rust_api 대비 force/stress 약 30배, layered 6~8배, mrtree/radial/rectpacking 2~5배 느림 → 최우선 과제.
-- **다음 우선순위**: 성능 최적화(프로파일 → 공통 코어 → 알고리즘별, 출력 바이트 일치 유지) → Phase 8(`Elk.Ffi` C API → NAPI·npm → WASM) → Phase 7 전수 검증(메모리 수명, 이슈 시나리오) → 릴리스.
+- **Parity(ELK Java 기준)**: 코퍼스 1,998개 중 1,997개 비교(1건은 양쪽 동일 예외): 최종 출력 정확 일치(tol 0) 1,878, 나머지 119는 Java 자체가 실행 컨텍스트(identity hash 순서)에 따라 결과가 바뀌는 모델(패치 0001 적용 Java와는 전부 일치), ticket 213은 Java가 NaN을 내는 의도적 예외. 단계별 trace(tol 0): 표본 40개 중 39개 전 단계 일치(1개는 Java 측 `HashMultimap` 순서). 전체 단계별 결과는 `HISTORY.md`.
+- **Parity(elk-rs 보조)**: model parity 1447/1447, strict trace 1447/1447, 바이트 일치 1447/1447(`scripts/compare_bytes.sh`).
+- **성능**: 1차 기준선(elk-rs rust_api 대비 기하평균 6.4배) 이후 FastFloat·파서·zmij·force/stress·P3·P5·mrtree/rectpacking 최적화. 코퍼스 1,447개 총 시간은 1차 측정에서 이미 1.3배, 합성 layered는 P3 1.7배 개선 후 재측정 예정(`tests/perf/report.md`).
+- **Phase 8**: C API(`elk_lean.h`)·NAPI 애드온·npm 패키지(JS 테스트 51/51, 애드온 vs CLI 1447/1448 바이트 일치)·WASM(realworld 550/550, 네이티브 대비 1.5배) 완료. 남은 일: npm에 WASM 로더 연결, Linux/Windows 빌드, 게시.
+- **다음 우선순위**: Java 기준 단계별 전수 결과 정리 → 성능 재측정·기준선 갱신 → 남은 성능(P3 Forster, `NodeMicroLayout`, P5) → npm WASM 통합 → 릴리스 준비.
 - **작업 위치 규칙**: 서브에이전트는 worktree에서만 작업한다. worktree가 사라지면 메인 체크아웃으로 옮기지 말고 보고하게 한다(공유 체크아웃에서의 동시 작업은 커밋 범위 혼동을 일으킨다).
 
 ## 기본 실행 명령
@@ -92,8 +94,10 @@
 - CLI: `.lake/build/bin/elk --version`
 - oracle 재빌드: `sh scripts/build_oracle.sh`
 - oracle 단일 모델 실행: `sh scripts/oracle_layout.sh <input.json> <out.json> [trace_dir]`
-- Model parity: `sh scripts/run_model_parity.sh external/elk-models tests/model_parity`
-- Phase-step trace parity: `sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus [--limit N --filter S]`(단일 모델: `scripts/run_phase_trace_parity.sh`)
+- Java 기준값: `sh scripts/run_java_baseline.sh external/elk-models .reference/java-baseline/corpus [--trace true] [--reverse true]`
+- Java 결과 parity: `sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity`; 단계별: `sh scripts/run_java_trace_parity.sh external/elk-models tests/tmp/java_trace`
+- elk-rs model parity: `sh scripts/run_model_parity.sh external/elk-models tests/model_parity` + `sh scripts/compare_bytes.sh tests/model_parity`
+- elk-rs phase-step trace parity: `sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus [--limit N --filter S]`(단일 모델: `scripts/run_phase_trace_parity.sh`)
 - 성능: `sh scripts/run_perf_benchmark.sh [iterations] [warmup] [out_dir]`(oracle rust_api/rust_native vs `elk bench`, `tests/perf/report.md`; `baseline_lean_api.csv`가 있으면 5% 회귀 게이트)
 
 ## 외부 모듈 정책

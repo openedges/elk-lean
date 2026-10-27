@@ -9,29 +9,30 @@
 ## 1. 목표
 
 1. **기능 동등성**: ELK Java 0.12.0 / elkjs 0.12.0 / elk-rs 0.12.1이 제공하는 레이아웃 알고리즘과 옵션 메타데이터를 동일하게 제공한다.
-2. **출력 동등성**: 동일한 ELK JSON 입력에 대해 노드 좌표, 엣지 섹션/벤드포인트/정션포인트, 라벨 위치, 그래프 크기를 동일하게 산출한다.
-3. **단계별 동등성**: layered 알고리즘의 모든 프로세서(50~70단계) 실행 직후 중간 상태(phase-step trace)가 elk-rs와 일치한다.
-4. **성능·메모리**: elk-rs 수준을 목표로 한다. 순환 참조 없는 arena 설계로 메모리 누수를 구조적으로 배제하고, hot path는 SoA 배열로 처리한다.
+2. **출력 동등성(기준: ELK Java 0.12.0)**: 동일한 ELK JSON 입력에 대해 노드 좌표, 엣지 섹션/벤드포인트/정션포인트, 라벨 위치, 그래프 크기를 수정하지 않은 ELK Java 0.12.0(Maven Central 아티팩트)과 값 단위로 정확히(허용오차 0) 산출한다. Java 자체가 실행 컨텍스트(identity hash 순서)에 따라 결과가 달라지는 모델은 Java가 내는 결과 중 하나(열거형 순서)로 고정한다.
+3. **단계별 동등성(기준: ELK Java)**: layered 알고리즘의 모든 프로세서(20~140단계) 실행 직후 중간 상태(phase-step trace)가 ELK Java의 상태와 일치한다. elk-rs trace는 보조 기준(엄격 순서 비교)으로 유지한다.
+4. **성능·메모리(기준: elk-rs)**: elk-rs 수준을 목표로 한다. 순환 참조 없는 arena 설계로 메모리 누수를 구조적으로 배제하고, hot path는 SoA 배열로 처리한다.
 5. **배포**: 네이티브 CLI(`elk`), Node.js NAPI 애드온, WASM(브라우저/Node), elkjs 호환 npm 패키지(`layout()`, `knownLayoutAlgorithms()`, `knownLayoutOptions()`, `knownLayoutCategories()`, Web Worker 모드).
 
 ### 비목표
 - Eclipse/EMF/Xtext 통합 플러그인(`core.service`, `*.ui`, `*.debug`, `core.meta`, `conn.gmf`)은 포팅하지 않는다(elk-rs도 최소 스텁).
 - Graphviz(`alg.graphviz.*`)와 libavoid(`alg.libavoid`)는 외부 바이너리 연동이므로 메타데이터 등록과 스텁만 유지한다(elk-rs와 동일).
-- Java 원본의 동작을 "개선"하지 않는다. elk-rs가 명시적으로 Java와 다르게 결정한 3건(self-loop 결정성, zero-size resize, zero-height scanline)은 elk-rs를 따른다.
+- Java 원본의 동작을 "개선"하지 않는다. elk-rs가 Java 기준값 생성 시 적용한 패치 3건(`../elk-rs/scripts/java/patches`)의 취급: (1) self-loop 포트 변 순서 — Java는 `HashMultimap`의 identity hash 순서라 실행마다 달라진다 → Java가 내는 결과 중 하나인 열거형 순서로 고정(elk-rs와 동일); (2) zero-size resize — Java는 중간 포트 좌표가 비유한이 되지만 뒤에 덮어써 최종 출력은 같다 → 최종 출력 기준으로 Java와 일치; (3) zero-height scanline(ticket 213) — 수정 전 Java는 최종 출력에 NaN을 낸다 → **유일한 의도적 예외**로 유한한 결과를 유지하고 `HISTORY.md`에 기록.
 
 ## 2. 기준 버전과 레퍼런스
 
 | 레퍼런스 | 위치 | 핀 | 용도 |
 |---|---|---|---|
-| elk-rs 0.12.1 | `../elk-rs` (HEAD `eb586b6d`) | ELK 0.12.0 포팅 + elk-rs 수정 | 주 코드 레퍼런스, **oracle** |
-| oracle 바이너리 | `.reference/elk-rs-target/release/` | elk-rs 위 커밋의 release 빌드 | 기준 출력/trace 생성 |
-| ELK Java | `external/elk` | `32331291` (v0.12.0) | 알고리즘 의미론 확인, 메타데이터(`*.melk`) |
+| **ELK Java 0.12.0 (결과 기준)** | Maven Central `org.eclipse.elk:*:0.12.0` (`.reference/m2`), 드라이버 `scripts/java/` | 릴리스 아티팩트(미수정) | **결과·단계별 기준값**(`scripts/run_java_baseline.sh`, JDK 21·Maven 3.9 via mise) |
+| elk-rs 0.12.1 (성능 기준) | `../elk-rs` (HEAD `eb586b6d`) | ELK 0.12.0 포팅 + elk-rs 수정 | 주 코드 레퍼런스, 성능 기준(`perf_benchmark`), 보조 trace oracle |
+| oracle 바이너리 | `.reference/elk-rs-target/release/` | elk-rs 위 커밋의 release 빌드 | elk-rs 출력/trace 생성 |
+| ELK Java 소스 | `external/elk` | `32331291` (v0.12.0) | 알고리즘 의미론 확인, 메타데이터(`*.melk`) |
 | elkjs | `external/elkjs` | `ff5771d7` (0.12.0) | npm API/typings, JS 테스트 |
 | elk-models | `external/elk-models` | `ac5af2ba` | 검증 코퍼스(1,998 모델) |
 | elk-live | `external/elk-live` | `cbf63a24` | 브라우저 통합 예제, elkt 파서 참고 |
 | Lean | `lean-toolchain` | v4.35.0 / Lake 5.0 | 툴체인 |
 
-**oracle을 elk-rs로 정한 이유**: 이 환경에는 JDK/Maven이 없다. elk-rs는 Java 0.12.0 대비 1,998개 모델 최종 출력과 196,407개 중간 단계가 일치함을 검증했으므로(elk-rs `tests/phase_trace_audit.md`), elk-rs 출력을 Java 출력의 대리 기준값으로 사용한다. Java 환경이 추가되면 `TESTING.md`의 절차로 Java 기준값을 재생성해 3자 비교로 확장한다.
+**기준의 역할 분담**: 결과(최종 출력·단계별 상태)의 기준은 수정하지 않은 ELK Java 0.12.0이다(JDK 21·Maven은 `mise`로 설치, 아티팩트는 Maven Central; `scripts/run_java_baseline.sh`가 코퍼스 기준값과 layered 단계별 trace를 생성한다). elk-rs는 코드 레퍼런스이자 성능 기준이며, elk-rs trace 비교(엄격 순서)는 Java trace가 담지 않는 저장 순서까지 보는 보조 검사로 유지한다. elk-rs가 Java 비교에 쓴 패치 3건은 적용하지 않는다(1장 비목표 참조). Java 결과가 실행 컨텍스트에 따라 달라지는 모델은 `--reverse`/`--shuffle` 실행으로 식별해 따로 집계한다.
 
 ## 3. 규모 산정 (elk-rs src 기준, 테스트 제외)
 
@@ -220,20 +221,25 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 4. **변환·조회는 루프 밖으로**: `Float.ofInt`, 속성 조회(`getD`), `HashMap` 조회는 루프 전에 `FloatArray`/`Array`로 미리 만든다. id로 인덱싱하는 배열이 해시맵보다 빠르다.
 5. **모나드 안의 내부 루프**: `StateRefT` 위의 반복은 반복마다 클로저 호출이 생긴다. 필요한 배열을 한 번 꺼내 순수 함수로 계산하고 결과를 한 번에 쓴다. 상태 전체를 바인딩(`let g ← get`)한 채 수정하면 배열 복사(`lean_copy_expand_array`)가 생긴다.
 6. **작은 할당 줄이기**: 핫 경로에서 `Option`/튜플/`KVector` 반환을 피하고(인자로 분해), 작은 도우미에는 `@[inline]`을 붙인다. `Array`에서 원소를 꺼내 고칠 때는 `modify`(소유권 이전)를 쓴다.
-7. **NaN 판정**: `Float.isNaN`/`isFinite`/`isInf`도 FastFloat가 인라인 비교로 바꾼다(코어는 out-of-line C 호출).
+7. **NaN 판정**: `Float.isNaN`/`isFinite`/`isInf`도 FastFloat가 인라인 비교로 바꾼다(코어는 out-of-line C 호출). 핫 루프에서는 `x != x`가 가장 확실하다.
+8. **루프 안의 Float 리터럴**: 컴파일러가 추출하지 못한 리터럴은 반복마다 `FastFloat.ofScientificImpl`을 부른다 → 최상위 `def` 상수(단순 load)로 뺀다.
+9. **`Int`와 리터럴 `0` 비교**는 평가마다 `lean_obj_once` 전역 초기화를 거친다 → `Int` 생성자 매칭(`.ofNat`/`.negSucc`)이나 `UInt`/`Nat` 비교로 바꾼다.
+10. **열거형 `BEq`**(derived)는 `ctorIdx`를 거치는 out-of-line 호출 → 핫 경로는 `match`나 `UInt8` 비교.
+11. **중첩 구조체의 배열 필드를 루프/분기 안에서 `{ d with f := d.f.modify … }`로 갱신**하면 바깥·안쪽 배열이 복사될 수 있다(참조가 남는 경우). `match d with | ⟨a, b, …⟩ => ⟨…⟩`로 분해해 필드를 유일 소유로 유지한다(PL3 `BarycenterData`/`ForsterData`).
+12. **전역 `stableSort`/`rustSortBy`는 특수화되지 않아** 비교마다 클로저 호출·박싱이 든다 → 핫 경로는 키를 미리 뽑아 전용 정렬(같은 비교 순서)로 처리한다(PL3 삽입 정렬, PT 키 정렬).
 
 ## 8. 배포 설계
 - **CLI**: `elk layout [-f json|elkt] [-a <algorithm>] [-o out] [--pretty] [--sort-keys] [--trace-dir DIR] [--lenient] input`, `elk convert`, `elk algorithms|options|categories`, `elk --version`.
 - **FFI**: `@[export elk_layout_json] (graph options : String) : String`(오류는 JSON `{"error": "..."}`), `elk_known_layout_algorithms/options/categories`, `elk_init`(모듈 initializer + `ensureInitialized`).
 - **NAPI**: Node-API C 애드온(`plugins/org.eclipse.elk.napi/src/elk_napi.c`)이 `libelklean.a`(`elk_lean.h` C API, `scripts/build_ffi.sh`)를 링크, elk-rs와 같은 6개 플랫폼 패키지 구조(`scripts/build_napi.sh`).
-- **WASM**: Lean 런타임(`src/runtime`)·stdlib C(`stage0/stdlib/Init,Std`)·프로젝트 C를 emscripten으로 컴파일, `-s MODULARIZE -s EXPORT_ES6`, 브라우저 ESM + Node CJS 두 산출물. 스레드 없이 빌드(`LEAN_MULTI_THREAD` off) 가능 여부를 Phase 8 초기에 검증한다.
+- **WASM**(`plugins/org.eclipse.elk.wasm`, `scripts/build_wasm.sh`): Lean 런타임 `src/runtime`(v4.35.0 소스, 단일 스레드, GMP 없음, libuv 호환 셈 `c/uv_compat`)과 Init/Std C(툴체인 `lean -c`로 재생성, 릴리스 오브젝트와 793/793 바이트 일치 검증) + 모든 Elk 모듈 C + `elk_lean.c`를 emscripten 6.0.13으로 컴파일. **`-sMEMORY64=2`**(64비트 C를 wasm32로 낮춤): Lean 생성 C는 32비트 타깃에서 `2^31` 이상 리터럴을 매번 힙 bignum으로 만들고 해제하지 않아(누수·느림) 순수 wasm32는 쓰지 않는다. 산출물: Node CJS(동기 초기화) + 브라우저 ESM, `.wasm` 18.9 MB(brotli 2.0 MB), mimalloc. 깊은 재귀는 JS 엔진 스택 한계에 걸리므로 npm 패키지는 스택을 키운 Worker 모드를 제공한다.
 - **npm**: elk-rs `plugins/org.eclipse.elk.js`의 로더(플랫폼 NAPI → 로컬 .node → WASM 폴백, Worker 모드)와 typings 구조를 그대로 이식.
 
 ## 9. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
 |---|---|---|
-| WASM: Lean 런타임의 emscripten 빌드가 현재 CI에서 비활성(libuv/pthread 의존) | 브라우저 배포 지연 | Phase 8 초기에 PoC(런타임+Init만 빌드)로 조기 검증; 실패 시 wasi-sdk 경로 시도; NAPI 먼저 출시 |
+| WASM: Lean 런타임의 emscripten 빌드가 현재 CI에서 비활성(libuv/pthread 의존) | 브라우저 배포 지연 | **해결(W1)**: libuv 호환 셈 + `MEMORY64=2`로 빌드, realworld 550/550 일치, 네이티브 대비 1.5배. 남은 위험: `MEMORY64=2`가 emscripten 6에서 deprecated |
 | Lean 컴파일 시간(대형 do-block 느린 elaboration) | 개발 속도 | 파일당 1 클래스 유지, 긴 함수 분할, `maxHeartbeats` 상향, 모듈 병렬 빌드 |
 | in-place 규약 위반으로 O(n²) 복사 | 성능 | 코드리뷰 체크리스트, 벤치마크 회귀 게이트(5%) |
 | 안정 정렬에서 비일관 비교자의 결과 차이(TimSort vs 병합) | parity 드리프트 | drift 발생 시 해당 비교자에 한해 TimSort 동작 재현 |
@@ -241,7 +247,8 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | Java 부동소수점(`float` 캐스팅, `Math.round`) 미세 차이 | parity 드리프트 | Java 헬퍼 1:1, trace 비교로 단계 특정 |
 | `Nat` 뺄셈 절단, 배열 범위 밖 접근 시 panic 후 계속 진행 | 잘못된 결과 | 음수 가능 값은 `Int`, 테스트 시 `LEAN_ABORT_ON_PANIC=1` |
 | 내부 속성 typed 필드 전환 누락 | 포팅 오류 | 대응표 문서 + 컴파일 타임 타입 검사가 누락을 드러냄 |
-| Java 기준값 부재(JDK 없음) | 3자 검증 불가 | elk-rs를 대리 기준값으로 사용(2장), JDK 확보 시 `TESTING.md` 절차로 확장 |
+| Java 기준값 부재(JDK 없음) | 3자 검증 불가 | **해결**: JDK 21·Maven을 mise로 설치, Maven Central ELK 0.12.0으로 `scripts/run_java_baseline.sh` 기준값·trace 생성(2장) |
+| ELK Java 결과의 컨텍스트 의존(identity hash 순서) | 모델 ~6%에서 Java 자체가 실행마다 다른 결과 | `--reverse`/`--shuffle`/단일 실행으로 변동 모델을 식별하고, elk-lean 결과가 Java 결과 집합에 속하는지로 판정 |
 
 ## 10. 코딩 규약 요약 (상세: `AGENTS.md`)
 - 파일 1개 = Java 클래스 1개, 모듈 경로는 Java 패키지 경로를 CamelCase로 변환.
