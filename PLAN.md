@@ -227,6 +227,9 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 10. **열거형 `BEq`**(derived)는 `ctorIdx`를 거치는 out-of-line 호출 → 핫 경로는 `match`나 `UInt8` 비교.
 11. **중첩 구조체의 배열 필드를 루프/분기 안에서 `{ d with f := d.f.modify … }`로 갱신**하면 바깥·안쪽 배열이 복사될 수 있다(참조가 남는 경우). `match d with | ⟨a, b, …⟩ => ⟨…⟩`로 분해해 필드를 유일 소유로 유지한다(PL3 `BarycenterData`/`ForsterData`).
 12. **전역 `stableSort`/`rustSortBy`는 특수화되지 않아** 비교마다 클로저 호출·박싱이 든다 → 핫 경로는 키를 미리 뽑아 전용 정렬(같은 비교 순서)로 처리한다(PL3 삽입 정렬, PT 키 정렬).
+13. **분기·조인 뒤의 `{ s with … }` 갱신은 객체를 재사용하지 못한다**: 모든 필드를 투영해 새 객체를 할당한다(26필드 `ImporterState`는 갱신마다 재할당). 직선 코드의 `{ g with … }`(`ElkGraph.modifyNode`)는 괜찮다. 핫 갱신은 분기 없는 생성자 매치(`match s with | ⟨a, b, …⟩ => ⟨a', b, …⟩`)로 쓴다(PJ `ImporterState.addNode` 등).
+14. **double 비트 패턴을 `Int`로 비교하지 않는다**: 대부분의 비트 패턴이 small-`Int` 범위 밖이라 비교마다 GMP 수가 할당된다(`Float.compareTotal`/`compareJava`, P5 정렬). 부호 비트를 뒤집은 `UInt64` 키를 비교한다. `2^64`/`2^32` 리터럴을 쓰는 부호 변환도 `~~~`(보수)로 바꾼다(PJ, 차분 테스트 `core.util.java`).
+15. **증명된 인덱스로 unchecked 접근**: `USize` 인덱스와 `i < a.usize` 증명(`usize_lt_size`)으로 `uget`/`uset`을 쓰면 `Nat` 박싱 검사 없는 직접 load가 된다. 배열 크기 동치는 루프 밖에서 한 번 검사하고(`scanForces`), 실패 시 checked 복사본으로 간다(PF2 force 쌍 루프, rectpacking 스캔). 어댑터 읽기(부작용 없음)는 한 번 읽어 재사용하고, 빈 컨테이너(라벨 없는 셀·스트립)는 생성하지 않는다(PN).
 
 ## 8. 배포 설계
 - **CLI**: `elk layout [-f json|elkt] [-a <algorithm>] [-o out] [--pretty] [--sort-keys] [--trace-dir DIR] [--lenient] input`, `elk convert`, `elk algorithms|options|categories`, `elk --version`.
