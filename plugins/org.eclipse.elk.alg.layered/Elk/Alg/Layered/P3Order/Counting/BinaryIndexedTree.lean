@@ -77,6 +77,42 @@ def isEmpty (t : BinaryIndexedTree) : Bool := t.size == 0
 
 end BinaryIndexedTree
 
+/-! ## Packed tree loops
+
+The between-layer crossing count (`CrossingsCounter.countCrossingsBetweenLayers` with a snapshot)
+keeps a fresh tree of `n` buckets in one array `t` of `2 n + 1` `Nat`s: `t[1..n]` are `binarySums`
+(slot `0` unused) and `t[n + 1 + x]` is `numsPerIndex[x]`. Counts never become negative; `size`
+is not needed there. Tree indices are `USize`s (`i - lowbit i` is `i &&& (i - 1)`, `lowbit i` is
+`i &&& (0 - i)`). -/
+
+namespace BinaryIndexedTree
+
+/-- `t[i] += 1` along the parents of `i` below `bound` (`n + 1`; `add`'s update loop). -/
+partial def incLoopPacked (t : Array Nat) (bound i : USize) : Array Nat :=
+  if i < bound then
+    if h : i.toNat < t.size then incLoopPacked (t.uset i (t.uget i h + 1) h) bound (i + (i &&& (0 - i)))
+    else t
+  else t
+
+/-- `t[i] -= delta` along the parents of `i` below `bound` (`removeAll`'s update loop). -/
+partial def decLoopPacked (t : Array Nat) (bound i : USize) (delta : Nat) : Array Nat :=
+  if i < bound then
+    if h : i.toNat < t.size then decLoopPacked (t.uset i (t.uget i h - delta) h) bound (i + (i &&& (0 - i))) delta
+    else t
+  else t
+
+/-- The prefix sum loop of `rank` on the packed sums. -/
+partial def rankLoopPacked (t : Array Nat) (i : USize) (acc : Nat) : Nat :=
+  if i == 0 then acc
+  else if h : i.toNat < t.size then rankLoopPacked t (i &&& (i - 1)) (acc + t.uget i h)
+  else acc
+
+/-- `rank(index)` of a packed tree of `n` buckets. -/
+@[inline] def rankPacked (t : Array Nat) (n index : Nat) : Nat :=
+  rankLoopPacked t (Nat.min index n).toUSize 0
+
+end BinaryIndexedTree
+
 /-- Rust `x as usize` for an `i32` position/id: negative values wrap to huge indices (which
 every consumer treats as out of range). -/
 @[inline] def asUsize (v : Int) : Nat :=

@@ -42,6 +42,8 @@ structure CrossingsCounter where
   nodeCardinalities : IO.Ref (Array Int)
   /-- elk-rs `snapshot` (`set_snapshot`). -/
   snapshot : IO.Ref (Option CrossMinSnapshot)
+  /-- Scratch buffer of the snapshot path's captured port ids (Lean only). -/
+  idScratch : IO.Ref (Array Nat)
 
 namespace CrossingsCounter
 
@@ -59,7 +61,7 @@ namespace CrossingsCounter
 
 /-- Rust `set_port_position`: grows the array when `pid` is beyond its end. Ids that are not
 valid `i32` values (negative ids wrapped by `as usize`) are ignored (Rust would abort). -/
-def setPosition (positions : Array Int) (pid : Nat) (v : Int) : Array Int :=
+@[inline] def setPosition (positions : Array Int) (pid : Nat) (v : Int) : Array Int :=
   if pid >>> 32 != 0 then positions
   else
     let positions := if pid >= positions.size then positions ++ Array.replicate (pid + 1 - positions.size) 0 else positions
@@ -250,42 +252,149 @@ private partial def countOnPortsLoop (a : LGraphArena) (positions : Array Int) (
     countOnPortsLoop a positions ports (i + 1) tree crossings
   else (crossings, tree)
 
-/-- `tree.rank(position)` summed over the far ends `ends[i:]` (captured port ids) above `cur`. -/
-private partial def rankEndsSnap (positions : Array Int) (tree : BinaryIndexedTree) (cur : Int) (ends : Array Nat)
-    (i : Nat) (acc : Int) : Int :=
-  if h : i < ends.size then
-    let endPosition := positions[ends[i]]?.getD 0
-    rankEndsSnap positions tree cur ends (i + 1) (if endPosition > cur then acc + tree.rank (asUsize endPosition) else acc)
-  else acc
-
-/-- Adds the far-end positions `ends[i:]` above `cur` to the tree. -/
-private partial def addEndsSnap (positions : Array Int) (cur : Int) (ends : Array Nat) (i : Nat)
-    (tree : BinaryIndexedTree) : BinaryIndexedTree :=
-  if h : i < ends.size then
-    let endPosition := positions[ends[i]]?.getD 0
-    addEndsSnap positions cur ends (i + 1) (if endPosition > cur then tree.add (asUsize endPosition) else tree)
-  else tree
-
-/-- elk-rs `count_crossings_on_ports_snap(snapshot, port_ids)` on the ports' captured ids. -/
-private partial def countOnPortsSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (ports : Array LPortId) (i : Nat)
-    (tree : BinaryIndexedTree) (crossings : Int) : Int × BinaryIndexedTree :=
-  if h : i < ports.size then
-    let pid := s.portId ports[i]
-    let cur := positions[pid]?.getD 0
-    let tree := tree.removeAll (asUsize cur)
-    let preds := s.portPredecessors pid
-    let succs := s.portSuccessors pid
-    let crossings := rankEndsSnap positions tree cur preds 0 crossings
-    let crossings := rankEndsSnap positions tree cur succs 0 crossings
-    let tree := addEndsSnap positions cur preds 0 tree
-    let tree := addEndsSnap positions cur succs 0 tree
-    countOnPortsSnapLoop s positions ports (i + 1) tree crossings
-  else (crossings, tree)
-
 /-- `countCrossingsOnPorts(ports)`. -/
 def countCrossingsOnPorts (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (ports : Array LPortId) :
     Int × BinaryIndexedTree :=
   countOnPortsLoop a positions ports 0 tree 0
+
+/-! ### Between-layer counting on the snapshot path
+
+`countCrossingsBetweenLayers` with a snapshot fuses `initPortPositionsCounterClockwise` and
+`count_crossings_on_ports_snap`: the side views are numbered in place (positions written at the live
+`LPort.id`, exactly as `initPositions` does) while the ports' captured ids are collected, and the
+count runs over those ids on a fresh packed tree (`BinaryIndexedTree.incLoopPacked`/`rankPacked`).
+
+`removeAll(cur)` is deferred: its bucket is cleared at once (as `removeAll` does), the pair
+`(cur, count)` is kept, and the pending removals are applied to the prefix sums before the next
+`rank`. The tree updates commute, so every `rank` sees the same sums; removals after the last
+`rank` (the ports of the right layer, whose far ends lie in the left layer) are never applied. The
+tree is not stored back (`indexTree` keeps its previous value): every other use of the counter
+starts with a fresh tree. -/
+
+/-- `pids[len] := pid` (pushed when `len` is the size). -/
+@[inline] private def writeAt (pids : Array Nat) (len pid : Nat) : Array Nat :=
+  if len < pids.size then pids.set! len pid else pids.push pid
+
+/-- The cached `[lo, hi)` range of `getPortSideView(side)` of a node (`sideView` without the
+`allOnSide` test, which the numbering loop does on the fly); `none` for the uncached view. -/
+@[inline] private def cachedRange (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) : Option (Nat × Nat) :=
+  if !nd.portSidesCached then none
+  else
+    let indices := match nd.portSideIndices with
+      | some idx => idx
+      | none => a.findPortIndices n
+    match indices[ElkEnum.ordinal side]? with
+    | some (some (first, last)) =>
+      let hi := Nat.min last nd.ports.size
+      if first >= hi then some (0, 0) else some (first, hi)
+    | _ => none
+
+/-- Whether `node` is a captured node without nested graph none of whose ports lies on `side`
+(`nodeSideMask`). The crossing minimisation only permutes the ports of such a node and does not
+change their sides, so `getPortSideView(side)` is empty: the cached range is either empty or fails
+`allOnSide`, and the filter finds no port. -/
+@[inline] def noPortOnSide (s : CrossMinSnapshot) (node : LNodeId) (side : PortSide) : Bool :=
+  let flat1 := s.nodeMap.get node.idx
+  flat1 != 0 && !s.nodeHasNestedGraph (flat1 - 1) && s.nodeSideMask (flat1 - 1) &&& sideBit side == 0
+
+/-- Numbers the ports of `getPortSideView(side)` of the `nodes` (top-down, or bottom-up without
+`topDown`; the views are not reversed, as for `EAST` top-down and `WEST` bottom-up), continuing
+after the `len` ports numbered so far: `positions[LPort.id] := len`, and the captured id of the
+port goes to `pids[len]` (`pids` is a scratch buffer; only `pids[0:len]` is meaningful). The state
+is the current node's port list `ports` and the cursor `j < hi` in it (`filter`: the uncached view,
+ports on other sides skipped; else the cached range), `start` the value of `len` when the node was
+entered, `k` the next node to visit. A cached range is numbered while its ports are checked
+(`sideView`'s `allOnSide`): at the first port on another side the node is numbered again from
+`start` with the filter (every port numbered before lies on `side`, so its position is written
+again, and `pids[start:]` is overwritten). -/
+private partial def numberSideViewsSnap (a : LGraphArena) (s : CrossMinSnapshot) (nodes : Array LNodeId)
+    (side : PortSide) (topDown : Bool) (k : Nat) (ports : Array LPortId) (j hi : Nat) (filter : Bool) (start : Nat)
+    (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
+  if h : j < hi ∧ j < ports.size then
+    let p := ports[j]
+    let pt := a.port p
+    if !sideIs pt.side side then
+      if filter then
+        numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter start len positions pids
+      else
+        numberSideViewsSnap a s nodes side topDown k ports 0 ports.size true start start positions pids
+    else
+      numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter start (len + 1)
+        (setPosition positions (asUsize pt.id) len) (writeAt pids len (s.portId p))
+  else if k < nodes.size then
+    let node := nodes[if topDown then k else nodes.size - 1 - k]!
+    if noPortOnSide s node side then
+      numberSideViewsSnap a s nodes side topDown (k + 1) #[] 0 0 false len len positions pids
+    else
+      let nd := a.node node
+      match cachedRange a node nd side with
+      | some (lo, hi) => numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports lo hi false len len positions pids
+      | none => numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports 0 nd.ports.size true len len positions pids
+  else (positions, pids, len)
+
+/-- Whether a far end of `ends[k:]` lies above `cur`. -/
+private partial def anyEndAbove (positions : Array Int) (cur : Int) (ends : Array Nat) (k : Nat) : Bool :=
+  if h : k < ends.size then (positions[ends[k]]?.getD 0) > cur || anyEndAbove positions cur ends (k + 1)
+  else false
+
+/-- Applies the deferred removals `pend[k:np]` (pairs of index and count) to the prefix sums of the
+packed tree `t` (`bound = n + 1`). -/
+private partial def flushRemovals (pend : Array Nat) (k np : Nat) (bound : USize) (t : Array Nat) : Array Nat :=
+  if h : k + 1 < np ∧ k + 1 < pend.size then
+    flushRemovals pend (k + 2) np bound (BinaryIndexedTree.decLoopPacked t bound (pend[k] + 1).toUSize pend[k + 1])
+  else t
+
+/-- Defers a removal (`np` is even and at most `pend.size`, which is even). -/
+@[inline] private def pushPending (pend : Array Nat) (np x c : Nat) : Array Nat :=
+  if np + 1 < pend.size then (pend.set! np x).set! (np + 1) c else (pend.push x).push c
+
+/-- Sum of `rank(endPosition)` over the far ends `ends[k:]` above `cur` (packed tree of `n` buckets). -/
+private partial def rankEndsPacked (positions : Array Int) (t : Array Nat) (n : Nat) (cur : Int) (ends : Array Nat)
+    (k acc : Nat) : Nat :=
+  if h : k < ends.size then
+    let e := positions[ends[k]]?.getD 0
+    rankEndsPacked positions t n cur ends (k + 1)
+      (if e > cur then acc + BinaryIndexedTree.rankPacked t n (asUsize e) else acc)
+  else acc
+
+/-- `add(endPosition)` for the far ends `ends[k:]` above `cur`: the bucket `t[n + 1 + x]` and the
+prefix sums (indices below `n` only, like `add`). -/
+private partial def addEndsPacked (positions : Array Int) (cur : Int) (ends : Array Nat) (k n : Nat) (t : Array Nat) :
+    Array Nat :=
+  if h : k < ends.size then
+    let e := positions[ends[k]]?.getD 0
+    if e > cur then
+      let x := asUsize e
+      if x < n then
+        let b := n + 1 + x
+        let t := t.set! b (t[b]! + 1)
+        addEndsPacked positions cur ends (k + 1) n (BinaryIndexedTree.incLoopPacked t (n + 1).toUSize (x + 1).toUSize)
+      else addEndsPacked positions cur ends (k + 1) n t
+    else addEndsPacked positions cur ends (k + 1) n t
+  else t
+
+/-- `count_crossings_on_ports_snap` over the captured ids `pids[i:n]` on a fresh packed tree `t` of
+`n` buckets (deferred removals `pend[0:np]`). -/
+private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (pids : Array Nat) (i n : Nat)
+    (t pend : Array Nat) (np crossings : Nat) : Nat :=
+  if h : i < n ∧ i < pids.size then
+    let pid := pids[i]
+    let cur := positions[pid]?.getD 0
+    -- `removeAll(cur)`: the bucket now, the prefix sums before the next `rank`
+    let x := asUsize cur
+    let c := if x < n then t[n + 1 + x]! else 0
+    let t := if c != 0 then t.set! (n + 1 + x) 0 else t
+    let pend := if c != 0 then pushPending pend np x c else pend
+    let np := if c != 0 then np + 2 else np
+    let preds := s.portPredecessors pid
+    let succs := s.portSuccessors pid
+    if anyEndAbove positions cur preds 0 || anyEndAbove positions cur succs 0 then
+      let t := flushRemovals pend 0 np (n + 1).toUSize t
+      let crossings := rankEndsPacked positions t n cur succs 0 (rankEndsPacked positions t n cur preds 0 crossings)
+      let t := addEndsPacked positions cur succs 0 n (addEndsPacked positions cur preds 0 n t)
+      countBetweenSnapLoop s positions pids (i + 1) n t pend 0 crossings
+    else countBetweenSnapLoop s positions pids (i + 1) n t pend np crossings
+  else crossings
 
 /-- Like `rankEnds` for the in-layer edges only; also counts the between-layer edges. -/
 private partial def rankInLayerEnds (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (port : LPortId)
@@ -430,7 +539,7 @@ def connectedPortsSortedByPosition (a : LGraphArena) (positions : Array Int) (up
 /-- `new CrossingsCounter(portPositions)` sharing the given position array. -/
 def new (portPositions : IO.Ref (Array Int)) : BaseIO CrossingsCounter := do
   return { portPositions, indexTree := ← IO.mkRef (BinaryIndexedTree.new 0), nodeCardinalities := ← IO.mkRef #[],
-           snapshot := ← IO.mkRef none }
+           snapshot := ← IO.mkRef none, idScratch := ← IO.mkRef #[] }
 
 /-- elk-rs `set_snapshot(snapshot)`. -/
 def setSnapshot (c : CrossingsCounter) (s : CrossMinSnapshot) : BaseIO Unit := c.snapshot.set (some s)
@@ -491,21 +600,34 @@ def initForCountingBetween (c : CrossingsCounter) (leftLayer rightLayer : Array 
   let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
   c.indexTree.set (BinaryIndexedTree.new ports.size)
 
-/-- `countCrossingsBetweenLayers(leftLayerNodes, rightLayerNodes)`. -/
+/-- `countCrossingsBetweenLayers(leftLayerNodes, rightLayerNodes)` (with a snapshot: see
+"Between-layer counting on the snapshot path"). -/
 def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : Array LNodeId) : LayeredM Int := do
-  let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
   match ← c.snapshot.get with
   | some s =>
-    let positions ← c.portPositions.get
-    let (crossings, tree) := countOnPortsSnapLoop s positions ports 0 (BinaryIndexedTree.new ports.size) 0
-    c.indexTree.set tree
+    let a ← get
+    let positions ← c.portPositions.swap #[]
+    let pids ← c.idScratch.swap #[]
+    let (positions, pids, len) := numberSideViewsSnap a s leftLayer .east true 0 #[] 0 0 false 0 0 positions pids
+    let (positions, pids, n) := numberSideViewsSnap a s rightLayer .west false 0 #[] 0 0 false len len positions pids
+    c.portPositions.set positions
+    let crossings := countBetweenSnapLoop s positions pids 0 n (Array.replicate (2 * n + 1) 0) #[] 0 0
+    c.idScratch.set pids
     return crossings
   | none =>
+    let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
     c.indexTree.set (BinaryIndexedTree.new ports.size)
     c.withTree countCrossingsOnPorts ports
 
 /-- `countInLayerCrossingsOnSide(nodes, side)`. -/
 def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (side : PortSide) : LayeredM Int := do
+  if let some s ← c.snapshot.get then
+    if nodes.all (noPortOnSide s · side) then
+      -- no node has a port on `side` (`noPortOnSide`): `initPortPositionsForInLayerCrossings` numbers
+      -- nothing, so the cardinalities become zeros, the tree is empty and nothing crosses
+      if !nodes.isEmpty then c.nodeCardinalities.set (Array.replicate nodes.size 0)
+      c.indexTree.set (BinaryIndexedTree.new 0)
+      return 0
   let ports ← c.initPortPositionsForInLayerCrossings nodes side
   c.withTree countInLayerCrossingsOnPorts ports
 
