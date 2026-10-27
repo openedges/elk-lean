@@ -12,6 +12,11 @@ namespace Elk.Core.Util
 structure Random where
   /-- Scrambled 48-bit state. -/
   seed : UInt64 := 0
+  /-- Test mock (elk-rs `set_mock_next_boolean`): fixed `nextBoolean` result. -/
+  mockNextBoolean : Option Bool := none
+  /-- Test mock (elk-rs `set_mock_double_sequence`): `(current, step)`; `nextDouble` returns
+  `current + step` and advances. -/
+  mockDoubleSequence : Option (Float × Float) := none
   deriving Repr, Inhabited, BEq
 
 namespace Random
@@ -26,13 +31,22 @@ def ofInt (seed : Int) : Random := ⟨(Int.toUInt64Wrap seed ^^^ multiplier) &&&
 /-- `new Random(seed)` with a raw 64-bit seed (Rust `Random::new(u64)`). -/
 def ofUInt64 (seed : UInt64) : Random := ⟨(seed ^^^ multiplier) &&& mask⟩
 
-/-- `setSeed`. -/
-def setSeed (_ : Random) (seed : Int) : Random := ofInt seed
+/-- `setSeed` (keeps the test mocks). -/
+def setSeed (r : Random) (seed : Int) : Random := { r with seed := (ofInt seed).seed }
+
+/-- elk-rs `set_mock_next_boolean(value)`. -/
+def setMockNextBoolean (r : Random) (value : Bool) : Random := { r with mockNextBoolean := some value }
+/-- elk-rs `clear_mock_next_boolean()`. -/
+def clearMockNextBoolean (r : Random) : Random := { r with mockNextBoolean := none }
+/-- elk-rs `set_mock_double_sequence(start, step)`. -/
+def setMockDoubleSequence (r : Random) (start step : Float) : Random := { r with mockDoubleSequence := some (start, step) }
+/-- elk-rs `clear_mock_double_sequence()`. -/
+def clearMockDoubleSequence (r : Random) : Random := { r with mockDoubleSequence := none }
 
 /-- `next(bits)`: advances the state and returns the top `bits` bits. -/
 @[inline] def next (r : Random) (bits : Nat) : UInt32 × Random :=
   let s := (r.seed * multiplier + addend) &&& mask
-  ((s >>> (48 - bits).toUInt64).toUInt32, ⟨s⟩)
+  ((s >>> (48 - bits).toUInt64).toUInt32, { r with seed := s })
 
 /-- `nextInt()`: uniformly distributed Java `int`. -/
 def nextIntUnbounded (r : Random) : Int × Random :=
@@ -69,22 +83,36 @@ def nextLong (r : Random) : Int × Random :=
   let v : Int64 := (Int64.ofInt (UInt32.toIntSigned hi) <<< 32) + Int64.ofInt (UInt32.toIntSigned lo)
   (v.toInt, r)
 
-/-- `nextBoolean()`. -/
+/-- `nextBoolean()` (honours the test mock). -/
 def nextBoolean (r : Random) : Bool × Random :=
-  let (v, r) := r.next 1
-  (v != 0, r)
+  match r.mockNextBoolean with
+  | some value => (value, r)
+  | none =>
+    let (v, r) := r.next 1
+    (v != 0, r)
 
-/-- `nextDouble()`: `((next(26) << 27) + next(27)) * 2^-53`. -/
+/-- `nextDouble()`: `((next(26) << 27) + next(27)) * 2^-53` (honours the mock sequence). -/
 def nextDouble (r : Random) : Float × Random :=
-  let (hi, r) := r.next 26
-  let (lo, r) := r.next 27
-  let n : UInt64 := (hi.toUInt64 <<< 27) + lo.toUInt64
-  (n.toFloat / 9007199254740992.0, r)
+  match r.mockDoubleSequence with
+  | some (current, step) =>
+    let value := current + step
+    (value, { r with mockDoubleSequence := some (value, step) })
+  | none =>
+    let (hi, r) := r.next 26
+    let (lo, r) := r.next 27
+    let n : UInt64 := (hi.toUInt64 <<< 27) + lo.toUInt64
+    (n.toFloat / 9007199254740992.0, r)
 
-/-- `nextFloat()` as a double carrying only single precision (`next(24) / 2^24` in `float`). -/
+/-- `nextFloat()` as a double carrying only single precision (`next(24) / 2^24` in `float`);
+with the mock sequence it is the mocked double rounded to single precision. -/
 def nextFloat (r : Random) : Float × Random :=
-  let (v, r) := r.next 24
-  (Float.toF32 (v.toNat.toFloat / 16777216.0), r)
+  match r.mockDoubleSequence with
+  | some _ =>
+    let (v, r) := r.nextDouble
+    (Float.toF32 v, r)
+  | none =>
+    let (v, r) := r.next 24
+    (Float.toF32 (v.toNat.toFloat / 16777216.0), r)
 
 end Random
 
