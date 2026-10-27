@@ -1,0 +1,12 @@
+{
+  "children": [],
+  "edges": [],
+  "height": 0,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.vertiflex"
+  },
+  "width": 0,
+  "x": 0,
+  "y": 0
+}

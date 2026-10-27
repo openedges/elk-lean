@@ -1,0 +1,113 @@
+{
+  "children": [
+    {
+      "height": 38,
+      "id": "n0",
+      "width": 14,
+      "x": 31.5,
+      "y": 0
+    },
+    {
+      "height": 11,
+      "id": "n1",
+      "width": 77,
+      "x": 0,
+      "y": 98
+    },
+    {
+      "height": 23,
+      "id": "n2",
+      "width": 55,
+      "x": 11,
+      "y": 169
+    },
+    {
+      "height": 46,
+      "id": "n3",
+      "width": 18,
+      "x": 29.5,
+      "y": 252
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 38.5,
+            "y": 98
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 38.5,
+            "y": 38
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 38.5,
+            "y": 169
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 38.5,
+            "y": 109
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 38.5,
+            "y": 252
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": 38.5,
+            "y": 192
+          }
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n3"
+      ]
+    }
+  ],
+  "height": 310,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.vertiflex",
+    "elk.spacing.nodeNode": "10",
+    "elk.vertiflex.considerNodeModelOrder": "false"
+  },
+  "width": 89,
+  "x": 0,
+  "y": 0
+}

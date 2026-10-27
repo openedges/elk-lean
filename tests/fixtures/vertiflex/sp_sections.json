@@ -1,0 +1,4 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"org.eclipse.elk.vertiflex","elk.vertiflex.considerNodeModelOrder":"false"},
+ "children":[{"id":"a","width":30,"height":20},{"id":"b","width":40,"height":20},{"id":"c","width":20,"height":30}],
+ "edges":[{"id":"e1","sources":["a"],"targets":["b"],"sections":[{"id":"s1","startPoint":{"x":1,"y":2},"endPoint":{"x":3,"y":4},"bendPoints":[{"x":9,"y":9}]},{"id":"s2","startPoint":{"x":5,"y":6},"endPoint":{"x":7,"y":8},"bendPoints":[{"x":11,"y":11},{"x":12,"y":12}]}]},
+          {"id":"e2","sources":["a"],"targets":["c"],"sections":[{"id":"s3","startPoint":{"x":1,"y":2},"endPoint":{"x":3,"y":4},"bendPoints":[{"x":9,"y":9}]}]}]}

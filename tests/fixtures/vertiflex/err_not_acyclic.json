@@ -1,0 +1,1 @@
+{"id": "root", "layoutOptions": {"elk.algorithm": "org.eclipse.elk.vertiflex"}, "children": [{"id": "n0", "width": 30, "height": 20}, {"id": "n1", "width": 40, "height": 20}, {"id": "n2", "width": 40, "height": 20}], "edges": [{"id": "e1", "sources": ["n0"], "targets": ["n2"]}, {"id": "e2", "sources": ["n1"], "targets": ["n2"]}]}
