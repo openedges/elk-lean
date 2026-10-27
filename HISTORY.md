@@ -49,11 +49,11 @@
 | B. Math 나머지 + 테스트 | `core/math/{elk_math,bezier_spline,cubic_spline_interpolator,ispline_interpolator}.rs`, `core/tests/all/{elk_math,bezier_spline,cubic_spline_interpolator,kvector,kvector_chain}_test.rs` (≈1.4K+1K줄) | sonnet | medium | 서브에이전트 B(worktree) | 완료: 테스트 ≈200 추가, 경고 0. 편차: 팩토리얼/이항은 `Except`, `findRoots`/`bezier`는 값 반환, `maxl/minl` i32 초기값 등 Rust 특이점 유지 |
 | C. Util 보조 + graph/property 테스트 이식 | `core/util/{progress_monitor,elk_trace,exclusive_bounds,abstract_random_list_accessor}.rs`, `graph/util/graph_identifier_generator.rs`, `graph/tests/*`, `core/tests/all/{basic_progress_monitor,property,util_misc}_test.rs` (≈1.2K+1K줄) | sonnet | medium | 서브에이전트 C(worktree) | 완료: 테스트 ≈90 추가, 경고 0. 편차: `ProgressMonitor.basic` 기본 maxHierarchyLevels=-1(Java/Rust 기본), 작업량 전파는 Java 방식(Rust는 전파 안 함), `subMonitors`는 항상 빈 배열, `GraphIdentifierGenerator` 접미사는 고정 seed LCG(Rust는 시계). 미이식: `util_misc_test`(DefaultFactory/Maybe/Triple/WrappedException 미존재) |
 | D. `Elk.Core.Data` 레지스트리 | `core/data/{mod,layout_option_data,layout_algorithm_data,layout_category_data,i_layout_meta_data*}.rs` | fable(주) | high | 주 에이전트 | 완료: `LayoutOptionData`/`LayoutAlgorithmData`/`LayoutCategoryData`/`Registry`/`LayoutMetaDataService`(전역 `IO.Ref`, 지연 초기화 훅, 등록 순서 보존, suffix 캐시). resolver/replacer는 F로 이관 |
-| E. `CoreOptionsMeta` 등록 + 코어 알고리즘 메타데이터 + 지연 초기화 훅(`Elk.Core.Init`) + `LabelManagementOptions` | `core/options/core_options_meta.rs`(1,966줄), `data/mod.rs::register_core_algorithms`, `labels/*` | sonnet | high | 서브에이전트 E(worktree, 2026-10-27 시작) | 진행 중 |
-| F1. `ElkUtil`/`ElkSpacings`/validation/resolver/replacer/`IndividualSpacings`/visitors(+`LayoutConfigurator` 검토) | `core/util/{elk_util,elk_spacings}.rs`, `core/validation/*`, `core/data/{layout_algorithm_resolver,deprecated_layout_option_replacer}.rs`, `core/layout_configurator.rs` (≈3.1K줄) | opus | high | 서브에이전트 F1(worktree, 2026-10-27 시작) | 진행 중 |
+| E. `CoreOptionsMeta` 등록 + 코어 알고리즘 메타데이터 + 지연 초기화 훅(`Elk.Core.Init`) + `LabelManagementOptions` | `core/options/core_options_meta.rs`(1,966줄), `data/mod.rs::register_core_algorithms`, `labels/*` | sonnet | high | 서브에이전트 E(worktree) | 완료(`555ea22`): 94 옵션/7 카테고리/10 의존성 + `registerCoreAlgorithms`(fixed/random/box/layered placeholder), `Elk.Core.Init` 지연 초기화 훅. 편차: `IndividualSpacings` 파서는 `CoreOptionsMeta`에서 TODO로 두고 F1의 `IndividualSpacings.parse` 사용 |
+| F1. `ElkUtil`/`ElkSpacings`/validation/resolver/replacer/`IndividualSpacings`/visitors(+`LayoutConfigurator` 검토) | `core/util/{elk_util,elk_spacings}.rs`, `core/validation/*`, `core/data/{layout_algorithm_resolver,deprecated_layout_option_replacer}.rs`, `core/layout_configurator.rs` (≈3.1K줄) | opus | high | 서브에이전트 F1(worktree) | 완료(`0474979`, 948 테스트): `ElkUtil`(순수 함수+`ElkM` 변형), `GraphValidator`/`LayoutOptionValidator`, 리졸버/대체기, `IndividualSpacings`, `GraphElementVisitor`. 편차: `LayoutOptionValidator`의 OBJECT 타입 검사는 Java보다 느슨(`elk.resolvedAlgorithm`은 주 에이전트가 예외 처리) |
 | F2. `ElkGraphAdapters`(adapter 추상화 설계: alg.common nodespacing과 공유) | `core/util/adapters/*` (1K줄) | fable(주) | high | 주 에이전트, Phase 3 착수 시 | 대기 |
 | G. JSON importer/exporter/layout API/CLI/parity 스크립트 | `graph.json/*` (7.3K줄) | fable(주) | xhigh | 주 에이전트 | 완료(엔진 스텁): import/transfer/export 1:1, `Elk.Api.layoutJson`, `elk layout|batch|algorithms|options|categories`, `scripts/run_model_parity.sh`. 코퍼스 `.json` 100개 왕복 오류 0 |
-| H. JSON import/export 테스트 이식 | `graph.json/tests/all/*.rs` (4.8K줄) | sonnet | medium | 서브에이전트 H(worktree) | 진행 중 |
+| H. JSON import/export 테스트 이식 | `graph.json/tests/all/*.rs` (4.8K줄) | sonnet | medium | 서브에이전트 H(worktree) | 완료(`33d06b4`): 비-layered 테스트 전부 이식(graph/edges/sections/id/layoutOptions/individualSpacings/export/transfer/metadata cache/layout API), 동작 차이 없음. layered 의존 테스트(edge_coords, root_external_ports, edgeless 4건)는 Phase 4 이후 복원 TODO |
 | I. `.elkt` 파서(Phase 6 선행) | `alg.layered/tests/common/elkt_test_loader.rs` (3.3K줄), elk-live `src/elkt` | sonnet | high | 서브에이전트 I(worktree) | 진행 중 |
 
 ### Phase 1 (2차) — 병합 결과
@@ -67,3 +67,18 @@
 - CLI `elk layout|batch|algorithms|options|categories`. `batch`는 elk-rs parity manifest 형식을 소비/생성한다.
 - `scripts/run_model_parity.sh`: 코퍼스 `.json` → manifest → oracle 러너 → `elk batch` → 병합 → `compare_model_parity_layouts.py`. 100개 시험: oracle 100/100, lean 100/100(오류 0), 비교 total=100/compared=100/matches=0(스텁 엔진)/drift=100/skipped=0. 소요 1.3초.
 - 메타데이터: `elk options` 95개(E 등록분), `elk algorithms` 4개(fixed/random/box/layered placeholder).
+
+### Phase 2 (2차) — RecursiveGraphLayoutEngine + 코어 프로바이더 (2026-10-27, `0d95cc7`)
+- `Elk.Core.RecursiveGraphLayoutEngine`: elk-rs `recursive_graph_layout_engine.rs` 1:1. 대체기 → 리졸버/옵션 검증/그래프 검증 visitor → `layoutRecursively`(NO_LAYOUT, inside self loop 수집·후처리, `INHERIT` 계층 처리, INCLUDE_CHILDREN 큐, top-down 레이아웃 `applyTopdownLayout`, `executeAlgorithm`은 `LayoutProvider.create`). 등록되지 않은 알고리즘은 `UnsupportedConfigurationException: Layout algorithm '<id>' is not available in this build.`
+- 프로바이더: `Elk.Core.Util.{FixedLayoutProvider,RandomLayoutProvider,BoxLayoutProvider}`. Box의 그룹 트리(`Rc<RefCell<Group>>`)는 `StateT (Array Group) ElkM` arena로 대체. Random은 elk-rs 특이점(target을 sources[0]에서 취함, 포트 중심에 parent x 2회 가산)을 그대로 유지. `Elk.Core.Providers`가 `builtin_initialize`로 등록. `LayoutProvider.predictedGraphSize` 필드 추가(top-down 전용 프로바이더용).
+- 수정: `LayoutOptionValidator.checkProperty`에서 `elk.resolvedAlgorithm`(Java는 `LayoutAlgorithmData` 인스턴스 저장)을 OBJECT 타입 검사에서 제외. CLI `-o`는 oracle 러너(`fs::write`)처럼 끝 개행 없이 기록.
+- 검증: fixed/random/box(SIMPLE·GROUP_DEC·GROUP_INC·GROUP_MIXED × expandNodes, 중첩 box/fixed, interactive, 최소 크기, 포트/셀프루프/계층 간선, ORTHOGONAL junction points, top-down ROOT/HIERARCHICAL + COUNT_CHILDREN 근사) 17개 모델이 oracle과 **바이트 단위 일치**. `tests/fixtures/core/<name>.json` + `<name>.expected.json`으로 보관(회귀 테스트는 작업 J).
+- 테스트: 1261 통과/0 실패. H의 layout API 테스트 중 layered 의존 부분은 `elk.algorithm: box`로 전환(TODO(phase4) 표기).
+- 모델 parity(60개 샘플): oracle 60/60 ok, lean 60/60 `UnsupportedConfigurationException(layered)` → compared 0. 코퍼스 550개 모델은 전부 layered(기본값)라 Phase 4 전까지 match 0.
+
+#### Phase 2 (2차) 작업 할당표
+| 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| 엔진 + fixed/random/box 프로바이더 + 등록 | `core/recursive_graph_layout_engine.rs`, `core/util/{fixed,random,box}_layout_provider.rs` (≈1.7K줄) | fable(주) | xhigh | 주 에이전트 | 완료: oracle 바이트 일치 17/17 |
+| J. 엔진/프로바이더/util 테스트 이식 + fixture 회귀 스위트 | `core/tests/all/{recursive_graph_layout_engine(_integration),fixed_layout_provider,issue_457,issue_489,elk_util,layout_algorithm_resolver,deprecated_layout_option_replacer,individual_spacings,util_misc,property,layout_option_parse}_test.rs` (≈1.5K줄) | sonnet | high | 서브에이전트 J(worktree) | 진행 중 |
+
