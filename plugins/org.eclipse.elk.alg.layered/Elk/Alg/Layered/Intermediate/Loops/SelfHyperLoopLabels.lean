@@ -98,7 +98,7 @@ def placementForHorizontalLayout (l : SelfHyperLoopLabels) (offset : KVector) (s
       else if l.alignment == .right || l.side == .west then x + l.size.x - s.x
       else x + (l.size.x - s.x) / 2.0
     result := result.push (label, ⟨labelX + offset.x, y + offset.y⟩)
-    y := y + s.y + l.labelLabelSpacing
+    y := y + (s.y + l.labelLabelSpacing)
   return result
 
 /-- `apply_placement_for_vertical_layout(offset)`: label positions, side by side (top aligned
@@ -112,7 +112,7 @@ def placementForVerticalLayout (l : SelfHyperLoopLabels) (offset : KVector) (siz
     let s := sizeOf label
     let labelY := if l.side == .north then y + l.size.y - s.y else y
     result := result.push (label, ⟨x + offset.x, labelY + offset.y⟩)
-    x := x + s.x + l.labelLabelSpacing
+    x := x + (s.x + l.labelLabelSpacing)
   return result
 
 /-- `applyPlacement(offset)`: the new position of every label (in `lLabels` order); the caller

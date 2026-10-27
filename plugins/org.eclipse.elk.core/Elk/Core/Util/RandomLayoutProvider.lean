@@ -130,8 +130,8 @@ private def randomize (parent : NodeId) (random : Random) (aspectRatio spacing :
     for e in ElkGraphUtil.allOutgoingEdges (← get) source do
       if !(ElkGraphUtil.isHierarchicalEdge (← get) e) then
         random ← randomizeEdge e random totalWidth totalHeight
-  totalWidth := totalWidth + padding.left + padding.right
-  totalHeight := totalHeight + padding.top + padding.bottom
+  totalWidth := totalWidth + (padding.left + padding.right)
+  totalHeight := totalHeight + (padding.top + padding.bottom)
   let _ ← ElkUtil.resizeNodeWith parent totalWidth totalHeight false true
 
 /-- `RandomLayoutProvider.layout`. -/
