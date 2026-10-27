@@ -16,9 +16,12 @@ elk-rs additionally has a `CrossMinSnapshot` fast path (`set_snapshot`, used by 
 `GraphInfoHolder`'s `AllCrossingsCounter`). It reads the same ids from the snapshot and filters
 `node.ports` by side instead of `getPortSideView`; both coincide because ports are sorted by side
 during crossing minimisation and ids/edges do not change after the snapshot is built. Here the
-snapshot (`setSnapshot`) is only used by `countCrossingsBetweenLayers` to read the far ends of a
+snapshot (`setSnapshot`) is used by `countCrossingsBetweenLayers` to read the far ends of a
 port's edges (`port_predecessors`, then `port_successors`, which is `connectedEdges` order) as
-captured ids; the ports themselves are still numbered through `getPortSideView`.
+captured ids; the ports themselves are still numbered through `getPortSideView` (with the captured
+sides and ids for nodes without nested graph, which keep them while the snapshot is used), and
+nodes of the snapshot without a port on the counted side are skipped there and in
+`countInLayerCrossingsOnSide`.
 
 Rust semantics kept where they differ from Java:
 - the in-layer/two-port port sets are de-duplicated by port identity and *stably* sorted by

@@ -24,7 +24,11 @@ Representation:
   and from the live graph otherwise (`LNode.id`, `Layer.id`, `LNode.type`); both are kept
   (`snapshot`). The `ArenaSync` property reads of elk-rs are plain arena reads.
 - One `processConstraints` call runs on local copies of the resolver state (`ForsterData`)
-  in `ExceptT String (StateM ForsterData)`; the arena is only read.
+  in `ExceptT String (StateM ForsterData)`; the arena is only read. A layer without any
+  constraint (`unconstrained`) skips the passes, which would change neither the order nor a
+  barycenter.
+- `BarycenterState` keeps the barycenter unboxed (`barycenterValue`, `hasBarycenter`);
+  `barycenter`/`setBarycenter` are the `Option` view.
 
 Rust semantics kept where they differ from Java:
 - `new` takes `constraintsBetweenNonDummies` as an argument (Java reads

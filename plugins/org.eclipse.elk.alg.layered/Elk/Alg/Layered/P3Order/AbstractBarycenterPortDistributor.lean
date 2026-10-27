@@ -46,8 +46,14 @@ Performance (no Rust counterpart): ranks and barycenters are `FloatArray`s (unbo
 snapshot path's loops are tail recursive over the state (whose scratch fields hold the running
 min/max barycenter and the in-layer ports, so nothing is allocated per port), `sort_ports`
 sorts the port list directly (the index tie-break of the keyed sort is implied by the stable
-sort), and a node is only rewritten when the sorted order or its side cache differs from the
-current one (`cachePortSides` would then not change it).
+sort; keys are read once and `keyedStableSort` replays `stableSort`), and a node is only
+rewritten when the sorted order or its side cache differs from the current one
+(`cachePortSides` would then not change it). In the snapshot path a node without nested graph
+(whose port list only this distributor permutes, see `CrossMinSnapshot`) reads its sides, ids,
+edge presence and `PORT_CONSTRAINTS` from the snapshot, has its side cache checked only until its
+first sorted list was written (`sortedOnce`), and is skipped when nothing was written since its
+last idempotent sort (`distributePortsSnap`). The fixed layer's ranks are not recomputed when the
+barycenter heuristic just had them computed (`distributePortsWhileSweeping`).
 -/
 namespace Elk.Alg.Layered.P3Order
 
