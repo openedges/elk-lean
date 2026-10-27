@@ -357,7 +357,7 @@ def hFirstLayer : LayeredM (Array Float × Array LNodeId × Array LNodeId × Arr
   let order ← nodeArray g
   let h ← createHeuristic order
   let (order', _) ← h.minimizeCrossings order 0 true true (← IO.mkRef (Random.ofInt 0))
-  return (← h.portRanks.get, ln, order'[0]!, ← barysOf h ln)
+  return ((← h.portRanks.get).data, ln, order'[0]!, ← barysOf h ln)
 
 /-- The record view and the sweep iteration counter. -/
 def hRecord : LayeredM (Bool × Bool × Bool × Nat × Nat) := do

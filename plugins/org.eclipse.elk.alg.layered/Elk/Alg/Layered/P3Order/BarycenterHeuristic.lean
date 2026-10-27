@@ -79,11 +79,14 @@ structure BarycenterContext where
   /-- `snapshot`. -/
   snapshot : Option CrossMinSnapshot := none
   /-- `port_ranks` (by port id). -/
-  portRanks : Array Float := #[]
+  portRanks : FloatArray := FloatArray.empty
   /-- The sweep direction (`forward`). -/
   forward : Bool := true
-  /-- `flat_to_node_buf`: flat index → node for the nodes of the current call (snapshot path). -/
-  flatToNode : Std.HashMap Nat LNodeId := {}
+  /-- `flat_to_node_buf`: flat index → node for the nodes of the current call (snapshot path), as
+  `node.idx + 1` (`0`: none) at `flat - flatToNodeBase`. -/
+  flatToNode : Array Nat := #[]
+  /-- The smallest flat index of `flatToNode`. -/
+  flatToNodeBase : Nat := 0
   /-- `random_trace::is_enabled()`. -/
   randomTrace : Bool := false
   /-- `ElkTrace::global().crossmin` (only changes trace labels). -/
@@ -127,6 +130,17 @@ def isExternalPortDummy (c : BarycenterContext) (n : LNodeId) : Bool :=
 /-- The trace label `id:<LNode.id>`. -/
 @[inline] def nodeLabel (c : BarycenterContext) (n : LNodeId) : String := s!"id:{(c.arena.node n).id}"
 
+/-- `flat_to_node_buf.get(flat)`. -/
+@[inline] def nodeOfFlat? (c : BarycenterContext) (flat : Nat) : Option LNodeId :=
+  if flat >= c.flatToNodeBase then
+    let i := flat - c.flatToNodeBase
+    if h : i < c.flatToNode.size then
+      match c.flatToNode[i] with
+      | 0 => none
+      | k + 1 => some ⟨k⟩
+    else none
+  else none
+
 end BarycenterContext
 
 /-- The mutable data of one computation: the resolver's `barycenter_states[layer][node id]`, the
@@ -148,7 +162,8 @@ namespace BarycenterData
 
 /-- `bary_state_mut(li, ni)` with an update (no-op without a state). -/
 @[inline] def modifyState (d : BarycenterData) (li ni : Nat) (f : BarycenterState → BarycenterState) : BarycenterData :=
-  { d with states := d.states.modify li fun l => l.modify ni fun o => o.map f }
+  match d with
+  | ⟨states, random, traces⟩ => ⟨BarycenterState.updateIn states li ni f, random, traces⟩
 
 /-- The barycenter of a state (`none` without a state). -/
 @[inline] def barycenter? (d : BarycenterData) (li ni : Nat) : Option Float :=
@@ -207,37 +222,115 @@ def finishBarycenter (c : BarycenterContext) (li ni : Nat) (nodeName : String) (
     else some (d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := 0.0, barycenter := none })
   | none => some d
 
+/-- Whether state `(li, ni)` exists and was already visited (`startVisit` returns `none`). -/
+@[inline] def alreadyVisited (d : BarycenterData) (li ni : Nat) : Bool :=
+  match d.state? li ni with
+  | some st => st.visited
+  | none => false
+
+/-- `startVisit` of a state known not to be visited. -/
+@[inline] def resetVisit (d : BarycenterData) (li ni : Nat) : BarycenterData :=
+  d.modifyState li ni fun st => { st with visited := true, degree := 0, summedWeight := 0.0, barycenter := none }
+
+/-- The far ends of a captured port in the sweep direction. -/
+@[inline] def farEnds (c : BarycenterContext) (s : CrossMinSnapshot) (pid : Nat) : Array Nat :=
+  if c.forward then s.portPredecessors pid else s.portSuccessors pid
+
+/-- Whether a far end of `ends[k:]` lies in captured layer `li`. -/
+partial def anyEndInLayerOf (s : CrossMinSnapshot) (li : Nat) (ends : Array Nat) (k : Nat) : Bool :=
+  if h : k < ends.size then
+    s.nodeLayerOf (s.portOwnerFlat ends[k]) == li || anyEndInLayerOf s li ends (k + 1)
+  else false
+
+/-- Whether a far end of the captured ports `pids[i:]` lies in captured layer `li` (then `calcSnap`
+recurses or skips self loops, otherwise every far end only adds its rank). -/
+partial def anyPortEndInLayer (c : BarycenterContext) (s : CrossMinSnapshot) (li : Nat) (pids : Array Nat) (i : Nat) :
+    Bool :=
+  if h : i < pids.size then anyEndInLayerOf s li (farEnds c s pids[i]) 0 || anyPortEndInLayer c s li pids (i + 1)
+  else false
+
+/-- `acc + rank` over the far ends `ends[k:]` (in order). -/
+partial def addEndRanks (c : BarycenterContext) (ends : Array Nat) (k : Nat) (acc : Float) : Float :=
+  if h : k < ends.size then addEndRanks c ends (k + 1) (acc + c.portRanks.get! ends[k]) else acc
+
+/-- `acc + rank` over the far ends of the captured ports `pids[i:]` (in order). -/
+partial def addPortEndRanks (c : BarycenterContext) (s : CrossMinSnapshot) (pids : Array Nat) (i : Nat) (acc : Float) :
+    Float :=
+  if h : i < pids.size then addPortEndRanks c s pids (i + 1) (addEndRanks c (farEnds c s pids[i]) 0 acc) else acc
+
+/-- The number of far ends of the captured ports `pids[i:]`. -/
+partial def countPortEnds (c : BarycenterContext) (s : CrossMinSnapshot) (pids : Array Nat) (i acc : Nat) : Nat :=
+  if h : i < pids.size then countPortEnds c s pids (i + 1) (acc + (farEnds c s pids[i]).size) else acc
+
+mutual
+
 /-- `calculate_barycenter_snap(snap, flat, …)`: the captured ports of the node and their captured
 predecessors (forward) or successors; a far end in the same (captured) layer contributes its own
 recursively computed degree and weight (self loops ignored), others their port rank; then the
 associates of the node (if it is one of the current nodes) in the same layer. -/
-partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat) (d : BarycenterData) : BarycenterData := Id.run do
+partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat) (d : BarycenterData) : BarycenterData :=
   let li := s.nodeLayerOf flat
   let ni := s.nodeGraphIdOf flat
-  let some d0 := startVisit d li ni | return d
-  let mut d := d0
-  for pid in s.nodePorts flat do
-    let connected := if c.forward then s.portPredecessors pid else s.portSuccessors pid
-    for fixedPid in connected do
-      let fixedFlat := s.portOwnerFlat fixedPid
-      let fixedLi := s.nodeLayerOf fixedFlat
-      if fixedLi == li then
-        if fixedFlat != flat then
-          d := calcSnap c s fixedFlat d
-          d := d.addFrom li ni fixedLi (s.nodeGraphIdOf fixedFlat)
+  if alreadyVisited d li ni then d
+  else
+    let pids := s.nodePorts flat
+    let d := if anyPortEndInLayer c s li pids 0 then calcSnapPorts c s flat li ni pids 0 (resetVisit d li ni)
       else
-        let rank := c.portRanks[fixedPid]?.getD 0.0
-        d := d.modifyState li ni fun st => { st with summedWeight := st.summedWeight + rank, degree := st.degree + 1 }
-  let node? := c.flatToNode[flat]?
-  if let some node := node? then
-    for associate in (c.arena.node node).internal.barycenterAssociates do
-      let assocFlat := s.nodeFlatIndex associate
-      let assocLi := s.nodeLayerOf assocFlat
-      if assocLi == li then
-        d := calcSnap c s assocFlat d
-        d := d.addFrom li ni assocLi (s.nodeGraphIdOf assocFlat)
-  let nodeName := if c.crossminTrace then (node?.map c.nodeLabel).getD "<unknown>" else ""
-  return finishBarycenter c li ni nodeName d
+        -- no recursion: the reset state accumulates the ranks of all far ends in order
+        let sum := addPortEndRanks c s pids 0 0.0
+        let degree : Int := countPortEnds c s pids 0 0
+        d.modifyState li ni fun st =>
+          { st with visited := true, degree := 0 + degree, summedWeight := sum, barycenter := none }
+    let node? := c.nodeOfFlat? flat
+    let d := match node? with
+      | some node => calcSnapAssociates c s li ni (c.arena.node node).internal.barycenterAssociates 0 d
+      | none => d
+    let nodeName := if c.crossminTrace then (node?.map c.nodeLabel).getD "<unknown>" else ""
+    finishBarycenter c li ni nodeName d
+
+/-- The port loop of `calcSnap` over the captured ports `pids[i:]` of node `flat`. -/
+partial def calcSnapPorts (c : BarycenterContext) (s : CrossMinSnapshot) (flat li ni : Nat) (pids : Array Nat) (i : Nat)
+    (d : BarycenterData) : BarycenterData :=
+  if h : i < pids.size then
+    let pid := pids[i]
+    let connected := if c.forward then s.portPredecessors pid else s.portSuccessors pid
+    calcSnapPorts c s flat li ni pids (i + 1) (calcSnapConnected c s flat li ni connected 0 d)
+  else d
+
+/-- The far-end loop of `calcSnap` over the captured port ids `connected[k:]`. -/
+partial def calcSnapConnected (c : BarycenterContext) (s : CrossMinSnapshot) (flat li ni : Nat) (connected : Array Nat)
+    (k : Nat) (d : BarycenterData) : BarycenterData :=
+  if h : k < connected.size then
+    let fixedPid := connected[k]
+    let fixedFlat := s.portOwnerFlat fixedPid
+    let fixedLi := s.nodeLayerOf fixedFlat
+    if fixedLi == li then
+      if fixedFlat != flat then
+        let d := (calcSnap c s fixedFlat d).addFrom li ni fixedLi (s.nodeGraphIdOf fixedFlat)
+        calcSnapConnected c s flat li ni connected (k + 1) d
+      else calcSnapConnected c s flat li ni connected (k + 1) d
+    else
+      let rank := c.portRanks.get! fixedPid
+      let d := match d with
+        | ⟨states, random, traces⟩ =>
+          ⟨BarycenterState.updateIn states li ni fun st => { st with summedWeight := st.summedWeight + rank, degree := st.degree + 1 },
+           random, traces⟩
+      calcSnapConnected c s flat li ni connected (k + 1) d
+  else d
+
+/-- The associate loop of `calcSnap` (`BARYCENTER_ASSOCIATES` in the same captured layer). -/
+partial def calcSnapAssociates (c : BarycenterContext) (s : CrossMinSnapshot) (li ni : Nat) (associates : Array LNodeId)
+    (k : Nat) (d : BarycenterData) : BarycenterData :=
+  if h : k < associates.size then
+    let assocFlat := s.nodeFlatIndex associates[k]
+    let assocLi := s.nodeLayerOf assocFlat
+    if assocLi == li then
+      let d := (calcSnap c s assocFlat d).addFrom li ni assocLi (s.nodeGraphIdOf assocFlat)
+      calcSnapAssociates c s li ni associates (k + 1) d
+    else calcSnapAssociates c s li ni associates (k + 1) d
+  else d
+
+end
 
 /-- `calculate_barycenter_lock(node, …)`: like `calcSnap` on the live graph (current port order,
 `getPredecessorPorts`/`getSuccessorPorts`, ports without owner skipped, layer identity). -/
@@ -255,7 +348,7 @@ partial def calcLock (c : BarycenterContext) (node : LNodeId) (d : BarycenterDat
           d := calcLock c fixedNode d
           d := d.addFrom li ni (c.layerIndexOf fixedNode) (c.nodeIdOf fixedNode)
       else
-        let rank := c.portRanks[c.portIdOf fixedPort]?.getD 0.0
+        let rank := c.portRanks.get! (c.portIdOf fixedPort)
         d := d.modifyState li ni fun st => { st with summedWeight := st.summedWeight + rank, degree := st.degree + 1 }
   for associate in (c.arena.node node).internal.barycenterAssociates do
     if c.sameLayerCheck associate node then
@@ -270,12 +363,15 @@ def calculateBarycenters (c : BarycenterContext) (nodes : Array LNodeId) (d : Ba
   let mut d := d
   match c.snapshot with
   | some s =>
-    let mut flatToNode : Std.HashMap Nat LNodeId := {}
-    for node in nodes do
-      let flat := s.nodeFlatIndex node
-      flatToNode := flatToNode.insert flat node
+    let flats := nodes.map s.nodeFlatIndex
+    let base := flats.foldl min (flats[0]?.getD 0)
+    let top := flats.foldl max 0
+    let mut flatToNode : Array Nat := Array.replicate (if flats.isEmpty then 0 else top + 1 - base) 0
+    for h : i in [0:nodes.size] do
+      let flat := flats[i]!
+      flatToNode := flatToNode.setIfInBounds (flat - base) (nodes[i].idx + 1)
       d := d.modifyState (s.nodeLayerOf flat) (s.nodeGraphIdOf flat) fun st => { st with visited := false }
-    let c := { c with flatToNode }
+    let c := { c with flatToNode, flatToNodeBase := base }
     for node in nodes do
       d := calcSnap c s (s.nodeFlatIndex node) d
   | none =>
@@ -340,17 +436,47 @@ def compareBarycenters : Option Float → Option Float → Ordering
   | none, some _ => .gt
   | none, none => .eq
 
+/-- The barycenter of state `(li, ni)` of a states table (`none` without a state). -/
+@[inline] def stateBarycenter (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Option Float :=
+  if h : li < states.size then
+    let row := states[li]
+    if h2 : ni < row.size then
+      match row[ni] with
+      | some st => st.barycenter
+      | none => none
+    else none
+  else none
+
 /-- `get_barycenter(node)` on explicit states. -/
 @[inline] def barycenterIn (c : BarycenterContext) (states : Array (Array (Option BarycenterState))) (n : LNodeId) :
     Option Float :=
-  ({ states } : BarycenterData).barycenter? (c.layerIndexOf n) (c.nodeIdOf n)
+  stateBarycenter states (c.layerIndexOf n) (c.nodeIdOf n)
+
+/-- The barycenter keys of `layer[i:]`: value (`0.0` when unknown) and whether it is known. -/
+partial def barycenterKeys (c : BarycenterContext) (states : Array (Array (Option BarycenterState))) (layer : Array LNodeId)
+    (i : Nat) (values : FloatArray) (known : ByteArray) : FloatArray × ByteArray :=
+  if h : i < layer.size then
+    match barycenterIn c states layer[i] with
+    | some b => barycenterKeys c states layer (i + 1) (values.push b) (known.push 1)
+    | none => barycenterKeys c states layer (i + 1) (values.push 0.0) (known.push 0)
+  else (values, known)
 
 /-- The stable sort of `minimize_crossings_layer` (Rust sorts indices by the pre-extracted
-barycenters with `sort_by`). -/
+barycenters with `sort_by`): positions sorted by the extracted keys (`compareBarycenters`). -/
 def sortByBarycenter (c : BarycenterContext) (states : Array (Array (Option BarycenterState))) (layer : Array LNodeId) :
     Array LNodeId :=
-  let keyed := layer.map fun n => (n, barycenterIn c states n)
-  (stableSort keyed fun a b => compareBarycenters a.2 b.2).map (·.1)
+  if layer.size < 2 then layer
+  else
+    let (values, known) := barycenterKeys c states layer 0 (FloatArray.emptyWithCapacity layer.size)
+      (ByteArray.emptyWithCapacity layer.size)
+    let positions := (Array.range layer.size)
+    let sorted := stableSort positions fun i j =>
+      match known.get! i != 0, known.get! j != 0 with
+      | true, true => Float.comparePartial (values.get! i) (values.get! j)
+      | true, false => .lt
+      | false, true => .gt
+      | false, false => .eq
+    sorted.map fun i => layer[i]!
 
 /-- `is_first_layer(node_order, current_index, forward_sweep)`: the start index is `0` forward and
 `length - 1` (saturating) backward. -/
@@ -365,7 +491,7 @@ end BarycenterHeuristic
 resolver's `barycenterStates`). -/
 structure BarycenterHeuristic where
   /-- `port_ranks`: the copy of the distributor's ranks. -/
-  portRanks : IO.Ref (Array Float)
+  portRanks : IO.Ref FloatArray
   /-- `constraint_resolver` (shares its state, including `barycenterStates`). -/
   constraintResolver : ForsterConstraintResolver
   /-- `port_distributor`. -/
@@ -382,7 +508,7 @@ random generator and the node order). -/
 def new (constraintResolver : ForsterConstraintResolver) (portDistributor : BarycenterPortDistributor) :
     BaseIO BarycenterHeuristic := do
   return {
-    portRanks := ← IO.mkRef #[], constraintResolver, portDistributor
+    portRanks := ← IO.mkRef FloatArray.empty, constraintResolver, portDistributor
     sweepIteration := ← IO.mkRef 0, snapshot := ← IO.mkRef none }
 
 /-- `set_snapshot(snapshot)`: also hands it to the port distributor and the constraint resolver. -/
@@ -459,7 +585,7 @@ def updatePortRanks (h : BarycenterHeuristic) (order : Array (Array LNodeId)) (f
     let portType : PortType := if forwardSweep then .output else .input
     if let some layer := order[fixedLayerIndex]? then
       h.portDistributor.calculatePortRanks layer portType
-      h.portRanks.set (← h.portDistributor.portRanks)
+      h.portRanks.set (← h.portDistributor.portRanksF)
 
 /-- `pre_ordered` of `minimize_crossings`: not the first sweep, or the free layer starts with an
 external port dummy. -/
@@ -500,7 +626,7 @@ no-ops), `initAfterTraversal` copies the distributor's ranks. -/
 def initializable (h : BarycenterHeuristic) : Initializable where
   initAtLayerLevel := h.initAtLayerLevel
   initAtNodeLevel := h.constraintResolver.initAtNodeLevel
-  initAfterTraversal := do h.portRanks.set (← h.portDistributor.portRanks)
+  initAfterTraversal := do h.portRanks.set (← h.portDistributor.portRanksF)
 
 /-- The `ICrossingMinimizationHeuristic` view; `random` is the caller's generator used by
 `setFirstLayerOrder`/`minimizeCrossings`. Not deterministic, never always improving. -/

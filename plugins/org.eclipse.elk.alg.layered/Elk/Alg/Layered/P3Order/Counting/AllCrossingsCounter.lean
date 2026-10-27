@@ -13,7 +13,8 @@ north/south port crossings (elk-rs `all_crossings_counter.rs`). Must be initiali
 assigns `LPort.id`s in traversal order.
 
 elk-rs hands the `GraphInfoHolder`'s counter a `CrossMinSnapshot`/`ArenaSync` (`set_snapshot`,
-`set_arena_sync`); in Lean the counters read the arena directly (see `CrossingsCounter`). The
+`set_arena_sync`); in Lean `setSnapshot` reaches the between-layer counting of the
+`CrossingsCounter` (see there), everything else reads the arena. The
 `ELK_TRACE` crossings breakdown output of elk-rs is not reproduced.
 -/
 namespace Elk.Alg.Layered.P3Order.Counting
@@ -48,6 +49,9 @@ def new (_graph : LGraphId) (order : Array (Array LNodeId)) : LayeredM AllCrossi
     inLayerEdgeCounts := ← IO.mkRef (Array.replicate length 0)
     hasNorthSouthPorts := ← IO.mkRef (Array.replicate length false)
     nPorts := ← IO.mkRef 0 }
+
+/-- elk-rs `set_snapshot(snapshot)`: hands the snapshot to the crossings counter. -/
+def setSnapshot (c : AllCrossingsCounter) (s : CrossMinSnapshot) : BaseIO Unit := c.crossingCounter.setSnapshot s
 
 /-- `countCrossingsAt(layerIndex, currentOrder)`. -/
 private def countCrossingsAt (c : AllCrossingsCounter) (layerIndex : Nat) (currentOrder : Array (Array LNodeId)) :

@@ -12,20 +12,82 @@ structure with the same API. All values are captured at build time.
 Index spaces: the *flat node index* numbers the nodes of `order` layer by layer; a *port id*
 is the port's `LPort.id` (Rust `graph_element().id as u32`), expected in `[0, nPorts)`. The
 CSR arrays of the Rust version are plain nested arrays here.
+
+The node → flat index and port → port id maps (Rust `FxHashMap`s keyed by `Arc` addresses) are
+`IdIndex`es: dense arrays over the arena index range of the captured elements, or a hash map
+when that range is much larger than the number of elements (nested graphs whose dummies were
+created late).
 -/
 namespace Elk.Alg.Layered.P3Order
 
 open Elk.Core.Options Elk.Alg.Layered.Graph
 
+/-- The bit of a side in a side mask (`1 <<< ElkEnum.ordinal side`). -/
+@[inline] def sideBit : PortSide → UInt8
+  | .undefined => 1
+  | .north => 2
+  | .east => 4
+  | .south => 8
+  | .west => 16
+
 /-- Rust `x as u32` of an `i32` id. -/
 @[inline] private def toU32 (v : Int) : Nat := (v % 4294967296).toNat
+
+/-- A map from arena indices to `Nat` values: `get i` is `value + 1`, or `0` for absent keys. -/
+structure IdIndex where
+  /-- The smallest key (dense representation). -/
+  base : Nat := 0
+  /-- `value + 1` per key `base + i` (`0`: absent). -/
+  dense : Array Nat := #[]
+  /-- The map of the sparse representation. -/
+  sparse : Std.HashMap Nat Nat := {}
+  /-- Whether `dense` is used. -/
+  isDense : Bool := true
+  deriving Inhabited
+
+namespace IdIndex
+
+/-- Builds the index of `(key, value)` pairs (a later pair overrides an earlier one with the same key,
+like `HashMap.insert`). -/
+def ofPairs (keys values : Array Nat) : IdIndex := Id.run do
+  if keys.isEmpty then return {}
+  let mut lo := keys[0]!
+  let mut hi := keys[0]!
+  for k in keys do
+    if k < lo then lo := k
+    if k > hi then hi := k
+  let range := hi + 1 - lo
+  if range <= 4 * keys.size + 1024 then
+    let mut dense := Array.replicate range 0
+    for h : i in [0:keys.size] do
+      dense := dense.set! (keys[i] - lo) (values[i]! + 1)
+    return { base := lo, dense, isDense := true }
+  else
+    let mut sparse : Std.HashMap Nat Nat := {}
+    for h : i in [0:keys.size] do
+      sparse := sparse.insert keys[i] values[i]!
+    return { sparse, isDense := false }
+
+/-- `value + 1` of key `k`, `0` when absent. -/
+@[inline] def get (m : IdIndex) (k : Nat) : Nat :=
+  if m.isDense then
+    if k >= m.base then
+      let i := k - m.base
+      if h : i < m.dense.size then m.dense[i] else 0
+    else 0
+  else
+    match m.sparse[k]? with
+    | some v => v + 1
+    | none => 0
+
+end IdIndex
 
 /-- `CrossMinSnapshot`. -/
 structure CrossMinSnapshot where
   /-- node → flat node index. -/
-  nodeMap : Std.HashMap LNodeId Nat := {}
+  nodeMap : IdIndex := {}
   /-- port → port id (captured `LPort.id`). -/
-  portMap : Std.HashMap LPortId Nat := {}
+  portMap : IdIndex := {}
   /-- per flat node: captured `LNode.id` (its position in the layer). -/
   nodeGraphIds : Array Nat := #[]
   /-- per flat node: layer index. -/
@@ -36,6 +98,16 @@ structure CrossMinSnapshot where
   nodeNested : Array Bool := #[]
   /-- per flat node: port ids in port order. -/
   nodePortIds : Array (Array Nat) := #[]
+  /-- per flat node: the sides of its captured ports (bit `ElkEnum.ordinal side`, Lean only). -/
+  nodeSideMasks : Array UInt8 := #[]
+  /-- per flat node: number of captured ports with predecessors (Lean only, rank precomputation). -/
+  nodeInputCounts : Array Nat := #[]
+  /-- per flat node: number of captured northern ports with predecessors. -/
+  nodeNorthInputCounts : Array Nat := #[]
+  /-- per flat node: number of captured ports with successors. -/
+  nodeOutputCounts : Array Nat := #[]
+  /-- per flat node: largest captured port id `+ 1` (`0` without ports). -/
+  nodeMaxPortIds : Array Nat := #[]
   /-- per port id: side. -/
   portSides : Array PortSide := #[]
   /-- per port id: flat index of the owner. -/
@@ -62,19 +134,26 @@ def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : C
     portSides := Array.replicate nPorts .undefined, portOwners := Array.replicate nPorts 0,
     portIns := Array.replicate nPorts #[], portOuts := Array.replicate nPorts #[],
     portRefs := Array.replicate nPorts none, nPorts := nPorts }
+  let mut nodeKeys : Array Nat := #[]
+  let mut nodeValues : Array Nat := #[]
+  let mut portKeys : Array Nat := #[]
+  let mut portValues : Array Nat := #[]
   let mut flat := 0
   for h : layerIndex in [0:order.size] do
     for node in order[layerIndex] do
       let nd := a.node node
+      nodeKeys := nodeKeys.push node.idx
+      nodeValues := nodeValues.push flat
       s := { s with
-        nodeMap := s.nodeMap.insert node flat, nodeRefs := s.nodeRefs.push node,
+        nodeRefs := s.nodeRefs.push node,
         nodeGraphIds := s.nodeGraphIds.push (toU32 nd.id), nodeLayers := s.nodeLayers.push layerIndex,
         nodeTypes := s.nodeTypes.push nd.type, nodeNested := s.nodeNested.push nd.nestedGraph.isSome }
       let mut portIds : Array Nat := #[]
       for port in nd.ports do
         let pt := a.port port
         let pid := toU32 pt.id
-        s := { s with portMap := s.portMap.insert port pid }
+        portKeys := portKeys.push port.idx
+        portValues := portValues.push pid
         portIds := portIds.push pid
         if pid < nPorts then
           let preds := pt.incomingEdges.filterMap fun e => (a.edge e).source.map fun sp => toU32 (a.port sp).id
@@ -86,32 +165,49 @@ def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : C
             portIns := s.portIns.modify pid (· ++ preds), portOuts := s.portOuts.modify pid (· ++ succs) }
       s := { s with nodePortIds := s.nodePortIds.push portIds }
       flat := flat + 1
-  return { s with nNodes := flat }
+  -- the side masks of the final `port_side_of` values
+  let masks := s.nodePortIds.map fun pids =>
+    pids.foldl (fun m pid => m ||| sideBit (s.portSides[pid]?.getD .undefined)) (0 : UInt8)
+  let hasIn (pid : Nat) : Bool := !(s.portIns[pid]?.getD #[]).isEmpty
+  let hasOut (pid : Nat) : Bool := !(s.portOuts[pid]?.getD #[]).isEmpty
+  let isNorth (pid : Nat) : Bool := (s.portSides[pid]?.getD .undefined) == .north
+  let inCounts := s.nodePortIds.map fun pids => (pids.filter hasIn).size
+  let northInCounts := s.nodePortIds.map fun pids => (pids.filter fun pid => hasIn pid && isNorth pid).size
+  let outCounts := s.nodePortIds.map fun pids => (pids.filter hasOut).size
+  let maxIds := s.nodePortIds.map fun pids => pids.foldl (fun m pid => max m (pid + 1)) 0
+  return { s with nNodes := flat, nodeSideMasks := masks, nodeMap := IdIndex.ofPairs nodeKeys nodeValues,
+                  nodeInputCounts := inCounts, nodeNorthInputCounts := northInCounts, nodeOutputCounts := outCounts,
+                  nodeMaxPortIds := maxIds,
+                  portMap := IdIndex.ofPairs portKeys portValues }
 
 /-- `CrossMinSnapshot::build(order, n_ports)`: built from the current arena. -/
 def build (order : Array (Array LNodeId)) (nPorts : Nat) : LayeredM CrossMinSnapshot := do
   return ofArena (← get) order nPorts
 
 /-- `port_id(port)`: the captured id (`0` for unknown ports). -/
-@[inline] def portId (s : CrossMinSnapshot) (port : LPortId) : Nat := s.portMap[port]?.getD 0
+@[inline] def portId (s : CrossMinSnapshot) (port : LPortId) : Nat := s.portMap.get port.idx - 1
 
 /-- `node_id(node)`: the captured `LNode.id` (`0` for unknown nodes). -/
 @[inline] def nodeId (s : CrossMinSnapshot) (node : LNodeId) : Nat :=
-  match s.nodeMap[node]? with
-  | some f => s.nodeGraphIds[f]?.getD 0
-  | none => 0
+  match s.nodeMap.get node.idx with
+  | 0 => 0
+  | f + 1 => s.nodeGraphIds[f]?.getD 0
 
 /-- `node_layer_index(node)` (`0` for unknown nodes). -/
 @[inline] def nodeLayerIndex (s : CrossMinSnapshot) (node : LNodeId) : Nat :=
-  match s.nodeMap[node]? with
-  | some f => s.nodeLayers[f]?.getD 0
-  | none => 0
+  match s.nodeMap.get node.idx with
+  | 0 => 0
+  | f + 1 => s.nodeLayers[f]?.getD 0
 
 /-- `node_flat_index(node)` (`0` for unknown nodes). -/
-@[inline] def nodeFlatIndex (s : CrossMinSnapshot) (node : LNodeId) : Nat := s.nodeMap[node]?.getD 0
+@[inline] def nodeFlatIndex (s : CrossMinSnapshot) (node : LNodeId) : Nat := s.nodeMap.get node.idx - 1
 
 /-- `same_layer(a, b)`. -/
 @[inline] def sameLayer (s : CrossMinSnapshot) (a b : LNodeId) : Bool := s.nodeLayerIndex a == s.nodeLayerIndex b
+
+/-- The sides of the captured ports of a flat node (`sideBit` mask; `0` out of range). -/
+@[inline] def nodeSideMask (s : CrossMinSnapshot) (flatNode : Nat) : UInt8 :=
+  if h : flatNode < s.nodeSideMasks.size then s.nodeSideMasks[flatNode] else 0
 
 /-- `node_ports(flat)`: port ids of a node in port order (empty out of range; Rust panics). -/
 @[inline] def nodePorts (s : CrossMinSnapshot) (flatNode : Nat) : Array Nat := s.nodePortIds[flatNode]?.getD #[]

@@ -1,6 +1,7 @@
 import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
 import Elk.Alg.Layered.P3Order.Counting.CrossMinUtil
+import Elk.Alg.Layered.P3Order.CrossMinSnapshot
 import Elk.Core.Util.Sort
 import Std.Data.HashSet
 /-!
@@ -14,8 +15,10 @@ and the elk-rs `graph_element().id` path.
 elk-rs additionally has a `CrossMinSnapshot` fast path (`set_snapshot`, used by the
 `GraphInfoHolder`'s `AllCrossingsCounter`). It reads the same ids from the snapshot and filters
 `node.ports` by side instead of `getPortSideView`; both coincide because ports are sorted by side
-during crossing minimisation and ids/edges do not change after the snapshot is built, so the
-plumbing is not ported (PORTING.md §15.1).
+during crossing minimisation and ids/edges do not change after the snapshot is built. Here the
+snapshot (`setSnapshot`) is only used by `countCrossingsBetweenLayers` to read the far ends of a
+port's edges (`port_predecessors`, then `port_successors`, which is `connectedEdges` order) as
+captured ids; the ports themselves are still numbered through `getPortSideView`.
 
 Rust semantics kept where they differ from Java:
 - the in-layer/two-port port sets are de-duplicated by port identity and *stably* sorted by
@@ -37,6 +40,8 @@ structure CrossingsCounter where
   indexTree : IO.Ref BinaryIndexedTree
   /-- `nodeCardinalities` (indexed by `LNode.id`). -/
   nodeCardinalities : IO.Ref (Array Int)
+  /-- elk-rs `snapshot` (`set_snapshot`). -/
+  snapshot : IO.Ref (Option CrossMinSnapshot)
 
 namespace CrossingsCounter
 
@@ -90,28 +95,39 @@ def getPorts (a : LGraphArena) (node : LNodeId) (side : PortSide) (topDown : Boo
   let needReverse := if side == .east then !topDown else topDown
   if needReverse then ports.reverse else ports
 
+/-- Numbers `ports[i:stop]` with consecutive positions from `next`. -/
+private partial def numberPorts (a : LGraphArena) (ports : Array LPortId) (i stop : Nat) (next : Int)
+    (positions : Array Int) : Array Int :=
+  if h : i < stop ∧ i < ports.size then
+    numberPorts a ports (i + 1) stop (next + 1) (setPosition positions (portIdOf a ports[i]) next)
+  else positions
+
+/-- The node loop of `initPositions` (`k`-th visited node, `nodes[k]` top-down or `nodes[n - 1 - k]`). -/
+private partial def initPositionsLoop (a : LGraphArena) (nodes : Array LNodeId) (side : PortSide)
+    (topDown getCardinalities needReverse : Bool) (k : Nat) (positions cards : Array Int) (ports : Array LPortId) :
+    Array Int × Array Int × Array LPortId :=
+  if k < nodes.size then
+    let node := nodes[if topDown then k else nodes.size - 1 - k]!
+    let start := ports.size
+    let ports := appendSideView a node side needReverse ports
+    let cards := if getCardinalities then cards.setIfInBounds (nodeIdOf a node) (ports.size - start) else cards
+    let positions := numberPorts a ports start ports.size start positions
+    initPositionsLoop a nodes side topDown getCardinalities needReverse (k + 1) positions cards ports
+  else (positions, cards, ports)
+
 /-- `initPositions(nodes, ports, side, topDown, getCardinalities)`: numbers the side's ports of
 `nodes` (top-down or bottom-up) after the `ports` already collected; returns the updated
 positions, cardinalities and port list. An empty `nodes` array changes nothing (Rust returns
-before resetting the cardinalities). -/
+before resetting the cardinalities). The ports of a node are `getPorts(node, side, topDown)`
+(`getPortSideView(side)`, reversed for `EAST` bottom-up and for the other sides top-down), appended
+without intermediate copies. -/
 def initPositions (a : LGraphArena) (positions cards : Array Int) (nodes : Array LNodeId) (ports : Array LPortId)
-    (side : PortSide) (topDown getCardinalities : Bool) : Array Int × Array Int × Array LPortId := Id.run do
-  if nodes.isEmpty then return (positions, cards, ports)
-  let mut numPorts : Int := ports.size
-  let mut positions := positions
-  let mut cards := if getCardinalities then Array.replicate nodes.size 0 else cards
-  let mut ports := ports
-  for k in [0:nodes.size] do
-    let i := if topDown then k else nodes.size - 1 - k
-    let node := nodes[i]!
-    let nodePorts := getPorts a node side topDown
-    if getCardinalities then
-      cards := cards.setIfInBounds (nodeIdOf a node) nodePorts.size
-    for p in nodePorts do
-      positions := setPosition positions (portIdOf a p) numPorts
-      numPorts := numPorts + 1
-    ports := ports ++ nodePorts
-  return (positions, cards, ports)
+    (side : PortSide) (topDown getCardinalities : Bool) : Array Int × Array Int × Array LPortId :=
+  if nodes.isEmpty then (positions, cards, ports)
+  else
+    let cards := if getCardinalities then Array.replicate nodes.size 0 else cards
+    let needReverse := if sideIs side .east then !topDown else topDown
+    initPositionsLoop a nodes side topDown getCardinalities needReverse 0 positions cards ports
 
 /-- `emptyStack(stack, ports, side, startIndex)`: numbers the first `side` port of every stacked
 dummy (LIFO). -/
@@ -185,54 +201,147 @@ def initPositionsForNorthSouthCounting (a : LGraphArena) (positions : Array Int)
   (_, ports, _, positions) := emptyStack a stack ports .east index positions
   return (positions, ports)
 
-/-- Adds the collected end positions to the tree (Rust drains the `ends` deque from the back). -/
-@[inline] private def addEnds (tree : BinaryIndexedTree) (ends : Array Int) : BinaryIndexedTree := Id.run do
-  let mut tree := tree
-  for k in [0:ends.size] do
-    tree := tree.add (asUsize ends[ends.size - 1 - k]!)
-  return tree
+/-! ### Counting loops
+
+The Rust loops collect the far-end positions above the current one in a deque and add them to the
+tree after the port's ranks are summed. The tree additions commute, so here every edge list is
+walked twice: once summing the ranks, once adding the positions (no deque). -/
+
+/-- The far-end position of edge `e` seen from `port` (`none` when an end point is missing). -/
+@[inline] private def endPositionOf (a : LGraphArena) (positions : Array Int) (e : LEdgeId) (port : LPortId) :
+    Option Int :=
+  match otherEndOf a e port with
+  | some other => some (positionIn positions a other)
+  | none => none
+
+/-- Sums `tree.rank(endPosition)` over the edges `edges[i:]` whose far end lies above `cur`. -/
+private partial def rankEnds (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (port : LPortId)
+    (cur : Int) (edges : Array LEdgeId) (i : Nat) (acc : Int) : Int :=
+  if h : i < edges.size then
+    match endPositionOf a positions edges[i] port with
+    | some endPosition =>
+      rankEnds a positions tree port cur edges (i + 1) (if endPosition > cur then acc + tree.rank (asUsize endPosition) else acc)
+    | none => rankEnds a positions tree port cur edges (i + 1) acc
+  else acc
+
+/-- Adds the far-end positions above `cur` of the edges `edges[i:]` to the tree. -/
+private partial def addEnds (a : LGraphArena) (positions : Array Int) (port : LPortId) (cur : Int)
+    (edges : Array LEdgeId) (i : Nat) (tree : BinaryIndexedTree) : BinaryIndexedTree :=
+  if h : i < edges.size then
+    match endPositionOf a positions edges[i] port with
+    | some endPosition =>
+      addEnds a positions port cur edges (i + 1) (if endPosition > cur then tree.add (asUsize endPosition) else tree)
+    | none => addEnds a positions port cur edges (i + 1) tree
+  else tree
+
+/-- The port loop of `countCrossingsOnPorts`. -/
+private partial def countOnPortsLoop (a : LGraphArena) (positions : Array Int) (ports : Array LPortId) (i : Nat)
+    (tree : BinaryIndexedTree) (crossings : Int) : Int × BinaryIndexedTree :=
+  if h : i < ports.size then
+    let port := ports[i]
+    let pt := a.port port
+    let cur := positionIn positions a port
+    let tree := tree.removeAll (asUsize cur)
+    -- `connectedEdges` = incoming, then outgoing
+    let crossings := rankEnds a positions tree port cur pt.incomingEdges 0 crossings
+    let crossings := rankEnds a positions tree port cur pt.outgoingEdges 0 crossings
+    let tree := addEnds a positions port cur pt.incomingEdges 0 tree
+    let tree := addEnds a positions port cur pt.outgoingEdges 0 tree
+    countOnPortsLoop a positions ports (i + 1) tree crossings
+  else (crossings, tree)
+
+/-- `tree.rank(position)` summed over the far ends `ends[i:]` (captured port ids) above `cur`. -/
+private partial def rankEndsSnap (positions : Array Int) (tree : BinaryIndexedTree) (cur : Int) (ends : Array Nat)
+    (i : Nat) (acc : Int) : Int :=
+  if h : i < ends.size then
+    let endPosition := positions[ends[i]]?.getD 0
+    rankEndsSnap positions tree cur ends (i + 1) (if endPosition > cur then acc + tree.rank (asUsize endPosition) else acc)
+  else acc
+
+/-- Adds the far-end positions `ends[i:]` above `cur` to the tree. -/
+private partial def addEndsSnap (positions : Array Int) (cur : Int) (ends : Array Nat) (i : Nat)
+    (tree : BinaryIndexedTree) : BinaryIndexedTree :=
+  if h : i < ends.size then
+    let endPosition := positions[ends[i]]?.getD 0
+    addEndsSnap positions cur ends (i + 1) (if endPosition > cur then tree.add (asUsize endPosition) else tree)
+  else tree
+
+/-- elk-rs `count_crossings_on_ports_snap(snapshot, port_ids)` on the ports' captured ids. -/
+private partial def countOnPortsSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (ports : Array LPortId) (i : Nat)
+    (tree : BinaryIndexedTree) (crossings : Int) : Int × BinaryIndexedTree :=
+  if h : i < ports.size then
+    let pid := s.portId ports[i]
+    let cur := positions[pid]?.getD 0
+    let tree := tree.removeAll (asUsize cur)
+    let preds := s.portPredecessors pid
+    let succs := s.portSuccessors pid
+    let crossings := rankEndsSnap positions tree cur preds 0 crossings
+    let crossings := rankEndsSnap positions tree cur succs 0 crossings
+    let tree := addEndsSnap positions cur preds 0 tree
+    let tree := addEndsSnap positions cur succs 0 tree
+    countOnPortsSnapLoop s positions ports (i + 1) tree crossings
+  else (crossings, tree)
 
 /-- `countCrossingsOnPorts(ports)`. -/
 def countCrossingsOnPorts (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (ports : Array LPortId) :
-    Int × BinaryIndexedTree := Id.run do
-  let mut crossings : Int := 0
-  let mut tree := tree
-  for port in ports do
-    let currentPosition := positionIn positions a port
-    tree := tree.removeAll (asUsize currentPosition)
-    let mut ends : Array Int := #[]
-    for e in (a.port port).connectedEdges do
-      if let some other := otherEndOf a e port then
-        let endPosition := positionIn positions a other
-        if endPosition > currentPosition then
-          crossings := crossings + tree.rank (asUsize endPosition)
-          ends := ends.push endPosition
-    tree := addEnds tree ends
-  return (crossings, tree)
+    Int × BinaryIndexedTree :=
+  countOnPortsLoop a positions ports 0 tree 0
+
+/-- Like `rankEnds` for the in-layer edges only; also counts the between-layer edges. -/
+private partial def rankInLayerEnds (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (port : LPortId)
+    (cur : Int) (edges : Array LEdgeId) (i : Nat) (acc betweenLayer : Int) : Int × Int :=
+  if h : i < edges.size then
+    let e := edges[i]
+    if isInLayer a e then
+      match endPositionOf a positions e port with
+      | some endPosition =>
+        rankInLayerEnds a positions tree port cur edges (i + 1)
+          (if endPosition > cur then acc + tree.rank (asUsize endPosition) else acc) betweenLayer
+      | none => rankInLayerEnds a positions tree port cur edges (i + 1) acc betweenLayer
+    else rankInLayerEnds a positions tree port cur edges (i + 1) acc (betweenLayer + 1)
+  else (acc, betweenLayer)
+
+/-- Like `addEnds` for the in-layer edges only. -/
+private partial def addInLayerEnds (a : LGraphArena) (positions : Array Int) (port : LPortId) (cur : Int)
+    (edges : Array LEdgeId) (i : Nat) (tree : BinaryIndexedTree) : BinaryIndexedTree :=
+  if h : i < edges.size then
+    let e := edges[i]
+    if isInLayer a e then
+      match endPositionOf a positions e port with
+      | some endPosition =>
+        addInLayerEnds a positions port cur edges (i + 1) (if endPosition > cur then tree.add (asUsize endPosition) else tree)
+      | none => addInLayerEnds a positions port cur edges (i + 1) tree
+    else addInLayerEnds a positions port cur edges (i + 1) tree
+  else tree
+
+/-- The port loop of `countInLayerCrossingsOnPorts`. -/
+private partial def countInLayerOnPortsLoop (a : LGraphArena) (positions : Array Int) (ports : Array LPortId) (i : Nat)
+    (tree : BinaryIndexedTree) (crossings : Int) : Int × BinaryIndexedTree :=
+  if h : i < ports.size then
+    let port := ports[i]
+    let pt := a.port port
+    let cur := positionIn positions a port
+    let tree := tree.removeAll (asUsize cur)
+    let (crossings, between1) := rankInLayerEnds a positions tree port cur pt.incomingEdges 0 crossings 0
+    let (crossings, between2) := rankInLayerEnds a positions tree port cur pt.outgoingEdges 0 crossings 0
+    let crossings := crossings + tree.size * (between1 + between2)
+    let tree := addInLayerEnds a positions port cur pt.incomingEdges 0 tree
+    let tree := addInLayerEnds a positions port cur pt.outgoingEdges 0 tree
+    countInLayerOnPortsLoop a positions ports (i + 1) tree crossings
+  else (crossings, tree)
 
 /-- `countInLayerCrossingsOnPorts(ports)`: in-layer edges by rank, every between-layer edge
 crosses all open in-layer edges. -/
 def countInLayerCrossingsOnPorts (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (ports : Array LPortId) :
-    Int × BinaryIndexedTree := Id.run do
-  let mut crossings : Int := 0
+    Int × BinaryIndexedTree :=
+  countInLayerOnPortsLoop a positions ports 0 tree 0
+
+/-- Adds the collected end positions to the tree (Rust drains the `ends` deque from the back). -/
+@[inline] private def addEndsArray (tree : BinaryIndexedTree) (ends : Array Int) : BinaryIndexedTree := Id.run do
   let mut tree := tree
-  for port in ports do
-    let currentPosition := positionIn positions a port
-    tree := tree.removeAll (asUsize currentPosition)
-    let mut numBetweenLayerEdges : Int := 0
-    let mut ends : Array Int := #[]
-    for e in (a.port port).connectedEdges do
-      if isInLayer a e then
-        if let some other := otherEndOf a e port then
-          let endPosition := positionIn positions a other
-          if endPosition > currentPosition then
-            crossings := crossings + tree.rank (asUsize endPosition)
-            ends := ends.push endPosition
-      else
-        numBetweenLayerEdges := numBetweenLayerEdges + 1
-    crossings := crossings + tree.size * numBetweenLayerEdges
-    tree := addEnds tree ends
-  return (crossings, tree)
+  for k in [0:ends.size] do
+    tree := tree.add (asUsize ends[ends.size - 1 - k]!)
+  return tree
 
 /-- The "edges" of a port taking part in north/south counting (`countNorthSouthCrossingsOnPorts`):
 for a normal node all ports of its `PORT_DUMMY`, for a long-edge dummy its other port, for a
@@ -274,7 +383,7 @@ def countNorthSouthCrossingsOnPorts (a : LGraphArena) (positions : Array Int) (t
       if endPosition > currentPosition then
         crossings := crossings + tree.rank (asUsize endPosition) * degree
         ends := ends.push endPosition
-    tree := addEnds tree ends
+    tree := addEndsArray tree ends
   return (crossings, tree)
 
 /-- `connectedInLayerPortsSortedByPosition(upperNode, lowerNode, side)`: the side's ports of both
@@ -320,7 +429,11 @@ def connectedPortsSortedByPosition (a : LGraphArena) (positions : Array Int) (up
 
 /-- `new CrossingsCounter(portPositions)` sharing the given position array. -/
 def new (portPositions : IO.Ref (Array Int)) : BaseIO CrossingsCounter := do
-  return { portPositions, indexTree := ← IO.mkRef (BinaryIndexedTree.new 0), nodeCardinalities := ← IO.mkRef #[] }
+  return { portPositions, indexTree := ← IO.mkRef (BinaryIndexedTree.new 0), nodeCardinalities := ← IO.mkRef #[],
+           snapshot := ← IO.mkRef none }
+
+/-- elk-rs `set_snapshot(snapshot)`. -/
+def setSnapshot (c : CrossingsCounter) (s : CrossMinSnapshot) : BaseIO Unit := c.snapshot.set (some s)
 
 /-- elk-rs `CrossingsCounter::new(port_positions)`: a counter owning a copy of the positions. -/
 def ofPositions (portPositions : Array Int) : BaseIO CrossingsCounter := do
@@ -381,8 +494,15 @@ def initForCountingBetween (c : CrossingsCounter) (leftLayer rightLayer : Array 
 /-- `countCrossingsBetweenLayers(leftLayerNodes, rightLayerNodes)`. -/
 def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : Array LNodeId) : LayeredM Int := do
   let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
-  c.indexTree.set (BinaryIndexedTree.new ports.size)
-  c.withTree countCrossingsOnPorts ports
+  match ← c.snapshot.get with
+  | some s =>
+    let positions ← c.portPositions.get
+    let (crossings, tree) := countOnPortsSnapLoop s positions ports 0 (BinaryIndexedTree.new ports.size) 0
+    c.indexTree.set tree
+    return crossings
+  | none =>
+    c.indexTree.set (BinaryIndexedTree.new ports.size)
+    c.withTree countCrossingsOnPorts ports
 
 /-- `countInLayerCrossingsOnSide(nodes, side)`. -/
 def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (side : PortSide) : LayeredM Int := do
