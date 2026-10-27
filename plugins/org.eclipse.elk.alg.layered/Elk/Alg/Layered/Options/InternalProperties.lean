@@ -140,6 +140,8 @@ structure LNodeInternals where
 
 /-- Internal properties set on `LPort`s. -/
 structure LPortInternals where
+  /-- `PARTITION_DUMMY` (`partitionDummy`, `false`) as set on the dummy ports of `PartitionMidprocessor`. -/
+  partitionDummy : Bool := false
   /-- `SPLINE_NS_PORT_Y_COORD` (`splines.nsPortY`): y coordinate of a north/south port's original port,
   set by `NorthSouthPortPostprocessor` for the spline router. -/
   splineNsPortYCoord : Option Float := none

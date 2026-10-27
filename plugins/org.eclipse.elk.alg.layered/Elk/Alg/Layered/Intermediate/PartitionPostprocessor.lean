@@ -3,7 +3,7 @@ import Elk.Alg.Layered.Intermediate.PartitionMidprocessor
 # `org.eclipse.elk.alg.layered.intermediate.PartitionPostprocessor`
 
 Port of elk-rs `intermediate/partition_postprocessor.rs`. After layering, the dummy ports created by
-`PartitionMidprocessor` (flag `PARTITION_DUMMY`, see `PartitionMidprocessor.PORT_PARTITION_DUMMY`) are
+`PartitionMidprocessor` (flag `PARTITION_DUMMY`: `LPortInternals.partitionDummy`) are
 removed: each connected edge (incoming, then outgoing) is detached from the port and the port from its
 node. Nodes are visited in layer order; layerless nodes are not visited.
 -/

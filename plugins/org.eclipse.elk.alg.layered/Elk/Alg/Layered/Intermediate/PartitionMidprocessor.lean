@@ -10,9 +10,8 @@ partition order; nodes in layerless order): one new `EAST` source port per node 
 and, per pair, a new `WEST` target port on the node of the second partition and a new edge. Ports and edges
 are flagged `PARTITION_DUMMY` and removed again by `PartitionPostprocessor`.
 
-The flag on the dummy **ports** is kept in the port's `props` (`PORT_PARTITION_DUMMY`, same id as
-`InternalProperties.PARTITION_DUMMY`) because `LPortInternals` has no `partitionDummy` field yet (TODO:
-move it to a typed field; the edge flag already is `LEdgeInternals.partitionDummy`).
+The flag on the dummy ports is the typed field `LPortInternals.partitionDummy` (the edge flag is
+`LEdgeInternals.partitionDummy`).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -21,16 +20,12 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Alg.Laye
 
 namespace PartitionMidprocessor
 
-/-- `InternalProperties.PARTITION_DUMMY` (`partitionDummy`, default `false`) as set on dummy ports.
-Temporary stand-in for a typed `LPortInternals.partitionDummy` field (see the module doc). -/
-def PORT_PARTITION_DUMMY : Property Bool := Property.withDefault "partitionDummy" false
-
 /-- Marks a port as a partition dummy port (`port.setProperty(PARTITION_DUMMY, true)`). -/
 def setPortPartitionDummy (port : LPortId) : LayeredM Unit :=
-  setPortProp port PORT_PARTITION_DUMMY true
+  modifyPort port fun p => { p with internal := { p.internal with partitionDummy := true } }
 
 /-- `port.getProperty(PARTITION_DUMMY)` on a port value. -/
-def portIsPartitionDummy (port : LPort) : Bool := port.props.getD PORT_PARTITION_DUMMY false
+def portIsPartitionDummy (port : LPort) : Bool := port.internal.partitionDummy
 
 /-- `port.getProperty(PARTITION_DUMMY)`. -/
 def isPortPartitionDummy (port : LPortId) : LayeredM Bool := do
