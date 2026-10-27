@@ -76,9 +76,23 @@
 - 테스트: 1261 통과/0 실패. H의 layout API 테스트 중 layered 의존 부분은 `elk.algorithm: box`로 전환(TODO(phase4) 표기).
 - 모델 parity(60개 샘플): oracle 60/60 ok, lean 60/60 `UnsupportedConfigurationException(layered)` → compared 0. 코퍼스 550개 모델은 전부 layered(기본값)라 Phase 4 전까지 match 0.
 
+### Phase 3 착수 — alg.common 병렬 할당 (2026-10-27)
+- 사전 준비: `Elk/Alg/Common/{Utils,Geometry,NetworkSimplex,Compaction,Polyomino,Spore,NodeSpacing}.lean` 집계 모듈과 `Tests/AlgCommon/*.lean` 자리를 미리 등록해 worktree 병합 충돌을 예방. `PORTING.md` §14(알고리즘 내부 그래프: arena+id, origin 타입 매개변수, 전략 클로저, 순회 순서 재현) 추가.
+- 어댑터(`ElkGraphAdapters`)와 `core/alg`(AlgorithmAssembler)는 규약을 정하는 작업이라 주 에이전트가 직렬로 수행하고, nodespacing은 그 뒤에 할당한다.
+
+#### Phase 3 작업 할당표
+| 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| K1. networksimplex | `alg.common/networksimplex/*.rs`(1.65K줄) + `tests/all/network_simplex_test.rs` | opus | xhigh | 서브에이전트 K1(worktree) | 진행 중 |
+| K2. compaction(oned/options/scanline) + polyomino | `alg.common/compaction/**`, `polyomino/**`(2.6K줄) + `one_dimensional_compactor_test.rs`, `two_bit_grid_test.rs` | opus | high | 서브에이전트 K2(worktree) | 진행 중 |
+| K3. geometry(Point/TEdge/TTriangle/Tree/BowyerWatson/NaiveMinST/RectilinearConvexHull) + overlaps + spore + utils | 해당 `*.rs`(≈1.9K줄) + `rectilinear_convex_hull_test.rs` | opus | high | 서브에이전트 K3(worktree) | 진행 중 |
+| F2. `GraphAdapters` 레코드 + `ElkGraphAdapters`; `Elk.Core.Alg`(assembler/processor configuration) | `core/util/adapters/*`, `core/alg/*`(1.6K줄) | fable(주) | high | 주 에이전트 | 진행 중 |
+| N1~N3. nodespacing(cellsystem → 내부 알고리즘 → 계산기) | `alg.common/nodespacing/**`(8.5K줄) + `nodespacing_test.rs` 등 4.3K줄 | opus | xhigh | F2 이후 할당 | 대기 |
+
 #### Phase 2 (2차) 작업 할당표
 | 작업 | 대응 원본 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
 | 엔진 + fixed/random/box 프로바이더 + 등록 | `core/recursive_graph_layout_engine.rs`, `core/util/{fixed,random,box}_layout_provider.rs` (≈1.7K줄) | fable(주) | xhigh | 주 에이전트 | 완료: oracle 바이트 일치 17/17 |
-| J. 엔진/프로바이더/util 테스트 이식 + fixture 회귀 스위트 | `core/tests/all/{recursive_graph_layout_engine(_integration),fixed_layout_provider,issue_457,issue_489,elk_util,layout_algorithm_resolver,deprecated_layout_option_replacer,individual_spacings,util_misc,property,layout_option_parse}_test.rs` (≈1.5K줄) | sonnet | high | 서브에이전트 J(worktree) | 진행 중 |
+| J. 엔진/프로바이더/util 테스트 이식 + fixture 회귀 스위트 | `core/tests/all/{recursive_graph_layout_engine(_integration),fixed_layout_provider,issue_457,issue_489,elk_util,layout_algorithm_resolver,deprecated_layout_option_replacer,individual_spacings,util_misc,property,layout_option_parse}_test.rs` (≈1.5K줄) | sonnet | high | 서브에이전트 J(worktree) | 완료(`merge J`): 엔진 4/4, 통합 5/8(TestController 3건 제외; INCLUDE_CHILDREN은 COMPOUND 기능을 가진 테스트 알고리즘 `test.engine.compound`로 대체, TODO(phase4)), fixed 1/1, issue 457/489, option parse 4/4, fixture 스위트 `core.engine.fixtures`(16/17 바이트 일치, `box.json`은 layered 대기 SKIP). `util_misc`/`property` 일부는 API 부재로 제외 |
+| CLI `elk convert` + `.elkt` 입력(`layout`) | elk-rs 없음(Java `ElkModelParityExportTest`가 EMF로 변환) | fable(주) | low | 주 에이전트 | 완료: `elk convert [-o] [--pretty] [--sort-keys] [--defaults] IN.elkt`, `layout`이 `.elkt`를 자동 변환. ticket 425 모델(box 강제)이 oracle과 바이트 일치 |
 

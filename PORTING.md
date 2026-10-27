@@ -163,3 +163,12 @@ lake build && lake test     # 종료 전 전체
 - `Array.modify`는 인덱스 범위 밖이면 무시, `arr[i]!`는 범위 밖이면 panic 후 `default` → 인덱스 계산을 `Int`로 하고 `toNat` 전에 검사한다.
 - `deriving Repr`가 중첩 inductive에서 실패하면 수동 `instance`를 쓴다.
 - `set_option linter.* false`로 경고를 숨기지 않는다.
+
+## 14. 알고리즘 내부 그래프 (alg.common 이후)
+- 알고리즘 전용 그래프(`NGraph`, `CGraph`, polyomino `PlanarGrid`, spore `Tree`/`Node` 등)도 **arena 배열 + typed id**로 표현한다: `structure NNodeId where idx : Nat`(deriving `BEq, Hashable, Repr, Inhabited, DecidableEq`), 요소는 `graph.nodes[id.idx]`. Rust의 `Rc<RefCell<_>>`/`Weak`/`Arc<Mutex<_>>`, `Rc::ptr_eq`는 모두 id 비교로 대체한다.
+- Java `Object`/Rust `Arc<dyn Any>` 타입의 `origin` 페이로드는 구조체의 **타입 매개변수**로 둔다: `structure NNode (ο : Type) where origin : Option ο …`, `structure NGraph (ο : Type)`. 알고리즘은 `ο`에 대해 다형적이며 테스트는 `Unit`/`String`을 쓴다.
+- 전략 인터페이스(`ISpacingsHandler`, `ILockFunction`, `ICostFunction`, `IOverlapHandler`, `IConstraintCalculationAlgorithm`, `ICompactionAlgorithm`)는 클로저 필드를 가진 `structure`로 옮긴다. 클로저는 그래프를 인자로 받는 순수 함수(`CGraph → CNodeId → CNodeId → Float`)를 기본으로 하고, 상태 변경이 필요한 것만 모나딕으로 만든다.
+- 상태를 가진 알고리즘 객체(`OneDimensionalCompactor`, `NetworkSimplex`, `DepthFirstCompaction`)는 `structure` + `abbrev XM := StateRefT X IO`로 두고, 요소 갱신은 `modifyNode id f` 류 헬퍼로 한다(상태 전체를 `let s ← get`로 묶은 채 `modify` 금지).
+- Rust의 `panic!`/`expect`는 `throw (IO.userError "java.lang.IllegalStateException: <원문 메시지>")`(또는 `IllegalArgumentException`)로 옮긴다. 순수 함수에서 실패가 필요하면 `Except String`을 반환한다.
+- 순회 순서가 결과를 바꾸는 컬렉션(`HashSet`, `HashMap`, `BTreeSet`, `TreeMultimap`)은 Rust 포팅이 쓰는 순서를 그대로 재현한다. `Array`+삽입 순서(중복 제거는 선형 탐색 또는 `Std.HashSet`로 "존재 여부"만) 또는 정렬 키가 명시된 `stableSort`를 사용하고, 어떤 순서를 재현했는지 docstring에 적는다.
+- 부동소수점 비교: Rust `partial_cmp(..).unwrap_or(Equal)` → `Float.comparePartial`, `f64::max/min` → `fmax/fmin`, `total_cmp` → `Float.compareTotal`. `-0.0`, `NaN`, `INFINITY` 상수는 `Float` 리터럴/`(0.0/0.0)` 대신 `Elk.Core.Util.Java`의 상수를 사용한다.

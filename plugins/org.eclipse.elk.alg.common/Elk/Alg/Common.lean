@@ -1,4 +1,5 @@
 import Elk.Alg.Common.Utils
+import Elk.Alg.Common.Geometry
 import Elk.Alg.Common.NetworkSimplex
 import Elk.Alg.Common.Compaction
 import Elk.Alg.Common.Polyomino

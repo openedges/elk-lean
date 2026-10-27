@@ -3,11 +3,14 @@ import Elk.Api
 # `elk` command line interface
 
 ```
-elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] INPUT.json
+elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)
+elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt
 elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--pretty]
 elk algorithms | options | categories
 elk --version
 ```
+`layout` and `convert` read ELK Text (`.elkt`) input through `Elk.Text.parseElkt`; `--defaults` applies the
+elk-live defaults (node size 30, port size 5) to shapes without a size.
 `batch` consumes the elk-rs parity manifest format (`model_rel_path	input_json	java_layout_json	java_status	java_error`)
 and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills the "rust" side).
 -/
@@ -15,7 +18,7 @@ and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills th
 open Elk Elk.Json Elk.Api
 
 def usage : String :=
-  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] INPUT.json\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
+  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--pretty] [--sort-keys]\n  elk algorithms | options | categories\n  elk --version"
 
 structure LayoutArgs where
   input : Option String := none
@@ -24,6 +27,28 @@ structure LayoutArgs where
   pretty : Bool := false
   sortKeys : Bool := false
   lenient : Bool := false
+  defaults : Bool := false
+
+/-- Writes `out` to `path` (creating directories) or prints it. Files get no trailing newline,
+like the elk-rs parity runner (`fs::write`). -/
+def writeOutput (path : Option String) (out : String) : IO Unit := do
+  match path with
+  | some path =>
+    if let some dir := (System.FilePath.mk path).parent then IO.FS.createDirAll dir
+    IO.FS.writeFile path out
+  | none => IO.println out
+
+/-- `true` for ELK Text inputs (`.elkt`). -/
+def isElkt (path : String) : Bool := path.endsWith ".elkt"
+
+/-- Parses ELK Text and renders it as ELK JSON (`Elk.Json.JsonExporter`). -/
+def elktToJson (text : String) (defaults : Bool) (pretty : Bool := false) (sortKeys : Bool := false) : IO (Except String String) := do
+  match ← Elk.Text.parseElkt text with
+  | .error e => return .error s!"ELK Text parse error: {e}"
+  | .ok (root, g) =>
+    let g := if defaults then Elk.Text.applyDefaults g root else g
+    let v ← Elk.Json.JsonExporter.exportValue g root {}
+    return .ok (if pretty then v.renderPretty sortKeys else v.render sortKeys)
 
 partial def parseLayoutArgs (args : List String) (acc : LayoutArgs) : Except String LayoutArgs :=
   match args with
@@ -33,6 +58,7 @@ partial def parseLayoutArgs (args : List String) (acc : LayoutArgs) : Except Str
   | "--pretty" :: rest => parseLayoutArgs rest { acc with pretty := true }
   | "--sort-keys" :: rest => parseLayoutArgs rest { acc with sortKeys := true }
   | "--lenient" :: rest => parseLayoutArgs rest { acc with lenient := true }
+  | "--defaults" :: rest => parseLayoutArgs rest { acc with defaults := true }
   | a :: rest => if a.startsWith "-" then .error s!"unknown argument: {a}" else parseLayoutArgs rest { acc with input := some a }
 
 def runLayout (args : List String) : IO UInt32 := do
@@ -40,16 +66,44 @@ def runLayout (args : List String) : IO UInt32 := do
   | .error e => IO.eprintln e; return 2
   | .ok a =>
     let some input := a.input | IO.eprintln "missing input file"; return 2
-    let text ← IO.FS.readFile input
+    let raw ← IO.FS.readFile input
+    let text ← (do
+      if isElkt input then
+        match ← elktToJson raw a.defaults with
+        | .error e => IO.eprintln e; return none
+        | .ok json => return some json
+      else return some raw)
+    let some text := text | return 1
     match ← layoutJson text a.options a.lenient a.pretty a.sortKeys with
     | .error e => IO.eprintln e; return 1
-    | .ok out =>
-      match a.output with
-      | some path =>
-        if let some dir := (System.FilePath.mk path).parent then IO.FS.createDirAll dir
-        IO.FS.writeFile path out  -- no trailing newline, like the elk-rs parity runner
-      | none => IO.println out
-      return 0
+    | .ok out => writeOutput a.output out; return 0
+
+structure ConvertArgs where
+  input : Option String := none
+  output : Option String := none
+  pretty : Bool := false
+  sortKeys : Bool := false
+  defaults : Bool := false
+
+partial def parseConvertArgs (args : List String) (acc : ConvertArgs) : Except String ConvertArgs :=
+  match args with
+  | [] => .ok acc
+  | "-o" :: v :: rest => parseConvertArgs rest { acc with output := some v }
+  | "--pretty" :: rest => parseConvertArgs rest { acc with pretty := true }
+  | "--sort-keys" :: rest => parseConvertArgs rest { acc with sortKeys := true }
+  | "--defaults" :: rest => parseConvertArgs rest { acc with defaults := true }
+  | a :: rest => if a.startsWith "-" then .error s!"unknown argument: {a}" else parseConvertArgs rest { acc with input := some a }
+
+/-- `elk convert`: ELK Text → ELK JSON. -/
+def runConvert (args : List String) : IO UInt32 := do
+  match parseConvertArgs args {} with
+  | .error e => IO.eprintln e; return 2
+  | .ok a =>
+    let some input := a.input | IO.eprintln "missing input file"; return 2
+    let raw ← IO.FS.readFile input
+    match ← elktToJson raw a.defaults a.pretty a.sortKeys with
+    | .error e => IO.eprintln e; return 1
+    | .ok out => writeOutput a.output out; return 0
 
 structure BatchArgs where
   inputManifest : Option String := none
@@ -115,6 +169,7 @@ def main (args : List String) : IO UInt32 := do
     IO.println s!"elk-lean {Elk.Api.version} (ELK {Elk.Api.elkVersion})"
     return 0
   | "layout" :: rest => runLayout rest
+  | "convert" :: rest => runConvert rest
   | "batch" :: rest => runBatch rest
   | ["algorithms"] => IO.println (← knownLayoutAlgorithms); return 0
   | ["options"] => IO.println (← knownLayoutOptions); return 0

@@ -1,0 +1,1 @@
+/-! Aggregator of the top-level `org.eclipse.elk.alg.common` geometry classes (Point, TEdge, TTriangle, Tree, BowyerWatsonTriangulation, NaiveMinST, RectilinearConvexHull, ICostFunction) and `overlaps`. Owned by the Geometry porting task; add submodule imports here. -/
