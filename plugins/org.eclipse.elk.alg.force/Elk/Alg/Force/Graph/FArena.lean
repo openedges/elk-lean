@@ -198,4 +198,23 @@ def particleRadius (a : FArena) (p : FParticleId) : Float :=
 
 end FArena
 
+/-! ### Flat array access for the O(n²) loops of the force models -/
+
+/-- An index below `a.usize` is in bounds. -/
+theorem FloatArray.usize_lt_size {a : FloatArray} {i : USize} (h : i < a.usize) : i.toNat < a.size := by
+  have h1 : i.toNat < a.usize.toNat := (USize.lt_iff_toNat_lt).mp h
+  have h2 : a.usize.toNat ≤ a.size := by
+    simp only [FloatArray.usize, Nat.toUSize]
+    exact Nat.mod_le _ _
+  omega
+
+/-- `a[i]` with a `USize` index (`0.0` out of bounds, like `FloatArray.get!`): compiles to a size
+compare and a direct load, without the `Nat` boxing checks of `get!`. -/
+@[inline] def fgetU (a : FloatArray) (i : USize) (dflt : Float) : Float :=
+  if h : i < a.usize then a.uget i (FloatArray.usize_lt_size h) else dflt
+
+/-- `a.set! i v` with a `USize` index (unchanged out of bounds). -/
+@[inline] def fsetU (a : FloatArray) (i : USize) (v : Float) : FloatArray :=
+  if h : i < a.usize then a.uset i v (FloatArray.usize_lt_size h) else a
+
 end Elk.Alg.Force.Graph
