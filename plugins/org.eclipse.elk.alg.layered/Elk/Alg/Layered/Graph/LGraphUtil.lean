@@ -427,7 +427,8 @@ def getExternalPortPosition (graph : LGraphId) (portDummy : LNodeId) (portWidth 
   let connectedComponentsCompaction := gr.props.getD LayeredOptions.COMPACTION_CONNECTED_COMPONENTS false
   match extSide with
   | .north =>
-    portPos := { portPos with x := portPos.x + padding.left + graphOffset.x - portWidth / 2.0 }
+    -- Rust `port_pos.x += padding.left + graph_offset.x - port_width / 2.0` (right side first)
+    portPos := { portPos with x := portPos.x + (padding.left + graphOffset.x - portWidth / 2.0) }
     -- Java's compactor can produce half-step northern external port coordinates for compacted
     -- connected-component layouts (elk-rs parity quirk)
     if connectedComponentsCompaction && Float.abs portWidth <= 1e-9 && Float.abs (portPos.x - Float.floor portPos.x) <= 1e-9 then
@@ -435,13 +436,13 @@ def getExternalPortPosition (graph : LGraphId) (portDummy : LNodeId) (portWidth 
     portPos := { portPos with y := -portHeight - portOffset }
     modifyNode portDummy fun x => { x with position := { x.position with y := -(padding.top + portOffset + graphOffset.y) } }
   | .east =>
-    portPos := ⟨graphSize.x + padding.left + padding.right + portOffset, portPos.y + padding.top + graphOffset.y - portHeight / 2.0⟩
+    portPos := ⟨graphSize.x + padding.left + padding.right + portOffset, portPos.y + (padding.top + graphOffset.y - portHeight / 2.0)⟩
     modifyNode portDummy fun x => { x with position := { x.position with x := graphSize.x + padding.right + portOffset - graphOffset.x } }
   | .south =>
-    portPos := ⟨portPos.x + padding.left + graphOffset.x - portWidth / 2.0, graphSize.y + padding.top + padding.bottom + portOffset⟩
+    portPos := ⟨portPos.x + (padding.left + graphOffset.x - portWidth / 2.0), graphSize.y + padding.top + padding.bottom + portOffset⟩
     modifyNode portDummy fun x => { x with position := { x.position with y := graphSize.y + padding.bottom + portOffset - graphOffset.y } }
   | .west =>
-    portPos := ⟨-portWidth - portOffset, portPos.y + padding.top + graphOffset.y - portHeight / 2.0⟩
+    portPos := ⟨-portWidth - portOffset, portPos.y + (padding.top + graphOffset.y - portHeight / 2.0)⟩
     modifyNode portDummy fun x => { x with position := { x.position with x := -(padding.left + portOffset + graphOffset.x) } }
   | .undefined => pure ()
   return portPos

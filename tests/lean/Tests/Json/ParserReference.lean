@@ -3,6 +3,9 @@ import Elk.Json.Parser
 /-!
 # Reference copy of the original `StateT` JSON parser (tests only)
 
+Strict-mode number values come from `Elk.Json.Parser.strictNumber?` (serde_json semantics, tested
+against serde_json in `Tests.Json.SerdeNumbers`); everything else is the old parser.
+
 `Tests.Json.ParserFuzz` compares `Elk.Json.parse` against it: values, error messages and error
 positions must agree. Kept verbatim apart from the namespace.
 
@@ -231,6 +234,12 @@ private partial def parseNumber : M Number := do
   let s ← get
   let lexeme := String.fromUTF8! (s.bytes.extract start s.pos)
   let lexeme := if lexeme.startsWith "+" then (lexeme.drop 1).toString else lexeme
+  -- strict values follow serde_json (checked separately against serde_json itself); the reference
+  -- keeps the grammar, error messages and positions
+  if !lenient then
+    match Elk.Json.Parser.strictNumber? lexeme with
+    | some n => return n
+    | none => fail "number out of range"
   if isFloat then
     return .float (strtodUnchecked lexeme)
   else

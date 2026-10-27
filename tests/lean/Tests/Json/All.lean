@@ -40,7 +40,8 @@ def parserStrict : Suite := suite "json.parser" do
     check "int" (xs[0]! == .num (.int 1))
     check "float kept" (xs[1]! == .num (.float 2.0))
     checkEq "1e2 render" xs[2]!.render "100.0"
-    checkEq "-0 render" xs[3]!.render "0"
+    -- serde_json: `-0` is `ParserNumber::F64(-0.0)` and serialises as `-0.0`
+    checkEq "-0 render" xs[3]!.render "-0.0"
     checkEq "u64" xs[4]!.render "18446744073709551615"
     checkEq "big" xs[5]!.render "9223372036854775808"
     check "unicode escape" (xs[6]! == .str "é😀")
