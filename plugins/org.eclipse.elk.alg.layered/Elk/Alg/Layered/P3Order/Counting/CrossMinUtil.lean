@@ -15,6 +15,15 @@ open Elk.Core.Options Elk.Alg.Layered.Graph
 every evaluation, a global constant is a plain load. -/
 def floatZero : Float := 0.0
 
+/-- `1.0` as a global (see `floatZero`). -/
+def floatOne : Float := 1.0
+
+/-- `2.0` as a global (see `floatZero`). -/
+def floatTwo : Float := 2.0
+
+/-- `-1.0` as a global (see `floatZero`). -/
+def floatMinusOne : Float := -1.0
+
 /-- Rust `f64::min` with inline NaN tests (`x != x`; `Float.isNaN` is an out-of-line call). -/
 @[inline] def fminInline (a b : Float) : Float :=
   if a != a then b else if b != b then a else if a < b then a else b
@@ -48,6 +57,66 @@ handed to `stableSort`. -/
   if as.size < 2 then as
   else if as.size <= 16 then insertionSortFrom cmp 0 as.size 1 as
   else Elk.Core.Util.stableSort as cmp
+
+/-! ### Keyed stable sort
+
+`Elk.Core.Util.stableSort` (insertion sort of runs of 16, then bottom-up merges that take the right
+element only when the left one compares greater) on the permutation `[0, n)` of key positions,
+with `cmp i j == .gt` given as `gt i j` (specialised at each call site, so the keys are read
+from unboxed arrays without a closure call). It performs the same comparisons and moves as
+`stableSort` with the corresponding comparator and therefore returns the same permutation for
+every comparator, also one that is not a total preorder (NaN keys). -/
+
+/-- The inner insertion loop: moves `x` down from position `j` (not below `start`). -/
+@[specialize] partial def keyedInsertDown (gt : Nat → Nat → Bool) (start x j : Nat) (a : Array Nat) : Array Nat :=
+  if j > start then
+    let y := a[j - 1]!
+    if gt y x then keyedInsertDown gt start x (j - 1) (a.set! j y) else a.set! j x
+  else a.set! j x
+
+/-- Insertion sort of the run `a[start:stop]` from position `i`. -/
+@[specialize] partial def keyedInsertRun (gt : Nat → Nat → Bool) (start stop i : Nat) (a : Array Nat) : Array Nat :=
+  if i < stop then keyedInsertRun gt start stop (i + 1) (keyedInsertDown gt start a[i]! i a) else a
+
+/-- Insertion sort of all runs of 16 from `start`. -/
+@[specialize] partial def keyedInsertRuns (gt : Nat → Nat → Bool) (n start : Nat) (a : Array Nat) : Array Nat :=
+  if start < n then
+    let stop := min (start + 16) n
+    keyedInsertRuns gt n stop (keyedInsertRun gt start stop (start + 1) a)
+  else a
+
+/-- Merges `src[i:mid]` and `src[j:hi]` into `dst[k:]`. -/
+@[specialize] partial def keyedMerge (gt : Nat → Nat → Bool) (src : Array Nat) (mid hi i j k : Nat) (dst : Array Nat) :
+    Array Nat :=
+  if i < mid && j < hi then
+    if gt src[i]! src[j]! then keyedMerge gt src mid hi i (j + 1) (k + 1) (dst.set! k src[j]!)
+    else keyedMerge gt src mid hi (i + 1) j (k + 1) (dst.set! k src[i]!)
+  else if i < mid then keyedMerge gt src mid hi (i + 1) j (k + 1) (dst.set! k src[i]!)
+  else if j < hi then keyedMerge gt src mid hi i (j + 1) (k + 1) (dst.set! k src[j]!)
+  else dst
+
+/-- One bottom-up merge pass of width `width` from `lo`. -/
+@[specialize] partial def keyedMergePass (gt : Nat → Nat → Bool) (n width lo : Nat) (src dst : Array Nat) : Array Nat :=
+  if lo < n then
+    let mid := min (lo + width) n
+    let hi := min (lo + 2 * width) n
+    keyedMergePass gt n width hi src (keyedMerge gt src mid hi lo mid lo dst)
+  else dst
+
+/-- The merge passes (`src`/`dst` swapped after each pass). -/
+@[specialize] partial def keyedMergeAll (gt : Nat → Nat → Bool) (n width : Nat) (src dst : Array Nat) : Array Nat :=
+  if width < n then
+    let merged := keyedMergePass gt n width 0 src dst
+    keyedMergeAll gt n (width * 2) merged src
+  else src
+
+/-- The stably sorted permutation of `[0, n)` (see "Keyed stable sort"). -/
+@[inline] def keyedStableSort (n : Nat) (gt : Nat → Nat → Bool) : Array Nat :=
+  let a := Array.range n
+  if n < 2 then a
+  else
+    let runs := keyedInsertRuns gt n 0 a
+    keyedMergeAll gt n 16 runs runs
 
 /-- The constructor index of a `PortSide` (`ElkEnum.ordinal` as `UInt8`). -/
 @[inline] def sideCode : PortSide → UInt8

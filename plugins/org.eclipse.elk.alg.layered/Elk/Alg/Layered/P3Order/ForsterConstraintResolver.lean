@@ -501,10 +501,39 @@ def runM {α : Type} (r : ForsterConstraintResolver) (x : ForsterCtx → Forster
   | .ok v => return v
   | .error msg => throw (IO.userError msg)
 
+/-- Whether `process_constraints(nodes)` has no constraint to resolve: every node has a constraint
+group (`group_of` would not fail), no node has `IN_LAYER_SUCCESSOR_CONSTRAINTS` and no node has
+layout unit members. Then `build_constraints_graph` adds no constraint, `find_violated_constraint`
+finds none, and every group (`group_of` only ever yields the single-node groups of
+`init_node_level`) gives back its node: the order is unchanged and no barycenter is written. The
+fields that `build_constraints_graph`/`find_violated_constraint` reset on the groups are reset
+again before they are next read, so skipping the passes is not observable. -/
+def unconstrained (c : ForsterCtx) (groups : Array (Array (Option Nat))) (units : Std.HashMap LNodeId (Array LNodeId))
+    (nodes : Array LNodeId) : Bool :=
+  nodes.all fun n =>
+    (match (groups[c.layerIndex n]?).bind (·[c.nodeId n]?) with
+      | some (some _) => true
+      | _ => false) &&
+    (c.arena.node n).internal.inLayerSuccessorConstraints.isEmpty &&
+    (units.isEmpty || (units.getD n #[]).isEmpty)
+
 /-- `process_constraints(nodes)`: the reordered nodes (Rust rewrites the vector in place); the
-group barycenters are written to the nodes' states. -/
-def processConstraints (r : ForsterConstraintResolver) (nodes : Array LNodeId) : LayeredM (Array LNodeId) :=
-  r.runM fun c => ForsterM.processConstraints c r.constraintsBetweenNonDummies nodes
+group barycenters are written to the nodes' states. Without constraints (`unconstrained`) the
+passes are skipped; with `constraintsBetweenNonDummies` the groups are still re-initialised
+between them (`init_node_level(node, false)`), as in Rust. -/
+def processConstraints (r : ForsterConstraintResolver) (nodes : Array LNodeId) : LayeredM (Array LNodeId) := do
+  let c : ForsterCtx := { arena := ← get, snapshot := ← r.snapshot.get }
+  let groups ← r.constraintGroups.get
+  let units ← r.layoutUnits.get
+  if unconstrained c groups units nodes then
+    if r.constraintsBetweenNonDummies then
+      r.runM fun c => do
+        for node in nodes do
+          ForsterM.initNodeLevel c node false
+        return nodes
+    else return nodes
+  else
+    r.runM fun c => ForsterM.processConstraints c r.constraintsBetweenNonDummies nodes
 
 /-- `init_at_layer_level(layer_index, node_order)`. -/
 def initAtLayerLevel (r : ForsterConstraintResolver) (l : Nat) (order : Array (Array LNodeId)) : LayeredM Unit := do
