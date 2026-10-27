@@ -57,14 +57,16 @@ def resolveAlgorithm (node : NodeId) : ElkM (Except String Unit) := do
   if let some id := algorithmId then
     if ← resolveAndSetAlgorithm id node then return .ok ()
   if !(← mustResolve node) then return .ok ()
-  let g ← get
   match algorithmId with
   | none =>
     if ← resolveAndSetAlgorithm defaultLayoutAlgorithmId node then return .ok ()
+    -- the graph is read only on the error paths (holding it across the update would copy the arena)
+    let g ← get
     let message := ElkUtil.printElementPathInto g (.node node)
       s!"Unable to load default layout algorithm {defaultLayoutAlgorithmId} for unconfigured node "
     return .error s!"{unsupportedConfigurationExceptionClass}: {message}"
   | some id =>
+    let g ← get
     let message := ElkUtil.printElementPathInto g (.node node) s!"Layout algorithm '{id}' not found for "
     return .error s!"{unsupportedConfigurationExceptionClass}: {message}"
 

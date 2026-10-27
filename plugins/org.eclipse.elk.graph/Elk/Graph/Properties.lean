@@ -164,20 +164,34 @@ instance {α : Type} [ElkEnum α] : PropCodec α where
     | .proxy s => ElkEnum.ofNameLoose? s
     | _ => none
 
+namespace EnumSetParse
+
+/-- Token separators of `EnumSet.parse?`. -/
+@[inline] def isSep (b : UInt8) : Bool := b == 91 || b == 93 || b == 44 || ElkEnum.isWsByte b
+
+/-- End of the token starting at `i`. -/
+partial def tokenEnd (s : String) (stop i : Nat) : Nat :=
+  if i < stop && !isSep (ElkEnum.utf8ByteAt s i) then tokenEnd s stop (i + 1) else i
+
+/-- Parses the tokens from `i` on into `set`. -/
+partial def go {α : Type} [ElkEnum α] (s : String) (stop i : Nat) (set : EnumSet α) : Option (EnumSet α) :=
+  if i < stop then
+    if isSep (ElkEnum.utf8ByteAt s i) then go s stop (i + 1) set
+    else
+      let j := tokenEnd s stop i
+      match (ElkEnum.ofNameLooseRange? s i j : Option α) with
+      | some v => go s stop j (set.insert v)
+      | none => none
+  else some set
+
+end EnumSetParse
+
 /-- elk-rs `parse_enumset_value`: tokens split on `[`, `]`, `,` and whitespace;
 every token must parse, otherwise the whole value is rejected. -/
-def EnumSet.parse? {α : Type} [ElkEnum α] (s : String) : Option (EnumSet α) := Id.run do
-  let trimmed := s.trimAscii.toString
-  if trimmed.isEmpty then return some EnumSet.empty
-  let normalized := String.map (fun c => if c == '[' || c == ']' || c == ',' || c.isWhitespace then ' ' else c) trimmed
-  let mut set : EnumSet α := EnumSet.empty
-  for tok in normalized.splitOn " " do
-    let t := tok.trimAscii.toString
-    if t.isEmpty then continue
-    match (ElkEnum.ofNameLoose? t : Option α) with
-    | some v => set := set.insert v
-    | none => return none
-  return some set
+def EnumSet.parse? {α : Type} [ElkEnum α] (s : String) : Option (EnumSet α) :=
+  -- byte-wise: the separators are ASCII, so the tokens are the maximal runs of other bytes
+  -- (they hold no whitespace, so `trimAscii` keeps them as they are)
+  EnumSetParse.go s s.utf8ByteSize 0 EnumSet.empty
 
 instance {α : Type} [ElkEnum α] : PropCodec (EnumSet α) where
   enc s := .enumSet s.bits
@@ -292,31 +306,43 @@ def empty : PropertyMap := {}
 @[inline] def size (m : PropertyMap) : Nat := m.entries.size
 @[inline] def isEmpty (m : PropertyMap) : Bool := m.entries.isEmpty
 
+/-- Index of the entry with key `id`/`hash` from `i` on (`es.size` if absent). A plain loop:
+`Array.find?`/`findIdx?` go through `forIn` and allocate their loop state on a hit. -/
+private def indexFrom (es : Array (PropKey × PropValue)) (id : String) (hash : UInt64) (i : Nat) : Nat :=
+  if h : i < es.size then
+    let k := es[i].1
+    if k.hash == hash && k.id == id then i else indexFrom es id hash (i + 1)
+  else es.size
+termination_by es.size - i
+
+@[inline] private def indexOf (m : PropertyMap) (k : PropKey) : Nat := indexFrom m.entries k.id k.hash 0
+
 def findIdx? (m : PropertyMap) (k : PropKey) : Option Nat :=
-  m.entries.findIdx? (fun e => e.1 == k)
+  let i := m.indexOf k
+  if i < m.entries.size then some i else none
 
 /-- Raw stored value for a key (no default, no decoding). -/
 def getRaw? (m : PropertyMap) (k : PropKey) : Option PropValue :=
-  (m.entries.find? (fun e => e.1 == k)).map (·.2)
+  let i := m.indexOf k
+  if h : i < m.entries.size then some m.entries[i].2 else none
 
 def getRawById? (m : PropertyMap) (id : String) : Option PropValue :=
   m.getRaw? (PropKey.ofString id)
 
 /-- Stores a raw value (replacing an existing entry in place, keeping its position). -/
 def setRaw (m : PropertyMap) (k : PropKey) (v : PropValue) : PropertyMap :=
-  match m.findIdx? k with
-  | some i => { entries := m.entries.set! i (k, v) }
-  | none => { entries := m.entries.push (k, v) }
+  let i := m.indexOf k
+  if i < m.entries.size then { entries := m.entries.set! i (k, v) }
+  else { entries := m.entries.push (k, v) }
 
 def setRawById (m : PropertyMap) (id : String) (v : PropValue) : PropertyMap :=
   m.setRaw (PropKey.ofString id) v
 
 def removeRaw (m : PropertyMap) (k : PropKey) : PropertyMap :=
-  match m.findIdx? k with
-  | some i => { entries := m.entries.eraseIdx! i }
-  | none => m
+  let i := m.indexOf k
+  if i < m.entries.size then { entries := m.entries.eraseIdx! i } else m
 
-@[inline] def hasKey (m : PropertyMap) (k : PropKey) : Bool := (m.findIdx? k).isSome
+@[inline] def hasKey (m : PropertyMap) (k : PropKey) : Bool := m.indexOf k < m.entries.size
 
 @[inline] def hasId (m : PropertyMap) (id : String) : Bool := m.hasKey (PropKey.ofString id)
 
