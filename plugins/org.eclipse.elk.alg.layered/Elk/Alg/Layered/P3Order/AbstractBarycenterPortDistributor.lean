@@ -3,6 +3,7 @@ import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.P3Order.CrossMinSnapshot
 import Elk.Alg.Layered.P3Order.ISweepPortDistributor
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
+import Elk.Alg.Layered.P3Order.Counting.CrossMinUtil
 import Elk.Core.Util.Sort
 import Elk.Core.Util.Java
 /-!
@@ -40,6 +41,13 @@ Numerics follow Rust: ranks and the rank sum are computed in `f64` and stored ro
 arithmetic (every operation rounded with `Float.toF32`), `min`/`max` are `f64::min/max`.
 The `ELK_TRACE` timing and port-rank dumps are not reproduced. Port ids beyond `u32` (wrapped
 negative ids) never grow the arrays (Rust would abort).
+
+Performance (no Rust counterpart): ranks and barycenters are `FloatArray`s (unboxed), the
+snapshot path's loops are tail recursive over the state (whose scratch fields hold the running
+min/max barycenter and the in-layer ports, so nothing is allocated per port), `sort_ports`
+sorts the port list directly (the index tie-break of the keyed sort is implied by the stable
+sort), and a node is only rewritten when the sorted order or its side cache differs from the
+current one (`cachePortSides` would then not change it).
 -/
 namespace Elk.Alg.Layered.P3Order
 
@@ -57,13 +65,19 @@ inductive PortRankStrategy where
 /-- The mutable fields of `AbstractBarycenterPortDistributor`. -/
 structure BarycenterPortDistributorState where
   /-- `port_ranks` (by port id, `f32` values). -/
-  portRanks : Array Float := #[]
+  portRanks : FloatArray := FloatArray.empty
   /-- `node_positions[layer][node id]`: position of the node in the layer. -/
   nodePositions : Array (Array Nat) := #[]
   /-- `port_barycenter` (by port id, `f32` values). -/
-  portBarycenter : Array Float := #[]
+  portBarycenter : FloatArray := FloatArray.empty
   /-- `n_ports`: the next port id handed out by `initAtPortLevel`. -/
   nPorts : Nat := 0
+  /-- Scratch of the snapshot port iteration: `min_barycenter`. -/
+  minBarycenter : Float := 0.0
+  /-- Scratch of the snapshot port iteration: `max_barycenter`. -/
+  maxBarycenter : Float := 0.0
+  /-- Scratch of the snapshot port iteration: `in_layer_port_ids`. -/
+  inLayerPortIds : Array Nat := #[]
   deriving Inhabited
 
 namespace BarycenterPortDistributorState
@@ -78,9 +92,25 @@ namespace BarycenterPortDistributorState
   let m := n.toUInt32
   if m >= 2147483648 then -(((0 : UInt32) - m).toNat : Int) else (m.toNat : Int)
 
+/-- `n` zeros. -/
+def zeros (n : Nat) : FloatArray := Id.run do
+  let mut arr := FloatArray.emptyWithCapacity n
+  for _ in [0:n] do
+    arr := arr.push 0.0
+  return arr
+
 /-- Rust `Vec::resize(n, 0.0)`. -/
-@[inline] def resizeFloats (arr : Array Float) (n : Nat) : Array Float :=
-  if n <= arr.size then arr.extract 0 n else arr ++ Array.replicate (n - arr.size) 0.0
+def resizeFloats (arr : FloatArray) (n : Nat) : FloatArray := Id.run do
+  if n <= arr.size then
+    let mut out := FloatArray.emptyWithCapacity n
+    for i in [0:n] do
+      out := out.push (arr.get! i)
+    return out
+  else
+    let mut arr := arr
+    for _ in [0:n - arr.size] do
+      arr := arr.push 0.0
+    return arr
 
 /-- `ensure_port_capacity(port_id)`: grows both id-indexed arrays to `pid + 1`. -/
 def ensurePortCapacity (st : BarycenterPortDistributorState) (pid : Nat) : BarycenterPortDistributorState :=
@@ -88,34 +118,31 @@ def ensurePortCapacity (st : BarycenterPortDistributorState) (pid : Nat) : Baryc
     { st with portRanks := resizeFloats st.portRanks (pid + 1), portBarycenter := resizeFloats st.portBarycenter (pid + 1) }
   else st
 
-/-- `port_ranks[pid] = v`. -/
+/-- `port_ranks[pid] = v` (no-op out of range). -/
 @[inline] def setRank (st : BarycenterPortDistributorState) (pid : Nat) (v : Float) : BarycenterPortDistributorState :=
-  -- take the array out first so that it is updated in place (`{ st with f := st.f.set … }` keeps
-  -- a second reference alive during the update and copies the array)
-  let ranks := st.portRanks
-  let st := { st with portRanks := #[] }
-  { st with portRanks := ranks.setIfInBounds pid v }
+  { st with portRanks := st.portRanks.set! pid v }
 
 /-- `port_ranks.get(pid).unwrap_or(0.0)`. -/
-@[inline] def rankOf (st : BarycenterPortDistributorState) (pid : Nat) : Float := st.portRanks[pid]?.getD 0.0
+@[inline] def rankOf (st : BarycenterPortDistributorState) (pid : Nat) : Float := st.portRanks.get! pid
 
-/-- `port_barycenter[pid] = v`. -/
+/-- `port_barycenter[pid] = v` (no-op out of range). -/
 @[inline] def setBarycenter (st : BarycenterPortDistributorState) (pid : Nat) (v : Float) : BarycenterPortDistributorState :=
-  let bary := st.portBarycenter
-  let st := { st with portBarycenter := #[] }
-  { st with portBarycenter := bary.setIfInBounds pid v }
+  { st with portBarycenter := st.portBarycenter.set! pid v }
 
 /-- `port_barycenter.get(pid).unwrap_or(0.0)`. -/
-@[inline] def barycenterOf (st : BarycenterPortDistributorState) (pid : Nat) : Float := st.portBarycenter[pid]?.getD 0.0
+@[inline] def barycenterOf (st : BarycenterPortDistributorState) (pid : Nat) : Float := st.portBarycenter.get! pid
 
 /-- `node_positions.get(layer).and_then(|p| p.get(node)).unwrap_or(node)`. -/
 @[inline] def positionIn (st : BarycenterPortDistributorState) (layerIndex nodeIndex : Nat) : Nat :=
-  ((st.nodePositions[layerIndex]?).bind (·[nodeIndex]?)).getD nodeIndex
+  if h : layerIndex < st.nodePositions.size then
+    let positions := st.nodePositions[layerIndex]
+    if h2 : nodeIndex < positions.size then positions[nodeIndex] else nodeIndex
+  else nodeIndex
 
 /-- Ensures capacity for the largest of `pids` (the snapshot rank paths). -/
 def ensureForAll (st : BarycenterPortDistributorState) (pids : Array Nat) : BarycenterPortDistributorState :=
-  match pids.foldl (fun m p => some (match m with | some x => max x p | none => p)) none with
-  | some maxPid => st.ensurePortCapacity maxPid
+  match pids[0]? with
+  | some first => st.ensurePortCapacity (pids.foldl max first)
   | none => st
 
 end BarycenterPortDistributorState
@@ -124,45 +151,129 @@ open BarycenterPortDistributorState
 
 /-! ## Port ranks -/
 
-/-- `calculate_port_ranks_node_relative`, snapshot path: `pids` are the captured ids of the
-node's current ports. -/
-def ranksNodeRelativeSnap (s : CrossMinSnapshot) (pids : Array Nat) (st : BarycenterPortDistributorState)
-    (rankSum : Float) (portType : PortType) : BarycenterPortDistributorState × Float := Id.run do
-  let mut st := st.ensureForAll pids
+/-! ### Snapshot path
+
+The node's *current* ports mapped to captured ids (`ports.map s.portId` in elk-rs), walked in
+place by tail-recursive loops. -/
+
+/-- Whether the captured port has incoming edges with a source (`port_predecessors` non-empty). -/
+@[inline] def hasPredecessors (s : CrossMinSnapshot) (pid : Nat) : Bool :=
+  if h : pid < s.portIns.size then !s.portIns[pid].isEmpty else false
+
+/-- Whether the captured port has outgoing edges with a target (`port_successors` non-empty). -/
+@[inline] def hasSuccessors (s : CrossMinSnapshot) (pid : Nat) : Bool :=
+  if h : pid < s.portOuts.size then !s.portOuts[pid].isEmpty else false
+
+/-- Whether the captured port lies on the north side. -/
+@[inline] def isNorthPort (s : CrossMinSnapshot) (pid : Nat) : Bool :=
+  if h : pid < s.portSides.size then sideIs s.portSides[pid] .north else false
+
+/-- The largest captured id of `ports[i:]` (at least `acc`). -/
+partial def maxPortIdFrom (s : CrossMinSnapshot) (ports : Array LPortId) (i acc : Nat) : Nat :=
+  if h : i < ports.size then maxPortIdFrom s ports (i + 1) (max acc (s.portId ports[i])) else acc
+
+/-- `ensure_port_capacity` for the largest captured id of the node's ports (`ensureForAll`). -/
+@[inline] def ensureForPorts (s : CrossMinSnapshot) (ports : Array LPortId) (st : BarycenterPortDistributorState) :
+    BarycenterPortDistributorState :=
+  if h : 0 < ports.size then st.ensurePortCapacity (maxPortIdFrom s ports 1 (s.portId ports[0])) else st
+
+/-- Number of ports of `ports[i:]` with predecessors (`north`: only northern ones). -/
+partial def countWithPredecessors (s : CrossMinSnapshot) (ports : Array LPortId) (north : Bool) (i acc : Nat) : Nat :=
+  if h : i < ports.size then
+    let pid := s.portId ports[i]
+    let counts := hasPredecessors s pid && (!north || isNorthPort s pid)
+    countWithPredecessors s ports north (i + 1) (if counts then acc + 1 else acc)
+  else acc
+
+/-- Number of ports of `ports[i:]` with successors. -/
+partial def countWithSuccessors (s : CrossMinSnapshot) (ports : Array LPortId) (i acc : Nat) : Nat :=
+  if h : i < ports.size then
+    countWithSuccessors s ports (i + 1) (if hasSuccessors s (s.portId ports[i]) then acc + 1 else acc)
+  else acc
+
+/-- The input rank assignment of both strategies: northern ports get `northPos` (then
+`- step`), the others `restPos` (then `- step`). -/
+partial def assignInputRanks (s : CrossMinSnapshot) (ports : Array LPortId) (i : Nat) (step northPos restPos : Float)
+    (ranks : FloatArray) : FloatArray :=
+  if h : i < ports.size then
+    let pid := s.portId ports[i]
+    if hasPredecessors s pid then
+      if isNorthPort s pid then
+        assignInputRanks s ports (i + 1) step (northPos - step) restPos (ranks.set! pid (f32t northPos))
+      else
+        assignInputRanks s ports (i + 1) step northPos (restPos - step) (ranks.set! pid (f32t restPos))
+    else assignInputRanks s ports (i + 1) step northPos restPos ranks
+  else ranks
+
+/-- The node-relative output rank assignment: `pos`, then `+ incr`. -/
+partial def assignOutputRanksNodeRelative (s : CrossMinSnapshot) (ports : Array LPortId) (i : Nat) (incr pos : Float)
+    (ranks : FloatArray) : FloatArray :=
+  if h : i < ports.size then
+    let pid := s.portId ports[i]
+    if hasSuccessors s pid then
+      assignOutputRanksNodeRelative s ports (i + 1) incr (pos + incr) (ranks.set! pid (f32t pos))
+    else assignOutputRanksNodeRelative s ports (i + 1) incr pos ranks
+  else ranks
+
+/-- The layer-total output rank assignment: `rankSum + pos` with `pos` counting from `1`. -/
+partial def assignOutputRanksLayerTotal (s : CrossMinSnapshot) (ports : Array LPortId) (i : Nat) (rankSum pos : Float)
+    (ranks : FloatArray) : FloatArray :=
+  if h : i < ports.size then
+    let pid := s.portId ports[i]
+    if hasSuccessors s pid then
+      let pos := pos + 1.0
+      assignOutputRanksLayerTotal s ports (i + 1) rankSum pos (ranks.set! pid (f32t (rankSum + pos)))
+    else assignOutputRanksLayerTotal s ports (i + 1) rankSum pos ranks
+  else ranks
+
+/-- `calculate_port_ranks_node_relative`, snapshot path, on the node's current `ports`: the
+updated state (the node consumes rank `1`). -/
+def ranksNodeRelativeSnap (s : CrossMinSnapshot) (ports : Array LPortId) (st : BarycenterPortDistributorState)
+    (rankSum : Float) (portType : PortType) : BarycenterPortDistributorState :=
+  let st := ensureForPorts s ports st
   match portType with
   | .input =>
-    let mut inputCount : Nat := 0
-    let mut northInputCount : Nat := 0
-    for pid in pids do
-      if !(s.portPredecessors pid).isEmpty then
-        inputCount := inputCount + 1
-        if s.portSideOf pid == .north then northInputCount := northInputCount + 1
-    if inputCount == 0 then return (st, 1.0)
-    let incr := 1.0 / (inputCount.toFloat + 1.0)
-    let mut northPos := rankSum + northInputCount.toFloat * incr
-    let mut restPos := rankSum + 1.0 - incr
-    for pid in pids do
-      if (s.portPredecessors pid).isEmpty then continue
-      if s.portSideOf pid == .north then
-        st := st.setRank pid (f32t northPos)
-        northPos := northPos - incr
-      else
-        st := st.setRank pid (f32t restPos)
-        restPos := restPos - incr
-    return (st, 1.0)
+    let inputCount := countWithPredecessors s ports false 0 0
+    if inputCount == 0 then st
+    else
+      let incr := 1.0 / (inputCount.toFloat + 1.0)
+      let northInputCount := countWithPredecessors s ports true 0 0
+      let ranks := assignInputRanks s ports 0 incr (rankSum + northInputCount.toFloat * incr) (rankSum + 1.0 - incr)
+        st.portRanks
+      { st with portRanks := ranks }
   | .output =>
-    let mut outputCount : Nat := 0
-    for pid in pids do
-      if !(s.portSuccessors pid).isEmpty then outputCount := outputCount + 1
-    if outputCount == 0 then return (st, 1.0)
-    let incr := 1.0 / (outputCount.toFloat + 1.0)
-    let mut pos := rankSum + incr
-    for pid in pids do
-      if (s.portSuccessors pid).isEmpty then continue
-      st := st.setRank pid (f32t pos)
-      pos := pos + incr
-    return (st, 1.0)
-  | .undefined => return (st, 1.0)
+    let outputCount := countWithSuccessors s ports 0 0
+    if outputCount == 0 then st
+    else
+      let incr := 1.0 / (outputCount.toFloat + 1.0)
+      { st with portRanks := assignOutputRanksNodeRelative s ports 0 incr (rankSum + incr) st.portRanks }
+  | .undefined => st
+
+/-- `calculate_port_ranks_layer_total`, snapshot path, on the node's current `ports`. -/
+def ranksLayerTotalSnap (s : CrossMinSnapshot) (ports : Array LPortId) (st : BarycenterPortDistributorState)
+    (rankSum : Float) (portType : PortType) : BarycenterPortDistributorState :=
+  let st := ensureForPorts s ports st
+  match portType with
+  | .input =>
+    let inputCount := countWithPredecessors s ports false 0 0
+    if inputCount == 0 then st
+    else
+      let northInputCount := countWithPredecessors s ports true 0 0
+      let ranks := assignInputRanks s ports 0 1.0 (rankSum + northInputCount.toFloat) (rankSum + inputCount.toFloat)
+        st.portRanks
+      { st with portRanks := ranks }
+  | .output => { st with portRanks := assignOutputRanksLayerTotal s ports 0 rankSum 0.0 st.portRanks }
+  | .undefined => st
+
+/-- The rank consumed by a node in the snapshot path (`1` node-relative; layer-total: the
+number of input ports with predecessors, resp. output ports with successors). -/
+def consumedRankSnap (strategy : PortRankStrategy) (s : CrossMinSnapshot) (ports : Array LPortId) (portType : PortType) :
+    Float :=
+  match strategy, portType with
+  | .nodeRelative, _ => 1.0
+  | .layerTotal, .input => (countWithPredecessors s ports false 0 0).toFloat
+  | .layerTotal, .output => (countWithSuccessors s ports 0 0).toFloat
+  | .layerTotal, .undefined => 0.0
 
 /-- `calculate_port_ranks_node_relative`, lock path (live ports, `ports_by_type`). -/
 def ranksNodeRelativeLock (a : LGraphArena) (node : LNodeId) (st : BarycenterPortDistributorState)
@@ -208,39 +319,6 @@ def ranksNodeRelativeLock (a : LGraphArena) (node : LNodeId) (st : BarycenterPor
     return (st, 1.0)
   | .undefined => return (st, 1.0)
 
-/-- `calculate_port_ranks_layer_total`, snapshot path. -/
-def ranksLayerTotalSnap (s : CrossMinSnapshot) (pids : Array Nat) (st : BarycenterPortDistributorState)
-    (rankSum : Float) (portType : PortType) : BarycenterPortDistributorState × Float := Id.run do
-  let mut st := st.ensureForAll pids
-  match portType with
-  | .input =>
-    let mut inputCount : Nat := 0
-    let mut northInputCount : Nat := 0
-    for pid in pids do
-      if !(s.portPredecessors pid).isEmpty then
-        inputCount := inputCount + 1
-        if s.portSideOf pid == .north then northInputCount := northInputCount + 1
-    if inputCount == 0 then return (st, 0.0)
-    let mut northPos := rankSum + northInputCount.toFloat
-    let mut restPos := rankSum + inputCount.toFloat
-    for pid in pids do
-      if (s.portPredecessors pid).isEmpty then continue
-      if s.portSideOf pid == .north then
-        st := st.setRank pid (f32t northPos)
-        northPos := northPos - 1.0
-      else
-        st := st.setRank pid (f32t restPos)
-        restPos := restPos - 1.0
-    return (st, inputCount.toFloat)
-  | .output =>
-    let mut pos : Float := 0.0
-    for pid in pids do
-      if (s.portSuccessors pid).isEmpty then continue
-      pos := pos + 1.0
-      st := st.setRank pid (f32t (rankSum + pos))
-    return (st, pos)
-  | .undefined => return (st, 0.0)
-
 /-- `calculate_port_ranks_layer_total`, lock path. -/
 def ranksLayerTotalLock (a : LGraphArena) (node : LNodeId) (st : BarycenterPortDistributorState)
     (rankSum : Float) (portType : PortType) : BarycenterPortDistributorState × Float := Id.run do
@@ -279,13 +357,16 @@ def ranksLayerTotalLock (a : LGraphArena) (node : LNodeId) (st : BarycenterPortD
     return (st, pos)
   | .undefined => return (st, 0.0)
 
-/-- `calculate_port_ranks_for_node(node, rank_sum, port_type)`: the rank consumed by the node. -/
+/-- `calculate_port_ranks_for_node(node, rank_sum, port_type)`: the updated state and the rank
+consumed by the node. -/
 def ranksForNode (strategy : PortRankStrategy) (snap : Option CrossMinSnapshot) (a : LGraphArena) (node : LNodeId)
     (st : BarycenterPortDistributorState) (rankSum : Float) (portType : PortType) : BarycenterPortDistributorState × Float :=
   match strategy, snap with
-  | .nodeRelative, some s => ranksNodeRelativeSnap s ((a.node node).ports.map s.portId) st rankSum portType
+  | .nodeRelative, some s => (ranksNodeRelativeSnap s (a.node node).ports st rankSum portType, 1.0)
   | .nodeRelative, none => ranksNodeRelativeLock a node st rankSum portType
-  | .layerTotal, some s => ranksLayerTotalSnap s ((a.node node).ports.map s.portId) st rankSum portType
+  | .layerTotal, some s =>
+    let ports := (a.node node).ports
+    (ranksLayerTotalSnap s ports st rankSum portType, consumedRankSnap .layerTotal s ports portType)
   | .layerTotal, none => ranksLayerTotalLock a node st rankSum portType
 
 /-! ## Barycenter values -/
@@ -378,46 +459,60 @@ def inLayerValue (side : PortSide) (sum conns nodeIndexInLayer layerSize : Int) 
 
 /-! ### Snapshot path -/
 
-/-- The ranks of the far ends of a non-north/south port (`+` successors, `-` predecessors);
-`none` as soon as a far end lies in the node's layer (Rust `continue 'port_iteration`). -/
-def connectedRankSumSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState) (pid nodeLayer : Nat) : Option Float := Id.run do
-  let mut sum : Float := 0.0
-  for target in s.portSuccessors pid do
-    if s.portOwnerLayer target == nodeLayer then return none
-    sum := f32t (sum + f32t (st.rankOf target))
-  for source in s.portPredecessors pid do
-    if s.portOwnerLayer source == nodeLayer then return none
-    sum := f32t (sum - f32t (st.rankOf source))
-  return some sum
+/-- Whether a far end of `targets[i:]` lies in layer `nodeLayer` (Rust `continue 'port_iteration`). -/
+partial def anyEndInLayer (s : CrossMinSnapshot) (targets : Array Nat) (nodeLayer i : Nat) : Bool :=
+  if h : i < targets.size then
+    if s.portOwnerLayer targets[i] == nodeLayer then true else anyEndInLayer s targets nodeLayer (i + 1)
+  else false
 
-/-- The port loop of `distribute_ports_for_iter_snap`: barycenters of `pids`, the in-layer
-ports and the min/max barycenter. -/
-def iteratePortsSnap (s : CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId)
-    (pids : Array Nat) (layerSize : Nat) : BarycenterPortDistributorState × Array Nat × Float × Float := Id.run do
-  let absurdlyLargeFloat := f32t (2 * layerSize + 1).toFloat
-  let nodeLayer := s.nodeLayerIndex node
-  let mut st := st
-  let mut inLayer : Array Nat := #[]
-  let mut minB : Float := 0.0
-  let mut maxB : Float := 0.0
-  for pid in pids do
-    let side := s.portSideOf pid
-    let northSouth := side == .north || side == .south
-    let mut sum : Float := 0.0
-    if northSouth then
-      let some portRef := s.portRefOpt pid | continue
-      let some dummy := (a.port portRef).internal.portDummy | continue
-      -- Rust: `self.snapshot` is taken while distributing, so the lock path runs
-      sum := f32t (sum + f32t (dealWithNorthSouthPorts none a st absurdlyLargeFloat portRef dummy))
+/-- `f32` sum of the ranks of `targets[i:]` (`sign`: added, else subtracted). -/
+partial def rankSumOf (ranks : FloatArray) (targets : Array Nat) (add : Bool) (i : Nat) (sum : Float) : Float :=
+  if h : i < targets.size then
+    let r := f32t (ranks.get! targets[i])
+    rankSumOf ranks targets add (i + 1) (if add then f32t (sum + r) else f32t (sum - r))
+  else sum
+
+/-- The end of the Rust port loop on the state: `sum / degree` (or the north/south sum) is stored
+and the running `f64` min/max (scratch fields) are updated. -/
+@[inline] def recordBarycenterSt (st : BarycenterPortDistributorState) (pid : Nat) (degree : Nat) (sum : Float)
+    (northSouth : Bool) : BarycenterPortDistributorState :=
+  let st := st.ensurePortCapacity pid
+  if degree > 0 then
+    let value := f32t (sum / f32t degree.toFloat)
+    { st with portBarycenter := st.portBarycenter.set! pid value,
+              minBarycenter := fmin st.minBarycenter value, maxBarycenter := fmax st.maxBarycenter value }
+  else if northSouth then { st with portBarycenter := st.portBarycenter.set! pid sum }
+  else st
+
+/-- The port loop of `distribute_ports_for_iter_snap` over the captured ports `pids[i:]` on
+`side`: barycenters, in-layer ports and the min/max barycenter in the state's scratch fields. -/
+partial def iteratePortsSnapLoop (s : CrossMinSnapshot) (a : LGraphArena) (pids : Array Nat) (side : PortSide)
+    (absurdlyLargeFloat : Float) (nodeLayer i : Nat) (st : BarycenterPortDistributorState) : BarycenterPortDistributorState :=
+  if h : i < pids.size then
+    let pid := pids[i]
+    let pside := s.portSideOf pid
+    if !sideIs pside side then iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) st
     else
-      match connectedRankSumSnap s st pid nodeLayer with
-      | none =>
-        inLayer := inLayer.push pid
-        continue
-      | some v => sum := v
-    let degree : Int := (s.portPredecessors pid).size + (s.portSuccessors pid).size
-    (st, minB, maxB) := recordBarycenter st pid degree sum northSouth minB maxB
-  return (st, inLayer, minB, maxB)
+      let preds := s.portPredecessors pid
+      let succs := s.portSuccessors pid
+      let degree := preds.size + succs.size
+      if sideIs pside .north || sideIs pside .south then
+        match s.portRefOpt pid with
+        | none => iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) st
+        | some portRef =>
+          match (a.port portRef).internal.portDummy with
+          | none => iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) st
+          | some dummy =>
+            -- Rust: `self.snapshot` is taken while distributing, so the lock path runs
+            let sum := f32t (0.0 + f32t (dealWithNorthSouthPorts none a st absurdlyLargeFloat portRef dummy))
+            iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) (recordBarycenterSt st pid degree sum true)
+      else if anyEndInLayer s succs nodeLayer 0 || anyEndInLayer s preds nodeLayer 0 then
+        iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1)
+          { st with inLayerPortIds := st.inLayerPortIds.push pid }
+      else
+        let sum := rankSumOf st.portRanks preds false 0 (rankSumOf st.portRanks succs true 0 0.0)
+        iteratePortsSnapLoop s a pids side absurdlyLargeFloat nodeLayer (i + 1) (recordBarycenterSt st pid degree sum false)
+  else st
 
 /-- `calculate_in_layer_ports_snap(node, node_id, layer_index, layer_size)`. -/
 def inLayerPortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState) (node : LNodeId) (nodeId : Int)
@@ -445,11 +540,19 @@ def inLayerPortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState
       st := st.setBarycenter pid v
   return st
 
-/-- `distribute_ports_for_iter_snap(node, port_ids, node_id, layer_index, layer_size)`. -/
-def distributePortsForIterSnap (s : CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId)
-    (pids : Array Nat) (nodeId : Int) (layerIndex layerSize : Nat) : BarycenterPortDistributorState :=
-  let (st, inLayer, minB, maxB) := iteratePortsSnap s a st node pids layerSize
-  if inLayer.isEmpty then st else inLayerPortsSnap s st node nodeId layerIndex layerSize inLayer minB maxB
+/-- `distribute_ports_for_iter_snap(node, port_ids, node_id, layer_index, layer_size)` for the
+captured ports `portIds` on `side` (Rust partitions them into a buffer first). -/
+def distributePortsForSideSnap (s : CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState)
+    (node : LNodeId) (portIds : Array Nat) (side : PortSide) (nodeId : Int) (layerIndex layerSize : Nat) :
+    BarycenterPortDistributorState :=
+  let st := { st with minBarycenter := 0.0, maxBarycenter := 0.0, inLayerPortIds := #[] }
+  let st := iteratePortsSnapLoop s a portIds side (f32t (2 * layerSize + 1).toFloat) (s.nodeLayerIndex node) 0 st
+  if st.inLayerPortIds.isEmpty then st
+  else
+    let inLayer := st.inLayerPortIds
+    let minB := st.minBarycenter
+    let maxB := st.maxBarycenter
+    inLayerPortsSnap s { st with inLayerPortIds := #[] } node nodeId layerIndex layerSize inLayer minB maxB
 
 /-- Rust comparator on two barycenters of the same side: `0.0` (no barycenter) first, then
 `partial_cmp` (NaN compares equal). -/
@@ -556,16 +659,64 @@ def distributePortsForIterLock (a : LGraphArena) (st : BarycenterPortDistributor
   let (st, inLayer, minB, maxB) := iteratePortsLock a st node ports
   if inLayer.isEmpty then st else inLayerPortsLock a st node nodeId layerIndex layerSize inLayer minB maxB
 
-/-- `sort_ports(node)` (lock path): the current ports sorted by (side, barycenter, index). -/
+/-- `sort_ports(node)` (lock path): the current ports sorted by (side, barycenter, index). The
+stable sort only ever compares an element with one that was before it in the input, so the index
+tie-break never decides and the ports are sorted directly by (side, barycenter). -/
 def sortPortsLock (a : LGraphArena) (st : BarycenterPortDistributorState) (node : LNodeId) : Array LPortId :=
-  let keyed := (a.node node).ports.mapIdx fun idx p =>
-    let pt := a.port p
-    (pt.side, st.barycenterOf (asUsize pt.id), idx, p)
-  let sorted := stableSort keyed fun (side1, bary1, idx1, _) (side2, bary2, idx2, _) =>
-    let ord := if side1 != side2 then compare (ElkEnum.ordinal side1) (ElkEnum.ordinal side2)
-      else compareBarycenters bary1 bary2
-    if ord == .eq then compare idx1 idx2 else ord
-  sorted.map fun (_, _, _, p) => p
+  let ports := (a.node node).ports
+  if ports.size < 2 then ports
+  else
+    let bary := st.portBarycenter
+    stableSort ports fun p q =>
+      let pt := a.port p
+      let qt := a.port q
+      let s1 := sideCode pt.side
+      let s2 := sideCode qt.side
+      if s1 != s2 then compare s1 s2
+      else compareBarycenters (bary.get! (asUsize pt.id)) (bary.get! (asUsize qt.id))
+
+/-- Whether ports `xs[i:]` and `ys[i:]` are the same. -/
+partial def samePortsFrom (xs ys : Array LPortId) (i : Nat) : Bool :=
+  if h : i < xs.size then
+    if h2 : i < ys.size then xs[i].idx == ys[i].idx && samePortsFrom xs ys (i + 1) else false
+  else true
+
+/-- Whether two port lists are the same. -/
+@[inline] def samePorts (xs ys : Array LPortId) : Bool := xs.size == ys.size && samePortsFrom xs ys 0
+
+/-- Start of the run of ports on `side` that ends with `ports[j]`. -/
+partial def runStart (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (j : Nat) : Nat :=
+  if j == 0 then 0
+  else match ports[j - 1]? with
+    | some p => if sideIs (a.port p).side side then runStart a ports side (j - 1) else j
+    | none => j
+
+/-- `LNode.findPortIndices()`'s entry of `side` for `ports[0:i]` (the last maximal run of ports on
+`side`), compared with a cached entry. -/
+partial def lastRunMatches (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (i : Nat)
+    (cached : Option (Nat × Nat)) : Bool :=
+  if i == 0 then cached.isNone
+  else match ports[i - 1]? with
+    | some p =>
+      if sideIs (a.port p).side side then
+        match cached with
+        | some (first, last) => last == i && first == runStart a ports side (i - 1)
+        | none => false
+      else lastRunMatches a ports side (i - 1) cached
+    | none => false
+
+/-- Whether `cachePortSides()` on a node with port list `ports` would leave its cache unchanged:
+the cache is enabled and its stored indices equal `findPortIndices()` of `ports`. -/
+def portSideCacheMatches (a : LGraphArena) (nd : LNode) (ports : Array LPortId) : Bool :=
+  if !nd.portSidesCached then false
+  else match nd.portSideIndices with
+    | none => false
+    | some idx =>
+      idx.size == 5 &&
+        (ElkEnum.values : Array PortSide).all fun side =>
+          match idx[ElkEnum.ordinal side]? with
+          | some entry => lastRunMatches a ports side ports.size entry
+          | none => false
 
 /-! ## The distributor -/
 
@@ -590,26 +741,48 @@ def new (numLayers : Nat) (strategy : PortRankStrategy) : BaseIO AbstractBarycen
 /-- `set_snapshot(snapshot)` (`BarycenterPortDistributor` trait). -/
 def setSnapshot (d : AbstractBarycenterPortDistributor) (s : CrossMinSnapshot) : BaseIO Unit := d.snapshot.set (some s)
 
+/-- `port_ranks()` (shared until the next update). -/
+def portRanksF (d : AbstractBarycenterPortDistributor) : BaseIO FloatArray := do
+  return (← d.state.get).portRanks
+
 /-- `port_ranks()` (a copy). -/
 def portRanks (d : AbstractBarycenterPortDistributor) : BaseIO (Array Float) := do
-  return (← d.state.get).portRanks
+  return (← d.state.get).portRanks.data
 
 /-- `port_barycenter` (a copy; testing/debugging). -/
 def portBarycenters (d : AbstractBarycenterPortDistributor) : BaseIO (Array Float) := do
-  return (← d.state.get).portBarycenter
+  return (← d.state.get).portBarycenter.data
+
+/-- The node loop of `calculate_port_ranks` in the snapshot path. -/
+partial def calculatePortRanksSnapLoop (strategy : PortRankStrategy) (s : CrossMinSnapshot) (a : LGraphArena)
+    (layer : Array LNodeId) (portType : PortType) (i : Nat) (rankSum : Float) (st : BarycenterPortDistributorState) :
+    BarycenterPortDistributorState :=
+  if h : i < layer.size then
+    let ports := (a.node layer[i]).ports
+    let st := match strategy with
+      | .nodeRelative => ranksNodeRelativeSnap s ports st rankSum portType
+      | .layerTotal => ranksLayerTotalSnap s ports st rankSum portType
+    calculatePortRanksSnapLoop strategy s a layer portType (i + 1) (rankSum + consumedRankSnap strategy s ports portType) st
+  else st
+
+/-- `calculate_port_ranks(layer, port_type)` on an explicit state. -/
+def calculatePortRanksPure (strategy : PortRankStrategy) (snap : Option CrossMinSnapshot) (a : LGraphArena)
+    (st : BarycenterPortDistributorState) (layer : Array LNodeId) (portType : PortType) : BarycenterPortDistributorState :=
+  match snap with
+  | some s => calculatePortRanksSnapLoop strategy s a layer portType 0 0.0 st
+  | none => Id.run do
+    let mut st := st
+    let mut consumedRank : Float := 0.0
+    for node in layer do
+      let (st', consumed) := ranksForNode strategy none a node st consumedRank portType
+      st := st'
+      consumedRank := consumedRank + consumed
+    return st
 
 /-- `calculate_port_ranks(layer, port_type)` on an explicit state. -/
 def calculatePortRanksOn (d : AbstractBarycenterPortDistributor) (st : BarycenterPortDistributorState)
     (layer : Array LNodeId) (portType : PortType) : LayeredM BarycenterPortDistributorState := do
-  let a ← get
-  let snap ← d.snapshot.get
-  let mut st := st
-  let mut consumedRank : Float := 0.0
-  for node in layer do
-    let (st', consumed) := ranksForNode d.strategy snap a node st consumedRank portType
-    st := st'
-    consumedRank := consumedRank + consumed
-  return st
+  return calculatePortRanksPure d.strategy (← d.snapshot.get) (← get) st layer portType
 
 /-- `calculate_port_ranks(layer, port_type)`: ranks of the layer's ports of the given type,
 written to the rank array. -/
@@ -619,29 +792,37 @@ def calculatePortRanks (d : AbstractBarycenterPortDistributor) (layer : Array LN
   let st ← d.calculatePortRanksOn st layer portType
   d.state.set st
 
-/-- Writes a sorted port list (`*ports_mut() = ports; cache_port_sides()`). -/
+/-- Writes a sorted port list (`*ports_mut() = ports; cache_port_sides()`). The node is left
+untouched when the list and its side cache would not change, and the cache is not recomputed when
+it already matches the new list. -/
 private def setPorts (node : LNodeId) (ports : Array LPortId) : LayeredM Unit := do
-  modifyNode node fun x => { x with ports := ports }
-  cachePortSides node
+  let a ← get
+  let nd := a.node node
+  let samePortList := samePorts nd.ports ports
+  let cacheMatches := portSideCacheMatches a nd ports
+  if samePortList && cacheMatches then return
+  if cacheMatches then
+    modifyNode node fun x => { x with ports := ports }
+  else
+    modifyNode node fun x => { x with ports := ports }
+    cachePortSides node
 
 /-- `distribute_ports_snap(node, side, layer_index, layer_size)`. -/
 private def distributePortsSnap (s : CrossMinSnapshot) (st : BarycenterPortDistributorState) (node : LNodeId)
     (side : PortSide) (layerIndex layerSize : Nat) : LayeredM BarycenterPortDistributorState := do
   let a ← get
+  let constraints := (a.node node).props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
+  if constraints.isOrderFixed then return st
   let flat := s.nodeFlatIndex node
   let nodeId := toI32 (s.nodeGraphIdOf flat)
-  let constraints := (a.node node).props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
   let portIds := s.nodePorts flat
-  let sideIds := portIds.filter (s.portSideOf · == side)
-  let southIds := portIds.filter (s.portSideOf · == .south)
-  let northIds := portIds.filter (s.portSideOf · == .north)
-  if constraints.isOrderFixed then return st
-  let st := distributePortsForIterSnap s a st node sideIds nodeId layerIndex layerSize
-  let st := distributePortsForIterSnap s a st node southIds nodeId layerIndex layerSize
-  let st := distributePortsForIterSnap s a st node northIds nodeId layerIndex layerSize
+  let st := distributePortsForSideSnap s a st node portIds side nodeId layerIndex layerSize
+  let st := distributePortsForSideSnap s a st node portIds .south nodeId layerIndex layerSize
+  let st := distributePortsForSideSnap s a st node portIds .north nodeId layerIndex layerSize
   -- Rust `sort_ports(node)` runs while `distribute_ports` holds the snapshot taken out of
   -- `self.snapshot`, so its lock fallback sorts the *current* port order (index tie-break)
-  setPorts node (sortPortsLock a st node)
+  let sorted := sortPortsLock a st node
+  setPorts node sorted
   return st
 
 /-- `distribute_ports(node, side, layer_index, layer_size)` (lock path). -/
@@ -668,22 +849,26 @@ def distributePorts (snap : Option CrossMinSnapshot) (st : BarycenterPortDistrib
   | some s => distributePortsSnap s st node side layerIndex layerSize
   | none => distributePortsLock st node side layerIndex layerSize
 
+/-- The loop of `update_node_positions`: `positions[node id] := index` for `layer[index:]`. -/
+partial def updateNodePositionsLoop (snap : Option CrossMinSnapshot) (a : LGraphArena) (layer : Array LNodeId)
+    (index : Nat) (positions : Array Nat) : Array Nat :=
+  if h : index < layer.size then
+    let node := layer[index]
+    let nid := match snap with
+      | some s => s.nodeId node
+      | none => asUsize (a.node node).id
+    let positions := if nid >= positions.size && nid >>> 32 == 0 then
+        positions ++ Array.replicate (nid + 1 - positions.size) 0
+      else positions
+    updateNodePositionsLoop snap a layer (index + 1) (positions.setIfInBounds nid index)
+  else positions
+
 /-- `update_node_positions(node_order, current_index)`. -/
 def updateNodePositions (snap : Option CrossMinSnapshot) (a : LGraphArena) (st : BarycenterPortDistributorState)
     (order : Array (Array LNodeId)) (currentIndex : Nat) : BarycenterPortDistributorState :=
   if currentIndex < st.nodePositions.size then
     let layer := order[currentIndex]?.getD #[]
-    { st with nodePositions := st.nodePositions.modify currentIndex fun positions => Id.run do
-        let mut positions := positions
-        for h : index in [0:layer.size] do
-          let node := layer[index]
-          let nid := match snap with
-            | some s => s.nodeId node
-            | none => asUsize (a.node node).id
-          if nid >= positions.size && nid >>> 32 == 0 then
-            positions := positions ++ Array.replicate (nid + 1 - positions.size) 0
-          positions := positions.setIfInBounds nid index
-        return positions }
+    { st with nodePositions := st.nodePositions.modify currentIndex (updateNodePositionsLoop snap a layer 0 ·) }
   else st
 
 /-- `has_nested_graph(node)`. -/
@@ -755,7 +940,7 @@ def initAtPortLevel (d : AbstractBarycenterPortDistributor) (l n p : Nat) (order
 /-- `init_after_traversal()`: zeroed rank and barycenter arrays of `nPorts` entries. -/
 def initAfterTraversal (d : AbstractBarycenterPortDistributor) : LayeredM Unit :=
   d.state.modify fun st => { st with
-    portRanks := Array.replicate st.nPorts 0.0, portBarycenter := Array.replicate st.nPorts 0.0 }
+    portRanks := zeros st.nPorts, portBarycenter := zeros st.nPorts }
 
 /-- The `IInitializable` implementation. -/
 def initializable (d : AbstractBarycenterPortDistributor) : Initializable where

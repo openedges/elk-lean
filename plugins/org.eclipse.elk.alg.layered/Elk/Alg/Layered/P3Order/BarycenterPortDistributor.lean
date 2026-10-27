@@ -21,6 +21,8 @@ structure BarycenterPortDistributor where
   calculatePortRanks : Array LNodeId → PortType → LayeredM Unit
   /-- `port_ranks()` (a copy). -/
   portRanks : BaseIO (Array Float)
+  /-- `port_ranks()` as the distributor's (unboxed) array. -/
+  portRanksF : BaseIO FloatArray
   /-- `set_snapshot(snapshot)` (default: ignored). -/
   setSnapshot : CrossMinSnapshot → BaseIO Unit := fun _ => pure ()
 
@@ -30,6 +32,7 @@ def AbstractBarycenterPortDistributor.toBarycenterPortDistributor (d : AbstractB
   initializable := d.initializable
   calculatePortRanks := d.calculatePortRanks
   portRanks := d.portRanks
+  portRanksF := d.portRanksF
   setSnapshot := d.setSnapshot
 
 /-- `impl BarycenterPortDistributor for NodeRelativePortDistributor`. -/
