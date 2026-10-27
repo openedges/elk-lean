@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- elk-lean: ELK Java 0.12.0 reference layouts (the result baseline). Built by scripts/run_java_baseline.sh. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.eclipse.elk.lean</groupId>
+  <artifactId>elk-java-baseline</artifactId>
+  <version>0.12.0</version>
+  <packaging>jar</packaging>
+  <properties>
+    <elk.version>0.12.0</elk.version>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.core</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.graph</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.graph.json</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.graph.text</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.common</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.layered</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.force</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.mrtree</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.radial</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.rectpacking</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.spore</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.disco</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.topdownpacking</artifactId><version>${elk.version}</version></dependency>
+    <dependency><groupId>org.eclipse.elk</groupId><artifactId>org.eclipse.elk.alg.vertiflex</artifactId><version>${elk.version}</version></dependency>
+  </dependencies>
+</project>

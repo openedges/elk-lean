@@ -808,9 +808,9 @@ static const double elk_pow10_exact[23] = {
 
 LEAN_EXPORT double elk_float_of_sci_fast(b_lean_obj_arg m, uint8_t s, b_lean_obj_arg e) {
     if (lean_is_scalar(m) && lean_is_scalar(e)) {
-        size_t mv = lean_unbox(m);
-        size_t ev = lean_unbox(e);
-        if (mv < ((size_t)1 << 53) && ev <= 22) {
+        uint64_t mv = (uint64_t)lean_unbox(m);
+        uint64_t ev = (uint64_t)lean_unbox(e);
+        if (mv < ((uint64_t)1 << 53) && ev <= 22) {
             double dm = (double)(uint64_t)mv;
             return s ? dm / elk_pow10_exact[ev] : dm * elk_pow10_exact[ev];
         }
@@ -820,8 +820,8 @@ LEAN_EXPORT double elk_float_of_sci_fast(b_lean_obj_arg m, uint8_t s, b_lean_obj
 
 LEAN_EXPORT double elk_float_of_nat_fast(b_lean_obj_arg n) {
     if (lean_is_scalar(n)) {
-        size_t v = lean_unbox(n);
-        if (v < ((size_t)1 << 53)) {
+        uint64_t v = (uint64_t)lean_unbox(n);
+        if (v < ((uint64_t)1 << 53)) {
             return (double)(uint64_t)v;
         }
     }
