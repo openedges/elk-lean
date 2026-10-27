@@ -75,11 +75,11 @@ def process (_layoutGraph : GridElkNode) (monitor : ProgressMonitor) : GridM Uni
     let g ← get
     set (← GridM.liftExcept (Grid.put g currentCol currentRow child))
     monitor.logGraph s!"{(← ElkM.getNode child).identifier.getD ""} placed in ({currentCol}|{currentRow})"
-    currX := currX + (← ElkM.getNode child).width + nodeNodeSpacing
+    currX := currX + ((← ElkM.getNode child).width + nodeNodeSpacing)
     currentCol := currentCol + 1
     if currentCol >= cols then
       currX := padding.left
-      currY := currY + desiredNodeWidth / aspectRatio + nodeNodeSpacing
+      currY := currY + (desiredNodeWidth / aspectRatio + nodeNodeSpacing)
       currentCol := 0
       currentRow := currentRow + 1
   monitor.log "Node Placing done!"
