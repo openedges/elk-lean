@@ -6,4 +6,9 @@ import Elk.Core.Util.ProgressMonitor
 import Elk.Core.Util.ElkTrace
 import Elk.Core.Util.ExclusiveBounds
 import Elk.Core.Util.AbstractRandomListAccessor
+import Elk.Core.Util.IndividualSpacings
+import Elk.Core.Util.GraphElementVisitor
+import Elk.Core.Util.ElkUtil
+import Elk.Core.Util.ElkSpacings
+import Elk.Core.Util.LayoutConfigurator
 /-! Aggregator of `org.eclipse.elk.core.util`. Owned by the util porting task; add submodule imports here. -/

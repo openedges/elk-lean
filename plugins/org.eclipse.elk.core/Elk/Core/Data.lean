@@ -1,5 +1,7 @@
 import Elk.Core.Data.LayoutOptionData
 import Elk.Core.Data.LayoutAlgorithmData
 import Elk.Core.Data.LayoutMetaDataService
-/-! Aggregator of `org.eclipse.elk.core.data` (metadata registry). `LayoutAlgorithmResolver` and
-`DeprecatedLayoutOptionReplacer` follow once `CoreOptions` is available. -/
+import Elk.Core.Data.LayoutAlgorithmResolver
+import Elk.Core.Data.DeprecatedLayoutOptionReplacer
+/-! Aggregator of `org.eclipse.elk.core.data` (metadata registry and the
+`LayoutAlgorithmResolver` / `DeprecatedLayoutOptionReplacer` graph element visitors). -/
