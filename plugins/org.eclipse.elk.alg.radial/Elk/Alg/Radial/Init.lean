@@ -5,7 +5,7 @@ the core hook) and the layout provider at module initialisation. -/
 namespace Elk.Alg.Radial
 
 builtin_initialize initRadialMetaData : Unit ←
-  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.RadialMetaDataProvider.register
+  Elk.Core.Data.LayoutMetaDataService.addInitHook Options.RadialMetaDataProvider.register (rank := 50)
 
 builtin_initialize registerRadialLayoutProvider : Unit ←
   Elk.Core.LayoutProvider.register Options.RadialOptions.ALGORITHM_ID

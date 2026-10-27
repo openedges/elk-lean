@@ -6,6 +6,7 @@ import Elk.Alg.Force
 import Elk.Alg.Disco
 import Elk.Alg.Spore
 import Elk.Alg.VertiFlex
+import Elk.Alg.Radial
 import Elk.Api.LayoutApi
 /-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API. -/
 namespace Elk.Api
