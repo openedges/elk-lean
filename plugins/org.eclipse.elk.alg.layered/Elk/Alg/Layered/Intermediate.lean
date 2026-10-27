@@ -7,6 +7,7 @@ import Elk.Alg.Layered.Intermediate.ModelOrderProcessors
 import Elk.Alg.Layered.Intermediate.WrappingProcessors
 import Elk.Alg.Layered.Intermediate.CompactionProcessors
 import Elk.Alg.Layered.Intermediate.NodeSizeProcessors
+import Elk.Alg.Layered.Intermediate.SplineProcessors
 import Elk.Alg.Layered.Intermediate.LabelProcessors
 import Elk.Alg.Layered.Intermediate.HierarchicalPortProcessors
 import Elk.Alg.Layered.Intermediate.GreedySwitch
