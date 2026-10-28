@@ -77,6 +77,17 @@ per-node array). -/
   let pt := c.arena.port p
   pt.position.y + pt.anchor.y
 
+/-- `base + port.getPosition().y + port.getAnchor().y`, evaluated left to right like Java
+(`(base + position.y) + anchor.y`, not `base + portOffsetY`). -/
+@[inline] def plusPortY (c : BKContext) (base : Float) (p : LPortId) : Float :=
+  let pt := c.arena.port p
+  base + pt.position.y + pt.anchor.y
+
+/-- `base - port.getPosition().y - port.getAnchor().y`, evaluated left to right like Java. -/
+@[inline] def minusPortY (c : BKContext) (base : Float) (p : LPortId) : Float :=
+  let pt := c.arena.port p
+  base - pt.position.y - pt.anchor.y
+
 /-- `util::port_node_id_a`: the local id of the port's owner (out of range without owner). -/
 @[inline] def portNodeId (c : BKContext) (p : LPortId) : Nat :=
   match (c.arena.port p).owner with

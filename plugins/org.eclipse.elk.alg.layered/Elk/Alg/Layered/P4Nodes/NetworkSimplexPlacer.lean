@@ -294,11 +294,12 @@ private def prepare : NspM Unit := do
           if anchorMustBeInteger then
             let y := p.anchor.y
             if y != y.floor then
-              let offset := y - y.round
+              -- Java `Math.round` (half up, also for negative values), not C `round`
+              let offset := y - (Float.javaRound y).toFloat
               p := { p with anchor := { p.anchor with y := p.anchor.y - offset } }
           let y := p.position.y + p.anchor.y
           if y != y.floor then
-            let offset := y - y.round
+            let offset := y - (Float.javaRound y).toFloat
             p := { p with position := { p.position with y := p.position.y - offset } }
           return p
   let nc := nodeIdx
@@ -418,8 +419,10 @@ private def transformEdge (edge : LEdgeId) : NspM Unit := do
   let tp ← getPort targetPort
   let srcOffset := if !srcRep.isFlexible then sp.anchor.y + sp.position.y else sp.anchor.y
   let tgtOffset := if !tgtRep.isFlexible then tp.anchor.y + tp.position.y else tp.anchor.y
-  let tgtDelta := f64AsI32 (fmax (srcOffset - tgtOffset) fl0p0).round
-  let srcDelta := f64AsI32 (fmax (tgtOffset - srcOffset) fl0p0).round
+  -- Java `(int) Math.max(0, srcOffset - tgtOffset)`: truncation (elk-rs rounds; the offsets are only
+  -- nearly integral after the `y - Math.round(y)` port shifts above)
+  let tgtDelta := f64AsI32 (fmax (srcOffset - tgtOffset) fl0p0)
+  let srcDelta := f64AsI32 (fmax (tgtOffset - srcOffset) fl0p0)
   let weight ← getEdgeWeight edge
   let left ← createNEdge weight srcDelta dummy (← portRep sourcePort) (some (.edge edge))
   let right ← createNEdge weight tgtDelta dummy (← portRep targetPort) (some (.edge edge))

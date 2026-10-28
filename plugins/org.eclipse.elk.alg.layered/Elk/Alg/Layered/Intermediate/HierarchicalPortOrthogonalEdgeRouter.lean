@@ -36,14 +36,13 @@ dummies orthogonally after phase 5 and fixes the coordinates of all external por
 Rust's `northern_ext_port_edge_routing_height` field is only written (reset by every `process`); it
 is the return value of `routeEdges` here.
 
-Differences between elk-rs and Java (Java followed for the first item, elk-rs for the others):
-* `restoreDummy` computes the restored dummy's margins like Java (`processNode` on the dummy's own
-  adapter). elk-rs runs the margin calculator only on the adapter node that is the dummy; its
-  adapter snapshots the layer nodes and the restored dummy is not in a layer yet, so elk-rs
-  computes no margins (the dummy then sits at the border without the room of its port labels).
-* `fixCoordinates` / `correctSlantedEdgeSegments` process the last layer only when it differs from
-  the first one (Java processes a single layer twice); `fixCoordinates` returns for a graph without
-  layers (Java throws).
+Differences from Java reproduced from elk-rs:
+* `restoreDummy`: like Java (`getNodeMarginCalculator(adapt(graph, false)).processNode(adapt(dummy,
+  false))`) the margins of the restored dummy are computed. (elk-rs searches the adapter's layer
+  nodes for the dummy, which is not in a layer yet, and computes none.)
+* `correctSlantedEdgeSegments` processes the last layer only when it differs from the first one
+  (Java processes a single layer twice, which changes nothing there); `fixCoordinates` processes it
+  twice like Java (elk-rs once) and returns for a graph without layers (Java throws).
 * Missing properties fall back to defaults (`PORT_ANCHOR` → `(0, 0)`, unset spacings → `0`) and
   missing ports/edges skip the element (Java throws `NullPointerException`).
 * `Math.max` → Rust `f64::max` (`fmax`); sorts use the stable Rust `sort_by` with `partial_cmp`
@@ -90,7 +89,7 @@ private def placeInsideLabels (labels : Array LLabelId) (dummyWidth portPosX spa
 /-- `restoreDummy(dummy, graph)` (Rust `restore_dummy`): flips the side of the dummy's port
 (northern dummies get a southern port and vice versa) and, if port labels are part of the graph's
 size constraints, places the port labels (`INSIDE`: stacked and centred, `OUTSIDE`: `x` right of
-the dummy) and computes the dummy's margins (Java; see module doc). -/
+the dummy) and runs the margin calculator on the dummy. -/
 def restoreDummy (dummy : LNodeId) (graph : LGraphId) : LayeredM Unit := do
   let nd ← getNode dummy
   let portSide := nd.internal.extPortSide
@@ -113,9 +112,7 @@ def restoreDummy (dummy : LNodeId) (graph : LGraphId) : LayeredM Unit := do
     let x := portLabelSpacingHorizontal + nd.size.x - pt.position.x
     for label in pt.labels do
       modifyLabel label fun l => { l with position := { l.position with x := x } }
-  -- Java: `getNodeMarginCalculator(adapt(graph, false)).processNode(adapt(dummy, false))` — the
-  -- dummy's own margins (elk-rs searches the adapter's layer nodes, which do not contain the dummy
-  -- yet, and computes nothing)
+  -- Java: the margin calculator of the graph's adapter, applied to the dummy's own adapter
   let adapter ← LGraphAdapters.adapt graph false false fun _ => true
   let calculator := Elk.Alg.Common.NodeSpacing.NodeDimensionCalculation.getNodeMarginCalculator adapter
   calculator.processNode adapter graph dummy
@@ -191,12 +188,13 @@ def applyNorthSouthDummyPosition (dummy : LNodeId) : LayeredM Unit := do
   let x := nd.internal.portRatioOrPosition - (portAnchorOf nd).x
   modifyNode dummy fun n => { n with position := { n.position with x := x } }
 
-/-- `dummy.borderToContentAreaCoordinates(true, false)` as inlined by Rust: `x -= padding.left +
-offset.x` of the layered graph. -/
+/-- `dummy.borderToContentAreaCoordinates(true, false)`: `x = x - padding.left - offset.x` of the
+layered graph, left to right like Java (elk-rs subtracts `padding.left + offset.x`). -/
 private def borderToContentAreaX (graph : LGraphId) (dummy : LNodeId) : LayeredM Unit := do
   let gr ← getGraph graph
-  let d := gr.padding.left + gr.offset.x
-  modifyNode dummy fun n => { n with position := { n.position with x := n.position.x - d } }
+  let pl := gr.padding.left
+  let ox := gr.offset.x
+  modifyNode dummy fun n => { n with position := { n.position with x := n.position.x - pl - ox } }
 
 /-- `assignAscendingCoordinates(dummies, graph)` (Rust `assign_ascending_coordinates`): moves dummies
 right so that consecutive dummies keep `SPACING_PORT_PORT` between their margins, widening the graph
@@ -447,7 +445,8 @@ def fixCoordinatesForLayer (layer : LayerId) (constraints : PortConstraints) (gr
         else none
       if let some y := y? then
         requiredHeight := y + extSize.y
-        let y := y - (padding.top + offset.y)
+        -- `borderToContentAreaCoordinates(false, true)`: `y - padding.top - offset.y`
+        let y := y - padding.top - offset.y
         modifyNode node fun n => { n with position := { n.position with y := y } }
     newActualHeight := fmax newActualHeight requiredHeight
   let dy := newActualHeight - graphActualSize.y
@@ -472,8 +471,9 @@ def fixCoordinates (graph : LGraphId) : LayeredM Unit := do
   let layers := gr.layers
   let some first := layers[0]? | return
   fixCoordinatesForLayer first constraints graph
-  if layers.size > 1 then
-    fixCoordinatesForLayer layers[layers.size - 1]! constraints graph
+  -- Java processes `layers.get(size - 1)` even when it is the first layer again (the second pass
+  -- sees the graph height grown by the first one)
+  fixCoordinatesForLayer layers[layers.size - 1]! constraints graph
 
 /-! ## Step 6: slanted edge segments -/
 

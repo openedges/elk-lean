@@ -145,9 +145,10 @@ private partial def shiftBlockNodes (ctx : BKContext) (hdir : HDirection) (rootI
   let ed := ctx.arena.edge edge
   let (some sourcePort, some targetPort) := (ed.source, ed.target)
     | throw (IO.userError "java.lang.IllegalStateException: block edge without source or target port")
+  -- Java: tgt.pos.y + tgt.anchor.y - src.pos.y - src.anchor.y (left to right; mirrored for RIGHT)
   let portPosDiff :=
-    if hdir == .left then ctx.portOffsetY targetPort - ctx.portOffsetY sourcePort
-    else ctx.portOffsetY sourcePort - ctx.portOffsetY targetPort
+    if hdir == .left then ctx.minusPortY (ctx.portOffsetY targetPort) sourcePort
+    else ctx.minusPortY (ctx.portOffsetY sourcePort) targetPort
   let nextInnerShift := innerShift.get! current + portPosDiff
   let innerShift := innerShift.set! next nextInnerShift
   if ElkTrace.global.bkInner then

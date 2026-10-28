@@ -235,8 +235,11 @@ def routerRustTests : Suite := suite "layered.intermediate.selfLoopRouter.rust" 
     (centers[0]! < nodeCenterX - 5.0 && centers[1]! > nodeCenterX + 5.0)
   checkEq "hand: sequenced alignments (RIGHT at the leftmost loop, LEFT at the other)"
     ((labelBlock a n 0).alignment, (labelBlock a n 1).alignment) (.right, .left)
-  checkEq "hand: sequenced label positions" (lbs.map (·.position)) #[⟨4, 10⟩, ⟨82, -10⟩]
-  checkEq "hand: overlapping labels push the second loop to N slot 1" ((slotsOf a n 0)[0]!, (slotsOf a n 1)[0]!) (0, 1)
+  -- ELK Java computes the label blocks' x (`LabelPlacer.computeCoordinates`) before the slot
+  -- assignment: the RIGHT/LEFT aligned blocks do not overlap, so both loops stay in N slot 0
+  -- (elk-rs compares unset positions, sees an overlap and moves the second loop to slot 1)
+  checkEq "hand: sequenced label positions" (lbs.map (·.position)) #[⟨4, 10⟩, ⟨82, 10⟩]
+  checkEq "hand: non-overlapping label blocks share N slot 0" ((slotsOf a n 0)[0]!, (slotsOf a n 1)[0]!) (0, 0)
   -- self_loop_router_expands_node_margin_for_self_loop_labels
   let ((n, es), a) ← LayeredM.run (do
       let (g, n, es) ← parallelNorthGraph true
@@ -264,7 +267,8 @@ def routerRustTests : Suite := suite "layered.intermediate.selfLoopRouter.rust" 
   checkEq "hand: regular opposing route (clockwise over EAST)" (bends ra re) #[⟨50, 10⟩, ⟨100, 10⟩, ⟨100, 90⟩, ⟨50, 90⟩]
   checkEq "hand: inline route (EAST corners + half label width)" (bends ia ie) #[⟨50, 10⟩, ⟨110, 10⟩, ⟨110, 90⟩, ⟨50, 90⟩]
   checkEq "hand: regular label NORTH/LEFT at the leftmost port" ((ra.label rl).position, (labelBlock ra rn 0).alignment) (⟨50, -2⟩, .left)
-  checkEq "hand: inline label centred on the EAST lane (no label distance)" (ia.label il).position ⟨100, 45⟩
+  -- Java `computeCoordinates` sets only `x` for CENTER: on the EAST lane the block keeps `y = 0`
+  checkEq "hand: inline CENTER label on the EAST lane (no label distance, block y 0)" (ia.label il).position ⟨100, 20⟩
   -- self_loop_router_prefers_west_route_when_east_ports_are_more_connected
   let ((n, e), a) ← LayeredM.run (do
       let (g, n, e) ← opposingPenaltyGraph true false
@@ -502,7 +506,7 @@ def labelTests : Suite := suite "layered.intermediate.selfLoopRouter.labels" do
       preRestoreRoute g n
       return (g, n))
   check "hand: graph random kept (no draws for a two-segment cycle)" (((a.graph g).internal.random.map (·.seed)) == some (Random.ofInt 42).seed)
-  checkEq "hand: holder ports and routing kept with a stored random" ((slotsOf a n 0)[0]!, (slotsOf a n 1)[0]!) (0, 1)
+  checkEq "hand: holder ports and routing kept with a stored random" ((slotsOf a n 0)[0]!, (slotsOf a n 1)[0]!) (0, 0)
 
 def suites : Array Suite := #[routerRustTests, ptidesTests, polylineTests, handRouteTests, labelTests]
 

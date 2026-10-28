@@ -60,7 +60,8 @@ def placeComponentsInRowsGroup (components : Array LGraphId) (spacing : Float) :
     maxRowWidth := fmax maxRowWidth size.x
     totalArea := totalArea + size.x * size.y
   let aspectRatio := (← getGraph first).props.getD LayeredOptions.ASPECT_RATIO fl1p6
-  maxRowWidth := fmax maxRowWidth (Float.sqrt totalArea * aspectRatio)
+  -- Java: Math.max(maxRowWidth, (float) Math.sqrt(totalArea) * aspectRatio)
+  maxRowWidth := fmax maxRowWidth (Float.toF32 (Float.sqrt totalArea) * aspectRatio)
   let mut xpos := fl0p0
   let mut ypos := fl0p0
   let mut highestBox := fl0p0

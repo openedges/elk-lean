@@ -10,10 +10,10 @@ around the node: the original edge is cut at the dummy's western input port and 
 properties copied except `JUNCTION_POINTS`, `HEAD` labels moved) continues from the dummy's
 eastern output port.
 
-Rust behaviour followed here (deviations from Java): the dummies are appended to the layer as they
-are created (Java collects them and appends them after the layer's nodes, which yields the same
-order); `LONG_EDGE_SOURCE`/`LONG_EDGE_TARGET` are **not** set on the dummies (Java
-`setLongEdgeSourceAndTarget`) and moved head labels do not get `END_LABEL_EDGE`.
+The dummies are appended to the layer as they are created (Java collects them and appends them
+after the layer's nodes, which yields the same order). Like ELK Java (and unlike elk-rs), the dummies
+get `LONG_EDGE_SOURCE`/`LONG_EDGE_TARGET` (`setLongEdgeSourceAndTarget`; `LabelSideSelector` and
+`HyperedgeDummyMerger` group dummies by them) and moved head labels get `END_LABEL_EDGE`.
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -40,19 +40,49 @@ def createDummyPort (dummy : LNodeId) (side : PortSide) : LayeredM LPortId := do
   setPortNode port (some dummy)
   return port
 
-/-- `move_head_labels(old_edge, new_edge)`: moves the `HEAD` labels (no `END_LABEL_EDGE`). -/
-def moveHeadLabels (oldEdge newEdge : LEdgeId) : LayeredM Unit := do
+/-- Moves the `HEAD` labels of `oldEdge` to `newEdge`, recording `oldEdge` as their
+`END_LABEL_EDGE` (`createEastPortSideDummies` keeps an existing value, `createWestPortSideDummies`
+overwrites it). -/
+def moveHeadLabels (oldEdge newEdge : LEdgeId) (keepEndLabelEdge : Bool) : LayeredM Unit := do
   for label in (← getEdge oldEdge).labels do
     let lb ← getLabel label
     let placement := (if lb.props.has LayeredOptions.EDGE_LABELS_PLACEMENT then
       lb.props.get LayeredOptions.EDGE_LABELS_PLACEMENT else none).getD EdgeLabelPlacement.center
     if placement != .head then continue
+    modifyLabel label fun l =>
+      if keepEndLabelEdge && l.internal.endLabelEdge.isSome then l
+      else { l with internal := { l.internal with endLabelEdge := some oldEdge } }
     modifyEdge oldEdge fun e => { e with labels := e.labels.filter (· != label) }
     modifyEdge newEdge fun e => { e with labels := e.labels.push label }
 
+/-- `setLongEdgeSourceAndTarget(dummy, dummyInput, dummyOutput, oddPort)`: `LONG_EDGE_SOURCE` is the
+incoming edge's source port, or that `LONG_EDGE` node's `LONG_EDGE_SOURCE`; `LONG_EDGE_TARGET`
+likewise with the outgoing edge's target. -/
+def setLongEdgeSourceAndTarget (dummy : LNodeId) (dummyInput dummyOutput : LPortId) : LayeredM Unit := do
+  let some inEdge := (← getPort dummyInput).incomingEdges[0]? | return
+  let some outEdge := (← getPort dummyOutput).outgoingEdges[0]? | return
+  let sourcePort := (← getEdge inEdge).source
+  let targetPort := (← getEdge outEdge).target
+  let endNode (p : Option LPortId) : LayeredM (Option LNodeId) := do
+    match p with
+    | some p => return (← getPort p).owner
+    | none => return none
+  let mut longEdgeSource := sourcePort
+  if let some n ← endNode sourcePort then
+    let nd ← getNode n
+    if nd.type == .longEdge then longEdgeSource := nd.internal.longEdgeSource
+  let mut longEdgeTarget := targetPort
+  if let some n ← endNode targetPort then
+    let nd ← getNode n
+    if nd.type == .longEdge then longEdgeTarget := nd.internal.longEdgeTarget
+  let src := longEdgeSource
+  let tgt := longEdgeTarget
+  modifyNode dummy fun d => { d with internal := { d.internal with longEdgeSource := src, longEdgeTarget := tgt } }
+
 /-- The part shared by both Rust functions: cuts `edge` at a new dummy and connects the dummy's
 output port to `newTarget` with a new edge (the eastern port, or the edge's original target). -/
-private def insertDummy (layer : LayerId) (edge : LEdgeId) (newTarget : Option LPortId) : LayeredM Unit := do
+private def insertDummy (layer : LayerId) (edge : LEdgeId) (newTarget : Option LPortId) (east : Bool) :
+    LayeredM Unit := do
   let dummy ← createDummyNode layer edge
   let dummyInput ← createDummyPort dummy .west
   let dummyOutput ← createDummyPort dummy .east
@@ -62,7 +92,8 @@ private def insertDummy (layer : LayerId) (edge : LEdgeId) (newTarget : Option L
   let dummyEdge ← createEdge { props := old.props.remove LayeredOptions.JUNCTION_POINTS, internal := old.internal }
   setEdgeSource dummyEdge (some dummyOutput)
   setEdgeTarget dummyEdge newTarget
-  moveHeadLabels edge dummyEdge
+  setLongEdgeSourceAndTarget dummy dummyInput dummyOutput
+  moveHeadLabels edge dummyEdge east
 
 /-- Whether both nodes exist and are the same node (self loop). -/
 private def sameNode (a b : Option LNodeId) : Bool :=
@@ -77,7 +108,7 @@ def createEastPortSideDummy (layer : LayerId) (eastPort : LPortId) (edge : LEdge
     | none => pure none
   let targetNode := (← getPort eastPort).owner
   if sameNode sourceNode targetNode then return
-  insertDummy layer edge (some eastPort)
+  insertDummy layer edge (some eastPort) true
 
 /-- `create_west_port_side_dummy(layer, west_port, edge)` (Java `createWestPortSideDummies`). -/
 def createWestPortSideDummy (layer : LayerId) (westPort : LPortId) (edge : LEdgeId) : LayeredM Unit := do
@@ -87,7 +118,7 @@ def createWestPortSideDummy (layer : LayerId) (westPort : LPortId) (edge : LEdge
     | some t => pure (← getPort t).owner
     | none => pure none
   if sameNode sourceNode targetNode then return
-  insertDummy layer edge originalTarget
+  insertDummy layer edge originalTarget false
 
 /-- `process(layered_graph, monitor)`: per layer over a copy of its node list; normal nodes with
 an explicitly set side-fixing `PORT_CONSTRAINTS` only. -/

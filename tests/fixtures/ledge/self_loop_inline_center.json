@@ -1,0 +1,60 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "n",
+   "width": 80,
+   "height": 60,
+   "layoutOptions": {
+    "elk.portConstraints": "FIXED_POS"
+   },
+   "ports": [
+    {
+     "id": "np0",
+     "x": 40,
+     "y": 0,
+     "width": 0,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    },
+    {
+     "id": "np1",
+     "x": 40,
+     "y": 60,
+     "width": 0,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     }
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "np0"
+   ],
+   "targets": [
+    "np1"
+   ],
+   "labels": [
+    {
+     "id": "l0",
+     "text": "a",
+     "width": 20,
+     "height": 10,
+     "layoutOptions": {
+      "elk.edgeLabels.inline": "true"
+     }
+    }
+   ]
+  }
+ ]
+}

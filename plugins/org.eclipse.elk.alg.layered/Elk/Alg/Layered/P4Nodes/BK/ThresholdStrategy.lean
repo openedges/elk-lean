@@ -133,8 +133,11 @@ private def boundFor (ctx : BKContext) (bal : BKAlignedLayout) (isRoot : Bool) (
   let rootNodeId := ctx.portNodeId rootPort
   if rootNodeId ≥ bal.root.size then none
   let otherRoot := bal.rootOf otherNodeId
-  let threshold := bal.yOf otherRoot + bal.innerShiftOf otherNodeId + ctx.portOffsetY otherPort
-    - bal.innerShiftOf rootNodeId - ctx.portOffsetY rootPort
+  -- Java: y[otherRoot] + innerShift[other] + other.pos.y + other.anchor.y - innerShift[root]
+  -- - root.pos.y - root.anchor.y, left to right
+  let threshold := ctx.minusPortY
+    (ctx.plusPortY (bal.yOf otherRoot + bal.innerShiftOf otherNodeId) otherPort - bal.innerShiftOf rootNodeId)
+    rootPort
   let leftNodeId := ctx.portNodeId leftPort
   if leftNodeId ≥ bal.root.size then none
   let rightNodeId := ctx.portNodeId rightPort

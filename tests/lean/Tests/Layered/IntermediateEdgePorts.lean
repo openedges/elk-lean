@@ -530,8 +530,11 @@ def invertedTests : Suite := suite "layered.intermediate.InvertedPortProcessor" 
   checkEq "hand: original east edge cut at the dummy" (targetNode a edges[1]!) eastDummy
   check "hand: head label moved to the new edge"
     ((a.edge edges[0]!).labels.isEmpty && (a.edge (a.port ports[1]!).incomingEdges[0]!).labels == #[headLabel])
-  checkEq "hand: Rust sets no END_LABEL_EDGE" (a.label headLabel).internal.endLabelEdge none
-  checkEq "hand: Rust sets no LONG_EDGE_SOURCE" (westDummy.bind fun d => (a.node d).internal.longEdgeSource) none
+  -- ELK Java (elk-rs sets neither): the moved head label remembers its edge, the dummy's long edge
+  -- ends are the cut edge's source port and the new edge's target port
+  checkEq "hand: Java END_LABEL_EDGE of the moved head label" (a.label headLabel).internal.endLabelEdge (some edges[0]!)
+  checkEq "hand: Java LONG_EDGE_SOURCE" (westDummy.bind fun d => (a.node d).internal.longEdgeSource) (some ports[0]!)
+  checkEq "hand: Java LONG_EDGE_TARGET" (westDummy.bind fun d => (a.node d).internal.longEdgeTarget) (some ports[1]!)
   -- inverted_port_processor_ignores_self_loop
   let ((g2, n2), a2) ← LayeredM.run (do
       let (g, layers) ← mkGraph 1
