@@ -1,3 +1,4 @@
+import Std.Data.HashMap
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options.LayeredOptions
 /-!
@@ -10,13 +11,15 @@ predecessor numbers), and the nodes are assigned to layers of at most
 
 `LNode.id` is set to the index in the layerless node list and `LEdge.id` to a running index over
 the nodes' `getOutgoingEdges()`; both are used as array indices (Rust `id as usize`, guarded
-with `< len` where Rust guards). The priority queues of Java are the Rust `pop_best_by`: the
-first element that is strictly smaller than all earlier ones is taken and removed with
-`swap_remove`. The transitive reduction DFS is the Rust recursion run with an explicit stack.
+with `< len` where Rust guards). The transitive reduction DFS is the Java/Rust recursion run with an
+explicit stack.
 
-Deviation from Java (following Rust): `compareNodesInTopo` compares the predecessor numbers by
-value and falls back to the node ids whenever the common suffix is equal (Java compares boxed
-`Integer`s by identity and returns `1` when both lists were non-empty).
+Java semantics (elk-rs differs): both priority queues are `java.util.PriorityQueue` binary heaps
+(`JavaPriorityQueue`: JDK 21 `siftUp`/`siftDown`), and `compareNodesInTopo` is Java's comparator —
+boxed `Integer`s compared by identity (`!=`), the node ids only when a predecessor list is empty and
+`1` when both lists end undecided. That comparator is not a consistent order, so which source the
+heap yields first depends on its structure. elk-rs takes the first minimum of a list
+(`pop_best_by` with `swap_remove`), compares the numbers by value and falls back to the ids.
 
 Like Rust and Java the transitive reduction does not terminate on self-loops (the DFS revisits
 the unfinished node); self-loops are hidden by the `SelfLoopPreprocessor` before this phase runs.
@@ -51,18 +54,6 @@ private def edgeSourceNode (a : LGraphArena) (e : LEdgeId) : Option LNodeId :=
 /-- The node owning the target port of `e`. -/
 private def edgeTargetNode (a : LGraphArena) (e : LEdgeId) : Option LNodeId :=
   (a.edge e).target.bind fun p => (a.port p).owner
-
-/-- Rust `pop_best_by`: removes and returns the first minimum of `items` under `lt`
-(`swap_remove`, so the last element takes its place). -/
-def popBestBy {α : Type} [Inhabited α] (items : Array α) (lt : α → α → Bool) : Option (α × Array α) :=
-  if items.isEmpty then none
-  else Id.run do
-    let mut best := 0
-    for index in [1:items.size] do
-      if lt items[index]! items[best]! then best := index
-    let result := items[best]!
-    let last := items.back!
-    return some (result, (items.set! best last).pop)
 
 /-- `dfs(start, node)` of the transitive reduction: marks every edge `start → w` for which `w`
 is also reachable through a longer path. Iterative version of the Rust recursion (a node is
@@ -104,9 +95,15 @@ def transitiveReduction (a : LGraphArena) (nodes : Array LNodeId) (nodeCount edg
         edgeMark := edgeMark'
   return edgeMark
 
-/-- `compareNodesInTopo(u, v)` (Rust semantics): the node whose largest differing predecessor
-number is smaller comes first; ties are broken by the node ids. -/
-def compareNodesInTopo (inTopo : Array (Array Int)) (uid vid : Nat) : Ordering := Id.run do
+/-- Java `compareNodesInTopo(u, v)` (`int` result): walks both `inTopo` lists from the end with
+`ListIterator.previous()`. The elements are `Integer`s boxed by every `inTopo.put` (`!=` is identity:
+equal values are the same object only inside the `Integer` cache `[-128, 127]`), so a pair of
+different values decides by `Integer.compare` and a pair of equal values outside the cache gives
+`Integer.compare` = `0`. When the walk ends undecided, `!itU.hasNext() && !itV.hasNext()` holds
+exactly when no element was visited (one list is empty): the node ids decide; otherwise (both lists
+non-empty) Java returns `1` (the `else` branch; `!itU.hasNext()` alone cannot hold there). Not a
+consistent order, so the `PriorityQueue` heap structure decides (`JavaPriorityQueue`). -/
+def compareNodesInTopo (inTopo : Array (Array Int)) (uid vid : Nat) : Int := Id.run do
   let inListU := inTopo.getD uid #[]
   let inListV := inTopo.getD vid #[]
   let mut i := inListU.size
@@ -114,11 +111,59 @@ def compareNodesInTopo (inTopo : Array (Array Int)) (uid vid : Nat) : Ordering :
   while i > 0 && j > 0 do
     let iu := inListU[i - 1]!
     let iv := inListV[j - 1]!
-    if iu != iv then
-      return compare iu iv
+    if !(iu == iv && -128 <= iu && iu <= 127) then
+      return if iu < iv then -1 else if iu > iv then 1 else 0
     i := i - 1
     j := j - 1
-  return compare uid vid
+  if i == inListU.size && j == inListV.size then
+    return if uid < vid then -1 else if uid > vid then 1 else 0
+  return 1
+
+/-- `java.util.PriorityQueue` with a comparator (JDK 21 `offer` → `siftUpUsingComparator`, `poll` →
+`siftDownUsingComparator` of the last element from the root): the binary heap array. -/
+abbrev JavaPriorityQueue (α : Type) := Array α
+
+namespace JavaPriorityQueue
+
+/-- `offer(x)`: `siftUp(size, x)` (stops at the first parent with `cmp(x, parent) >= 0`). -/
+def offer {α : Type} [Inhabited α] (q : JavaPriorityQueue α) (cmp : α → α → Int) (x : α) : JavaPriorityQueue α :=
+  Id.run do
+    let mut k := q.size
+    let mut es := q.push x
+    while k > 0 do
+      let parent := (k - 1) / 2
+      let e := es[parent]!
+      if cmp x e >= 0 then break
+      es := es.set! k e
+      k := parent
+    return es.set! k x
+
+/-- `poll()`: the root; the last element is sifted down from the root (`siftDownUsingComparator`: the
+smaller child is the right one only when `cmp(left, right) > 0`, stop when `cmp(x, child) <= 0`). -/
+def poll {α : Type} [Inhabited α] (q : JavaPriorityQueue α) (cmp : α → α → Int) : Option (α × JavaPriorityQueue α) :=
+  if q.isEmpty then none
+  else Id.run do
+    let result := q[0]!
+    let n := q.size - 1
+    let x := q[n]!
+    let mut es := q.pop
+    if n > 0 then
+      let half := n / 2
+      let mut k := 0
+      while k < half do
+        let mut child := 2 * k + 1
+        let mut c := es[child]!
+        let right := child + 1
+        if right < n && cmp c es[right]! > 0 then
+          child := right
+          c := es[child]!
+        if cmp x c <= 0 then break
+        es := es.set! k c
+        k := child
+      es := es.set! k x
+    return some (result, es)
+
+end JavaPriorityQueue
 
 /-- The topological numbering (`topoOrd`) of step #2 and the initial out-degrees and sinks of
 step #3, computed on the reduced graph. -/
@@ -130,16 +175,19 @@ def topologicalNumbering (a : LGraphArena) (nodes : Array LNodeId) (edgeMark : A
   let mut outDeg : Array Int := Array.replicate nodeCount 0
   let mut topoOrd : Array Int := Array.replicate nodeCount 0
   let mut inTopo : Array (Array Int) := Array.replicate nodeCount #[]
-  let mut sources : Array LNodeId := #[]
+  -- `new PriorityQueue<LNode>(this::compareNodesInTopo)`; the comparator reads the current `inTopo`
+  let mut sources : JavaPriorityQueue LNodeId := #[]
   for node in nodes do
     let ni := nodeId a node
     for edge in a.nodeIncomingEdges node do
       if marked edge == some false then inDeg := inDeg.modify ni (· + 1)
-    if inDeg.getD ni 0 == 0 then sources := sources.push node
+    if inDeg.getD ni 0 == 0 then
+      let it := inTopo
+      sources := sources.offer (fun x y => compareNodesInTopo it (nodeId a x) (nodeId a y)) node
   let mut topoIndex : Int := 0
   while true do
-    let some (node, rest) := popBestBy sources
-        (fun x y => compareNodesInTopo inTopo (nodeId a x) (nodeId a y) == .lt) | break
+    let it := inTopo
+    let some (node, rest) := sources.poll (fun x y => compareNodesInTopo it (nodeId a x) (nodeId a y)) | break
     sources := rest
     let ni := nodeId a node
     topoOrd := topoOrd.set! ni topoIndex
@@ -150,7 +198,9 @@ def topologicalNumbering (a : LGraphArena) (nodes : Array LNodeId) (edgeMark : A
       let ti := nodeId a target
       inDeg := inDeg.modify ti (· - 1)
       inTopo := inTopo.modify ti (·.push (topoOrd.getD ni 0))
-      if inDeg[ti]? == some 0 then sources := sources.push target
+      if inDeg[ti]? == some 0 then
+        let it := inTopo
+        sources := sources.offer (fun x y => compareNodesInTopo it (nodeId a x) (nodeId a y)) target
   let mut sinks : Array LNodeId := #[]
   for node in nodes do
     let ni := nodeId a node
@@ -188,19 +238,27 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       edgeIndex := edgeIndex + 1
   -- #1 remove transitive edges, #2 compute topological ordering
   let edgeMark ← withArena (transitiveReduction · nodes nodes.size edgeIndex)
-  let (topoOrd, outDeg, sinks) ← withArena (topologicalNumbering · nodes edgeMark)
+  let (topoOrd, outDeg, initialSinks) ← withArena (topologicalNumbering · nodes edgeMark)
   let mut outDeg := outDeg
-  let mut sinks := sinks
+  -- `new PriorityQueue<LNode>((n1, n2) -> -Integer.compare(topoOrd[n1.id], topoOrd[n2.id]))`: the ids
+  -- do not change while the queue is used, so `topoOrd[n.id]` is looked up once per node
+  let mut topoOf : Std.HashMap LNodeId Int := {}
+  for node in nodes do
+    topoOf := topoOf.insert node (topoOrd.getD (usize (← getNode node).id) 0)
+  let topoOfNode := topoOf
+  let sinkCmp : LNodeId → LNodeId → Int := fun x y =>
+    let ox := topoOfNode.getD x 0
+    let oy := topoOfNode.getD y 0
+    if ox < oy then 1 else if ox > oy then -1 else 0
+  let mut sinks : JavaPriorityQueue LNodeId := #[]
+  for node in initialSinks do sinks := sinks.offer sinkCmp node
   -- #3 actual layer assignment, starting with the sinks
   let mut layers : Array LayerId := #[]
   let mut currentLayer ← createLayer graphRef
   layers := layers.push currentLayer
   while true do
-    let ids ← sinks.mapM fun n => do return usize (← getNode n).id
-    let keyed := sinks.zip ids
-    let some ((node, _), rest) := popBestBy keyed
-        (fun (_, x) (_, y) => compare (topoOrd.getD y 0) (topoOrd.getD x 0) == .lt) | break
-    sinks := rest.map (·.1)
+    let some (node, rest) := sinks.poll sinkCmp | break
+    sinks := rest
     if (← isLayerFull currentLayer bound) || !(← canAdd node currentLayer) then
       currentLayer ← createLayer graphRef
       layers := layers.push currentLayer
@@ -211,7 +269,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       let some source ← withArena (edgeSourceNode · edge) | continue
       let si := usize (← getNode source).id
       outDeg := outDeg.modify si (· - 1)
-      if outDeg[si]? == some 0 then sinks := sinks.push source
+      if outDeg[si]? == some 0 then sinks := sinks.offer sinkCmp source
   -- the layers were created in inverse order
   modifyGraph graph fun g => { g with layers := g.layers ++ layers.reverse, layerlessNodes := #[] }
   monitor.done
