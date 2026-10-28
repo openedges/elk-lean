@@ -14,11 +14,16 @@ on the nested graph's border layer). elk-rs `greedy_port_distributor.rs`.
 Rust semantics kept where they differ from Java:
 - `initAtNodeLevel` sets `node.id := nodeIndex` and `initAtPortLevel` assigns `port.id :=
   nPorts++` (Java only counts the ports per node and relies on the other initialisables);
-- a switch swaps the node's port list entries at the side's indices in `node.ports` (filtered by
-  side) — Java writes through the `getPortSideView` sub-list view, which is the same list slot;
 - a missing crossings counter (distribution before `initAfterTraversal`) throws
   `IllegalStateException: crossings counter not initialized` (Rust `expect`).
 The `ELK_TRACE` greedy port output is not reproduced.
+
+Java semantics (elk-rs differs): a switch of the view positions `i`, `i + 1` writes through Java's
+`getPortSideView` sub-list (reversed on `SOUTH`/`WEST`), i.e. it swaps the two node list slots those
+*positions* map to. The slot of a position never changes, so the slot indices are not permuted
+with the ports (elk-rs swaps them too, so after a port moved twice its later switches exchange the
+wrong slots — e.g. view `[a, b, c]` switching `b, c` then `a, c` gives `[c, a, b]` in Java and
+`[b, c, a]` in elk-rs).
 -/
 namespace Elk.Alg.Layered.P3Order
 
@@ -83,29 +88,28 @@ def switchingDecreasesCrossings (d : GreedyPortDistributor) (upperPort lowerPort
       lowerUpperCrossings := lowerUpperCrossings + (← hc.lowerUpperCrossings)
   return upperLowerCrossings > lowerUpperCrossings
 
-/-- `switch_ports(node, ports, indices, top_index, bottom_index)`: switches the positions in the
-counter, the local lists and the node's port list. -/
+/-- `switchPorts(ports, node, topPort, bottomPort)`: switches the positions in the counter, the
+view and the node's port list slots of the two view positions (`indices`: the node list slot of each
+view position, unchanged by a switch). -/
 def switchPorts (d : GreedyPortDistributor) (node : LNodeId) (ports : Array LPortId) (indices : Array Nat)
-    (topIndex bottomIndex : Nat) : LayeredM (Array LPortId × Array Nat) := do
-  if topIndex >= ports.size || bottomIndex >= ports.size then return (ports, indices)
+    (topIndex bottomIndex : Nat) : LayeredM (Array LPortId) := do
+  if topIndex >= ports.size || bottomIndex >= ports.size then return ports
   (← d.counter).switchPorts ports[topIndex]! ports[bottomIndex]!
   let topPos := indices[topIndex]?
   let bottomPos := indices[bottomIndex]?
   let ports := ports.swapIfInBounds topIndex bottomIndex
-  let indices := indices.swapIfInBounds topIndex bottomIndex
   if let (some tp, some bp) := (topPos, bottomPos) then
     modifyNode node fun x =>
       if tp < x.ports.size && bp < x.ports.size then { x with ports := x.ports.swapIfInBounds tp bp } else x
-  return (ports, indices)
+  return ports
 
 /-- `distribute_ports_on_node(node, side, hierarchical_counter)`: bubble passes over the side's
 ports until no switch improves; whether any switch was made. -/
 def distributePortsOnNode (d : GreedyPortDistributor) (node : LNodeId) (side : PortSide)
     (hierarchicalCounter : Option BetweenLayerEdgeTwoNodeCrossingsCounter) : LayeredM Bool := do
-  let (ports0, indices0) := portsForSide (← get) node side
+  let (ports0, indices) := portsForSide (← get) node side
   if ports0.isEmpty then return false
   let mut ports := ports0
-  let mut indices := indices0
   let mut improved := false
   while true do
     let mut continueSwitching := false
@@ -114,7 +118,7 @@ def distributePortsOnNode (d : GreedyPortDistributor) (node : LNodeId) (side : P
       let lowerPort := ports[i + 1]!
       if ← d.switchingDecreasesCrossings upperPort lowerPort hierarchicalCounter then
         improved := true
-        (ports, indices) ← d.switchPorts node ports indices i (i + 1)
+        ports ← d.switchPorts node ports indices i (i + 1)
         continueSwitching := true
     if !continueSwitching then break
   return improved

@@ -12,7 +12,10 @@ nested graph, the crossings their switch causes in the parent graph.
 
 elk-rs passes the free layer's nodes instead of indices (Java `doesSwitchReduceCrossings(int,
 int)`) and the parent data as an explicit `ParentCrossingContext` instead of reading the parent
-`GraphInfoHolder`; every counter gets its own copy of the port positions (Java shares the array).
+`GraphInfoHolder`. As in Java, both in-layer counters share the heuristic's port position array (the
+eastern initialisation does not erase the western positions, and positions of other layers survive)
+and the parent counter writes into the parent holder's array (elk-rs gives every counter its own
+copy).
 -/
 namespace Elk.Alg.Layered.Intermediate.GreedySwitch
 
@@ -22,10 +25,9 @@ open Elk.Core.Options Elk.Alg.Layered.Graph Elk.Alg.Layered.Options Elk.Alg.Laye
 index of the parent node and whether the free layer is the rightmost one. -/
 structure ParentCrossingContext where
   parentNodeOrder : Array (Array LNodeId)
-  parentPortPositions : Array Int
+  parentPortPositions : IO.Ref (Array Int)
   parentLayerIndex : Nat
   rightMostLayer : Bool
-  deriving Inhabited
 
 /-- `SwitchDecider`. -/
 structure SwitchDecider where
@@ -48,7 +50,7 @@ namespace SwitchDecider
 (the parent node's layer and its right neighbour for the rightmost free layer, else the left
 neighbour and the parent node's layer). -/
 private def initParentCrossCounter (context : ParentCrossingContext) : LayeredM CrossingsCounter := do
-  let counter ← CrossingsCounter.ofPositions context.parentPortPositions
+  let counter ← CrossingsCounter.new context.parentPortPositions
   let layers := context.parentNodeOrder
   let i := context.parentLayerIndex
   let leftLayer := if i > 0 then (layers[i - 1]?).getD #[] else #[]
@@ -62,11 +64,11 @@ private def initParentCrossCounter (context : ParentCrossingContext) : LayeredM 
 
 /-- `new SwitchDecider(freeLayer, crossingMatrixFiller, portPositions, parentContext,
 countCrossingsCausedByPortSwitch)` (elk-rs signature). -/
-def new (freeLayer : Array LNodeId) (crossingMatrixFiller : CrossingMatrixFiller) (portPositions : Array Int)
+def new (freeLayer : Array LNodeId) (crossingMatrixFiller : CrossingMatrixFiller) (portPositions : IO.Ref (Array Int))
     (parentContext : Option ParentCrossingContext) (countCrossingsCausedByPortSwitch : Bool) : LayeredM SwitchDecider := do
-  let leftInLayerCounter ← CrossingsCounter.ofPositions portPositions
+  let leftInLayerCounter ← CrossingsCounter.new portPositions
   let _ ← leftInLayerCounter.initPortPositionsForInLayerCrossings freeLayer .west
-  let rightInLayerCounter ← CrossingsCounter.ofPositions portPositions
+  let rightInLayerCounter ← CrossingsCounter.new portPositions
   let _ ← rightInLayerCounter.initPortPositionsForInLayerCrossings freeLayer .east
   let northSouthCounter ← NorthSouthEdgeNeighbouringNodeCrossingsCounter.new freeLayer
   let parentCrossCounter ← if countCrossingsCausedByPortSwitch then

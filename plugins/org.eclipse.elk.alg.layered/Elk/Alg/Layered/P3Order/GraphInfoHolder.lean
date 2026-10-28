@@ -63,8 +63,10 @@ structure GraphInfoHolder where
   currentlyBestNodeAndPortOrder : Option SweepCopy := none
   /-- `best_node_and_port_order`. -/
   bestNodeAndPortOrder : Option SweepCopy := none
-  /-- `port_positions` (zeros, sized by the initialisation; never updated, as in Rust). -/
-  portPositions : Array Int := #[]
+  /-- `portPositions` (zeros, sized by the initialisation). Java's array is shared by the parent
+  crossing counters of the greedy switch deciders of the child graphs, which leave their positions in
+  it (elk-rs hands every decider a fresh copy). -/
+  portPositions : IO.Ref (Array Int)
   /-- `use_bottom_up` (`dont_sweep_into()`). -/
   useBottomUp : Bool := false
   /-- `child_graphs`: nested graphs of the nodes, in node order. -/
@@ -103,10 +105,10 @@ structure GraphInfoHolder where
   thoroughness : Int
   /-- `random` (see the module doc). -/
   random : IO.Ref Random
-  /-- `first_try_with_initial_order`. -/
+  /-- `FIRST_TRY_WITH_INITIAL_ORDER` of the graph. Java's `SECOND_TRY_WITH_INITIAL_ORDER` is declared
+  with the same property id (`"firstTryWithInitialOrder"`), so both name this one value (elk-rs keeps
+  two fields). -/
   firstTryWithInitialOrder : Bool := false
-  /-- `second_try_with_initial_order`. -/
-  secondTryWithInitialOrder : Bool := false
   /-- `snapshot`. -/
   snapshot : CrossMinSnapshot := {}
 
@@ -166,6 +168,8 @@ structure Settings where
   nodeInfluence : Float
   portInfluence : Float
   thoroughness : Int
+  /-- The graph's `FIRST_TRY_WITH_INITIAL_ORDER` (left by an earlier run, see `LayerSweepCrossingMinimizer`). -/
+  firstTryWithInitialOrder : Bool := false
 
 /-- Reads the `Settings` of a graph (Rust `get_property(..).unwrap_or(..)` for every value). -/
 def readSettings (graph : LGraphId) : LayeredM Settings := do
@@ -183,7 +187,8 @@ def readSettings (graph : LGraphId) : LayeredM Settings := do
     portModelOrder := p.getD LayeredOptions.CONSIDER_MODEL_ORDER_PORT_MODEL_ORDER false
     nodeInfluence := p.getD LayeredOptions.CONSIDER_MODEL_ORDER_CROSSING_COUNTER_NODE_INFLUENCE 0.0
     portInfluence := p.getD LayeredOptions.CONSIDER_MODEL_ORDER_CROSSING_COUNTER_PORT_INFLUENCE 0.0
-    thoroughness := p.getD LayeredOptions.THOROUGHNESS 1 }
+    thoroughness := p.getD LayeredOptions.THOROUGHNESS 1
+    firstTryWithInitialOrder := g.internal.firstTryWithInitialOrder }
 
 /-- `GraphInfoHolder::build(..)` (see the module doc for the steps). -/
 def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : Array (Array LNodeId))
@@ -215,12 +220,12 @@ def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : A
   -- `update_greedy_context(None)`
   if let some g := greedySwitch then g.setDontSweepInto useBottomUp
   return {
-    lGraph := graph, currentNodeOrder, portPositions := Array.replicate nPorts 0, useBottomUp, childGraphs
+    lGraph := graph, currentNodeOrder, portPositions := ← IO.mkRef (Array.replicate nPorts 0), useBottomUp, childGraphs
     hasExternalPorts, hasParent, parentGraphRef, parentNode := s.parentNode, crossMinimizer, greedySwitch
     portDistributor, crossingsCounter, nPorts
     considerModelOrderStrategy := s.considerModelOrderStrategy, groupOrderStrategy := s.groupOrderStrategy
     portModelOrder := s.portModelOrder, nodeInfluence := s.nodeInfluence, portInfluence := s.portInfluence
-    thoroughness := s.thoroughness, random, snapshot }
+    thoroughness := s.thoroughness, random, snapshot, firstTryWithInitialOrder := s.firstTryWithInitialOrder }
 
 /-- `GraphInfoHolder::new(graph, cross_min_type)` / `new_with_graph(graph_ref, graph, cross_min_type,
 shared_random)`: `random` is the generator Rust would use (see the module doc); `lockedGraph` is the
@@ -256,7 +261,7 @@ def countCurrentCrossings (h : GraphInfoHolder) : LayeredM Int :=
 /-- `update_greedy_context(parent_snapshot)`: hands `dontSweepInto` and the parent data to the greedy
 switch heuristic (no-op for the other heuristics). -/
 def updateGreedyContext (h : GraphInfoHolder)
-    (parentSnapshot : Option (Array (Array LNodeId) × Array Int × LNodeId)) : BaseIO Unit := do
+    (parentSnapshot : Option (Array (Array LNodeId) × IO.Ref (Array Int) × LNodeId)) : BaseIO Unit := do
   let some greedy := h.greedySwitch | return
   greedy.setDontSweepInto h.useBottomUp
   if let some (parentNodeOrder, parentPortPositions, parentNode) := parentSnapshot then

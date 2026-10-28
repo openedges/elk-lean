@@ -30,9 +30,13 @@ graphs swept by the same minimiser (`INCLUDE_CHILDREN`) are not locked and are r
 `LayerSweepCrossingMinimizer` passes the processed (root) graph, the elk-rs unit tests correspond to
 `none`.
 
+## Java semantics (elk-rs differs)
+* `setFirstLayerOrder` randomises the barycenters and then, through Java's virtual
+  `minimizeCrossings(layer, …)`, sorts the first layer with the model order insertion sort (clearing
+  the relations, no constraint resolution); elk-rs uses the base barycenter sort and the resolver.
+* Barycenters compare with `Double.compareTo` (NaN largest, `-0.0 < 0.0`; elk-rs `partial_cmp`).
+
 ## Rust semantics kept where they differ from Java
-* `setFirstLayerOrder` is the base one (barycenter sort and constraint resolution); Java's override
-  of `minimizeCrossings(layer, …)` uses the model order insertion sort there too.
 * The relation sets are copied before the update (`update_bigger_and_smaller_associations`); Java
   iterates the live sets.
 * `minimizeCrossings` with `forceModelOrder = false` (never created by elk-rs) sorts with Rust's
@@ -132,14 +136,14 @@ open ModelOrderBarycenterRelations
   | .eq => 0
   | .gt => 1
 
-/-- `compare_based_on_barycenter(n1, n2)`: known barycenters ascending (`partial_cmp`), a known one
+/-- `compareBasedOnBarycenter(n1, n2)`: known barycenters ascending (`Double.compareTo`), a known one
 before an unknown one; a decision is recorded with the first node as the bigger one when it is
 `-1` (Java and Rust). -/
 def compareBasedOnBarycenter (env : ModelOrderCompareEnv) (rel : ModelOrderBarycenterRelations) (n1 n2 : LNodeId) :
     Int × ModelOrderBarycenterRelations :=
   match BarycenterHeuristic.barycenterIn env.base env.states n1, BarycenterHeuristic.barycenterIn env.base env.states n2 with
   | some s1, some s2 =>
-    let value := orderingToInt (Float.comparePartial s1 s2)
+    let value := orderingToInt (Float.compareJava s1 s2)
     if value < 0 then (value, rel.updateBiggerAndSmallerAssociations n1 n2)
     else if value > 0 then (value, rel.updateBiggerAndSmallerAssociations n2 n1)
     else (value, rel)
@@ -288,10 +292,25 @@ def compareNodesM (h : ModelOrderBarycenterHeuristic) (n1 n2 : LNodeId) : Layere
   h.relations.set rel
   return value
 
-/-- `set_first_layer_order(order, forward_sweep, random)`: the base one. -/
+/-- `setFirstLayerOrder(order, isForwardSweep)` (inherited, calling the overridden
+`minimizeCrossings(layer, false, true, forward)`): `nextDouble()` barycenters for the first (forward) or
+last layer, then with `forceModelOrder` the model order insertion sort (relations cleared, no
+constraint resolution); without it the base one. Never reports an improvement. -/
 def setFirstLayerOrder (h : ModelOrderBarycenterHeuristic) (order : Array (Array LNodeId)) (forwardSweep : Bool)
-    (random : IO.Ref Random) : LayeredM (Array (Array LNodeId) × Bool) :=
-  h.base.setFirstLayerOrder order forwardSweep random
+    (random : IO.Ref Random) : LayeredM (Array (Array LNodeId) × Bool) := do
+  if !h.forceModelOrder then return ← h.base.setFirstLayerOrder order forwardSweep random
+  let startIndex := if forwardSweep then 0 else order.size - 1
+  let some layer := order[startIndex]? | return (order, false)
+  let c ← h.base.context forwardSweep
+  h.base.runOnStates random (BarycenterHeuristic.randomizeBarycenters c layer)
+  let mut nodes := layer
+  if nodes.size > 1 then
+    let env ← h.compareEnv c nodes
+    let rel ← h.relations.swap {}
+    let (sorted, rel) := insertionSort env rel nodes
+    h.relations.set rel
+    nodes := sorted
+  return (order.setIfInBounds startIndex nodes, false)
 
 /-- `minimize_crossings(order, free_layer_index, forward_sweep, is_first_sweep, random)`: the base
 port ranks, barycenters and filled-in barycenters; then with `forceModelOrder` the model order

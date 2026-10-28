@@ -820,41 +820,49 @@ def countNorthSouthCrossingsOnPortsFast (a : LGraphArena) (positions : Array Int
   nsCountLoop a positions ports 0 tree 0
 
 /-- `connectedInLayerPortsSortedByPosition(upperNode, lowerNode, side)`: the side's ports of both
-nodes with non-self-loop edges plus the far ends of their in-layer edges, de-duplicated in
-discovery order and stably sorted by position. -/
+nodes with non-self-loop edges plus the far ends of their in-layer edges, collected like Java's
+`TreeSet` ordered by position: a port whose position equals that of a port collected before is
+dropped (far ends outside the counted sides keep stale positions, so distinct ports can share one;
+elk-rs de-duplicates by identity), then sorted by position. -/
 def connectedInLayerPortsSortedByPosition (a : LGraphArena) (positions : Array Int) (upperNode lowerNode : LNodeId)
     (side : PortSide) : Array LPortId := Id.run do
   let mut ports : Array LPortId := #[]
-  let mut seen : Std.HashSet LPortId := {}
+  let mut seen : Std.HashSet Int := {}
   for node in #[upperNode, lowerNode] do
     for port in CrossMinUtil.inNorthSouthEastWestOrder a node side do
       for e in (a.port port).connectedEdges do
         if a.edgeIsSelfLoop e then continue
-        if !seen.contains port then
-          seen := seen.insert port
+        let pos := positionIn positions a port
+        if !seen.contains pos then
+          seen := seen.insert pos
           ports := ports.push port
         if isInLayer a e then
           if let some other := otherEndOf a e port then
-            if !seen.contains other then
-              seen := seen.insert other
+            let otherPos := positionIn positions a other
+            if !seen.contains otherPos then
+              seen := seen.insert otherPos
               ports := ports.push other
   return stableSortByKey ports (positionIn positions a ·)
 
 /-- `connectedPortsSortedByPosition(upperPort, lowerPort)`: both ports and the far ends of their
-edges (port self loops skipped), de-duplicated and stably sorted by position. -/
+edges (port self loops skipped), collected like Java's `TreeSet` ordered by position (a port whose
+position was already collected is dropped, see `connectedInLayerPortsSortedByPosition`) and sorted
+by position. -/
 def connectedPortsSortedByPosition (a : LGraphArena) (positions : Array Int) (upperPort lowerPort : LPortId) :
     Array LPortId := Id.run do
   let mut ports : Array LPortId := #[]
-  let mut seen : Std.HashSet LPortId := {}
+  let mut seen : Std.HashSet Int := {}
   for port in #[upperPort, lowerPort] do
-    if !seen.contains port then
-      seen := seen.insert port
+    let pos := positionIn positions a port
+    if !seen.contains pos then
+      seen := seen.insert pos
       ports := ports.push port
     for e in (a.port port).connectedEdges do
       if isPortSelfLoop a e then continue
       if let some other := otherEndOf a e port then
-        if !seen.contains other then
-          seen := seen.insert other
+        let otherPos := positionIn positions a other
+        if !seen.contains otherPos then
+          seen := seen.insert otherPos
           ports := ports.push other
   return stableSortByKey ports (positionIn positions a ·)
 
@@ -897,6 +905,44 @@ private def initPortPositionsCounterClockwise (c : CrossingsCounter) (leftLayer 
     LayeredM (Array LPortId) := do
   let ports ← c.initPositionsM leftLayer #[] .east true false
   c.initPositionsM rightLayer ports .west false false
+
+/-- The text of the `ArrayIndexOutOfBoundsException` Java throws while `countCrossingsOnPorts`
+(`inLayer = false`) or `countInLayerCrossingsOnPorts` (`inLayer = true`) runs over `ports` with a tree
+of `maxNum` buckets, if any: per port `removeAll(cur)` (`numsPerIndex[cur]`, length `maxNum`), per
+(in-layer) edge whose far end lies above `rank(end)` (`binarySums[end]`, length `maxNum + 1`), then the
+`add(end)`s in the order the deque pops them (`numsPerIndex[end]`). The accessed indices depend only on
+the positions, so the first failing access can be found before counting. Positions are fresh for the
+ports a counter numbered, but far ends elsewhere keep the positions an earlier numbering left in the
+shared array (e.g. the other side's in-layer counter of a greedy switch decider), which can exceed
+the tree: Java then throws, the counts (and a greedy switch loop fed by them) would otherwise run on
+clamped values. -/
+def javaTreeIndexError (a : LGraphArena) (positions : Array Int) (maxNum : Nat) (ports : Array LPortId)
+    (inLayer : Bool) : Option String := Id.run do
+  let oob (i : Int) (len : Nat) : String :=
+    s!"java.lang.ArrayIndexOutOfBoundsException: Index {i} out of bounds for length {len}"
+  for port in ports do
+    let cur := positionIn positions a port
+    if cur < 0 || cur >= maxNum then return some (oob cur maxNum)
+    let pt := a.port port
+    let mut ends : Array Int := #[]
+    for e in pt.incomingEdges ++ pt.outgoingEdges do
+      if inLayer && !isInLayer a e then continue
+      let some other := otherEndOf a e port | continue
+      let endPosition := positionIn positions a other
+      if endPosition > cur then
+        if endPosition > maxNum then return some (oob endPosition (maxNum + 1))
+        ends := ends.push endPosition
+    for k in [0:ends.size] do
+      let endPosition := ends[ends.size - 1 - k]!
+      if endPosition >= maxNum then return some (oob endPosition maxNum)
+  return none
+
+/-- `withTree` after `javaTreeIndexError` (throws Java's exception text). -/
+@[inline] private def checkJavaTreeIndices (c : CrossingsCounter) (ports : Array LPortId) (inLayer : Bool) :
+    LayeredM Unit := do
+  let maxNum := (← c.indexTree.get).maxNum
+  if let some msg := javaTreeIndexError (← get) (← c.portPositions.get) maxNum ports inLayer then
+    throw (IO.userError msg)
 
 /-- Runs one of the pure counting loops on the counter's tree. -/
 @[inline] private def withTree (c : CrossingsCounter)
@@ -1023,10 +1069,12 @@ def countCrossingsBetweenPortsInBothOrders (c : CrossingsCounter) (upperPort low
     LayeredM (Int × Int) := do
   let a ← get
   let ports := connectedPortsSortedByPosition a (← c.portPositions.get) upperPort lowerPort
+  c.checkJavaTreeIndices ports false
   let upperLowerCrossings ← c.withTree countCrossingsOnPorts ports
   c.indexTree.modify (·.clear)
   c.switchPorts upperPort lowerPort
   let ports := stableSortByKey ports (positionIn (← c.portPositions.get) a ·)
+  c.checkJavaTreeIndices ports false
   let lowerUpperCrossings ← c.withTree countCrossingsOnPorts ports
   c.indexTree.modify (·.clear)
   c.switchPorts lowerPort upperPort
@@ -1039,10 +1087,12 @@ def countInLayerCrossingsBetweenNodesInBothOrders (c : CrossingsCounter) (upperN
     (side : PortSide) : LayeredM (Int × Int) := do
   let a ← get
   let ports := connectedInLayerPortsSortedByPosition a (← c.portPositions.get) upperNode lowerNode side
+  c.checkJavaTreeIndices ports true
   let upperLowerCrossings ← c.withTree countInLayerCrossingsOnPorts ports
   c.switchNodes upperNode lowerNode side
   c.indexTree.modify (·.clear)
   let ports := stableSortByKey ports (positionIn (← c.portPositions.get) a ·)
+  c.checkJavaTreeIndices ports true
   let lowerUpperCrossings ← c.withTree countInLayerCrossingsOnPorts ports
   c.switchNodes lowerNode upperNode side
   c.indexTree.modify (·.clear)

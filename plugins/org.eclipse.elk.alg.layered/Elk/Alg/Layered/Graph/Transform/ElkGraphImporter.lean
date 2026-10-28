@@ -568,7 +568,8 @@ def transformNode (imp : ElkGraphImporter) (elknode : NodeId) (lgraph : LGraphId
 from `portMap` or are transformed on demand when their node is known (graph properties of
 `lgraph` updated); nodes get a new port from `LGraphUtil.createPort(node, none, type, graph)`
 (target ports in the target node's graph). `none` when the end point is outside the scope. -/
-def resolvePort (imp : ElkGraphImporter) (shape : ConnectableId) (portType : PortType) (lgraph : LGraphId) :
+def resolvePort (imp : ElkGraphImporter) (shape : ConnectableId) (portType : PortType) (lgraph : LGraphId)
+    (endPoint : LNodeId → LImportM (Option KVector × PortType) := fun _ => pure (none, portType)) :
     LImportM (Option LPortId) := do
   match shape with
   | .port port =>
@@ -584,7 +585,8 @@ def resolvePort (imp : ElkGraphImporter) (shape : ConnectableId) (portType : Por
     let some lnode ← nodeFor imp node | return none
     -- Java parity: source ports in the edge's graph, target ports in the target node's graph
     let graphForPort ← if portType == .input then do pure ((← nodeGraph lnode).getD lgraph) else pure lgraph
-    return some (← LGraphUtil.createPort lnode none portType graphForPort)
+    let (point, createType) ← endPoint lnode
+    return some (← LGraphUtil.createPort lnode point createType graphForPort)
 
 /-- `INSIDE_CONNECTIONS` for the end ports of an edge into the source's descendants (source port)
 or from the target's descendants (target port), and for inside self loops (both). -/
@@ -622,14 +624,38 @@ end ports (first source, first target; edges without one are skipped) with the e
 (`NO_LAYOUT = false`), `ORIGIN`, registered in the origin store, its labels and
 `COORDINATE_SYSTEM_ORIGIN`; updates `SELF_LOOPS`, `HYPEREDGES`, `END_LABELS`, `CENTER_LABELS` of
 `lgraph`. Throws `UnsupportedGraphException` when an end point is outside the layout scope. -/
-def transformEdge (imp : ElkGraphImporter) (elkedge : EdgeId) (lgraph : LGraphId) : LImportM Unit := do
+def transformEdge (imp : ElkGraphImporter) (elkedge : EdgeId) (lgraph : LGraphId) (elkparent : Option NodeId := none) :
+    LImportM Unit := do
   checkEdgeValidity elkedge
   let edge ← elkEdge elkedge
   let some sourceShape := edge.sources[0]? | return
   let some targetShape := edge.targets[0]? | return
+  -- Java: a port created for an end at a node with fixed port sides starts at the first section's start
+  -- (end) point, made relative to `elkparent`; for an edge into a descendant of its source the source
+  -- port is an input port shifted by the source node's position (elk-rs ignores the section)
+  let section? ← match edge.sections[0]? with
+    | some sec => pure (some (← liftElk (ElkM.getSection sec)))
+    | none => pure none
+  let sectionPoint (lnode : LNodeId) (x y : Float) : LImportM (Option KVector) := do
+    let constraints := (← getNode lnode).props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
+    if !constraints.isSideFixed then return none
+    let abs ← withElk (ElkUtil.toAbsolute · ⟨x, y⟩ edge.containingNode)
+    return some (← withElk (ElkUtil.toRelative · abs elkparent))
+  let sourceEnd (lnode : LNodeId) : LImportM (Option KVector × PortType) := do
+    let some sec := section? | return (none, .output)
+    let some point ← sectionPoint lnode sec.startX sec.startY | return (none, .output)
+    let some elkSource ← withElk (ElkGraphUtil.connectableShapeToNode · sourceShape) | return (some point, .output)
+    let some elkTarget ← withElk (ElkGraphUtil.connectableShapeToNode · targetShape) | return (some point, .output)
+    if ← withElk (ElkGraphUtil.isDescendant · elkTarget elkSource) then
+      let pos := (← getNode lnode).position
+      return (some ⟨point.x + pos.x, point.y + pos.y⟩, .input)
+    return (some point, .output)
+  let targetEnd (lnode : LNodeId) : LImportM (Option KVector × PortType) := do
+    let some sec := section? | return (none, .input)
+    return (← sectionPoint lnode sec.endX sec.endY, .input)
   -- Java throws one exception for a missing source or target (elk-rs: two messages naming the edge id)
-  let some sourcePort ← resolvePort imp sourceShape .output lgraph | throwEdgeEndNotFound elkedge
-  let some targetPort ← resolvePort imp targetShape .input lgraph | throwEdgeEndNotFound elkedge
+  let some sourcePort ← resolvePort imp sourceShape .output lgraph sourceEnd | throwEdgeEndNotFound elkedge
+  let some targetPort ← resolvePort imp targetShape .input lgraph targetEnd | throwEdgeEndNotFound elkedge
   let insideSelfLoops := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
   markInsideConnections sourceShape targetShape insideSelfLoops sourcePort targetPort
   let ledge ← LayeredM.createEdge
@@ -648,6 +674,17 @@ def transformEdge (imp : ElkGraphImporter) (elkedge : EdgeId) (lgraph : LGraphId
     internal := { e.internal with origin := some (.elkEdge elkedge), modelOrder := modelOrder } }
   imp.ledges.modify fun m => m.insert elkedge ledge
   gp ← transformEdgeLabels imp edge.labels ledge gp
+  -- Java: the original bend points (start, bends, end of the first section) when the interactive
+  -- crossing minimiser or node placer needs them (elk-rs does not keep them)
+  let lgProps := (← getGraph lgraph).props
+  let bendPointsRequired :=
+    lgProps.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep == .interactive
+      || lgProps.getD LayeredOptions.NODE_PLACEMENT_STRATEGY NodePlacementStrategy.brandesKoepf == .interactive
+  if bendPointsRequired then
+    if let some sec := edge.sections[0]? then
+      if !(← liftElk (ElkM.getSection sec)).bendPoints.isEmpty then
+        let chain ← withElk (ElkUtil.createVectorChain · sec)
+        modifyEdge ledge fun e => { e with internal := { e.internal with originalBendpoints := some (ledge.idx, chain) } }
   let st ← imp.state.get
   if let (some topLevelElkGraph, some topLevelLGraph) := (st.topLevelElkGraph, st.topLevelLGraph) then
     let coordOrigin ← findCoordinateSystemOrigin imp elkedge topLevelElkGraph topLevelLGraph
@@ -768,14 +805,14 @@ def importFlatGraphNodes (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : 
 inside self loops and edges into the source's descendants, the inside of the target for edges
 from its descendants, else `lgraph` (also when that node has no nested graph). -/
 private def edgeParentLGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId)
-    (sourceNode targetNode : NodeId) (isInsideSelfLoop : Bool) : LImportM LGraphId := do
+    (sourceNode targetNode : NodeId) (isInsideSelfLoop : Bool) : LImportM (NodeId × LGraphId) := do
   let parentElkGraph ←
     if isInsideSelfLoop || (← withElk (ElkGraphUtil.isDescendant · targetNode sourceNode)) then pure sourceNode
     else if ← withElk (ElkGraphUtil.isDescendant · sourceNode targetNode) then pure targetNode
     else pure elkgraph
   match ← nodeFor imp parentElkGraph with
-  | some parentLNode => return (← getNode parentLNode).nestedGraph.getD lgraph
-  | none => return lgraph
+  | some parentLNode => return (parentElkGraph, (← getNode parentLNode).nestedGraph.getD lgraph)
+  | none => return (parentElkGraph, lgraph)
 
 /-- The inside self loops of `elkgraph` that are contained in its parent (second loop of Rust
 `import_flat_graph_edges`). -/
@@ -789,7 +826,7 @@ private def importParentInsideSelfLoops (imp : ElkGraphImporter) (elkgraph : Nod
     if sourceNode != elkgraph || !isSelfLoop then continue
     let insideSelfLoopsEnabled := (← elkNode sourceNode).props.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
     if insideSelfLoopsEnabled && edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false then
-      transformEdge imp e lgraph
+      transformEdge imp e lgraph (some elkgraph)
 
 /-- Rust `import_flat_graph_edges(elkgraph, lgraph)`, the edge loop of one level of
 `importHierarchicalGraph` (Java's hierarchical edge loop): the contained edges (edge model order by
@@ -816,8 +853,8 @@ def importFlatGraphEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : 
     if edgeNoLayout || sourceProps.getD CoreOptions.NO_LAYOUT false || targetNoLayout then continue
     let insideSelfLoopsEnabled := sourceProps.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
     let isInsideSelfLoop := isSelfLoop && insideSelfLoopsEnabled && insideSelfLoopYo
-    let parentLGraph ← edgeParentLGraph imp elkgraph lgraph sourceNode targetNode isInsideSelfLoop
-    transformEdge imp e parentLGraph
+    let (parentElkGraph, parentLGraph) ← edgeParentLGraph imp elkgraph lgraph sourceNode targetNode isInsideSelfLoop
+    transformEdge imp e parentLGraph (some parentElkGraph)
   importParentInsideSelfLoops imp elkgraph lgraph
 
 /-- The edge loop of Java `importFlatGraph(elkgraph, lgraph)`: for every contained edge (edge model
@@ -854,7 +891,7 @@ def importFlatGraphEdgesJava (imp : ElkGraphImporter) (elkgraph : NodeId) (lgrap
     let connectsToGraph := (sourceParent == some elkgraph && target == elkgraph) !=
       (targetParent == some elkgraph && source == elkgraph)
     if isToBeLaidOut && !isInsideSelfLoop && (connectsToGraph || connectsSiblings) then
-      transformEdge imp e lgraph
+      transformEdge imp e lgraph (some elkgraph)
   importParentInsideSelfLoops imp elkgraph lgraph
 
 /-- Java `importFlatGraph(elkgraph, lgraph)`: nodes, then `importFlatGraphEdgesJava`. -/

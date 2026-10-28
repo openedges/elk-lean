@@ -125,14 +125,20 @@ def joinWith (left right : VerticalSegment) : VerticalSegment :=
     potentialGroupParents := left.potentialGroupParents ++ right.potentialGroupParents
     hitbox := ElkRectangle.ofValues x y (maxX - x) (maxY - y) }
 
-/-- Rust `fuzzy_cmp(left, right)`: `Equal` within `CompareFuzzy.TOLERANCE`, else `partial_cmp`. -/
+/-- Guava `DoubleMath.fuzzyCompare(a, b, tolerance)`: `0` when `|a - b| <= tolerance`, `a == b` or
+both are NaN; else `a < b`, `a > b`, and finally a NaN is larger than a number. -/
 def fuzzyCmp (left right : Float) : Ordering :=
-  if CompareFuzzy.eq left right then .eq else Float.comparePartial left right
+  if (left - right).abs <= CompareFuzzy.TOLERANCE || left == right || (left != left && right != right) then .eq
+  else if left < right then .lt
+  else if left > right then .gt
+  else if left != left then .gt else .lt
 
-/-- `VerticalSegment.compareTo(o)` (Rust `register_segments` sort closure): fuzzy x, then y. -/
+/-- `VerticalSegment.compareTo(o)`: `DoubleMath.fuzzyCompare` of the x coordinates (tolerance
+`CompareFuzzy.TOLERANCE`), on `0` `Double.compare` of the y coordinates. Fuzzy equality is not
+transitive, so this is not a consistent order (elk-rs: `partial_cmp` for both). -/
 def compareTo (a b : VerticalSegment) : Ordering :=
   let xCmp := fuzzyCmp a.hitbox.x b.hitbox.x
-  if xCmp != .eq then xCmp else Float.comparePartial a.hitbox.y b.hitbox.y
+  if xCmp != .eq then xCmp else Float.compareJava a.hitbox.y b.hitbox.y
 
 end VerticalSegment
 

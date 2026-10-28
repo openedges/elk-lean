@@ -789,7 +789,8 @@ def nodePromotionTests : Suite := suite "layered.intermediate.NodePromotion" do
         return r)
     checkEq s!"elk-rs parity: {strategy} leaves the layering unchanged" (layerNodes a g)
       #[#[ns[0]!], #[ns[1]!, ns[3]!], #[ns[2]!]]
-  -- hand: fewer than two layers → untouched (not even re-sorted)
+  -- Java: a single layer is still sorted by model order (descending for left-to-right) and rebuilt
+  -- (elk-rs leaves graphs with fewer than two layers untouched)
   let ((g, ns), a) ← LayeredM.run (do
       let (g, layers) ← graphWithLayers 1
       LayeredM.setGraphProp g LayeredOptions.LAYERING_NODE_PROMOTION_STRATEGY NodePromotionStrategy.modelOrderLeftToRight
@@ -799,7 +800,7 @@ def nodePromotionTests : Suite := suite "layered.intermediate.NodePromotion" do
       setModelOrder n1 1
       runProc NodePromotion.processor g
       return (g, #[n0, n1]))
-  checkEq "hand: single layer not re-sorted" (layerNodes a g) #[ns]
+  checkEq "Java: single layer sorted by descending model order" (layerNodes a g) #[#[ns[1]!, ns[0]!]]
 
 def suites : Array Tests.Suite :=
   #[edgeReverserTests, layerConstraintPreprocessorTests, layerConstraintPostprocessorTests, inLayerConstraintTests,

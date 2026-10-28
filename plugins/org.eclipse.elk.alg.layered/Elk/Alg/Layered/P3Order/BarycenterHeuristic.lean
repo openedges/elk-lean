@@ -35,9 +35,12 @@ the in-layer constraints are resolved by the `ForsterConstraintResolver`.
   (Rust `set_snapshot`; the holder calls it after the initialisation).
 
 ## Two code paths (as in elk-rs)
-* **snapshot path** (after `setSnapshot`): node ids, layer indices, port ids, the *captured* port
-  order of a node and the edge end points are read from the snapshot (`calculate_barycenter_snap`);
-  "same layer" is the equality of the captured layer indices.
+* **snapshot path** (after `setSnapshot`): node ids, layer indices, port ids and the edge end points
+  are read from the snapshot (`calculate_barycenter_snap`); "same layer" is the equality of the
+  captured layer indices. The ports of a node are visited in their *current* order (Java
+  `node.getPorts()`, as left by the port distributors), mapped to their captured ids; elk-rs visits
+  the order captured with the snapshot, so the recursion into in-layer neighbours — and with it which
+  node gets which perturbation draw — and the order of the rank additions can differ from Java.
 * **lock path** (no snapshot, e.g. the elk-rs unit tests): live `LNode.id`, `Layer.id`, `LPort.id`,
   the current port order, `getPredecessorPorts`/`getSuccessorPorts` and layer identity
   (`calculate_barycenter_lock`).
@@ -46,18 +49,17 @@ the in-layer constraints are resolved by the `ForsterConstraintResolver`.
 ## Numerics and order
 The perturbation is `(nextFloat() as f32 * 0.07f - 0.07f / 2) as f64` in `f32` arithmetic (every
 operation rounded with `Float.toF32`), the filled-in random value `nextFloat() * maxBary - 1` and
-everything else is `f64`. Draws happen in the Rust order: per computed node with a positive degree
+everything else is `f64`. Draws happen in Java's order: per computed node with a positive degree
 (after its in-layer/associate recursion), then per node without barycenter in
 `fillInUnknownBarycenters`, or one `nextDouble()` per node in `randomizeBarycenters`, also for nodes
-without a state. The sort is stable (Rust `sort_by`) with known barycenters ascending
-(`partial_cmp`, NaN equal) before unknown ones.
+without a state. The sort is stable (Java's `TimSort` on this consistent order gives the same
+result) with known barycenters ascending by `Double.compareTo` (NaN largest, `-0.0 < 0.0`; elk-rs
+`partial_cmp`) before unknown ones.
 
 ## Deviations
 * Java `minimizeCrossings(layer, …)` sorts with `ModelOrderBarycenterHeuristic.insertionSort` when
   the graph has `CROSSING_MINIMIZATION_FORCE_NODE_MODEL_ORDER`; Rust (followed) always sorts by
   barycenter here (the model order heuristic overrides `minimizeCrossings` only).
-* Java's comparator uses `Double.compareTo` (NaN biggest, `-0.0 < 0.0`); Rust's `partial_cmp`
-  (followed) treats NaN as equal and `-0.0 == 0.0`.
 * An out-of-range layer index returns the order unchanged (Rust panics on `order[index]`).
 * The `ELK_TRACE_CROSSMIN`, `_PORT_RANKS`, `_CROSSMIN_TIMING` and `BARYCENTER_LAYER_PATTERN` dumps are
   not reproduced; `CROSSMIN_RANDOM_TRACE` lines are (see `RandomTrace`), including the Rust quirk that
@@ -285,15 +287,23 @@ partial def addEndRanks (c : BarycenterContext) (ends : Array Nat) (k : Nat) (ac
 partial def addEndRanksRange (ranks : FloatArray) (ends : Array Nat) (k hi : Nat) (acc : Float) : Float :=
   if h : k < hi ∧ k < ends.size then addEndRanksRange ranks ends (k + 1) hi (acc + ranks.get! ends[k]) else acc
 
-/-- `acc + rank` over the far ends of the captured ports `pids[i:]` (in order; the far ends in the
-sweep direction are the predecessor or successor range of the snapshot's `endIds`). -/
-partial def addPortEndRanks (c : BarycenterContext) (s : CrossMinSnapshot) (pids : Array Nat) (i : Nat) (acc : Float) :
-    Float :=
-  if h : i < pids.size then
-    let pid := pids[i]
-    let lo := if c.forward then s.endLo pid else s.endSplit pid
-    let hi := if c.forward then s.endSplit pid else s.endHi pid
-    addPortEndRanks c s pids (i + 1) (addEndRanksRange c.portRanks s.endIds lo hi acc)
+/-- The current port list of flat node `flat` (Java `node.getPorts()`: the order the port
+distributors left; elk-rs iterates the order captured with the snapshot). -/
+@[inline] def livePorts (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat) : Array LPortId :=
+  (c.arena.node (s.nodeRef flat)).ports
+
+/-- `acc + rank` over the far ends of the current ports `ports[i:]` (in order; the far ends in the
+sweep direction are the predecessor or successor range of the snapshot's `endIds` of the port's
+captured id; a port without captured id has none). -/
+partial def addPortEndRanks (c : BarycenterContext) (s : CrossMinSnapshot) (ports : Array LPortId) (i : Nat)
+    (acc : Float) : Float :=
+  if h : i < ports.size then
+    match s.portMap.get ports[i].idx with
+    | 0 => addPortEndRanks c s ports (i + 1) acc
+    | k + 1 =>
+      let lo := if c.forward then s.endLo k else s.endSplit k
+      let hi := if c.forward then s.endSplit k else s.endHi k
+      addPortEndRanks c s ports (i + 1) (addEndRanksRange c.portRanks s.endIds lo hi acc)
   else acc
 
 /-- The number of far ends of the captured ports `pids[i:]`. -/
@@ -302,23 +312,25 @@ partial def countPortEnds (c : BarycenterContext) (s : CrossMinSnapshot) (pids :
 
 mutual
 
-/-- `calculate_barycenter_snap(snap, flat, …)`: the captured ports of the node and their captured
-predecessors (forward) or successors; a far end in the same (captured) layer contributes its own
-recursively computed degree and weight (self loops ignored), others their port rank; then the
-associates of the node (if it is one of the current nodes) in the same layer. -/
+/-- `calculate_barycenter_snap(snap, flat, …)`: the node's ports in their current order (Java
+`node.getPorts()`; elk-rs: the captured order) and their captured predecessors (forward) or
+successors; a far end in the same (captured) layer contributes its own recursively computed degree
+and weight (self loops ignored), others their port rank; then the associates of the node (if it is
+one of the current nodes) in the same layer. The port order decides the recursion order (and so
+which node gets which perturbation draw) and the order of the rank additions. -/
 partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat) (d : BarycenterData) : BarycenterData :=
   let li := s.nodeLayerOf flat
   let ni := s.nodeGraphIdOf flat
   if alreadyVisited d li ni then d
   else
-    let pids := s.nodePorts flat
-    -- `anyPortEndInLayer c s li pids 0` and `countPortEnds c s pids 0 0`, precomputed by the snapshot
+    let ports := livePorts c s flat
+    -- `anyPortEndInLayer`/`countPortEnds` of the node's ports, precomputed by the snapshot
     let endsInLayer := s.nodeEndFlag flat &&& (if c.forward then 1 else 2) != 0
     if !endsInLayer && s.nodeEndFlag flat &&& 4 == 0 && !c.randomTrace && d.random.mockDoubleSequence.isNone &&
         stateExists d.states li ni then
       -- no recursion and no associates: reset, the ranks of all far ends in order and
       -- `finishBarycenter` (with `Random.nextFloat` inlined) in one update of the state
-      let sum := addPortEndRanks c s pids 0 floatZero
+      let sum := addPortEndRanks c s ports 0 floatZero
       let degree : Int := 0 + (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
       if degree > 0 then
         match d with
@@ -336,10 +348,10 @@ partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat)
         d.modifyState li ni fun st =>
           { st with visited := true, degree, summedWeight := sum, hasBarycenter := false }
     else
-      let d := if endsInLayer then calcSnapPorts c s flat li ni pids 0 (resetVisit d li ni)
+      let d := if endsInLayer then calcSnapPorts c s flat li ni ports 0 (resetVisit d li ni)
         else
           -- no recursion: the reset state accumulates the ranks of all far ends in order
-          let sum := addPortEndRanks c s pids 0 floatZero
+          let sum := addPortEndRanks c s ports 0 floatZero
           let degree : Int := (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
           d.modifyState li ni fun st =>
             { st with visited := true, degree := 0 + degree, summedWeight := sum, hasBarycenter := false }
@@ -351,13 +363,16 @@ partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat)
       let nodeName := if c.crossminTrace then ((c.nodeOfFlat? flat).map c.nodeLabel).getD "<unknown>" else ""
       finishBarycenter c li ni nodeName d
 
-/-- The port loop of `calcSnap` over the captured ports `pids[i:]` of node `flat`. -/
-partial def calcSnapPorts (c : BarycenterContext) (s : CrossMinSnapshot) (flat li ni : Nat) (pids : Array Nat) (i : Nat)
-    (d : BarycenterData) : BarycenterData :=
-  if h : i < pids.size then
-    let pid := pids[i]
-    let connected := if c.forward then s.portPredecessors pid else s.portSuccessors pid
-    calcSnapPorts c s flat li ni pids (i + 1) (calcSnapConnected c s flat li ni connected 0 d)
+/-- The port loop of `calcSnap` over the current ports `ports[i:]` of node `flat` (by captured id;
+a port without captured id has no far ends). -/
+partial def calcSnapPorts (c : BarycenterContext) (s : CrossMinSnapshot) (flat li ni : Nat) (ports : Array LPortId)
+    (i : Nat) (d : BarycenterData) : BarycenterData :=
+  if h : i < ports.size then
+    match s.portMap.get ports[i].idx with
+    | 0 => calcSnapPorts c s flat li ni ports (i + 1) d
+    | pid + 1 =>
+      let connected := if c.forward then s.portPredecessors pid else s.portSuccessors pid
+      calcSnapPorts c s flat li ni ports (i + 1) (calcSnapConnected c s flat li ni connected 0 d)
   else d
 
 /-- The far-end loop of `calcSnap` over the captured port ids `connected[k:]`. -/
@@ -466,7 +481,7 @@ partial def calcSnapRun (c : BarycenterContext) (s : CrossMinSnapshot) (flats : 
     else
       let endsInLayer := s.nodeEndFlag flat &&& (if c.forward then 1 else 2) != 0
       if !endsInLayer && s.nodeEndFlag flat &&& 4 == 0 && stateExists states li ni then
-        let sum := addPortEndRanks c s (s.nodePorts flat) 0 floatZero
+        let sum := addPortEndRanks c s (livePorts c s flat) 0 floatZero
         let degree : Int := 0 + (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
         if degree > 0 then
           let seed := (seed * Random.multiplier + Random.addend) &&& Random.mask
@@ -579,10 +594,10 @@ def randomizeBarycenters (c : BarycenterContext) (nodes : Array LNodeId) (d : Ba
     d := d'.assign (c.layerIndexOf node) (c.nodeIdOf node) value
   return d
 
-/-- The Rust sort comparator of `minimize_crossings_layer`: known barycenters ascending
-(`partial_cmp`, NaN equal), known before unknown, unknowns equal. -/
+/-- Java `barycenterStateComparator`: known barycenters ascending (`Double.compareTo`), known before
+unknown, unknowns equal. -/
 def compareBarycenters : Option Float → Option Float → Ordering
-  | some l, some r => Float.comparePartial l r
+  | some l, some r => Float.compareJava l r
   | some _, none => .lt
   | none, some _ => .gt
   | none, none => .eq
@@ -615,14 +630,18 @@ partial def barycenterKeys (c : BarycenterContext) (states : Array (Array (Optio
     else barycenterKeys c states layer (i + 1) (values.push floatZero) (known.push 0)
   else (values, known)
 
+/-- Java `Double.compare(a, b) > 0` (`a > b`, else only `0.0` vs `-0.0` or a NaN `a`). -/
+@[inline] def doubleGreater (a b : Float) : Bool :=
+  if a > b then true else if a < b then false else Float.compareJava a b == .gt
+
 /-- `compareBarycenters (key i) (key j) == .gt` of the comparator below (known before unknown,
-known by `partial_cmp`). -/
+known by `Double.compareTo`). -/
 @[inline] def keyGreater (values : FloatArray) (known : ByteArray) (i j : Nat) : Bool :=
-  if known.get! i != 0 then known.get! j != 0 && values.get! i > values.get! j
+  if known.get! i != 0 then known.get! j != 0 && doubleGreater (values.get! i) (values.get! j)
   else known.get! j != 0
 
-/-- The stable sort of `minimize_crossings_layer` (Rust sorts indices by the pre-extracted
-barycenters with `sort_by`): positions sorted by the extracted keys (`compareBarycenters`) with
+/-- `Collections.sort(layer, barycenterStateComparator)`: positions sorted by the extracted keys
+(`compareBarycenters`, a total preorder, so every stable sort gives Java's result) with
 `keyedStableSort` (`stableSort`'s algorithm on the unboxed keys). -/
 def sortByBarycenter (c : BarycenterContext) (states : Array (Array (Option BarycenterState))) (layer : Array LNodeId) :
     Array LNodeId :=

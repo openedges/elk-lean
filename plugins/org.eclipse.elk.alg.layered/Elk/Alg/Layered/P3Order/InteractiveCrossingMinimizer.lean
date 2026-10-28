@@ -4,7 +4,8 @@ import Elk.Alg.Layered.P3Order.NodeRelativePortDistributor
 import Elk.Alg.Layered.P3Order.Counting.IInitializable
 import Elk.Core.Util.Java
 import Elk.Core.Util.Sort
-import Elk.Core.Util.RustSort
+import Elk.Core.Util.JavaSort
+import Std.Data.HashMap
 /-!
 # `org.eclipse.elk.alg.layered.p3order.InteractiveCrossingMinimizer` (elk-rs `interactive_crossing_minimizer.rs`)
 
@@ -15,16 +16,27 @@ their origin node, everything else the node's reference point), ties are broken 
 `IN_LAYER_SUCCESSOR_CONSTRAINTS`. After each layer the ports are distributed by a
 `NodeRelativePortDistributor` (forward sweep, no random numbers are drawn).
 
-Deviations of the Rust port from Java (followed here): the long edge position interpolates the
-edge's *current* bend points (`bendPoints`), not `ORIGINAL_BENDPOINTS`; a long edge dummy whose
-`ORIGIN` is no edge, or whose edge has fewer than two points, and a north/south dummy whose
-origin port cannot be resolved or lies on an east/west side fall back to the reference point
-(Java throws or falls out of the switch); a zero x distance between the two interpolation
-points yields the second point's y (`|dx| <= f64::EPSILON`). The distributor receives the node
-order captured *before* sorting (`toNodeArray()` copies the layers), exactly like Rust and Java.
+Java semantics (elk-rs differs, see below): a long edge dummy interpolates the polyline of the
+`ORIGINAL_BENDPOINTS` of its `ORIGIN` edge (the start point, bend points and end point of the
+imported section, set by the importer only for the interactive strategies; reversed for a reversed
+edge), extended by the absolute anchors of `LONG_EDGE_SOURCE` (in front) and `LONG_EDGE_TARGET` (at
+the end). For an edge that is not reversed Java extends the stored chain object itself (`addFirst`/
+`addLast` on the property value); the segments of a split long edge share that object
+(`copyProperties`), so later dummies of the same edge see the points added before. This is
+reproduced with the chains extended so far, by object identity, for the duration of `process`. The interpolation divides by the x distance of the two points without a guard
+(`±Infinity`/`NaN` positions sort like `Double.compare`). The layer is sorted with JDK `TimSort`
+(`javaSortBy`, Java `Collections.sort`) by `Double.compare` of the positions with the
+`IN_LAYER_SUCCESSOR_CONSTRAINTS` tie-break — not a consistent order, so the comparison sequence
+matters. The distributor receives the node order captured *before* sorting (`toNodeArray()` copies
+the layers).
 
-Orders reproduced: layers in `graph.layers` order, ports numbered in the pre-sort node order,
-the layer sort is Rust `sort_by` (`rustSortBy`; Java `Collections.sort`).
+elk-rs interpolates the edge's current `bendPoints` (empty in P3) with an `f64::EPSILON` guard,
+compares with `partial_cmp` and sorts with Rust's `sort_by`.
+
+Unreachable Java crashes kept as fallbacks: a long edge dummy whose `ORIGIN` is no edge and a
+north/south dummy without ports or without origin port use the reference point (Java throws a
+`ClassCastException`/`NullPointerException`/`IndexOutOfBoundsException`; every dummy of these types
+has them).
 -/
 namespace Elk.Alg.Layered.P3Order
 
@@ -50,44 +62,46 @@ def getLayoutProcessorConfiguration (graph : LGraphId) : LayeredM (Option Layere
     configuration := configuration.addBefore .p3NodeOrdering .portListSorter
   return some configuration
 
-/-- Rust `f64::EPSILON`. -/
-def EPSILON : Float := 2.220446049250313e-16
-
-/-- Rust `long_edge_position(node, horiz_pos)`: the y coordinate at `horizPos` of the polyline
-formed by the source anchor, the edge's bend points (reversed for reversed edges) and the target
-anchor; `none` where Rust returns `None`. -/
-def longEdgePosition (node : LNodeId) (horizPos : Float) : LayeredM (Option Float) := do
+/-- The long edge position of `getPos(node, horizPos)`: the y coordinate at `horizPos` of the polyline
+of the `ORIGIN` edge's `ORIGINAL_BENDPOINTS` (reversed copy for a reversed edge, else the stored
+chain itself, which is extended in place like Java's) with the source anchor in front and the target
+anchor at the end; `none` (reference point fallback) with fewer than two points or no edge origin. -/
+def longEdgePosition (chains : IO.Ref (Std.HashMap Nat KVectorChain)) (node : LNodeId) (horizPos : Float) :
+    LayeredM (Option Float) := do
   let nd ← getNode node
   let some (.lEdge edge) := nd.internal.origin | return none
   let ed ← getEdge edge
-  let mut bendPoints : KVectorChain := ed.bendPoints
-  if ed.internal.reversed then
-    bendPoints := KVectorChain.reverse bendPoints
+  -- `shared`: the identity of the property's chain object when Java mutates it (not reversed)
+  let (bendPoints, shared) : KVectorChain × Option Nat ← match ed.internal.originalBendpoints with
+    | none => pure (#[], none)
+    | some (id, initial) => do
+      let current := ((← chains.get).get? id).getD initial
+      if ed.internal.reversed then pure (KVectorChain.reverse current, none) else pure (current, some id)
+  let store (chain : KVectorChain) : LayeredM Unit := do
+    if let some id := shared then chains.modify (·.insert id chain)
+  let mut bendPoints := bendPoints
   if let some sourcePort := nd.internal.longEdgeSource then
-    let anchor ← withArena (·.portAbsoluteAnchor sourcePort)
-    if let some sourcePoint := anchor then
+    if let some sourcePoint ← withArena (·.portAbsoluteAnchor sourcePort) then
       if horizPos <= sourcePoint.x then
         return some sourcePoint.y
       bendPoints := bendPoints.insertIdx! 0 sourcePoint
+      store bendPoints
   if let some targetPort := nd.internal.longEdgeTarget then
-    let anchor ← withArena (·.portAbsoluteAnchor targetPort)
-    if let some targetPoint := anchor then
+    if let some targetPoint ← withArena (·.portAbsoluteAnchor targetPort) then
       if targetPoint.x <= horizPos then
         return some targetPoint.y
       bendPoints := bendPoints.push targetPoint
+      store bendPoints
   if bendPoints.size < 2 then
     return none
   let mut point1 := bendPoints[0]!
   let mut point2 := bendPoints[1]!
-  for i in [2:bendPoints.size] do
-    if point2.x >= horizPos then
-      break
+  let mut i := 2
+  while point2.x < horizPos && i < bendPoints.size do
     point1 := point2
     point2 := bendPoints[i]!
-  let deltaX := point2.x - point1.x
-  if deltaX.abs <= EPSILON then
-    return some point2.y
-  return some (point1.y + (horizPos - point1.x) / deltaX * (point2.y - point1.y))
+    i := i + 1
+  return some (point1.y + (horizPos - point1.x) / (point2.x - point1.x) * (point2.y - point1.y))
 
 /-- Rust `north_south_port_position(node)`: the north (south) side of the node the dummy's first
 port stems from; `none` for other sides or unresolved origins. -/
@@ -102,11 +116,13 @@ def northSouthPortPosition (node : LNodeId) : LayeredM (Option Float) := do
   | .south => return some (originNodeData.position.y + originNodeData.size.y)
   | _ => return none
 
-/-- `getPos(node, horizPos)` (Rust `get_pos`): the vertical position used for sorting. -/
-def getPos (node : LNodeId) (horizPos : Float) (reference : InteractiveReferencePoint) : LayeredM Float := do
+/-- `getPos(node, horizPos)`: the vertical position used for sorting (`chains`: the
+`ORIGINAL_BENDPOINTS` objects extended so far). -/
+def getPos (chains : IO.Ref (Std.HashMap Nat KVectorChain)) (node : LNodeId) (horizPos : Float)
+    (reference : InteractiveReferencePoint) : LayeredM Float := do
   let nodeType := (← getNode node).type
   let special ← match nodeType with
-    | .longEdge => longEdgePosition node horizPos
+    | .longEdge => longEdgePosition chains node horizPos
     | .northSouthPort => northSouthPortPosition node
     | _ => pure none
   if let some position := special then
@@ -124,10 +140,10 @@ structure SortEntry where
   successors : Array LNodeId
   deriving Inhabited
 
-/-- Rust `compare_nodes_by_pos`: by position (`partial_cmp`, NaN equal), then the successor
-constraint of the first node (`Less`), then of the second node (`Greater`). -/
+/-- The comparator of `process`: `Double.compare` of the positions, on equality the successor
+constraint of the first node (`-1`), then of the second node (`1`). -/
 def compareEntries (a b : SortEntry) : Ordering :=
-  match Float.comparePartial a.pos b.pos with
+  match Float.compareJava a.pos b.pos with
   | .eq =>
     if a.successors.contains b.node then .lt
     else if b.successors.contains a.node then .gt
@@ -147,6 +163,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   let portDistributor ← NodeRelativePortDistributor.new nodeOrder.size
   Initializable.init #[portDistributor.initializable] nodeOrder
   let mut portCount : Int := 0
+  let chains ← IO.mkRef ({} : Std.HashMap Nat KVectorChain)
   for h : layerIndex in [0:layers.size] do
     let layer := layers[layerIndex]
     let layerNodes := (← getLayer layer).nodes
@@ -167,7 +184,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
     let mut entries : Array SortEntry := Array.mkEmpty layerNodes.size
     for h2 : nodeIndex in [0:layerNodes.size] do
       let node := layerNodes[nodeIndex]
-      let pos ← getPos node horizPos reference
+      let pos ← getPos chains node horizPos reference
       let id : Int := nodeIndex
       -- long edge dummies keep their position for the interactive node placer
       modifyNode node fun x => { x with
@@ -175,12 +192,11 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
         internal := if x.type == .longEdge then { x.internal with originalDummyNodePosition := some pos } else x.internal }
       let successors := (← getNode node).internal.inLayerSuccessorConstraints
       entries := entries.push { node := node, pos := pos, successors := successors }
-    -- sort the nodes by position
-    -- Rust `sort_by(compare_nodes_by_pos)`: successor constraints can make the comparator
-    -- intransitive, so Rust's exact algorithm decides the result
-    let sorted ← match Elk.Core.Util.rustSortBy entries compareEntries with
+    -- sort the nodes by position: Java `Collections.sort` (TimSort); successor constraints make the
+    -- comparator intransitive, so TimSort's comparison sequence decides the result
+    let sorted ← match javaSortBy entries compareEntries with
       | .ok r => pure r
-      | .error e => throw (IO.userError s!"java.lang.IllegalArgumentException: {e}")
+      | .error _ => throw (IO.userError JavaSort.contractViolationError)
     modifyLayer layer fun l => { l with nodes := sorted.map (·.node) }
     let _ ← portDistributor.distributePortsWhileSweeping nodeOrder layerIndex true
   monitor.done

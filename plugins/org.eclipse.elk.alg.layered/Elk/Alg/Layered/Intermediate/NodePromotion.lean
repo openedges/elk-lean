@@ -3,7 +3,7 @@ import Std.Data.HashSet
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Core.Util.Sort
-import Elk.Core.Util.RustSort
+import Elk.Core.Util.JavaSort
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.NodePromotion`
 
@@ -14,27 +14,34 @@ Port of elk-rs `intermediate/node_promotion.rs`. elk-rs implements only the mode
 Nikolov et al. promotion (`promotionMagic`, dummy-count bookkeeping) for those strategies. The Lean port
 follows the oracle (elk-rs), so those strategies are no-ops here too.
 
-Model order promotion (`model_order_node_promotion`): the layers are copied into a `LayerNodeMap` (layer
-index → nodes, each layer stably sorted by `MODEL_ORDER`, descending for left-to-right, ascending for
-right-to-left; nodes without model order compare equal). Passes run until nothing changes: from the
-second-to-last layer backwards (left-to-right) or from the second layer forwards (right-to-left), a node
-with a model order is promoted one layer towards the end (start) when no node of its layer has a larger
-(smaller) model order and either the next layer has a node with a smaller (larger) model order or the
-promotion can pass through a layer of label dummies. Promoting a node also promotes (breadth-first,
-insertion-ordered set) the nodes that would end up in the same layer as a node they are connected to.
-Finally the new layering is applied, reusing the existing layer objects by index and creating layers for
-new indices; empty layers are dropped.
+Model order promotion (Java `modelOrderNodePromotion`; elk-rs `model_order_node_promotion` differs, see
+below): every layer of the graph is sorted by `MODEL_ORDER` (descending for left-to-right, ascending
+for right-to-left) and copied into a `BiLinkedHashMultiMap` (layer key → nodes, node → key; keys are
+never removed, an emptied layer keeps its key). Passes run until nothing changes; a pass visits the
+layer keys `keySet().size() - 2` down to `0` (left-to-right) or `1` up to `keySet().size() - 1`
+(right-to-left), the bound re-read every step, and in each layer the live node list by index: a node
+with a model order is promoted one layer towards the end (start) unless its layer key is the largest
+(smallest) key of the map, when no node of its layer has a larger (smaller) model order and either the
+next layer has a node with a smaller (larger) model order or the promotion can pass through an empty
+layer or a layer of label dummies. After a promotion the same index is examined again (Java
+`nodeIndex--`, then the loop's `++`). Promoting a node also promotes (`LinkedHashSet` work list) the
+nodes connected to it that now share its key, where "share" is Java's `Integer ==`: equal values in
+`[-128, 127]` (the `Integer` cache), else the same boxed object — the keys of one layer's initial
+`putAll` share one box, every promotion boxes anew. Finally the new layering is applied (keys
+ascending, empty layers dropped), also for graphs with fewer than two layers (whose single layer is
+thus sorted). A node whose next-layer label check or label-layer check needs an edge it does not have
+makes Java throw `java.util.NoSuchElementException` (reproduced).
 
-Rust/Java differences (follows Rust):
-- after a promotion the node index steps back by one (`saturating_sub(1)`, revisiting the previous node);
-  Java re-examines the same index;
-- the first/last layer keys of a pass are fixed when the pass starts (Java checks them dynamically);
-- graphs with fewer than two layers are left untouched (Java still re-sorts and rebuilds the layers);
-- existing `Layer` objects are reused (Java creates new ones).
+elk-rs: it examines the previous index after a promotion, fixes the first/last key of a pass when the
+pass starts, iterates the keys from the smallest to the largest key, compares keys by value, leaves
+graphs with fewer than two layers untouched and skips missing edges. Existing `Layer` objects are
+reused here (Java creates new ones; not observable).
 
-The Rust `BTreeMap<i32, Vec<LNodeRef>>` is an `Array (Int × Array LNodeId)` kept sorted by key; the reverse
-map (node → key) is a `Std.HashMap` (lookups only). Sorting uses `rustSortBy` (Rust `sort_by`: the
-model-order comparator is not a total order, so the exact Rust algorithm is needed).
+The map is an `Array (Int × Array LNodeId)` kept sorted by key and a `Std.HashMap` node → (key, box).
+Each layer is sorted like Java's `layer.getNodes().sort(MODEL_ORDER_NODE_COMPARATOR_DESC/ASC)`: JDK
+`TimSort` (`javaSortBy`) with the model order difference (`int` subtraction) when both nodes have a
+model order, else `0` — not a consistent order, so TimSort's comparison sequence decides the result
+(elk-rs: Rust `sort_by`).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -43,37 +50,40 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layer
 
 namespace NodePromotion
 
-/-- Rust `LayerNodeMap`: layer key → nodes (sorted by key) and node → key. -/
+/-- Java `BiLinkedHashMultiMap<Integer, LNode>`: layer key → nodes (sorted by key; keys are never
+removed) and node → (key, the `Integer` box it was stored with). -/
 structure LayerNodeMap where
   layers : Array (Int × Array LNodeId) := #[]
-  reverse : Std.HashMap LNodeId Int := {}
+  reverse : Std.HashMap LNodeId (Int × Nat) := {}
+  /-- The next fresh box id. -/
+  nextBox : Nat := 0
   deriving Inhabited
 
 namespace LayerNodeMap
 
-/-- `min_key`. -/
-def minKey (m : LayerNodeMap) : Option Int := m.layers[0]?.map (·.1)
-
-/-- `max_key`. -/
-def maxKey (m : LayerNodeMap) : Option Int := m.layers.back?.map (·.1)
-
-/-- `key_count`. -/
+/-- `keySet().size()`. -/
 def keyCount (m : LayerNodeMap) : Nat := m.layers.size
 
-/-- `key_of(node)`. -/
-def keyOf (m : LayerNodeMap) (node : LNodeId) : Option Int := m.reverse.get? node
+/-- `getKey(node)` (value). -/
+def keyOf (m : LayerNodeMap) (node : LNodeId) : Option Int := (m.reverse.get? node).map (·.1)
 
-/-- `values(key)`: the nodes of a key (empty when absent). -/
+/-- `getValues(key)`: the nodes of a key (empty when absent). -/
 def values (m : LayerNodeMap) (key : Int) : Array LNodeId :=
   match m.layers.find? (·.1 == key) with
   | some (_, nodes) => nodes
   | none => #[]
 
-/-- `put(key, node)`: removes the node from its old key's list and appends it to the list of `key`
-(created in key order when missing). -/
-def put (m : LayerNodeMap) (key : Int) (node : LNodeId) : LayerNodeMap := Id.run do
+/-- `isMaximalKey(key)`: no key is larger. -/
+def isMaximalKey (m : LayerNodeMap) (key : Int) : Bool := m.layers.all (·.1 <= key)
+
+/-- `isMinimalKey(key)`: no key is smaller. -/
+def isMinimalKey (m : LayerNodeMap) (key : Int) : Bool := m.layers.all (·.1 >= key)
+
+/-- `put(key, node)` with the `Integer` box `box`: removes the node from its old key's list and appends
+it to the list of `key` (created when missing; empty lists keep their key). -/
+def putBoxed (m : LayerNodeMap) (key : Int) (box : Nat) (node : LNodeId) : LayerNodeMap := Id.run do
   let mut layers := m.layers
-  if let some oldKey := m.reverse.get? node then
+  if let some (oldKey, _) := m.reverse.get? node then
     if let some i := layers.findIdx? (·.1 == oldKey) then
       layers := layers.modify i fun (k, ns) => (k, ns.filter (· != node))
   match layers.findIdx? (·.1 == key) with
@@ -81,18 +91,36 @@ def put (m : LayerNodeMap) (key : Int) (node : LNodeId) : LayerNodeMap := Id.run
   | none =>
     let pos := (layers.findIdx? (·.1 > key)).getD layers.size
     layers := layers.insertIdx! pos (key, #[node])
-  return { layers := layers, reverse := m.reverse.insert node key }
+  return { m with layers := layers, reverse := m.reverse.insert node (key, box) }
+
+/-- `put(key, node)` with a freshly boxed key (`Integer.valueOf`). -/
+def put (m : LayerNodeMap) (key : Int) (node : LNodeId) : LayerNodeMap :=
+  { m.putBoxed key m.nextBox node with nextBox := m.nextBox + 1 }
+
+/-- `putAll(key, nodes)`: one box for all nodes (Java boxes the key once at the call). -/
+def putAll (m : LayerNodeMap) (key : Int) (nodes : Array LNodeId) : LayerNodeMap :=
+  let box := m.nextBox
+  nodes.foldl (fun m n => m.putBoxed key box n) { m with nextBox := box + 1 }
+
+/-- Java `getKey(a) == getKey(b)` on `Integer`s: both absent, or equal values that are cached
+(`[-128, 127]`) or stored with the same box. -/
+def keysIdentical (m : LayerNodeMap) (a b : LNodeId) : Bool :=
+  match m.reverse.get? a, m.reverse.get? b with
+  | none, none => true
+  | some (k1, b1), some (k2, b2) => k1 == k2 && ((-128 <= k1 && k1 <= 127) || b1 == b2)
+  | _, _ => false
 
 end LayerNodeMap
 
-/-- Rust `model_order_compare(left, right, leftToRight)`: descending (left-to-right) or ascending model
-order when both nodes have one, else equal. -/
+/-- Java `MODEL_ORDER_NODE_COMPARATOR_DESC` (left-to-right: `o2 - o1`) / `_ASC` (`o1 - o2`) on the
+model orders (Java `int` subtraction) when both nodes have one, else `0`. -/
 def modelOrderCompare (left right : Option Int) (leftToRight : Bool) : Ordering :=
   match left, right with
-  | some l, some r => if leftToRight then compare r l else compare l r
+  | some l, some r => compare (Int.wrap32 (if leftToRight then r - l else l - r)) 0
   | _, _ => .eq
 
-/-- `LayerNodeMap::from_graph(graph, leftToRight)`. -/
+/-- `precalculateAndSetInformationModelOrder()`: every layer sorted by model order and `putAll` into
+the map under its index. -/
 def fromGraph (graph : LGraphId) (leftToRight : Bool) : LayeredM LayerNodeMap := do
   let layers := (← getGraph graph).layers
   let mut m : LayerNodeMap := {}
@@ -100,59 +128,69 @@ def fromGraph (graph : LGraphId) (leftToRight : Bool) : LayeredM LayerNodeMap :=
     let mut withOrder : Array (LNodeId × Option Int) := #[]
     for node in (← getLayer layers[layerId]).nodes do
       withOrder := withOrder.push (node, (← getNode node).internal.modelOrder)
-    -- Rust `nodes.sort_by(model_order_compare)`: the comparator is not a total order (nodes without
-    -- a model order compare equal), so Rust's exact algorithm decides the result
-    let sorted ← match Elk.Core.Util.rustSortBy withOrder (fun a b => modelOrderCompare a.2 b.2 leftToRight) with
+    -- Java `layer.getNodes().sort(comparator)`: the comparator is not a total order (nodes without
+    -- a model order compare equal to all), so TimSort's comparison sequence decides the result
+    let sorted ← match javaSortBy withOrder (fun a b => modelOrderCompare a.2 b.2 leftToRight) with
       | .ok r => pure (r.map (·.1))
-      | .error e => throw (IO.userError s!"java.lang.IllegalArgumentException: {e}")
-    let mut reverse := m.reverse
-    for node in sorted do
-      reverse := reverse.insert node (layerId : Int)
-    m := { layers := m.layers.push ((layerId : Int), sorted), reverse := reverse }
+      | .error _ => throw (IO.userError JavaSort.contractViolationError)
+    m := m.putAll (layerId : Int) sorted
   return m
 
 /-- `MODEL_ORDER` of a node. -/
 def modelOrder (node : LNodeId) : LayeredM (Option Int) := do
   return (← getNode node).internal.modelOrder
 
-/-- Rust `first_incoming_source_node(node)`. -/
-def firstIncomingSourceNode (node : LNodeId) : LayeredM (Option LNodeId) := do
-  let some edge := (← withArena (·.nodeIncomingEdges node))[0]? | return none
-  let some port := (← getEdge edge).source | return none
-  return (← getPort port).owner
+/-- Java `node.getIncomingEdges().iterator().next().getSource().getNode()`
+(`java.util.NoSuchElementException` without incoming edge). -/
+def firstIncomingSourceNode (node : LNodeId) : LayeredM LNodeId := do
+  let some edge := (← withArena (·.nodeIncomingEdges node))[0]?
+    | throw (IO.userError "java.util.NoSuchElementException")
+  let some port := (← getEdge edge).source | throw (IO.userError "java.lang.NullPointerException")
+  let some owner := (← getPort port).owner | throw (IO.userError "java.lang.NullPointerException")
+  return owner
 
-/-- Rust `first_outgoing_target_node(node)`. -/
-def firstOutgoingTargetNode (node : LNodeId) : LayeredM (Option LNodeId) := do
-  let some edge := (← withArena (·.nodeOutgoingEdges node))[0]? | return none
-  let some port := (← getEdge edge).target | return none
-  return (← getPort port).owner
+/-- Java `node.getOutgoingEdges().iterator().next().getTarget().getNode()`
+(`java.util.NoSuchElementException` without outgoing edge). -/
+def firstOutgoingTargetNode (node : LNodeId) : LayeredM LNodeId := do
+  let some edge := (← withArena (·.nodeOutgoingEdges node))[0]?
+    | throw (IO.userError "java.util.NoSuchElementException")
+  let some port := (← getEdge edge).target | throw (IO.userError "java.lang.NullPointerException")
+  let some owner := (← getPort port).owner | throw (IO.userError "java.lang.NullPointerException")
+  return owner
 
 /-- Whether no node of the current layer blocks the promotion (has a larger model order for
 left-to-right, a smaller one for right-to-left). -/
 def notBlockedInLayer (currentLayer : Array LNodeId) (nodeModelOrder : Int) (leftToRight : Bool) :
     LayeredM Bool := do
+  let mut shallBePromoted := true
   for other in currentLayer do
     if let some otherModelOrder ← modelOrder other then
       if (leftToRight && nodeModelOrder < otherModelOrder) || (!leftToRight && nodeModelOrder > otherModelOrder) then
-        return false
-  return true
+        shallBePromoted := false
+  return shallBePromoted
+
+/-- `biLayerMap.getKey(n)` unboxed (Java would throw a `NullPointerException` for a node outside the
+map; every node reached here is in it). -/
+def keyValue (layerMap : LayerNodeMap) (n : LNodeId) : LayeredM Int := do
+  match layerMap.keyOf n with
+  | some k => return k
+  | none => throw (IO.userError "java.lang.NullPointerException")
 
 /-- The label dummy check of the next-layer scan: a label dummy whose edge comes from (goes to) `node`
 blocks the promotion through the label layer when its other end is at most two layers away. -/
-def labelDummyBlocks (layerMap : LayerNodeMap) (node labelDummy : LNodeId) (currentLayerId nextLayerId : Int)
-    (leftToRight : Bool) : LayeredM Bool := do
-  let connectedToNext ← if leftToRight then firstIncomingSourceNode labelDummy else firstOutgoingTargetNode labelDummy
-  let some nodeConnectedToNextLayer := connectedToNext | return false
+def labelDummyBlocks (layerMap : LayerNodeMap) (node labelDummy : LNodeId) (leftToRight : Bool) :
+    LayeredM Bool := do
+  let nodeConnectedToNextLayer ← if leftToRight then firstIncomingSourceNode labelDummy
+    else firstOutgoingTargetNode labelDummy
   if nodeConnectedToNextLayer != node then return false
-  let connected ← if leftToRight then firstOutgoingTargetNode labelDummy else firstIncomingSourceNode labelDummy
-  let some connectedNode := connected | return false
-  let connectedLayer := (layerMap.keyOf connectedNode).getD nextLayerId
-  let sourceLayer := (layerMap.keyOf nodeConnectedToNextLayer).getD currentLayerId
+  let connectedNode ← if leftToRight then firstOutgoingTargetNode labelDummy else firstIncomingSourceNode labelDummy
+  let connectedLayer ← keyValue layerMap connectedNode
+  let sourceLayer ← keyValue layerMap nodeConnectedToNextLayer
   let layerDistance := if leftToRight then connectedLayer - sourceLayer else sourceLayer - connectedLayer
   return layerDistance <= 2
 
 /-- Scan of the next layer: `(modelOrderAllowsPromotion, promoteThroughDummyLayer, containsLabels)`. -/
-def scanNextLayer (layerMap : LayerNodeMap) (node : LNodeId) (nodeModelOrder currentLayerId nextLayerId : Int)
+def scanNextLayer (layerMap : LayerNodeMap) (node : LNodeId) (nodeModelOrder nextLayerId : Int)
     (leftToRight : Bool) : LayeredM (Bool × Bool × Bool) := do
   let mut modelOrderAllowsPromotion := false
   let mut promoteThroughDummyLayer := true
@@ -168,37 +206,37 @@ def scanNextLayer (layerMap : LayerNodeMap) (node : LNodeId) (nodeModelOrder cur
     | none =>
       if !modelOrderAllowsPromotion && promoteThroughDummyLayer && nn.type == .label then
         containsLabels := true
-        if ← labelDummyBlocks layerMap node nextLayerNode currentLayerId nextLayerId leftToRight then
+        if ← labelDummyBlocks layerMap node nextLayerNode leftToRight then
           promoteThroughDummyLayer := false
   return (modelOrderAllowsPromotion, promoteThroughDummyLayer, containsLabels)
 
-/-- Whether the node at the current position shall be promoted (the Rust loop body up to the promotion;
-every `node_index += 1; continue` case returns `false`). -/
+/-- Whether the node at the current index shall be promoted (Java's loop body up to the promotion;
+every `continue` returns `false`). -/
 def shallPromote (layerMap : LayerNodeMap) (node : LNodeId) (currentLayer : Array LNodeId)
-    (currentLayerId minKey maxKey : Int) (leftToRight : Bool) : LayeredM Bool := do
+    (currentLayerId : Int) (leftToRight : Bool) : LayeredM Bool := do
   let some nodeModelOrder ← modelOrder node | return false
-  if (leftToRight && currentLayerId == maxKey) || (!leftToRight && currentLayerId == minKey) then return false
+  if (leftToRight && layerMap.isMaximalKey currentLayerId) || (!leftToRight && layerMap.isMinimalKey currentLayerId) then
+    return false
   if !(← notBlockedInLayer currentLayer nodeModelOrder leftToRight) then return false
   let nextLayerId := if leftToRight then currentLayerId + 1 else currentLayerId - 1
   let (modelOrderAllowsPromotion, promoteThroughDummyLayer, containsLabels) ←
-    scanNextLayer layerMap node nodeModelOrder currentLayerId nextLayerId leftToRight
+    scanNextLayer layerMap node nodeModelOrder nextLayerId leftToRight
   let mut promoteThroughDummyLayer := promoteThroughDummyLayer
   if containsLabels && promoteThroughDummyLayer then
-    let connected ← if leftToRight then firstOutgoingTargetNode node else firstIncomingSourceNode node
-    if let some connectedNode := connected then
-      let connectedLayer := (layerMap.keyOf connectedNode).getD currentLayerId
-      let nodeLayer := (layerMap.keyOf node).getD currentLayerId
-      let layerDistance := if leftToRight then connectedLayer - nodeLayer else nodeLayer - connectedLayer
-      if layerDistance <= 2 && (← getNode connectedNode).type == .normal then
-        promoteThroughDummyLayer := false
+    let connectedNode ← if leftToRight then firstOutgoingTargetNode node else firstIncomingSourceNode node
+    let connectedLayer ← keyValue layerMap connectedNode
+    let nodeLayer ← keyValue layerMap node
+    let layerDistance := if leftToRight then connectedLayer - nodeLayer else nodeLayer - connectedLayer
+    if layerDistance <= 2 && (← getNode connectedNode).type == .normal then
+      promoteThroughDummyLayer := false
   return modelOrderAllowsPromotion || promoteThroughDummyLayer
 
 /-- `promoteNodeByModelOrder(node, leftToRight)`: moves the node one layer and returns the connected nodes
-(over outgoing edges for left-to-right, incoming for right-to-left; first occurrence order) that now share
-its layer. -/
+(over outgoing edges for left-to-right, incoming for right-to-left; `LinkedHashSet` order) whose key is
+now Java-identical (`Integer ==`, `LayerNodeMap.keysIdentical`) to the node's. -/
 def promoteNodeByModelOrder (node : LNodeId) (leftToRight : Bool) (layerMap : LayerNodeMap) :
     LayeredM (LayerNodeMap × Array LNodeId) := do
-  let some oldLayer := layerMap.keyOf node | return (layerMap, #[])
+  let oldLayer ← keyValue layerMap node
   let newLayer := if leftToRight then oldLayer + 1 else oldLayer - 1
   let layerMap := layerMap.put newLayer node
   let edges ← withArena fun a => if leftToRight then a.nodeOutgoingEdges node else a.nodeIncomingEdges node
@@ -208,13 +246,13 @@ def promoteNodeByModelOrder (node : LNodeId) (leftToRight : Bool) (layerMap : La
     let ed ← getEdge edge
     let some port := (if leftToRight then ed.target else ed.source) | continue
     let some nextNode := (← getPort port).owner | continue
-    if layerMap.keyOf nextNode == layerMap.keyOf node && !seen.contains nextNode then
+    if layerMap.keysIdentical nextNode node && !seen.contains nextNode then
       seen := seen.insert nextNode
       nodesToPromote := nodesToPromote.push nextNode
   return (layerMap, nodesToPromote)
 
-/-- Promotes a node and, breadth-first, every node pushed into the same layer as a neighbour (Rust
-`VecDeque` + `HashSet` queue = Java `LinkedHashSet` iteration). -/
+/-- Promotes a node and every node pushed into the same layer as a neighbour (Java `LinkedHashSet`
+work list: take the first, remove it, add the nodes its promotion returns that are not queued). -/
 def promoteWithDependents (node : LNodeId) (leftToRight : Bool) (layerMap : LayerNodeMap) :
     LayeredM LayerNodeMap := do
   let (layerMap, first) ← promoteNodeByModelOrder node leftToRight layerMap
@@ -238,9 +276,9 @@ def promoteWithDependents (node : LNodeId) (leftToRight : Bool) (layerMap : Laye
         queue := queue.push promoted
   return layerMap
 
-/-- One pass over one layer of the map (Rust inner `loop`); returns the map and whether something was
-promoted. -/
-def promoteInLayer (layerMap : LayerNodeMap) (currentLayerId minKey maxKey : Int) (leftToRight : Bool) :
+/-- The node loop of one layer key (Java inner `for` over the live `LinkedList`); returns the map and
+whether something was promoted. After a promotion the same index is examined again. -/
+def promoteInLayer (layerMap : LayerNodeMap) (currentLayerId : Int) (leftToRight : Bool) :
     LayeredM (LayerNodeMap × Bool) := do
   let mut layerMap := layerMap
   let mut somethingChanged := false
@@ -249,9 +287,8 @@ def promoteInLayer (layerMap : LayerNodeMap) (currentLayerId minKey maxKey : Int
     let currentLayer := layerMap.values currentLayerId
     if nodeIndex >= currentLayer.size then break
     let node := currentLayer[nodeIndex]!
-    if ← shallPromote layerMap node currentLayer currentLayerId minKey maxKey leftToRight then
+    if ← shallPromote layerMap node currentLayer currentLayerId leftToRight then
       layerMap ← promoteWithDependents node leftToRight layerMap
-      nodeIndex := nodeIndex - 1
       somethingChanged := true
     else
       nodeIndex := nodeIndex + 1
@@ -286,17 +323,15 @@ def applyModelOrderLayers (graph : LGraphId) (layerMap : LayerNodeMap) : Layered
   let layers := orderedNonEmptyLayers
   modifyGraph graph fun g => { g with layers := layers }
 
-/-- `modelOrderNodePromotion(graph, leftToRight)`. -/
+/-- `modelOrderNodePromotion(leftToRight)` with `precalculateAndSetInformationModelOrder()` before and
+`setNewLayeringModelOrder(graph)` after. The layer loop bound `keySet().size()` is re-read every step. -/
 def modelOrderNodePromotion (graph : LGraphId) (leftToRight : Bool) : LayeredM Unit := do
   let mut layerMap ← fromGraph graph leftToRight
-  if layerMap.keyCount < 2 then return
   while true do
     let mut somethingChanged := false
-    let minKey := layerMap.minKey.getD 0
-    let maxKey := layerMap.maxKey.getD 0
-    let mut currentLayerId : Int := if leftToRight then maxKey - 1 else minKey + 1
-    while (if leftToRight then currentLayerId >= minKey else currentLayerId <= maxKey) do
-      let (next, changed) ← promoteInLayer layerMap currentLayerId minKey maxKey leftToRight
+    let mut currentLayerId : Int := if leftToRight then (layerMap.keyCount : Int) - 2 else 1
+    while (if leftToRight then currentLayerId >= 0 else currentLayerId < (layerMap.keyCount : Int)) do
+      let (next, changed) ← promoteInLayer layerMap currentLayerId leftToRight
       layerMap := next
       somethingChanged := somethingChanged || changed
       currentLayerId := currentLayerId + (if leftToRight then -1 else 1)
