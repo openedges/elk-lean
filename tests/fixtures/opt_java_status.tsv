@@ -234,7 +234,7 @@ tests/fixtures/radial/enum	rnd4_45	ok->ok	java_equal
 tests/fixtures/spore	co_basic	ok->ok	java_exact
 tests/fixtures/spore	co_big_small	ok->ok	java_exact
 tests/fixtures/spore	co_dup_positions	ok->ok	java_differs /children[0]/x: 8.000023129513927 vs 8
-tests/fixtures/spore	co_edges	ok->ok	java_differs /edges[3]/sections[0]/bendPoints: only in java
+tests/fixtures/spore	co_edges	ok->ok	java_exact (after SEC merge)
 tests/fixtures/spore	co_float	ok->ok	java_exact
 tests/fixtures/spore	co_grid	ok->ok	java_differs /children[3]/x: 56.0 vs 104
 tests/fixtures/spore	co_line	ok->ok	java_exact
@@ -255,7 +255,7 @@ tests/fixtures/spore	co_zero_size	ok->ok	java_exact
 tests/fixtures/spore	ov_basic	ok->ok	java_exact
 tests/fixtures/spore	ov_big_small	ok->ok	java_exact
 tests/fixtures/spore	ov_cluster	ok->ok	java_differs /children[0]/x: 19.93617021276596 vs 17.93617021276596
-tests/fixtures/spore	ov_edges_multi	ok->ok	java_differs /edges[4]/sections[0]/bendPoints: only in java
+tests/fixtures/spore	ov_edges_multi	ok->ok	java_exact (after SEC merge)
 tests/fixtures/spore	ov_float	ok->ok	java_exact
 tests/fixtures/spore	ov_grid	ok->ok	java_exact
 tests/fixtures/spore	ov_identical	ok->ok	java_differs /children[1]/x: 48.17692866444963 vs 50.728361371643246
