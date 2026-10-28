@@ -297,3 +297,33 @@ stress 4 → 79/560, layered 554 → 750/1,715, force 0 → 0/614, mrtree 0 → 
 4. 노드 마이크로 레이아웃 잔여(10건 미만): 라벨 달린 NORTH/SOUTH 포트를 가진 복합 노드의 둘째 포트 위치(예 v5/g0260
    `n2`만 남긴 그래프: Java 31.7, Lean 30 — 자식을 지우면 일치), 라벨 x의 1e-15 반올림 차이.
 5. Java만 던지는 예외: rectpacking `TARGET_WIDTH` 근사의 `A target width has to be set …`(Lean은 레이아웃).
+
+## 10. OPT: Java 옵션 의미론 — 알고리즘별 기본값·열거형 옵션 파서·radial/mrtree/vertiflex 경로 (2026-10-28)
+
+### 10.1 Java 메커니즘
+
+- `.melk`의 `supports X = value`는 생성된 `<Algorithm>Options`에서 `new Property<>(CoreOptions.X, X_DEFAULT)`로
+  **같은 id·다른 기본값의 속성 상수**를 재선언한다(값 없는 `supports X`는 `CoreOptions.X` 재노출). 기본값은
+  호출 지점의 상수가 정한다: `getProperty(ForceOptions.PADDING)`은 50, 같은 노드의 `getProperty(CoreOptions.PADDING)`은 12.
+  `LayoutAlgorithmData.getDefaultValue`(레지스트리의 `addOptionSupport` 기본값)는 레이아웃 경로에서 읽히지 않는다
+  (`LayoutConfigurationManager`, UI 전용). 그래서 vertiflex의 `padding = 5`는 메타데이터뿐이고(코드는 `CoreOptions.PADDING`),
+  stress의 `edgeLabels.inline = true`도 쓰이지 않는다(`FLabel`은 `ForceOptions`).
+- `EMapPropertyHolderImpl`/`MapPropertyHolder.getProperty`는 기본값이 `Cloneable`(`ElkPadding`·`KVector`·`EnumSet`…)이면
+  그 복제본을 **요소에 저장**한다. top-down 엔진이 레이아웃 전에 `CoreOptions.PADDING`(12)을 읽으면 자식 알고리즘은
+  자기 기본값(예 rectpacking 15) 대신 12를 본다. Lean: `ElkM.getNodePropSticky`(`Elk.Graph.Impl.EMapPropertyHolderImpl`).
+- 열거형 옵션은 `LayoutOptionData.parseValue`가 enum 클래스로 파싱한다(`Enum.valueOf`, 아니면 서수). elk-rs는 force·stress·
+  mrtree·radial·rectpacking·SPOrE·DisCo·VertiFlex의 열거형 옵션에 파서가 없어 JSON 문자열을 무시했다.
+
+### 10.2 결과(시드 1~10 × 600, s/v/d; RJ1 병합본 대비)
+
+| 집합 | 정확 일치 전 → 후 | 1e-6 전 → 후 |
+|---|---:|---:|
+| s | 912 → 1,016 / 1,205 | 917 → 1,020 |
+| v | 1,995 → **3,437** / 5,761 | 2,026 → 3,476 |
+| d(기본값 명시) | 2,268 → 3,437 / 5,761 | 2,302 → 3,476 |
+| o(새 옵션 집합, 시드 1~3 × 400) | 146 → 886 / 1,020·1,048 | 156 → 975 |
+
+d 집합이 v와 같아졌다(기본값을 명시해도 결과가 바뀌지 않음 = Lean의 기본값이 Java와 같다). 분류(s+v+d): DEF 1,625 → 418
+(mrtree 819 → 337, force 852 → 80, rectpacking 2 → 2), POS 2,481 → 566(stress 1,071 → 155, mrtree 792 → 322, force 416 → 78,
+radial 280 → 12), NML 1,268 → 46. 남은 DEF/POS: mrtree는 거의 전부 `AVOID_OVERLAP` 간선 경로(elk-rs의 재구성 라우터, 253/337),
+force/stress는 간선 라벨 위치만. 코퍼스 Java parity 1878/119(집합·차이 동일), elk-rs model parity 1447/1447.
