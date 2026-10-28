@@ -166,6 +166,17 @@
 - `scripts/compare_bytes.sh`(`elk layout --pretty --sort-keys` vs oracle 파일): 코퍼스 1,447/1,447 바이트 일치(이전 1,395). **이후 숫자 의미론을 ELK Java로 바꾸면서(아래 절) elk-rs와의 바이트 일치는 1,060/1,447로 내려갔고(차이는 `-0.0`/스냅 표기와 ≤4e-12 값), 정확 일치 검사는 Java 기준으로 옮겼다.**
 - 남은 점검 대상: Rust 복합 대입(`a += b + c`)을 평탄한 합으로 옮긴 곳이 더 있을 수 있다(코퍼스에서는 더 드러나지 않음).
 
+### 성능 6차·견고성 (2026-10-28): 4차 라운드 착수
+- 3차 라운드 마감 직후 Phase 7의 남은 항목(큰 layered 그래프의 P3, 분기 안 Float 리터럴, 무작위 그래프의 시간 초과/오버플로 분류)과 W2가 남긴 WASM 메모리 상한을 병렬 할당. 릴리스(Phase 8) 잔여는 유지보수자 결정(CI 러너·이미지, musl/Windows 패키지, NOTICE/GPL 전문, npm 게시)이 필요해 보류.
+
+### 성능 6차·견고성 작업 할당표 (2026-10-28)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| P3L. 큰 layered 그래프의 P3 교차 최소화(코퍼스 CounterMachine 2.3배·InverseKinematics 1.77배·Trilateration 1.48배, 전체의 45~48% vs elk-rs 26%) | Lean `P3Order/**`(elk-rs `p3order/**`) | opus | xhigh | 서브에이전트 P3L(worktree) | 진행 중 |
+| FL. 분기 안 Float 리터럴 상수화(`scan_generated_c.sh` `ofSciImpl` 482곳 중 프로파일 상위 모듈; `P3Order/**` 제외) | Lean 노드 크기 계산·P4·LabelAndNodeSize·`ElkUtil`·`BoxLayoutProvider` 등 | opus | high | 서브에이전트 FL(worktree) | 진행 중 |
+| HX. 무작위 그래프의 시간 초과·스택 오버플로·예외를 ELK Java/elk-rs와 대조해 분류(상속 동작 vs Lean 결함), Lean 결함은 수정 | `scripts/gen_nodesize_graphs.py`, `scripts/run_java_baseline.sh`, oracle 러너 | opus | high | 서브에이전트 HX(worktree) | 진행 중 |
+| W3. WASM 메모리 상한(`-sMAXIMUM_MEMORY=4GB`, `INITIAL_MEMORY`) 적용 검토: 포트 5,000개 노드 OOM, 550/550 parity·성능 유지 | `scripts/build_wasm.sh`, `plugins/org.eclipse.elk.wasm` | opus | medium | 서브에이전트 W3(worktree) | 진행 중 |
+
 ### 성능 5차·릴리스 준비 (2026-10-28): 3차 라운드 착수
 - **interactive 모델 3개 조사(종결, 결함 아님)**: `interactiveRectpacking_oneBigNode`·`interactiveRectpacking_hierarchy`·`interactiveLayout_mixedHierarchy`는 코퍼스 1,447개 중 루트 `elk.algorithm`이 layered가 아닌(`rectpacking`) 유일한 3개다. trace 모드(`elk batch --trace-dir`)는 elk-rs 러너의 `force_layered_algorithm`과 같이 루트 알고리즘을 layered로 강제하므로 출력이 달라지는 것이 의도된 동작이다. 확인: 두 모드 모두 Lean 출력이 oracle과 값 단위로 동일(trace 모드 oracle==lean, 일반 모드 oracle==lean, oracle 자신도 두 모드가 다름), 코퍼스 전체의 일반/trace 모드 Lean 출력 비교 1,444 동일 / 3 상이(정확히 이 3개). `ELK_TRACE_DIR` 환경변수만 주는 `elk layout`은 강제하지 않아 동일 출력.
 - **코퍼스 총시간 참고치**(조용한 상태, 1,447개 레이아웃을 파일로 쓰는 조건, 3회): `elk batch` 6.18/6.34/6.31 s vs oracle `model_parity_layout_runner` 5.37/5.53/5.54 s(약 1.15배). 이전 기록의 rust_api 3.53 s는 파일 출력이 없는 `perf_benchmark` 코퍼스 모드라 직접 비교 대상이 아니다.
