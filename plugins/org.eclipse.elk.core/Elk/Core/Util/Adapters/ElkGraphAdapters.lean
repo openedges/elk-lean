@@ -199,6 +199,8 @@ def new : IO ElkAdapters := do
     portIncomingEdges := fun p => do return (← ElkM.getPort p).incomingEdges
     portOutgoingEdges := fun p => do return (← ElkM.getPort p).outgoingEdges
     hasCompoundConnections := hasCompoundConnections
+    -- `portRatioOrPosition` is an internal layered property, never set on an `ElkPort`
+    portRatioOrPosition := fun _ => pure 0.0
     label := labelOps labelVol
     labelSide := fun l => do return (← ElkM.getLabel l).props.getD LabelSide.LABEL_SIDE LabelSide.unknown
     labelText := fun l => do return (← ElkM.getLabel l).text

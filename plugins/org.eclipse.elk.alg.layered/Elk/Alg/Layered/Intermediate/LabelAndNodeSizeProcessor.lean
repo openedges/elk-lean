@@ -15,8 +15,11 @@ Port of elk-rs `intermediate/label_and_node_size_processor.rs` (Java `LabelAndNo
 Slot: before phase 4. Precondition: the port lists are sorted (`PortListSorter`).
 
 `process` (Rust order):
-1. `NodeDimensionCalculation.calculateLabelAndNodeSizes` on
-   `LGraphAdapters.adapt(graph, true, true, NORMAL)` (Java: the whole processor).
+1. Java's `NodeDimensionCalculation.calculateLabelAndNodeSizes` (`calculateLabelAndNodeSizesJava`:
+   the cell system pipeline per node) on `LGraphAdapters.adapt(graph, true, true, NORMAL)` (Java:
+   the whole processor). elk-rs first runs its simplified `processNode` on nodes with fixed size
+   constraints and placed fixed port labels (`needsProcessNodeForFixedPortLabels`), which Java does
+   not; with `ELK_NODE_DIM_SKIP_FULL_PROCESS` the elk-rs simplified path runs instead.
 2. Only when `ENABLE_PHASE1_PORT_PLACEMENT` (environment, see `LabelAndNodeSizeFlags`): the elk-rs
    phase-2 workaround (no Java counterpart). Every pass visits the layerless nodes and then the
    layer nodes, each node once (Rust `seen` set):
@@ -381,7 +384,12 @@ def processWith (flags : LabelAndNodeSizeFlags) (graph : LGraphId) (monitor : Pr
   -- Step 1: node sizes and labels via NodeDimensionCalculation (Java: the whole processor)
   traceNodeSize "label-node-size: step1 (node sizing) begin"
   let adapter ← LGraphAdapters.adapt graph true true fun n => n.type == .normal
-  NodeDimensionCalculation.calculateLabelAndNodeSizesWith adapter graph flags.useFullProcess
+  if flags.useFullProcess then
+    -- Java: `NodeLabelAndSizeCalculator.process(graph, node, true, false)` per node, without the
+    -- elk-rs `processNode` pre-pass for fixed port labels (`needsProcessNodeForFixedPortLabels`)
+    NodeDimensionCalculation.calculateLabelAndNodeSizesJava adapter graph
+  else
+    NodeDimensionCalculation.calculateLabelAndNodeSizesWith adapter graph false
   traceNodeSize "label-node-size: step1 (node sizing) done"
   -- Step 2: port placement workaround (not present in Java)
   if flags.enablePhase1PortPlacement then

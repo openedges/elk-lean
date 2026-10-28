@@ -81,7 +81,8 @@ def l (i : Nat) : LLabelId := ⟨i⟩
 
 /-- Root with padding, nodes `a` (EAST port `pa`, labels `A` and an empty one), `b` (`FIXED_SIDE`,
 port `pb` without side, port label), comment box `c`, `NO_LAYOUT` node `n`; edges `e1` (`pa → pb`,
-HEAD + center labels), `e2` (`a → b`, node end points), `e3` (`a → n`, skipped). -/
+HEAD + center labels), `e2` (`a → b`, node end points), `e3` (`a → n`, itself `NO_LAYOUT`, skipped;
+without that option ELK Java fails on the untransformed end `n`, see `scopeErrors`). -/
 def flatJson : String := "{
   \"id\": \"root\",
   \"layoutOptions\": { \"elk.padding\": \"[top=1,left=2,bottom=3,right=4]\" },
@@ -100,7 +101,7 @@ def flatJson : String := "{
     { \"id\": \"e1\", \"sources\": [\"pa\"], \"targets\": [\"pb\"],
       \"labels\": [ { \"text\": \"head\", \"layoutOptions\": { \"elk.edgeLabels.placement\": \"HEAD\" } }, { \"text\": \"mid\" } ] },
     { \"id\": \"e2\", \"sources\": [\"a\"], \"targets\": [\"b\"] },
-    { \"id\": \"e3\", \"sources\": [\"a\"], \"targets\": [\"n\"] }
+    { \"id\": \"e3\", \"sources\": [\"a\"], \"targets\": [\"n\"], \"layoutOptions\": { \"elk.noLayout\": \"true\" } }
   ]
 }"
 
@@ -380,14 +381,24 @@ def paddingTest : Suite := suite "layered.import.padding" do
 /-! ## Errors -/
 
 def scopeErrors : Suite := suite "layered.import.errors" do
+  -- ELK Java's flat import only transforms edges between children (or a child and the graph): an
+  -- edge from or into a child's child is left alone without an error (checked against ELK Java;
+  -- elk-rs throws "The source/target of edge … could not be found in the current layout scope")
   let src := "{ \"id\": \"root\", \"children\": [ { \"id\": \"p\", \"children\": [ { \"id\": \"q\" } ] }, { \"id\": \"r\" } ],
     \"edges\": [ { \"id\": \"bad\", \"sources\": [\"q\"], \"targets\": [\"r\"] } ] }"
-  checkEq "hand: source outside the layout scope" (← importError src)
-    (some "org.eclipse.elk.core.UnsupportedGraphException: The source of edge bad could not be found in the current layout scope. An edge cannot cross into a different layout algorithm.")
+  checkEq "Java: source in a child's child, edge left alone" (← importError src) none
+  let r ← importText src
+  checkEq "Java: the edge is not transformed" (r.ledges.get? (edgeNamed r.g "bad")) none
+  checkEq "Java: no LEdge" r.a.edges.size 0
   let tgt := "{ \"id\": \"root\", \"children\": [ { \"id\": \"p\", \"children\": [ { \"id\": \"q\" } ] }, { \"id\": \"r\" } ],
     \"edges\": [ { \"id\": \"bad2\", \"sources\": [\"r\"], \"targets\": [\"q\"] } ] }"
-  checkEq "hand: target outside the layout scope" (← importError tgt)
-    (some "org.eclipse.elk.core.UnsupportedGraphException: The target of edge bad2 could not be found in the current layout scope. An edge cannot cross into a different layout algorithm.")
+  checkEq "Java: target in a child's child, edge left alone" (← importError tgt) none
+  -- an edge to a NO_LAYOUT sibling is transformed and fails on its untransformed end (ELK Java text)
+  let noLayout := "{ \"id\": \"root\", \"children\": [ { \"id\": \"a\", \"x\": 1, \"y\": 2, \"width\": 30, \"height\": 20 },
+    { \"id\": \"n\", \"width\": 10, \"height\": 10, \"layoutOptions\": { \"elk.noLayout\": \"true\" } } ],
+    \"edges\": [ { \"id\": \"e3\", \"sources\": [\"a\"], \"targets\": [\"n\"] } ] }"
+  checkEq "Java: edge to a NO_LAYOUT sibling" (← importError noLayout)
+    (some "org.eclipse.elk.core.UnsupportedGraphException: The source or the target of edge ElkEdge \"e3\" ElkNode \"a\" (1.0,2.0 | 30.0,20.0) -> ElkNode \"n\" (0.0,0.0 | 10.0,10.0) could not be found. This usually happens when an edge connects a node laid out by ELK Layered to a node in another level of hierarchy laid out by either another instance of ELK Layered or another layout algorithm alltogether. The former can be solved by setting the hierarchyHandling option to INCLUDE_CHILDREN.")
   -- with INCLUDE_CHILDREN the same edge is in scope
   let ok := "{ \"id\": \"root\", \"layoutOptions\": { \"elk.hierarchyHandling\": \"INCLUDE_CHILDREN\" },
     \"children\": [ { \"id\": \"p\", \"children\": [ { \"id\": \"q\" } ] }, { \"id\": \"r\" } ],

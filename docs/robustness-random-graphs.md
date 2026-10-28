@@ -344,3 +344,68 @@ d 집합이 v와 같아졌다(기본값을 명시해도 결과가 바뀌지 않�
 radial 288 → 8), NML 1,308 → 50. 남은 DEF/POS: mrtree는 거의 전부 `AVOID_OVERLAP` 간선 경로(elk-rs의 재구성 라우터),
 force/stress는 간선 라벨 위치만. SEC가 지적한 mrtree의 "출발점 아래 3 지점 굽힘"은 `LEVEL_PROC` 이식(`TREE_LEVEL` 계산)으로
 Java와 같아졌다. 코퍼스 Java parity 1878/119(집합·차이 동일), elk-rs model parity 1447/1447.
+## 11. LNODE: layered 노드 크기·포트·라벨과 임포터 간선 선택의 Java 경로 (2026-10-28)
+
+방법: 기준 바이너리(병합본 `7310832`)로 파이프라인(seed 1~10, s/v/d) → `LNODE`/`LSIZE` 입력 137개(s+v)를 Java
+단계별 trace(`ElkJavaBaseline --trace true`)와 Lean trace로 비교해 처음 갈라지는 프로세서를 모은 뒤, 프로세서별로
+Java와 다르게 이식된 지점을 고쳤다(처음 갈라짐: `SelfLoopPortRestorer` 64, `HierarchicalPortOrthogonalEdgeRouter` 12,
+`PortListSorter` 6, 나머지는 비layered 자식의 크기(DEF/NML)·P3·P5 f32 등 다른 클래스).
+
+### 10.1 변경(전부 ELK Java가 기준, elk-rs와는 달라짐)
+
+- `SelfLoopPortRestorer`: 한 변 self loop의 포트를 Java `SelfLoopPort.getSLNetFlow()`(self loop 간선 in − out)로
+  정렬한다. elk-rs는 `LPort.getNetFlow()`를 쓰는데 `SelfLoopPreProcessor`가 self loop를 떼어낸 뒤라 순수 self loop
+  포트는 전부 0이 되어 정렬이 일어나지 않았다(예 `v1/g0225` 0×0 노드의 SOUTH 포트 순서) — LNODE의 절반.
+- `HierarchicalPortOrthogonalEdgeRouter.restoreDummy`: 되돌린 북/남 외부 포트 더미의 여백을 Java처럼 그 더미에서
+  계산한다(`getNodeMarginCalculator(adapt(graph)).processNode(adapt(dummy))`). elk-rs는 층 노드 스냅샷에서 더미를
+  찾다 못 찾아 여백 0 — `assignAscendingCoordinates`가 라벨 폭만큼 더미를 밀지 않았다(예 `v6/g0330`).
+- `PortListSorter`: `Collections.sort`를 JDK 21 `TimSort`(`javaSortBy`)로. `FIXED_ORDER`에서 일부 포트만
+  `PORT_INDEX`를 가지면 `CMP_COMBINED`가 일관 순서가 아니어서 결과가 비교 순서에 달려 있다(예 `v8/g0080`). 위치는
+  `Double.compare`, 인덱스는 Java `int` 뺄셈, `UNDEFINED` 변은 Java처럼 `IllegalStateException: Port side is undefined`.
+- `LabelAndNodeSizeProcessor`: Java의 `calculateLabelAndNodeSizes`(노드마다 셀 시스템 `process`)만 돈다. elk-rs의
+  `needsProcessNodeForFixedPortLabels` 사전 패스(고정 크기·고정 포트 라벨의 복합 노드에 단순화 `processNode`로 크기를
+  키움)는 Java에 없다.
+- 셀 시스템 `FIXED_RATIO`: `PortContext.portRatioOrPosition`을 포트의 `PORT_RATIO_OR_POSITION`에서 읽는다
+  (`GraphAdapters.portRatioOrPosition`; layered `LPort`는 `initializePort`가 저장한 비율, `ElkPort`는 0). elk-rs는
+  항상 0이라 layered의 `FIXED_RATIO` 포트가 변의 시작에 몰렸다. 무작위 입력은 포트 좌표가 없어 비율이 0이므로
+  영향이 없고, 픽스처 `fixed_ratio_ports`로 고정했다.
+- `ElkGraphImporter.calculateMinimumGraphSize`: 라벨 셀을 부모 ElkNode의 `DIRECTION`(있을 때, Java `process`가
+  `graph.hasProperty(DIRECTION)`일 때만 읽음)으로 배치, 고정 포트 라벨이어도 계산(elk-rs의 조기 반환 없음), 그리고
+  Java `copyProperties`의 값 공유 — `MINIMUM_SIZE`가 더해진 `EnumSet`과 최솟값 `KVector`는 ElkNode가 명시한 값
+  그 자체라 ElkNode에 다시 쓴다(부모 실행이나 `INCLUDE_CHILDREN`의 복합 `LNode`가 그 값을 본다, 예 `v8/g0359`·`v8/g0219`).
+- 임포터 간선 선택(코디네이터 추가 요청, SEC 발견): 평면 임포트(`importFlatGraphEdgesJava`)는 Java처럼 자식끼리 또는
+  자식과 그래프를 잇는 간선만 변환하고, 자식의 자식으로 가는 간선은 어느 실행에도 속하지 않은 채 오류 없이 남긴다
+  (elk-rs: `UnsupportedGraphException ... could not be found in the current layout scope`). 끝 노드의 `NO_LAYOUT`은
+  보지 않으므로 `NO_LAYOUT` 형제로 가는 간선은 Java처럼 `transformEdge`에서 실패하고, 문구는 Java 그대로(EMF
+  `toString`: `ElkEdge "e0" ElkNode "x" (0.0,0.0 | 30.0,30.0) -> …`, Java `Double.toString` = 새 `Float.toJavaString`).
+  하이퍼엣지는 평면 임포트에서 `IllegalArgumentException: Passed edge is not 'simple'.`, 계층 임포트·`transformEdge`에서
+  `checkEdgeValidity`의 `UnsupportedGraphException`. 코퍼스 `tickets/layered/588_hierarchicalLayoutNPE`(양쪽 예외)의
+  오류 문구가 이제 Java와 글자까지 같다.
+
+### 10.2 결과
+
+SEC 병합본(`2ad1aa5`) 기준, 전 = 그 바이너리, 후 = SEC 병합 후의 LNODE:
+
+| 집합 | 정확 일치 전 → 후 | LNODE 전 → 후 | LSIZE 전 → 후 | 루트 layered 정확 전 → 후 |
+|---|---:|---:|---:|---:|
+| s | 963 → 975 / 1,205 | 14 → 1 | 2 → 0 | 471 → 477 / 547 |
+| v | 2,383 → 2,423 / 5,761 | 133 → 18 | 2 → 0 | 981 → 999 / 1,715 |
+| d | 2,748 → 2,796 / 5,761 | 134 → 18 | 2 → 0 | 1,060 → 1,079 / 1,715 |
+
+(SEC 이전 `7310832` 위에서: v 1,995 → 2,026, LNODE v 121 → 15 — SEC가 같은 단위의 간선 섹션 차이를 없애자 LNODE로 드러난
+입력 3개가 더해졌다: `v5/g0246`·`v4/g0522`는 P4 `NetworkSimplexPlacer`/`BKNodePlacer`가 처음 갈라지고, `v2/g0273`은 force
+자식 크기.) layered만 쓰는 입력(분류기 기준 1,999개)의 불일치 266 → 244. 코퍼스: Java 정확 1878/119(차이 집합·레이아웃 바이트 동일),
+ticket 588 오류 문구 Java와 동일. 테스트: `tests/lean/Tests/Api/LayeredNodeJava.lean`(+ `tests/fixtures/lnode/` 12개 입력,
+10개 Java 출력), `Tests/Layered/Import.lean`의 elk-rs 기대값(범위 밖 간선 예외, `NO_LAYOUT` 끝 건너뛰기)을 Java로 교체.
+
+### 10.3 남은 LNODE(v 18) — 이 클래스 밖의 원인
+
+- Java 실행 맥락 의존(코퍼스 119개와 같은 종류): `v3/g0291`, `v5/g0480`, `v9/g0359` — 새 JVM 하나에서 돌린 Java 출력은
+  Lean과 같거나(g0291) f32 굽은 점만 다르다. 같은 입력이 JVM 안의 앞선 작업(TestController 유무 등)에 따라 높이가
+  10씩 달라진다.
+- P3 포트/노드 순서(`LayerSweepCrossingMinimizer` — `v7/g0445` FIXED_SIDE 노드의 EAST 포트 순서, `v3/g0150`,
+  `v4/g0300`, `v7/g0258`; `InteractiveCrossingMinimizer`): 교차 최소화의 포트 분배·노드 순서.
+- self loop 경로(`SelfLoopRouter`의 경로 방향·여백, LPOS에도 11개: 예 `d6/g0282`는 Java가 서쪽으로 돌고 Lean은 동쪽,
+  `d1/g0052` 여백 38.6 vs 51.9), self loop 라벨(`SelfLoopPostProcessor`, `v4/g0515`), `LabelSideSelector`(`v5/g0151`),
+  P4 `NetworkSimplexPlacer`(`v7/g0511`)·`BKNodePlacer` 1e-14, P5 f32 굽은 점 — 간선 경로 클래스(LEDGE).
+- 비layered 자식의 크기(DEF·NML)가 부모 layered 실행으로 번진 것(`v10/g0216`·`v10/g0534`·`v2/g0186` 등).

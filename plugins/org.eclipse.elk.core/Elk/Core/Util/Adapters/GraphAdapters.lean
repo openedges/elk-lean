@@ -137,6 +137,11 @@ structure GraphAdapters (m : Type → Type) (G N P L E : Type) where
   portOutgoingEdges : P → m (Array E)
   /-- `PortAdapter.hasCompoundConnections()`. -/
   hasCompoundConnections : P → m Bool
+  /-- `port.getProperty(PortPlacementCalculator.PORT_RATIO_OR_POSITION)` (id `portRatioOrPosition`,
+  default `0.0`), read by the cell system's `FIXED_RATIO` placement: an `LPort` carries the ratio
+  `LGraphUtil.initializePort` stored (layered `InternalProperties.PORT_RATIO_OR_POSITION`, the same
+  property id); an `ElkPort` never has it. -/
+  portRatioOrPosition : P → m Float
   /-- `LabelAdapter<T>` element access. -/
   label : ElementOps m L
   /-- `LabelAdapter.getSide()`. -/

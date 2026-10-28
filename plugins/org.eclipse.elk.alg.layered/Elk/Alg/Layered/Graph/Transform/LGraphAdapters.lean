@@ -257,6 +257,7 @@ def adapt (graph : LGraphId) (transparentNorthSouthEdges transparentCommentNodes
     portIncomingEdges := fun p => do portEdges true (← portTransparent snap transparentNorthSouthEdges p) p
     portOutgoingEdges := fun p => do portEdges false (← portTransparent snap transparentNorthSouthEdges p) p
     hasCompoundConnections := fun p => do return (← getPort p).internal.insideConnections
+    portRatioOrPosition := fun p => do return (← getPort p).internal.portRatioOrPosition
     label := labelOpsWith labelVol
     labelSide := fun l => do return (← getLabel l).props.getD LabelSide.LABEL_SIDE LabelSide.unknown
     labelText := fun l => do return (← getLabel l).text

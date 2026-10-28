@@ -234,6 +234,47 @@ def Float.toRustDisplay (x : Float) : String :=
   else
     Float.toShortest x
 
+/-- The shortest round-trip decimal digits of a finite, non-zero `x` (no leading or trailing zeros)
+and the exponent `e` with `|x| = 0.d₁d₂…dₙ × 10^e`, from `Float.toShortest` (`12.0`, `0.1`, `1e21`,
+`1.5e-7`). -/
+private def shortestDigits (x : Float) : String × Int := Id.run do
+  let s := Float.toShortest x.abs
+  let (mant, exp) := match s.splitOn "e" with
+    | [m, e] => (m, (e.toInt?).getD (((e.drop 1).toString.toInt?).getD 0))
+    | _ => (s, 0)
+  let (intPart, fracPart) := match mant.splitOn "." with
+    | [i, f] => (i, f)
+    | _ => (mant, "")
+  let all := intPart ++ fracPart
+  let lead := (all.toList.takeWhile (· == '0')).length
+  let digits := String.ofList ((all.toList.drop lead).reverse.dropWhile (· == '0')).reverse
+  -- 0.d₁… × 10^e: the decimal point sits after `intPart`, minus the leading zeros
+  return (digits, exp + (intPart.length : Int) - (lead : Int))
+
+/-- Java `Double.toString(d)` / `StringBuilder.append(double)` (JDK 19+: shortest round-trip
+digits): `NaN`, `Infinity`, `-0.0`; for `10⁻³ ≤ |d| < 10⁷` plain decimal with at least one fraction
+digit (`12.0`, `0.001`, `50.5`), otherwise computerized scientific notation (`1.0E7`, `1.5E-7`). -/
+def Float.toJavaString (x : Float) : String := Id.run do
+  if x.isNaN then return "NaN"
+  if x.isInf then return if x > 0.0 then "Infinity" else "-Infinity"
+  let sign := if x < 0.0 || (x == 0.0 && x.toBits == 0x8000000000000000) then "-" else ""
+  if x == 0.0 then return sign ++ "0.0"
+  let (digits, e) := shortestDigits x
+  let ds := digits.toList
+  let ax := x.abs
+  if ax >= 1e-3 && ax < 1e7 then
+    if e <= 0 then
+      return sign ++ "0." ++ String.ofList (List.replicate e.natAbs '0') ++ digits
+    else
+      let k := e.toNat
+      let intDigits := String.ofList (ds.take k) ++ String.ofList (List.replicate (k - min k ds.length) '0')
+      let frac := String.ofList (ds.drop k)
+      return sign ++ intDigits ++ "." ++ (if frac.isEmpty then "0" else frac)
+  else
+    let first := String.ofList (ds.take 1)
+    let rest := String.ofList (ds.drop 1)
+    return sign ++ first ++ "." ++ (if rest.isEmpty then "0" else rest) ++ "E" ++ toString (e - 1)
+
 /-! ## Strings -/
 
 /-- Java `String.trim()` (ASCII whitespace). -/

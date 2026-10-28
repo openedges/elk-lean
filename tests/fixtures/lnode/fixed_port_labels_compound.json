@@ -1,0 +1,104 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.hierarchyHandling": "SEPARATE_CHILDREN"
+ },
+ "children": [
+  {
+   "id": "f",
+   "width": 50,
+   "height": 40,
+   "layoutOptions": {
+    "elk.portLabels.placement": "",
+    "elk.portConstraints": "FIXED_SIDE",
+    "elk.nodeLabels.placement": "H_CENTER V_TOP INSIDE"
+   },
+   "labels": [
+    {
+     "id": "fl",
+     "text": "a very wide compound node label",
+     "width": 200,
+     "height": 12
+    }
+   ],
+   "ports": [
+    {
+     "id": "fp0",
+     "width": 4,
+     "height": 4,
+     "layoutOptions": {
+      "elk.port.side": "EAST"
+     },
+     "labels": [
+      {
+       "id": "fp0l",
+       "text": "fixed",
+       "x": 6,
+       "y": -12,
+       "width": 30,
+       "height": 10
+      }
+     ]
+    },
+    {
+     "id": "fp1",
+     "width": 4,
+     "height": 4,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     },
+     "labels": [
+      {
+       "id": "fp1l",
+       "text": "fixed2",
+       "x": -20,
+       "y": -15,
+       "width": 25,
+       "height": 10
+      }
+     ]
+    }
+   ],
+   "children": [
+    {
+     "id": "f0",
+     "width": 20,
+     "height": 20
+    },
+    {
+     "id": "f1",
+     "width": 20,
+     "height": 20
+    }
+   ],
+   "edges": [
+    {
+     "id": "fe0",
+     "sources": [
+      "f0"
+     ],
+     "targets": [
+      "f1"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "k",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "fp0"
+   ],
+   "targets": [
+    "k"
+   ]
+  }
+ ]
+}

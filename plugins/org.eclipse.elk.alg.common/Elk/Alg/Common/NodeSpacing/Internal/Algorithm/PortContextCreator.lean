@@ -12,8 +12,9 @@ Order (elk-rs `create_port_contexts`): the volatile id of a port is its index in
 `NodeAdapter.getPorts()`; contexts are appended to their side in that order and afterwards the
 SOUTH and WEST lists are reversed. This reproduces Java's
 `TreeMultimap.create(comparePortSides, comparePortContexts)` (ascending volatile ids on
-NORTH/EAST, descending on SOUTH/WEST). `PortContext.portRatioOrPosition` stays `0.0` because
-elk-rs never sets it.
+NORTH/EAST, descending on SOUTH/WEST). `PortContext.portRatioOrPosition` is the port's
+`PORT_RATIO_OR_POSITION` (`GraphAdapters.portRatioOrPosition`, Java reads the property; elk-rs
+never sets it and places FIXED_RATIO ports at `0.0`).
 
 Deviation from Java (following elk-rs): Java's `PortContext` keeps the port adapter and reads it
 lazily; elk-rs (and this port) extracts the port size, side, position, border offset, compound
@@ -73,7 +74,10 @@ def createPortContextOnSide (a : GraphAdapters m G N P L E) (ctx : NodeContext N
   let labelsNextToPort ← computeLabelsNextToPort a ctx port hasCompoundConnections
   let pc : PortContext P L := PortContext.new port portSize portSide volatileId portPosition
     portBorderOffset hasPortBorderOffset hasCompoundConnections
-  let pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions }
+  -- Java reads `PORT_RATIO_OR_POSITION` from the port whenever it places a FIXED_RATIO port; the
+  -- value does not change during the calculation (elk-rs never sets it: always `0.0`)
+  let portRatioOrPosition ← a.portRatioOrPosition port
+  let pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions, portRatioOrPosition }
   -- If the port has labels and if port labels are to be placed, we need to remember them
   if imPortLabels && !labels.isEmpty && !PortLabelPlacement.isFixed ctx.portLabelsPlacement then
     let gap := ctx.labelLabelSpacing
