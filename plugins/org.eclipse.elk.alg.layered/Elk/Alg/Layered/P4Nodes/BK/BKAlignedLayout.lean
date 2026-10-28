@@ -148,8 +148,9 @@ the edge. -/
 def calculateDelta (ctx : BKContext) (bal : BKAlignedLayout) (src tgt : LPortId) : Float :=
   let srcNodeId := ctx.portNodeId src
   let tgtNodeId := ctx.portNodeId tgt
-  let srcPos := bal.yOf srcNodeId + bal.innerShiftOf srcNodeId + ctx.portOffsetY src
-  let tgtPos := bal.yOf tgtNodeId + bal.innerShiftOf tgtNodeId + ctx.portOffsetY tgt
+  -- Java: y + innerShift + port.position.y + port.anchor.y, left to right
+  let srcPos := ctx.plusPortY (bal.yOf srcNodeId + bal.innerShiftOf srcNodeId) src
+  let tgtPos := ctx.plusPortY (bal.yOf tgtNodeId + bal.innerShiftOf tgtNodeId) tgt
   tgtPos - srcPos
 
 /-- `getMinY(n)`: `y[root[n]] + innerShift[n] - margin.top`. -/
