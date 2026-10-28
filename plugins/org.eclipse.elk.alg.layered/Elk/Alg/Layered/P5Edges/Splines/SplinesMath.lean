@@ -160,7 +160,7 @@ def isBetweenInt (value boundary0 boundary1 : Int) : Bool :=
 
 /-- `isBetween(value, boundary0, boundary1)`: whether `value` lies between the boundaries
 (either order), with an `EPSILON` tolerance. -/
-def isBetween (value boundary0 boundary1 : Float) : Bool :=
+@[inline] def isBetween (value boundary0 boundary1 : Float) : Bool :=
   if (boundary0 - value).abs < EPSILON || (boundary1 - value).abs < EPSILON then true
   else if (boundary0 - value) > EPSILON then (value - boundary1) > EPSILON
   else (boundary1 - value) > EPSILON

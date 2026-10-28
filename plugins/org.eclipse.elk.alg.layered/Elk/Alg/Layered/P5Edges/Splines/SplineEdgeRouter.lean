@@ -289,85 +289,147 @@ abbrev RouterM := StateT State LayeredM
 def addSegment (segment : SplineSegment) : RouterM SplineSegmentId :=
   modifyGet fun s => (⟨s.segments.size⟩, { s with segments := s.segments.push segment })
 
+/-! ### Ports, edges and segments of one layer gap
+
+`clearThenFillMappings`, `createSplineSegmentsForHyperEdges` and `createSplineSegments` are pure
+functions on the arena: the collections they fill (`GapMappings`, `SegmentBuild`) are taken out of the
+router state, extended and put back once per gap. -/
+
+/-- The collections `clearThenFillMappings` fills: Rust `left_ports_layer`, `right_ports_layer`,
+`edges_remaining_layer`, `self_loops_layer` (with the membership sets of `State`) and the router-wide
+`start_edges` and `successing_edge`. -/
+structure GapMappings where
+  leftPorts : Array LPortId
+  leftSet : Std.HashSet LPortId
+  rightPorts : Array LPortId
+  rightSet : Std.HashSet LPortId
+  remaining : Array LEdgeId
+  remainingSet : Std.HashSet LEdgeId
+  selfLoops : Array LEdgeId
+  startEdges : Array LEdgeId
+  successors : Std.HashMap LEdgeId LEdgeId
+
+namespace GapMappings
+
 /-- `insert_unique_port(left_ports_layer, port)`. -/
-def insertLeftPort (port : LPortId) : RouterM Unit := modify fun s =>
-  if s.leftPortsSet.contains port then s
-  else { s with leftPortsLayer := s.leftPortsLayer.push port, leftPortsSet := s.leftPortsSet.insert port }
+@[inline] def insertLeft (m : GapMappings) (port : LPortId) : GapMappings :=
+  match m with
+  | ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩ =>
+    if ls.contains port then ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩
+    else ⟨lp.push port, ls.insert port, rp, rs, re, rset, sl, se, su⟩
 
 /-- `insert_unique_port(right_ports_layer, port)`. -/
-def insertRightPort (port : LPortId) : RouterM Unit := modify fun s =>
-  if s.rightPortsSet.contains port then s
-  else { s with rightPortsLayer := s.rightPortsLayer.push port, rightPortsSet := s.rightPortsSet.insert port }
-
-/-- `edges_remaining_layer.push(edge)`. -/
-def pushRemaining (edge : LEdgeId) : RouterM Unit := modify fun s =>
-  { s with edgesRemainingLayer := s.edgesRemainingLayer.push edge, edgesRemainingSet := s.edgesRemainingSet.insert edge }
+@[inline] def insertRight (m : GapMappings) (port : LPortId) : GapMappings :=
+  match m with
+  | ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩ =>
+    if rs.contains port then ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩
+    else ⟨lp, ls, rp.push port, rs.insert port, re, rset, sl, se, su⟩
 
 /-- `remove_arc(edges_remaining_layer, edge)`: removes the (single) occurrence. -/
-def removeRemaining (edge : LEdgeId) : RouterM Unit := modify fun s =>
-  if s.edgesRemainingSet.contains edge then
-    { s with edgesRemainingLayer := s.edgesRemainingLayer.erase edge, edgesRemainingSet := s.edgesRemainingSet.erase edge }
-  else s
+def removeRemaining (m : GapMappings) (edge : LEdgeId) : GapMappings :=
+  match m with
+  | ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩ =>
+    if rset.contains edge then ⟨lp, ls, rp, rs, re.erase edge, rset.erase edge, sl, se, su⟩
+    else ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩
 
-/-- `findAndAddSuccessor(edge)`: for an edge into a dummy node, the first outgoing edge of that node
-continues the long edge. -/
-def findAndAddSuccessor (edge : LEdgeId) : RouterM Unit := do
-  let next? ← withArena fun a =>
-    match (a.edge edge).target.bind (fun p => (a.port p).owner) with
-    | none => none
-    | some targetNode =>
-      if isNormalNode (a.node targetNode) then none else (a.nodeOutgoingEdges targetNode)[0]?
-  if let some next := next? then
-    modify fun s => { s with successingEdge := s.successingEdge.insert edge next }
+/-- `self_loops_layer.push(edge)`. -/
+def pushSelfLoop (m : GapMappings) (edge : LEdgeId) : GapMappings :=
+  match m with
+  | ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩ => ⟨lp, ls, rp, rs, re, rset, sl.push edge, se, su⟩
 
-/-- Registers one outgoing edge of a left-layer `EAST` port or a right-layer `WEST` port
-(the shared loop body of Rust `clear_then_fill_mappings`). -/
-def fillEdge (edge : LEdgeId) (leftLayer rightLayer : Option LayerId) : RouterM Unit := do
-  if ← withArena (·.edgeIsSelfLoop edge) then return
-  pushRemaining edge
-  findAndAddSuccessor edge
-  let ed ← getEdge edge
-  let qualified ← withArena fun a =>
-    ((ed.source.bind fun p => (a.port p).owner).map fun n => isQualifiedAsStartingNode (a.node n)).getD false
-  if qualified then
-    modify fun s => { s with startEdges := s.startEdges.push edge }
-  let targetLayer ← withArena fun a =>
-    (ed.target.bind fun p => (a.port p).owner).bind fun n => (a.node n).layer
-  if let (some targetLayer, some targetPort) := (targetLayer, ed.target) then
-    if rightLayer == some targetLayer then
-      insertRightPort targetPort
-      return
-    if leftLayer == some targetLayer then
-      insertLeftPort targetPort
-      return
-  -- unhandled situation (probably incoming and outgoing edges on the same port)
-  removeRemaining edge
+/-- `node.getOutgoingEdges().get(0)`: the first outgoing edge of the node's ports (port order). -/
+def firstOutgoingEdge (a : LGraphArena) (n : LNodeId) : Option LEdgeId :=
+  (a.node n).ports.findSome? fun p => (a.port p).outgoingEdges[0]?
 
-/-- `clearThenFillMappings(leftLayer, rightLayer)`: collects the ports, edges and self loops of a
-pair of layers (left: `EAST` ports, right: `WEST` ports, in node and port order). -/
+/-- Registers one outgoing edge of a left-layer `EAST` port or a right-layer `WEST` port (the shared
+loop body of Rust `clear_then_fill_mappings`): `edges_remaining_layer.push(edge)`,
+`findAndAddSuccessor(edge)` (for an edge into a dummy node, the first outgoing edge of that node
+continues the long edge), `start_edges` for a qualified source node and the target port into the
+port list of its layer (an edge into neither layer is removed again). -/
+def fillEdge (a : LGraphArena) (leftLayer rightLayer : Option LayerId) (m : GapMappings) (edge : LEdgeId) :
+    GapMappings :=
+  if a.edgeIsSelfLoop edge then m
+  else
+    let ed := a.edge edge
+    let targetNode := ed.target.bind fun p => (a.port p).owner
+    let next? := match targetNode with
+      | none => none
+      | some n => if isNormalNode (a.node n) then none else firstOutgoingEdge a n
+    let qualified :=
+      ((ed.source.bind fun p => (a.port p).owner).map fun n => isQualifiedAsStartingNode (a.node n)).getD false
+    let targetLayer := targetNode.bind fun n => (a.node n).layer
+    let m : GapMappings := match m with
+      | ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩ =>
+        ⟨lp, ls, rp, rs, re.push edge, rset.insert edge, sl, if qualified then se.push edge else se,
+          match next? with
+          | some next => su.insert edge next
+          | none => su⟩
+    match targetLayer, ed.target with
+    | some targetLayer, some targetPort =>
+      if rightLayer == some targetLayer then m.insertRight targetPort
+      else if leftLayer == some targetLayer then m.insertLeft targetPort
+      -- unhandled situation (probably incoming and outgoing edges on the same port)
+      else m.removeRemaining edge
+    | _, _ => m.removeRemaining edge
+
+/-- The number of ports of the nodes `nodes` (capacity of the port sets). -/
+def portCount (a : LGraphArena) (nodes : Array LNodeId) : Nat :=
+  nodes.foldl (fun acc n => acc + (a.node n).ports.size) 0
+
+/-- `clearThenFillMappings(leftLayer, rightLayer)` on empty collections: collects the ports, edges
+and self loops of a pair of layers (left: `EAST` ports, right: `WEST` ports, in node and port order). -/
+def fill (a : LGraphArena) (leftLayer rightLayer : Option LayerId) (startEdges : Array LEdgeId)
+    (successors : Std.HashMap LEdgeId LEdgeId) : GapMappings := Id.run do
+  let leftNodes := match leftLayer with
+    | some l => (a.layer l).nodes
+    | none => #[]
+  let rightNodes := match rightLayer with
+    | some l => (a.layer l).nodes
+    | none => #[]
+  let leftCount := portCount a leftNodes
+  let rightCount := portCount a rightNodes
+  let mut m : GapMappings := ⟨#[], Std.HashSet.emptyWithCapacity leftCount, #[],
+    Std.HashSet.emptyWithCapacity rightCount, #[], Std.HashSet.emptyWithCapacity (leftCount + rightCount), #[],
+    startEdges, successors⟩
+  for node in leftNodes do
+    for port in (a.node node).ports do
+      let pt := a.port port
+      match pt.side with
+      | .east =>
+        m := m.insertLeft port
+        for edge in pt.outgoingEdges do
+          m := m.fillEdge a leftLayer rightLayer edge
+      | _ => pure ()
+  for node in rightNodes do
+    let ports := (a.node node).ports
+    for port in ports do
+      for edge in (a.port port).outgoingEdges do
+        if a.edgeIsSelfLoop edge then m := m.pushSelfLoop edge
+    for port in ports do
+      let pt := a.port port
+      match pt.side with
+      | .west =>
+        m := m.insertRight port
+        for edge in pt.outgoingEdges do
+          m := m.fillEdge a leftLayer rightLayer edge
+      | _ => pure ()
+  return m
+
+end GapMappings
+
+/-- `clearThenFillMappings(leftLayer, rightLayer)`: resets the collections of the gap and fills them
+(`GapMappings.fill`). -/
 def clearThenFillMappings (leftLayer rightLayer : Option LayerId) : RouterM Unit := do
-  modify fun s => { s with
-    leftPortsLayer := #[], leftPortsSet := {}, rightPortsLayer := #[], rightPortsSet := {},
-    edgesRemainingLayer := #[], edgesRemainingSet := {}, splineSegmentsLayer := #[], selfLoopsLayer := #[] }
-  if let some left := leftLayer then
-    for node in (← getLayer left).nodes do
-      let ports ← withArena (·.nodePortsBySide node .east)
-      for port in ports do
-        insertLeftPort port
-        for edge in (← getPort port).outgoingEdges do
-          fillEdge edge leftLayer rightLayer
-  if let some right := rightLayer then
-    for node in (← getLayer right).nodes do
-      let allPorts := (← getNode node).ports
-      let westPorts ← withArena (·.nodePortsBySide node .west)
-      for port in allPorts do
-        for edge in (← getPort port).outgoingEdges do
-          if ← withArena (·.edgeIsSelfLoop edge) then
-            modify fun s => { s with selfLoopsLayer := s.selfLoopsLayer.push edge }
-      for port in westPorts do
-        insertRightPort port
-        for edge in (← getPort port).outgoingEdges do
-          fillEdge edge leftLayer rightLayer
+  -- the router-wide collections leave the state while they are extended (unshared)
+  let (startEdges, successors) ← modifyGet fun s =>
+    ((s.startEdges, s.successingEdge), { s with startEdges := #[], successingEdge := {} })
+  let m ← withArena fun a => GapMappings.fill a leftLayer rightLayer startEdges successors
+  match m with
+  | ⟨lp, ls, rp, rs, re, rset, sl, se, su⟩ =>
+    modify fun s => { s with
+      leftPortsLayer := lp, leftPortsSet := ls, rightPortsLayer := rp, rightPortsSet := rs,
+      edgesRemainingLayer := re, edgesRemainingSet := rset, splineSegmentsLayer := #[], selfLoopsLayer := sl,
+      startEdges := se, successingEdge := su }
 
 /-- `computeSloppySpacing(rightLayer, edgeEdgeSpacing, nodeNodeSpacing, sloppyLayerSpacingFactor)`:
 the layer gap that limits the slope of the edges into `rightLayer` (sloppy routing). -/
@@ -385,67 +447,89 @@ def computeSloppySpacing (rightLayer : LayerId) (edgeEdgeSpacing nodeNodeSpacing
     maxVertDiff := fmax maxVertDiff maxCurrInputYDiff
   return sloppyLayerSpacingFactor * fmin (edgeEdgeSpacing / nodeNodeSpacing) 1.0 * maxVertDiff
 
-/-- `createSplineSegments(edges, leftPorts, rightPorts, hyperEdges)`: a single-edge segment for every
-remaining edge. -/
-def createSplineSegments : RouterM Unit := do
-  for edge in (← get).edgesRemainingLayer do
-    let ed ← getEdge edge
+/-- The segment table and the per-gap collections the segment creation extends: Rust
+`all_spline_segments` (the table), `edge_to_segment_map`, `spline_segments_layer` and
+`edges_remaining_layer` (with its membership set). -/
+structure SegmentBuild where
+  segments : Array SplineSegment
+  edgeToSegment : Std.HashMap LEdgeId SplineSegmentId
+  layerSegments : Array SplineSegmentId
+  remaining : Array LEdgeId
+  remainingSet : Std.HashSet LEdgeId
+
+namespace SegmentBuild
+
+/-- Appends `segment` for the edges `edges` to the table (Rust `all_spline_segments`,
+`edge_to_segment_map`, `spline_segments_layer`); `hyper` also removes the edges from the remaining
+ones (`remove_arc`). -/
+def add (b : SegmentBuild) (segment : SplineSegment) (edges : Array LEdgeId) (hyper : Bool) : SegmentBuild :=
+  match b with
+  | ⟨segments, map, layerSegments, remaining, remainingSet⟩ =>
+    let id : SplineSegmentId := ⟨segments.size⟩
+    let segments := segments.push segment
+    let map := edges.foldl (fun map edge => map.insert edge id) map
+    if hyper then
+      let (remaining, remainingSet) := edges.foldl (init := (remaining, remainingSet)) fun (re, rset) edge =>
+        if rset.contains edge then (re.erase edge, rset.erase edge) else (re, rset)
+      ⟨segments, map, layerSegments.push id, remaining, remainingSet⟩
+    else ⟨segments, map, layerSegments.push id, remaining, remainingSet⟩
+
+/-- `createSplineSegmentsForHyperEdges` for one `singlePort`: the remaining (`REVERSED == reversed`),
+non-straight edges of the port going up resp. down form a hyperedge if there are at least two of them. -/
+def addHyperEdgesOf (a : LGraphArena) (leftSet : Std.HashSet LPortId) (sideToProcess : SideToProcess)
+    (reversed : Bool) (b : SegmentBuild) (singlePort : LPortId) : SegmentBuild := Id.run do
+  let singlePortPosition := absoluteAnchorY a singlePort
+  let mut upEdges : Array (SideToProcess × LEdgeId) := #[]
+  let mut downEdges : Array (SideToProcess × LEdgeId) := #[]
+  for edge in (a.port singlePort).connectedEdges do
+    let ed := a.edge edge
+    if ed.internal.reversed != reversed then continue
+    if !b.remainingSet.contains edge then continue
     let (some sourcePort, some targetPort) := (ed.source, ed.target) | continue
-    let st ← get
-    let sourceSide ←
-      if st.leftPortsSet.contains sourcePort then pure SideToProcess.left
-      else if st.rightPortsSet.contains sourcePort then pure SideToProcess.right
-      else throw (IO.userError "java.lang.IllegalArgumentException: Source port must be in one of the port sets.")
-    let targetSide ←
-      if st.leftPortsSet.contains targetPort then pure SideToProcess.left
-      else if st.rightPortsSet.contains targetPort then pure SideToProcess.right
-      else throw (IO.userError "java.lang.IllegalArgumentException: Target port must be in one of the port sets.")
-    let segment ← withArena fun a => SplineSegment.newSingleEdge a edge sourceSide targetSide
-    let id ← addSegment segment
-    modify fun s => { s with edgeToSegmentMap := s.edgeToSegmentMap.insert edge id,
-                             splineSegmentsLayer := s.splineSegmentsLayer.push id }
+    let otherPort := if targetPort == singlePort then sourcePort else targetPort
+    let otherPortPosition := absoluteAnchorY a otherPort
+    if isStraight otherPortPosition singlePortPosition then continue
+    let side := if leftSet.contains otherPort then SideToProcess.left else SideToProcess.right
+    if otherPortPosition < singlePortPosition then
+      upEdges := upEdges.push (side, edge)
+    else
+      downEdges := downEdges.push (side, edge)
+  let mut b := b
+  if upEdges.size > 1 then
+    b := b.add (SplineSegment.newHyperEdge a singlePort upEdges sideToProcess) (upEdges.map (·.2)) true
+  if downEdges.size > 1 then
+    b := b.add (SplineSegment.newHyperEdge a singlePort downEdges sideToProcess) (downEdges.map (·.2)) true
+  return b
 
-/-- Creates the hyperedge segment of `singlePort` for the collected edges (Rust inner block of
-`create_spline_segments_for_hyper_edges`). -/
-def createHyperEdgeSegment (singlePort : LPortId) (edges : Array (SideToProcess × LEdgeId))
-    (sideToProcess : SideToProcess) : RouterM Unit := do
-  let segment ← withArena fun a => SplineSegment.newHyperEdge a singlePort edges sideToProcess
-  let id ← addSegment segment
-  for (_, edge) in edges do
-    modify fun s => { s with edgeToSegmentMap := s.edgeToSegmentMap.insert edge id }
-    removeRemaining edge
-  modify fun s => { s with splineSegmentsLayer := s.splineSegmentsLayer.push id }
-
-/-- `createSplineSegmentsForHyperEdges(leftPorts, rightPorts, sideToProcess, reversed, …)`: for each
-port of the processed side, the remaining (`REVERSED == reversed`), non-straight edges going up
-resp. down form a hyperedge if there are at least two of them. -/
-def createSplineSegmentsForHyperEdges (leftPorts rightPorts : Array LPortId) (leftSet : Std.HashSet LPortId)
-    (sideToProcess : SideToProcess) (reversed : Bool) : RouterM Unit := do
+/-- `createSplineSegmentsForHyperEdges(leftPorts, rightPorts, sideToProcess, reversed, …)`: the
+hyperedges of every port of the processed side (`addHyperEdgesOf`). -/
+def addHyperEdges (a : LGraphArena) (leftPorts rightPorts : Array LPortId) (leftSet : Std.HashSet LPortId)
+    (sideToProcess : SideToProcess) (reversed : Bool) (b : SegmentBuild) : SegmentBuild :=
   let portsToProcess := match sideToProcess with
     | .left => leftPorts
     | .right => rightPorts
-  for singlePort in portsToProcess do
-    let singlePortPosition ← withArena (absoluteAnchorY · singlePort)
-    let connectedEdges := (← getPort singlePort).connectedEdges
-    let mut upEdges : Array (SideToProcess × LEdgeId) := #[]
-    let mut downEdges : Array (SideToProcess × LEdgeId) := #[]
-    for edge in connectedEdges do
-      let ed ← getEdge edge
-      if ed.internal.reversed != reversed then continue
-      if !(← get).edgesRemainingSet.contains edge then continue
-      let (some sourcePort, some targetPort) := (ed.source, ed.target) | continue
-      let otherPort := if targetPort == singlePort then sourcePort else targetPort
-      let otherPortPosition ← withArena (absoluteAnchorY · otherPort)
-      if isStraight otherPortPosition singlePortPosition then continue
-      let side := if leftSet.contains otherPort then SideToProcess.left else SideToProcess.right
-      if otherPortPosition < singlePortPosition then
-        upEdges := upEdges.push (side, edge)
-      else
-        downEdges := downEdges.push (side, edge)
-    if upEdges.size > 1 then
-      createHyperEdgeSegment singlePort upEdges sideToProcess
-    if downEdges.size > 1 then
-      createHyperEdgeSegment singlePort downEdges sideToProcess
+  portsToProcess.foldl (addHyperEdgesOf a leftSet sideToProcess reversed) b
+
+/-- `createSplineSegments(edges, leftPorts, rightPorts, hyperEdges)`: a single-edge segment for every
+remaining edge; an error message if an edge's port is in neither port set. -/
+def addSingleEdges (a : LGraphArena) (leftSet rightSet : Std.HashSet LPortId) (b : SegmentBuild) :
+    Except String SegmentBuild := Id.run do
+  let mut b := b
+  for edge in b.remaining do
+    let ed := a.edge edge
+    let (some sourcePort, some targetPort) := (ed.source, ed.target) | continue
+    let sourceSide ←
+      if leftSet.contains sourcePort then pure SideToProcess.left
+      else if rightSet.contains sourcePort then pure SideToProcess.right
+      else return .error "java.lang.IllegalArgumentException: Source port must be in one of the port sets."
+    let targetSide ←
+      if leftSet.contains targetPort then pure SideToProcess.left
+      else if rightSet.contains targetPort then pure SideToProcess.right
+      else return .error "java.lang.IllegalArgumentException: Target port must be in one of the port sets."
+    b := b.add (SplineSegment.newSingleEdge a edge sourceSide targetSide) #[edge] false
+  return .ok b
+
+end SegmentBuild
 
 /-! ### Dependency graph, cycle breaking and ranking of one layer gap
 
@@ -505,12 +589,23 @@ partial def crossingCounter (ys : FloatArray) (k mid stop : Nat) (top bottom : F
     else crossingCounter ys (k + 1) mid stop top bottom acc
   else acc
 
+/-- `crossingCounter ys k mid stop top bottom 0` with the usual single right and single left port
+handled inline. -/
+@[inline] def crossingCounterOf (ys : FloatArray) (k mid stop : Nat) (top bottom : Float) : Int :=
+  if mid == k + 1 && stop == k + 2 then
+    let r : Int := if SplinesMath.isBetween ys[k]! top bottom then 1 else 0
+    if SplinesMath.isBetween ys[k + 1]! top bottom then r - 1 else r
+  else crossingCounter ys k mid stop top bottom 0
+
 /-- `Dependency.source`, `Dependency.target` and `Dependency.weight` of the dependencies of one gap, in
-creation order (`source`/`target` are local segment indices). -/
+creation order (`source`/`target` are local segment indices), and per local segment the positions
+of its positive-weight outgoing and incoming dependencies (see `GapDeps.weightedOutgoing`). -/
 structure GapDepTable where
   source : Array Nat
   target : Array Nat
   weight : Array Int
+  weightedOutgoing : Array (Array Nat)
+  weightedIncoming : Array (Array Nat)
 
 /-- `createDependency(edge0, edge1)` for the local segment `i` (`edge0`, hyperedge range `top0`–
 `bottom0`, anchors `ys[r0:l0]`/`ys[l0:e0]`) and the segments `j, j + 1, …` (`edge1`): a weighted
@@ -524,15 +619,20 @@ partial def dependencyRow (gs : GapSegments) (i : Nat) (top0 bottom0 : Float) (r
     let bottom1 := gs.bottoms[j]!
     if top0 > bottom1 || top1 > bottom0 then dependencyRow gs i top0 bottom0 r0 l0 e0 (j + 1) t
     else
-      let edge0Counter := crossingCounter gs.ys r0 l0 e0 top1 bottom1 0
-      let edge1Counter := crossingCounter gs.ys gs.starts[2 * j]! gs.starts[2 * j + 1]! gs.starts[2 * j + 2]!
-        top0 bottom0 0
+      let edge0Counter := crossingCounterOf gs.ys r0 l0 e0 top1 bottom1
+      let edge1Counter := crossingCounterOf gs.ys gs.starts[2 * j]! gs.starts[2 * j + 1]! gs.starts[2 * j + 2]!
+        top0 bottom0
       match t with
-      | ⟨src, tgt, wgt⟩ =>
+      | ⟨src, tgt, wgt, wo, wi⟩ =>
+        let d := src.size
         let t : GapDepTable :=
-          if edge0Counter < edge1Counter then ⟨src.push i, tgt.push j, wgt.push (edge1Counter - edge0Counter)⟩
-          else if edge1Counter < edge0Counter then ⟨src.push j, tgt.push i, wgt.push (edge0Counter - edge1Counter)⟩
-          else ⟨(src.push j).push i, (tgt.push i).push j, (wgt.push 0).push 0⟩
+          if edge0Counter < edge1Counter then
+            ⟨src.push i, tgt.push j, wgt.push (edge1Counter - edge0Counter), wo.modifyIn i (·.push d),
+              wi.modifyIn j (·.push d)⟩
+          else if edge1Counter < edge0Counter then
+            ⟨src.push j, tgt.push i, wgt.push (edge0Counter - edge1Counter), wo.modifyIn j (·.push d),
+              wi.modifyIn i (·.push d)⟩
+          else ⟨(src.push j).push i, (tgt.push i).push j, (wgt.push 0).push 0, wo, wi⟩
         dependencyRow gs i top0 bottom0 r0 l0 e0 (j + 1) t
   else t
 
@@ -567,15 +667,21 @@ structure GapDeps where
   outgoing : Array (Array DependencyId)
   /-- `SplineSegment.incoming` per local segment. -/
   incoming : Array (Array DependencyId)
+  /-- The positive-weight entries of `outgoing` (positions, list order before `breakCycles`
+  reverses): the only dependencies the cycle breaking weighs, a weight-0 dependency changes no
+  weight. -/
+  weightedOutgoing : Array (Array Nat)
+  /-- The positive-weight entries of `incoming` (positions). -/
+  weightedIncoming : Array (Array Nat)
 
 /-- The dependencies of the gap's segments (`GapSegments`), ids from `base`. -/
 def createDependencies (gs : GapSegments) (base : Nat) : GapDeps :=
   let n := gs.tops.size
-  match dependencyRows gs 0 ⟨#[], #[], #[]⟩ with
-  | ⟨src, tgt, wgt⟩ =>
+  match dependencyRows gs 0 ⟨#[], #[], #[], Array.replicate n #[], Array.replicate n #[]⟩ with
+  | ⟨src, tgt, wgt, weightedOutgoing, weightedIncoming⟩ =>
     let outgoing := dependencyLists n base src
     let incoming := dependencyLists n base tgt
-    ⟨base, src, tgt, wgt, outgoing, incoming⟩
+    ⟨base, src, tgt, wgt, outgoing, incoming, weightedOutgoing, weightedIncoming⟩
 
 /-- Working state of `breakCycles` (per local segment). -/
 structure CycleState where
@@ -602,46 +708,47 @@ structure CycleState where
   /-- `next_right` (marks of sinks, counting down). -/
   nextRight : Int
 
-/-- `acc` plus the weights of the dependencies `deps[k:]`. -/
-partial def sumWeights (g : GapDeps) (deps : Array DependencyId) (k : Nat) (acc : Int) : Int :=
-  if h : k < deps.size then sumWeights g deps (k + 1) (acc + g.weight[deps[k].idx - g.base]!) else acc
+/-- `acc` plus the weights of the dependencies at the positions `deps[k:]`. -/
+partial def sumWeights (g : GapDeps) (deps : Array Nat) (k : Nat) (acc : Int) : Int :=
+  if h : k < deps.size then sumWeights g deps (k + 1) (acc + g.weight[deps[k]]!) else acc
 
 /-- The initial state of `breakCycles`: marks `-1, -2, …`, the in/out weights and the initial sinks
 (no outgoing weight) and sources (else no incoming weight), both in segment order. -/
 def initCycleBreaking (g : GapDeps) : CycleState :=
   let n := g.outgoing.size
-  let inweight := g.incoming.map fun deps => sumWeights g deps 0 0
-  let outweight := g.outgoing.map fun deps => sumWeights g deps 0 0
+  let inweight := g.weightedIncoming.map fun deps => sumWeights g deps 0 0
+  let outweight := g.weightedOutgoing.map fun deps => sumWeights g deps 0 0
   { mark := (Array.range n).map fun (i : Nat) => -1 - (i : Int), inweight, outweight
     sources := (Array.range n).filter fun i => outweight[i]! != 0 && inweight[i]! == 0, sourcesHead := 0
     sinks := (Array.range n).filter fun i => outweight[i]! == 0, sinksHead := 0
     unprocessed := Array.replicate n true, unprocessedCount := n, order := Array.range n
     nextLeft := (n : Int) + 1, nextRight := (n : Int) - 1 }
 
-/-- Outgoing half of `updateNeighbors`: for the dependencies `deps[k:]` of the processed segment,
-removes the weight from the unmarked targets (`inweight`) and queues those that became sources. -/
-partial def updateTargets (g : GapDeps) (deps : Array DependencyId) (mark outweight : Array Int) (k : Nat)
+/-- Outgoing half of `updateNeighbors`: for the positive-weight dependencies `deps[k:]` (positions) of
+the processed segment, removes the weight from the unmarked targets (`inweight`) and queues those that
+became sources. -/
+partial def updateTargets (g : GapDeps) (deps : Array Nat) (mark outweight : Array Int) (k : Nat)
     (inweight : Array Int) (sources : Array Nat) : Array Int × Array Nat :=
   if h : k < deps.size then
-    let p := deps[k].idx - g.base
+    let p := deps[k]
     let weight := g.weight[p]!
     let target := g.target[p]!
-    if weight > 0 && mark[target]! < 0 then
+    if mark[target]! < 0 then
       let w := inweight[target]! - weight
       let sources := if w <= 0 && outweight[target]! > 0 then sources.push target else sources
       updateTargets g deps mark outweight (k + 1) (inweight.set! target w) sources
     else updateTargets g deps mark outweight (k + 1) inweight sources
   else (inweight, sources)
 
-/-- Incoming half of `updateNeighbors`: removes the weight from the unmarked sources of `deps[k:]`
-(`outweight`) and queues those that became sinks. -/
-partial def updateSources (g : GapDeps) (deps : Array DependencyId) (mark inweight : Array Int) (k : Nat)
+/-- Incoming half of `updateNeighbors`: removes the weight from the unmarked sources of the
+positive-weight dependencies `deps[k:]` (`outweight`) and queues those that became sinks. -/
+partial def updateSources (g : GapDeps) (deps : Array Nat) (mark inweight : Array Int) (k : Nat)
     (outweight : Array Int) (sinks : Array Nat) : Array Int × Array Nat :=
   if h : k < deps.size then
-    let p := deps[k].idx - g.base
+    let p := deps[k]
     let weight := g.weight[p]!
     let source := g.source[p]!
-    if weight > 0 && mark[source]! < 0 then
+    if mark[source]! < 0 then
       let w := outweight[source]! - weight
       let sinks := if w <= 0 && inweight[source]! > 0 then sinks.push source else sinks
       updateSources g deps mark inweight (k + 1) (outweight.set! source w) sinks
@@ -658,8 +765,8 @@ def processSegment (g : GapDeps) (st : CycleState) (edge : Nat) (m : Int) : Cycl
     let unprocessed := if wasUnprocessed then unprocessed.set! edge false else unprocessed
     let unprocessedCount := if wasUnprocessed then unprocessedCount - 1 else unprocessedCount
     let mark := mark.set! edge m
-    let (inweight, sources) := updateTargets g g.outgoing[edge]! mark outweight 0 inweight sources
-    let (outweight, sinks) := updateSources g g.incoming[edge]! mark inweight 0 outweight sinks
+    let (inweight, sources) := updateTargets g g.weightedOutgoing[edge]! mark outweight 0 inweight sources
+    let (outweight, sinks) := updateSources g g.weightedIncoming[edge]! mark inweight 0 outweight sinks
     ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount, order,
       nextLeft, nextRight⟩
 
@@ -742,7 +849,7 @@ partial def reverseLeftward (mark : Array Int) (deps : Array DependencyId) (k : 
   if h : k < deps.size then
     let d := deps[k]
     match st with
-    | ⟨⟨base, src, tgt, wgt, out, inc⟩, dropped, incomingStale⟩ =>
+    | ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩ =>
       let p := d.idx - base
       let s := src[p]!
       let t := tgt[p]!
@@ -750,12 +857,12 @@ partial def reverseLeftward (mark : Array Int) (deps : Array DependencyId) (k : 
         let incomingStale := incomingStale.set! t true
         if wgt[p]! > 0 then
           reverseLeftward mark deps (k + 1)
-            ⟨⟨base, src.set! p t, tgt.set! p s, wgt, out.modifyIn t (·.push d), inc.modifyIn s (·.push d)⟩,
-              dropped, incomingStale⟩ true
+            ⟨⟨base, src.set! p t, tgt.set! p s, wgt, out.modifyIn t (·.push d), inc.modifyIn s (·.push d),
+                wo, wi⟩, dropped, incomingStale⟩ true
         else
           reverseLeftward mark deps (k + 1)
-            ⟨⟨base, src, tgt, wgt, out, inc⟩, dropped.set! p true, incomingStale⟩ true
-      else reverseLeftward mark deps (k + 1) ⟨⟨base, src, tgt, wgt, out, inc⟩, dropped, incomingStale⟩ removed
+            ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped.set! p true, incomingStale⟩ true
+      else reverseLeftward mark deps (k + 1) ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩ removed
   else (st, removed)
 
 /-- `reverseLeftward` for the segments `i, i + 1, …` (list order); a segment's outgoing list drops
@@ -765,20 +872,20 @@ partial def reverseLeftwardDependencies (mark : Array Int) (i : Nat) (st : Rever
     let deps := st.deps.outgoing[i]
     match reverseLeftward mark deps 0 st false with
     | (st, false) => reverseLeftwardDependencies mark (i + 1) st
-    | (⟨⟨base, src, tgt, wgt, out, inc⟩, dropped, incomingStale⟩, true) =>
+    | (⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩, true) =>
       let out := out.modifyIn i fun list =>
         keepDependencies list fun d => src[d.idx - base]! == i && !dropped[d.idx - base]!
-      reverseLeftwardDependencies mark (i + 1) ⟨⟨base, src, tgt, wgt, out, inc⟩, dropped, incomingStale⟩
+      reverseLeftwardDependencies mark (i + 1) ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩
   else st
 
 /-- Drops the removed entries of the incoming lists marked `incomingStale` (see `reverseLeftward`). -/
 def compactIncomingLists (st : ReversalState) : GapDeps :=
   match st with
-  | ⟨⟨base, src, tgt, wgt, out, inc⟩, dropped, incomingStale⟩ =>
+  | ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩ =>
     let inc := inc.mapIdx fun x list =>
       if incomingStale[x]! then keepDependencies list fun d => tgt[d.idx - base]! == x && !dropped[d.idx - base]!
       else list
-    ⟨base, src, tgt, wgt, out, inc⟩
+    ⟨base, src, tgt, wgt, out, inc, wo, wi⟩
 
 /-- `breakCycles(edges, random)`: Eades–Lin–Smyth style marking (sinks get decreasing marks below
 the segment count `n`, sources and the random max-outflow segments increasing marks above it; the
@@ -794,6 +901,8 @@ def breakCycles (g : GapDeps) (random : Random) : GapDeps × CycleState × Rando
       nextLeft, nextRight⟩ =>
     let mark := mark.map fun m => if m < markBase then m + shiftBase else m
     let dependencyCount := g.source.size
+    -- the weighted lists are not needed (and not maintained) any more
+    let g := { g with weightedOutgoing := #[], weightedIncoming := #[] }
     let g := compactIncomingLists
       (reverseLeftwardDependencies mark 0 ⟨g, Array.replicate dependencyCount false, Array.replicate n false⟩)
     (g, ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount, order,
@@ -879,7 +988,7 @@ advances the dependency id counter. -/
 def writeGapRanking (ids : Array SplineSegmentId) (g : GapDeps) (mark : Array Int) (rs : RankState) :
     RouterM Unit :=
   match g with
-  | ⟨_, src, _, _, outgoing, incoming⟩ =>
+  | ⟨_, src, _, _, outgoing, incoming, _, _⟩ =>
     modify fun s =>
       let segments := ids.size.fold (init := s.segments) fun i h segments =>
         segments.modifyIn ids[i].idx fun x => { x with
@@ -894,14 +1003,26 @@ def createSegmentsAndComputeRanking (graph : LGraphId) : RouterM Unit := do
   let leftPorts := (← get).leftPortsLayer
   let rightPorts := (← get).rightPortsLayer
   let leftSet := (← get).leftPortsSet
-  createSplineSegmentsForHyperEdges leftPorts rightPorts leftSet .left true
-  createSplineSegmentsForHyperEdges leftPorts rightPorts leftSet .left false
-  createSplineSegmentsForHyperEdges leftPorts rightPorts leftSet .right true
-  createSplineSegmentsForHyperEdges leftPorts rightPorts leftSet .right false
-  createSplineSegments
-  let layerSegments := (← get).splineSegmentsLayer
-  let segments := (← get).segments
-  let gs ← withArena fun a => GapSegments.read a segments layerSegments
+  let rightSet := (← get).rightPortsSet
+  -- the segment table and the gap collections leave the state while they are extended (unshared)
+  let b ← modifyGet fun s =>
+    ((⟨s.segments, s.edgeToSegmentMap, s.splineSegmentsLayer, s.edgesRemainingLayer, s.edgesRemainingSet⟩ :
+        SegmentBuild),
+      { s with segments := #[], edgeToSegmentMap := {}, splineSegmentsLayer := #[], edgesRemainingLayer := #[],
+               edgesRemainingSet := {} })
+  let built ← withArena fun a =>
+    let b := b.addHyperEdges a leftPorts rightPorts leftSet .left true
+      |>.addHyperEdges a leftPorts rightPorts leftSet .left false
+      |>.addHyperEdges a leftPorts rightPorts leftSet .right true
+      |>.addHyperEdges a leftPorts rightPorts leftSet .right false
+    (b.addSingleEdges a leftSet rightSet).map fun b => (b, GapSegments.read a b.segments b.layerSegments)
+  let (layerSegments, gs) ← match built with
+    | .error msg => throw (IO.userError msg)
+    | .ok (⟨segments, map, layerSegments, remaining, remainingSet⟩, gs) =>
+      modify fun s => { s with
+        segments, edgeToSegmentMap := map, splineSegmentsLayer := layerSegments, edgesRemainingLayer := remaining,
+        edgesRemainingSet := remainingSet }
+      pure (layerSegments, gs)
   let (deps, cycles, random, drawn) := breakCycles (createDependencies gs (← get).dependencyCount) (← get).random
   if drawn then
     modify fun s => { s with random := random }
@@ -909,40 +1030,40 @@ def createSegmentsAndComputeRanking (graph : LGraphId) : RouterM Unit := do
       LayeredM.setGraphRandom graph random
   writeGapRanking layerSegments deps cycles.mark (topologicalNumbering deps gs.leftEmpty)
 
+/-- The walk of `getEdgeChain` continued from `chain` (which ends with `current`): the successors of
+`current` up to (excluding) the first repeated edge. The repetition test scans `chain` while it is
+short and uses `visited` (filled when the chain reaches 16 edges) beyond. -/
+partial def edgeChainFrom (successors : Std.HashMap LEdgeId LEdgeId) (current : LEdgeId) (chain : Array LEdgeId)
+    (visited : Std.HashSet LEdgeId) : Array LEdgeId :=
+  match successors[current]? with
+  | none => chain
+  | some next =>
+    if chain.size < 16 then
+      if chain.contains next then chain else edgeChainFrom successors next (chain.push next) visited
+    else
+      let visited := if chain.size == 16 then chain.foldl (·.insert ·) visited else visited
+      if visited.contains next then chain
+      else edgeChainFrom successors next (chain.push next) (visited.insert next)
+
 /-- `getEdgeChain(start)`: the edge and its successors (long edge). Deviation: Rust/Java loop
 forever on a successor cycle (only possible for malformed dummy wiring); the walk stops at the
 first repeated edge instead. -/
 def getEdgeChain (start : LEdgeId) : RouterM (Array LEdgeId) := do
-  let successors := (← get).successingEdge
-  let mut edgeChain : Array LEdgeId := #[]
-  let mut visited : Std.HashSet LEdgeId := {}
-  let mut current := start
-  while true do
-    if visited.contains current then break
-    visited := visited.insert current
-    edgeChain := edgeChain.push current
-    match successors[current]? with
-    | some next => current := next
-    | none => break
-  return edgeChain
+  return edgeChainFrom (← get).successingEdge start #[start] {}
 
-/-- `getSplinePath(start)`: the segments along the edge chain (each gets the current edge's ports);
-marks the initial and last segment and their source/target node. Like `getEdgeChain`, the walk
-stops at a repeated edge (Rust/Java do not terminate on a successor cycle). -/
-def getSplinePath (start : LEdgeId) : RouterM (Array SplineSegmentId) := do
+/-- `getSplinePath(start)` for the edge chain `edgeChain` of `start` (`getEdgeChain`, the same
+successor walk): the segments along the chain up to the first edge without a segment (each gets the
+current edge's ports); marks the initial and last segment and their source/target node. Like
+`getEdgeChain`, the walk stops at a repeated edge (Rust/Java do not terminate on a successor
+cycle). -/
+def getSplinePath (edgeChain : Array LEdgeId) : RouterM (Array SplineSegmentId) := do
+  let edgeToSegment := (← get).edgeToSegmentMap
   let mut segmentChain : Array SplineSegmentId := #[]
-  let mut visited : Std.HashSet LEdgeId := {}
-  let mut current := start
-  while true do
-    if visited.contains current then break
-    visited := visited.insert current
-    let some segment := (← get).edgeToSegmentMap[current]? | break
+  for current in edgeChain do
+    let some segment := edgeToSegment[current]? | break
     let ed ← getEdge current
     modifySegment segment fun x => { x with sourcePort := ed.source, targetPort := ed.target }
     segmentChain := segmentChain.push segment
-    match (← get).successingEdge[current]? with
-    | some next => current := next
-    | none => break
   if let some first := segmentChain[0]? then
     let seg ← getSegment first
     let sourceNode ← match seg.edges[0]? with
@@ -972,13 +1093,13 @@ def processLayerPair (graph : LGraphId) (sp : Spacing) (leftLayer rightLayer fir
   clearThenFillMappings leftLayer rightLayer
   createSegmentsAndComputeRanking graph
   -- count the slots for vertical segments (straight segments have a rank but no slot)
-  let mut slotMax : Option Int := none
-  for id in (← get).splineSegmentsLayer do
-    let seg ← getSegment id
-    if !seg.isStraight then
-      slotMax := some (match slotMax with
-        | some m => max m (seg.rank + 1)
-        | none => seg.rank + 1)
+  let segments := (← get).segments
+  let slotMax := (← get).splineSegmentsLayer.foldl (init := (none : Option Int)) fun slotMax id =>
+    let seg := segments[id.idx]!
+    if seg.isStraight then slotMax
+    else some (match slotMax with
+      | some m => max m (seg.rank + 1)
+      | none => seg.rank + 1)
   let slotCount := slotMax.getD 0
   let mut xSegmentDelta := 0.0
   let mut rightLayerPosition := xpos
@@ -1004,10 +1125,13 @@ def processLayerPair (graph : LGraphId) (sp : Spacing) (leftLayer rightLayer fir
   let finalRight := rightLayerPosition
   let delta := xSegmentDelta
   let westOfInitial := leftLayer.isNone
-  for id in (← get).splineSegmentsLayer do
-    modifySegment id fun x => { x with
-      boundingBox := { x.boundingBox with x := xpos, width := finalRight - xpos },
-      xDelta := delta, isWestOfInitialLayer := westOfInitial }
+  let layerSegments := (← get).splineSegmentsLayer
+  modify fun s =>
+    let segments := layerSegments.foldl (init := s.segments) fun segments id =>
+      segments.modifyIn id.idx fun x => { x with
+        boundingBox := { x.boundingBox with x := xpos, width := finalRight - xpos },
+        xDelta := delta, isWestOfInitialLayer := westOfInitial }
+    { s with segments }
   modify fun s => { s with allSplineSegments := s.allSplineSegments ++ s.splineSegmentsLayer }
   let mut nextXpos := rightLayerPosition
   if let some right := rightLayer then
@@ -1050,7 +1174,7 @@ def routeGraph (graph : LGraphId) : RouterM Unit := do
     leftLayer := rightLayer
   for edge in (← get).startEdges do
     let edgeChain ← getEdgeChain edge
-    let spline ← getSplinePath edge
+    let spline ← getSplinePath edgeChain
     modifyEdge edge fun e => { e with internal := { e.internal with splineEdgeChain := edgeChain } }
     modify fun s => { s with routeStarts := s.routeStarts.push (edge, spline) }
   let width := xpos
