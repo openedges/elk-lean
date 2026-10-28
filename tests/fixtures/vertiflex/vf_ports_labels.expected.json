@@ -29,7 +29,7 @@
         }
       ],
       "width": 40,
-      "x": 45,
+      "x": 0,
       "y": 0
     },
     {
@@ -58,8 +58,8 @@
         }
       ],
       "width": 30,
-      "x": 100,
-      "y": 100
+      "x": 0,
+      "y": 0
     },
     {
       "height": 20,
@@ -76,13 +76,13 @@
       ],
       "width": 35,
       "x": 0,
-      "y": 100
+      "y": 0
     },
     {
       "height": 25,
       "id": "n3",
       "width": 25,
-      "x": 55,
+      "x": 7.5,
       "y": 100
     }
   ],
@@ -103,12 +103,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 115,
-            "y": 100
+            "x": 15,
+            "y": 0
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 65,
+            "x": 20,
             "y": 30
           }
         }
@@ -127,11 +127,11 @@
         {
           "endPoint": {
             "x": 17.5,
-            "y": 100
+            "y": 0
           },
           "id": "e2_s0",
           "startPoint": {
-            "x": 65,
+            "x": 20,
             "y": 30
           }
         }
@@ -149,12 +149,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 67.5,
+            "x": 20,
             "y": 100
           },
           "id": "e3_s0",
           "startPoint": {
-            "x": 65,
+            "x": 20,
             "y": 30
           }
         }
@@ -173,7 +173,7 @@
     "elk.algorithm": "org.eclipse.elk.vertiflex",
     "elk.vertiflex.considerNodeModelOrder": "false"
   },
-  "width": 152,
+  "width": 52,
   "x": 0,
   "y": 0
 }

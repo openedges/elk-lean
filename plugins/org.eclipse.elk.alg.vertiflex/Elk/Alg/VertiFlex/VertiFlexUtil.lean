@@ -2,8 +2,10 @@ import Elk.Graph
 /-!
 # `org.eclipse.elk.alg.vertiflex.VertiFlexUtil`
 
-Port of `vertiflex_util.rs` (elk-rs). The Rust phases each carry private copies of the helpers
-`edge_target_node`, `outgoing_children` and `ensure_single_section`; they are shared here.
+Port of `VertiFlexUtil.java` (elk-rs `vertiflex_util.rs`). The Rust phases each carry private copies
+of the helpers `edge_target_node`, `outgoing_children` and `ensure_single_section`; they are shared
+here. `findRoot` uses `ElkGraphUtil.allIncomingEdges` (ports included) like Java, the tree walks use
+the node's own edges (`outgoingChildren`).
 -/
 namespace Elk.Alg.VertiFlex
 
@@ -22,14 +24,25 @@ port), `none` for an edge without targets. -/
 def edgeTargetNode (e : EdgeId) : ElkM (Option NodeId) :=
   ElkM.withGraph fun g => ((g.edge e).targets[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
 
-/-- The target nodes of `ElkGraphUtil::all_outgoing_edges(node)` in edge order (edges without a
-target node are skipped), i.e. the children of a tree node. -/
+/-- Java's `ClassCastException` of `(ElkNode) edge.getTargets().get(0)` for a port target. -/
+def PORT_CAST_EXCEPTION : String :=
+  "java.lang.ClassCastException: class org.eclipse.elk.graph.impl.ElkPortImpl cannot be cast to class " ++
+  "org.eclipse.elk.graph.ElkNode (org.eclipse.elk.graph.impl.ElkPortImpl and org.eclipse.elk.graph.ElkNode " ++
+  "are in unnamed module of loader 'app')"
+
+/-- The children of a tree node as Java's phases read them: `(ElkNode)
+node.getOutgoingEdges().get(i).getTargets().get(0)` — only the edges of the node itself (not of its
+ports; elk-rs used `all_outgoing_edges`), in edge order; a port target is Java's
+`ClassCastException`, an edge without targets its `IndexOutOfBoundsException`. -/
 def outgoingChildren (n : NodeId) : ElkM (Array NodeId) := do
-  let edges ← ElkM.withGraph fun g => ElkGraphUtil.allOutgoingEdges g n
+  let g : ElkGraph ← get
   let mut children : Array NodeId := #[]
-  for e in edges do
-    if let some c ← edgeTargetNode e then
-      children := children.push c
+  for e in (g.node n).outgoingEdges do
+    let target : Option ConnectableId := (g.edge e).targets[0]?
+    match target with
+    | some (ConnectableId.node c) => children := children.push c
+    | some (ConnectableId.port _) => throw (IO.userError PORT_CAST_EXCEPTION)
+    | none => throw (IO.userError "java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0")
   return children
 
 /-- Java `ElkGraphUtil.firstEdgeSection(edge, true, true)` of the edge routers: the first section of
