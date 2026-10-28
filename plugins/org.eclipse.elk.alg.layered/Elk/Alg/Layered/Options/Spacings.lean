@@ -23,6 +23,11 @@ structure Spacings where
   vertical : Array (Array (Option (Property Float)))
   /-- Graph-level value per option id (`cache_graph_values`). -/
   graphPropertyValues : Array (String × Float)
+  /-- `graphSpacingValue` of every entry of `horizontal` (`0` where there is no option), resolved
+  once by `new` instead of a search by option id per lookup (no Java counterpart). -/
+  horizontalValues : Array (Array Float) := #[]
+  /-- `graphSpacingValue` of every entry of `vertical` (see `horizontalValues`). -/
+  verticalValues : Array (Array Float) := #[]
   deriving Inhabited
 
 namespace Spacings
@@ -99,16 +104,23 @@ private def cacheGraphValues (s : Spacings) (graphProps : PropertyMap) : Spacing
       if let some p := p then values := cache values p
   return { s with graphPropertyValues := values }
 
-/-- `new Spacings(graph)` from the graph's property map. -/
-def new (graphProps : PropertyMap) : Spacings :=
-  ({ horizontal := emptyTable, vertical := emptyTable, graphPropertyValues := #[] } : Spacings)
-    |>.precalculateNodeTypeSpacings |>.cacheGraphValues graphProps
-
 /-- `graph_spacing_value(property)`: the cached graph value, else the option default. -/
 def graphSpacingValue (s : Spacings) (p : Property Float) : Float :=
   match s.graphPropertyValues.find? (·.1 == p.key.id) with
   | some (_, v) => v
   | none => p.default.getD 0.0
+
+/-- `graphSpacingValue` of every option of a table (`0` for empty entries). -/
+private def resolveTable (s : Spacings) (table : Array (Array (Option (Property Float)))) : Array (Array Float) :=
+  table.map (·.map fun p? => match p? with
+    | some p => s.graphSpacingValue p
+    | none => 0.0)
+
+/-- `new Spacings(graph)` from the graph's property map. -/
+def new (graphProps : PropertyMap) : Spacings :=
+  let s := ({ horizontal := emptyTable, vertical := emptyTable, graphPropertyValues := #[] } : Spacings)
+    |>.precalculateNodeTypeSpacings |>.cacheGraphValues graphProps
+  { s with horizontalValues := s.resolveTable s.horizontal, verticalValues := s.resolveTable s.vertical }
 
 /-- `get_individual_or_default_f64(node, property)`: the node's individual spacing if set,
 else the graph value. -/
@@ -123,10 +135,30 @@ def getIndividualOrDefaultF64 (s : Spacings) (nodeProps : PropertyMap) (p : Prop
   | some v => v
   | none => s.graphSpacingValue p
 
+/-- `getIndividualOrDefaultF64` with the graph value of the option resolved before. -/
+@[inline] private def individualOr (nodeProps : PropertyMap) (p : Property Float) (graphValue : Float) : Float :=
+  let individual : Option Float :=
+    if nodeProps.has CoreOptions.SPACING_INDIVIDUAL then
+      match nodeProps.get CoreOptions.SPACING_INDIVIDUAL with
+      | some ind => if ind.props.has p then ind.props.get p else none
+      | none => none
+    else none
+  match individual with
+  | some v => v
+  | none => graphValue
+
+/-- The spacing between two nodes of the given types: the larger individual-or-graph value of
+the table's option (`values` holds the options' graph values, `horizontalValues`/`verticalValues`). -/
 private def localSpacing? (s : Spacings) (table : Array (Array (Option (Property Float))))
-    (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float := do
-  let option ← (table[ElkEnum.ordinal t1]?.bind (·[ElkEnum.ordinal t2]?)).bind id
-  return fmax (s.getIndividualOrDefaultF64 p1 option) (s.getIndividualOrDefaultF64 p2 option)
+    (values : Array (Array Float)) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) :
+    Option Float := do
+  let i := ElkEnum.ordinal t1
+  let j := ElkEnum.ordinal t2
+  let option ← (table[i]?.bind (·[j]?)).bind id
+  let graphValue := match values[i]?.bind (·[j]?) with
+    | some v => v
+    | none => s.graphSpacingValue option
+  return fmax (individualOr p1 option graphValue) (individualOr p2 option graphValue)
 
 private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (Property Float)))) (t1 t2 : NodeType) : Option Float := do
   let option ← (table[ElkEnum.ordinal t1]?.bind (·[ElkEnum.ordinal t2]?)).bind id
@@ -134,11 +166,11 @@ private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (
 
 /-- `getHorizontalSpacing(n1, n2)`: `none` = Java `UnspecifiedSpacingException`. -/
 def getHorizontalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
-  s.localSpacing? s.horizontal t1 p1 t2 p2
+  s.localSpacing? s.horizontal s.horizontalValues t1 p1 t2 p2
 
 /-- `getVerticalSpacing(n1, n2)`. -/
 def getVerticalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
-  s.localSpacing? s.vertical t1 p1 t2 p2
+  s.localSpacing? s.vertical s.verticalValues t1 p1 t2 p2
 
 /-- `getHorizontalSpacing(NodeType, NodeType)`. -/
 def getHorizontalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=

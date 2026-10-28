@@ -122,17 +122,20 @@ instance : ToString BKAlignedLayout := ⟨BKAlignedLayout.toString⟩
 
 /-- `layoutSize()`: the extent between the minimal y coordinate of any node and the maximal y
 coordinate plus the size of the node's block (`f64::min/max`, layers then nodes in order). -/
-def layoutSize (ctx : BKContext) (bal : BKAlignedLayout) : Float := Id.run do
-  let mut mn := Float.posInf
-  let mut mx := Float.negInf
-  for l in ctx.layers do
-    for n in (ctx.arena.layer l).nodes do
-      let id := ctx.nodeId n
+def layoutSize (ctx : BKContext) (bal : BKAlignedLayout) : Float :=
+  layoutSizeGo 0 #[] 0 Float.posInf Float.negInf
+where
+  /-- The node loop with unboxed accumulators: node `ni` of `nodes` (the nodes of layer `li`). -/
+  layoutSizeGo (li : Nat) (nodes : Array LNodeId) (ni : Nat) (mn mx : Float) : Float :=
+    if h : ni < nodes.size then
+      let id := ctx.nodeId nodes[ni]
       let yMin := bal.yOf id
       let yMax := yMin + bal.blockSizeOf (bal.rootOf id)
-      mn := fmin mn yMin
-      mx := fmax mx yMax
-  return mx - mn
+      layoutSizeGo li nodes (ni + 1) (fmin mn yMin) (fmax mx yMax)
+    else if h' : li < ctx.layers.size then
+      layoutSizeGo (li + 1) (ctx.arena.layer ctx.layers[li]).nodes 0 mn mx
+    else mx - mn
+  termination_by (ctx.layers.size + 1 - li, nodes.size - ni)
 
 /-- `calculateDelta(src, tgt)`: target port position minus source port position (each
 `y + innerShift + (port.y + anchor.y)`); `> 0` means the target has to move up to straighten

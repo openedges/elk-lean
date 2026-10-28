@@ -271,18 +271,32 @@ additionally moved by their class shift (if finite in the compaction direction).
 visited in layer order, so the root of a block (in the first visited layer of the block) is
 moved before its other nodes copy its position. -/
 private def applyFinalCoordinates (ctx : BKContext) (vdir : VDirection) (nodes : Array LNodeId)
-    (bal : BKAlignedLayout) : BKAlignedLayout := Id.run do
-  let mut bal := bal
-  for n in nodes do
-    let idx := ctx.nodeId n
-    let rootId := bal.rootOf idx
-    let rootY := bal.yOf rootId
-    bal := bal.setY idx rootY
-    if idx == rootId then
-      let sinkShift := bal.shiftOf (bal.sinkOf idx)
-      if (vdir == .up && sinkShift > Float.negInf) || (vdir == .down && sinkShift < Float.posInf) then
-        bal := bal.setY idx (rootY + sinkShift)
-  return bal
+    (bal : BKAlignedLayout) : BKAlignedLayout :=
+  -- the y arrays are taken out of the layout and updated in place by an unboxed loop
+  let y := bal.y
+  let yDefined := bal.yDefined
+  let bal := { bal with y := FloatArray.empty, yDefined := #[] }
+  let isUp := match vdir with | .up => true | .down => false
+  let (y, yDefined) := go bal isUp 0 y yDefined
+  { bal with y, yDefined }
+where
+  /-- Node `i` of `nodes`; `y`/`yDefined` are the layout's arrays (`yOf`/`setY` on them). -/
+  go (bal : BKAlignedLayout) (isUp : Bool) (i : Nat) (y : FloatArray) (yDefined : Array Bool) :
+      FloatArray × Array Bool :=
+    if h : i < nodes.size then
+      let idx := ctx.nodeId nodes[i]
+      let rootId := bal.rootOf idx
+      let rootY := if yDefined.getD rootId false then y.get! rootId else 0.0
+      let y := y.set! idx rootY
+      let yDefined := yDefined.set! idx true
+      if idx == rootId then
+        let sinkShift := bal.shiftOf (bal.sinkOf idx)
+        if (isUp && sinkShift > Float.negInf) || (!isUp && sinkShift < Float.posInf) then
+          go bal isUp (i + 1) (y.set! idx (rootY + sinkShift)) yDefined
+        else go bal isUp (i + 1) y yDefined
+      else go bal isUp (i + 1) y yDefined
+    else (y, yDefined)
+  termination_by nodes.size - i
 
 /-- `horizontalCompaction(bal)`: resets sinks and shifts, places all blocks (layers reversed
 for `LEFT`, nodes of a layer reversed for `UP`; only roots start a placement), places the

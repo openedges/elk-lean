@@ -264,15 +264,17 @@ private def chooseLayout (ctx : BKContext) (layouts : Array BKAlignedLayout) (pr
     if balancedOk then chosen := some balanced
   if trace then IO.eprintln "bk: balanced layout checked"
   if chosen.isNone then
+    -- `layoutSize` is pure: every layout's size is computed once (Java recomputes it per comparison)
+    let mut chosenSize : Float := 0.0
     for bal in layouts do
       let orderOk ← checkOrderConstraint ctx bal monitor
+      let size := bal.layoutSize ctx
       if trace then
-        IO.eprintln s!"bk: candidate={bal} size={(bal.layoutSize ctx).toRustDisplay} order_ok={orderOk}"
-      let smaller : Bool := match chosen with
-        | some c => c.layoutSize ctx > bal.layoutSize ctx
-        | none => true
+        IO.eprintln s!"bk: candidate={bal} size={size.toRustDisplay} order_ok={orderOk}"
+      let smaller : Bool := if chosen.isSome then chosenSize > size else true
       if orderOk && smaller then
         chosen := some bal
+        chosenSize := size
   if trace then
     match chosen with
     | some c => IO.eprintln s!"bk: layout chosen={c} size={(c.layoutSize ctx).toRustDisplay}"
