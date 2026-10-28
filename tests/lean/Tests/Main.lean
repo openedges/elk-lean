@@ -4,6 +4,7 @@ import Tests.Core.Options
 import Tests.Core.Math
 import Tests.Core.Util
 import Tests.Core.RustSort
+import Tests.Core.JavaSort
 import Tests.Core.FastFloat
 import Tests.Core.Meta
 import Tests.Core.Validation
@@ -33,12 +34,13 @@ import Tests.RectPacking
 import Tests.Api.PerfBenchmark
 import Tests.Api.Robustness
 
-/-- Test driver (`lake test`). Add each plugin's `suites` here. -/
-def main : IO UInt32 := do
+/-- Test driver (`lake test`). Add each plugin's `suites` here. `lake test -- --suite <prefix>` runs
+only the suites whose name starts with `<prefix>`. -/
+def main (args : List String) : IO UInt32 := do
   let suites :=
     Tests.Core.Foundation.suites ++ Tests.Core.Options.suites ++ Tests.Core.Math.suites ++
     Tests.Core.Util.suites ++
-    Tests.Core.RustSort.suites ++ Tests.Core.FastFloat.suites ++ Tests.Core.Meta.suites ++ Tests.Core.Validation.suites ++
+    Tests.Core.RustSort.suites ++ Tests.Core.JavaSort.suites ++ Tests.Core.FastFloat.suites ++ Tests.Core.Meta.suites ++ Tests.Core.Validation.suites ++
     Tests.Graph.suites ++ Tests.Json.suites ++ Tests.Json.Importer.suites ++ Tests.Json.ParserFuzz.suites ++
     Tests.Json.Zmij.suites ++ Tests.Text.suites ++
     Tests.AlgCommon.NetworkSimplex.suites ++ Tests.AlgCommon.Compaction.suites ++ Tests.AlgCommon.Polyomino.suites ++
@@ -57,4 +59,6 @@ def main : IO UInt32 := do
     Tests.Core.Alg.suites ++
     -- keep `Tests.Core.Engine` last: it registers an extra test algorithm (`core.meta.counts` expects 4)
     Tests.Core.Engine.suites
-  Tests.runSuites suites
+  match args with
+  | ["--suite", pre] => Tests.runSuites (suites.filter (·.name.startsWith pre))
+  | _ => Tests.runSuites suites
