@@ -139,18 +139,18 @@ def createCrossMinimizer (graph : LGraphId) (crossMinType : CrossMinType) (order
 `cachePortSides` and the nested graph of every node in order, one port count per port, and the
 zero port positions. Returns the child graphs and the port count. -/
 def initHolder (order : Array (Array LNodeId)) : LayeredM (Array LGraphId × Nat) := do
-  let childGraphs ← IO.mkRef (#[] : Array LGraphId)
-  let nPorts ← IO.mkRef (0 : Nat)
-  let holderInit : Initializable := {
-    initAtNodeLevel := fun l n nodeOrder => do
-      let some node := (nodeOrder[l]?).bind (·[n]?) | return
+  -- `Initializable.init #[holderInit] order` with `holderInit` doing `cachePortSides` and the nested
+  -- graph per node and counting the ports, as one loop (the same calls in the same order)
+  let mut childGraphs : Array LGraphId := #[]
+  let mut nPorts : Nat := 0
+  for layer in order do
+    for node in layer do
       cachePortSides node
-      if let some nested := (← getNode node).nestedGraph then
-        childGraphs.modify (·.push nested)
-    initAtPortLevel := fun _ _ _ _ => nPorts.modify (· + 1)
-    usesEdgeLevel := false }
-  Initializable.init #[holderInit] order
-  return (← childGraphs.get, ← nPorts.get)
+      let nd ← getNode node
+      if let some nested := nd.nestedGraph then
+        childGraphs := childGraphs.push nested
+      nPorts := nPorts + nd.ports.size
+  return (childGraphs, nPorts)
 
 /-- The settings Rust reads from the graph in `new`/`new_with_graph`. -/
 structure Settings where

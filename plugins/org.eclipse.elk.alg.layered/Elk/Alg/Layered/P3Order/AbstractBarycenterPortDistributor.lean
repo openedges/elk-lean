@@ -263,14 +263,15 @@ updated state (the node consumes rank `1`). -/
   | .input =>
     if k.inputs == 0 then st
     else
-      let incr := 1.0 / (k.inputs.toFloat + 1.0)
-      let ranks := assignInputRanks s ports 0 incr (rankSum + k.northInputs.toFloat * incr) (rankSum + 1.0 - incr)
+      -- `floatOne` for `1.0` (a literal in a branch is parsed per evaluation, PLAN 7.1 item 17)
+      let incr := floatOne / (k.inputs.toFloat + floatOne)
+      let ranks := assignInputRanks s ports 0 incr (rankSum + k.northInputs.toFloat * incr) (rankSum + floatOne - incr)
         st.portRanks
       { st with portRanks := ranks }
   | .output =>
     if k.outputs == 0 then st
     else
-      let incr := 1.0 / (k.outputs.toFloat + 1.0)
+      let incr := floatOne / (k.outputs.toFloat + floatOne)
       { st with portRanks := assignOutputRanksNodeRelative s ports 0 incr (rankSum + incr) st.portRanks }
   | .undefined => st
 
@@ -282,7 +283,7 @@ updated state (the node consumes rank `1`). -/
   | .input =>
     if k.inputs == 0 then st
     else
-      let ranks := assignInputRanks s ports 0 1.0 (rankSum + k.northInputs.toFloat) (rankSum + k.inputs.toFloat)
+      let ranks := assignInputRanks s ports 0 floatOne (rankSum + k.northInputs.toFloat) (rankSum + k.inputs.toFloat)
         st.portRanks
       { st with portRanks := ranks }
   | .output => { st with portRanks := assignOutputRanksLayerTotal s ports 0 rankSum floatZero st.portRanks }

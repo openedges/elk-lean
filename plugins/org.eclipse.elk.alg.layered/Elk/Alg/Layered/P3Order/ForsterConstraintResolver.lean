@@ -1024,7 +1024,18 @@ full node initialisation. -/
 def initAtNodeLevel (r : ForsterConstraintResolver) (l n : Nat) (order : Array (Array LNodeId)) : LayeredM Unit := do
   let some node := (order[l]?).bind (·[n]?) | return
   modifyNode node fun x => { x with id := n }
-  r.runM fun c => ForsterM.initNodeLevel c node true
+  -- `ForsterM.initNodeLevel c node true` (which cannot fail) on the refs directly
+  let c : ForsterCtx := { arena := ← get, snapshot := ← r.snapshot.get }
+  let li := c.layerIndex node
+  let ni := c.nodeId node
+  if li < (← r.constraintGroups.get).size then
+    let gid ← r.constraintGroupArena.modifyGet fun arena => (arena.size, arena.push (ConstraintGroup.new node))
+    r.constraintGroups.modify fun t => t.modify li fun row => (growTo row (ni + 1) none).setIfInBounds ni (some gid)
+  if li < (← r.barycenterStates.get).size then
+    r.barycenterStates.modify fun t => t.modify li fun row =>
+      (growTo row (ni + 1) none).setIfInBounds ni (some (BarycenterState.new node))
+  if let some unit := (c.arena.node node).internal.inLayerLayoutUnit then
+    r.layoutUnits.modify fun units => units.insert unit ((units.getD unit #[]).push node)
 
 /-- The `IInitializable` implementation (layer and node level). -/
 def initializable (r : ForsterConstraintResolver) : Initializable where
