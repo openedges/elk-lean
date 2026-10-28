@@ -37,10 +37,9 @@ Rust's `northern_ext_port_edge_routing_height` field is only written (reset by e
 is the return value of `routeEdges` here.
 
 Differences from Java reproduced from elk-rs:
-* `restoreDummy`: Rust adapts the graph (`LGraphAdapters::adapt(graph, false, false, all)`) and runs
-  the margin calculator only on the adapter node that is the dummy. The adapter snapshots the layer
-  nodes and the restored dummy is not in a layer yet, so no margins are computed (Java adapts the
-  dummy directly and computes them). Reproduced by the same search.
+* `restoreDummy`: like Java (`getNodeMarginCalculator(adapt(graph, false)).processNode(adapt(dummy,
+  false))`) the margins of the restored dummy are computed. (elk-rs searches the adapter's layer
+  nodes for the dummy, which is not in a layer yet, and computes none.)
 * `fixCoordinates` / `correctSlantedEdgeSegments` process the last layer only when it differs from
   the first one (Java processes a single layer twice); `fixCoordinates` returns for a graph without
   layers (Java throws).
@@ -90,7 +89,7 @@ private def placeInsideLabels (labels : Array LLabelId) (dummyWidth portPosX spa
 /-- `restoreDummy(dummy, graph)` (Rust `restore_dummy`): flips the side of the dummy's port
 (northern dummies get a southern port and vice versa) and, if port labels are part of the graph's
 size constraints, places the port labels (`INSIDE`: stacked and centred, `OUTSIDE`: `x` right of
-the dummy) and runs the margin calculator on the dummy's adapter (never found, see module doc). -/
+the dummy) and runs the margin calculator on the dummy. -/
 def restoreDummy (dummy : LNodeId) (graph : LGraphId) : LayeredM Unit := do
   let nd ← getNode dummy
   let portSide := nd.internal.extPortSide
@@ -113,13 +112,10 @@ def restoreDummy (dummy : LNodeId) (graph : LGraphId) : LayeredM Unit := do
     let x := portLabelSpacingHorizontal + nd.size.x - pt.position.x
     for label in pt.labels do
       modifyLabel label fun l => { l with position := { l.position with x := x } }
-  -- Rust: search the adapter's (layer) nodes for the dummy, which is not in a layer yet
+  -- Java: the margin calculator of the graph's adapter, applied to the dummy's own adapter
   let adapter ← LGraphAdapters.adapt graph false false fun _ => true
   let calculator := Elk.Alg.Common.NodeSpacing.NodeDimensionCalculation.getNodeMarginCalculator adapter
-  for n in ← adapter.getNodes graph do
-    if n == dummy then
-      calculator.processNode adapter graph n
-      break
+  calculator.processNode adapter graph dummy
 
 /-- `connectNodeToDummy(layeredGraph, node, dummy)` (Rust `connect_node_to_dummy`): a new port of
 `node` on its `EXT_PORT_SIDE`, connected by a new edge to the first port of `dummy` (no edge when
