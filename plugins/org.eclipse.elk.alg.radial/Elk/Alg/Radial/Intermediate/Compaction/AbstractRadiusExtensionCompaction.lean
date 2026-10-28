@@ -126,6 +126,138 @@ def contractLayerSoa (parentX parentY : Float) (x y w h : FloatArray) (step : Fl
     y := y.set! i newY
   return (x, y, changed)
 
+/-! ### The unboxed layer loop of the overlap removal
+
+`RadiusExtensionOverlapRemoval` repeats "is any neighbour pair overlapping? then expand the layer by
+one step" until no pair overlaps — one pass per pixel of radius extension (Java's step 1), so a
+layer of a few hundred nodes takes thousands of passes. The functions below compute exactly the
+values of `overlapLayerSoa`/`contractLayerSoa` (same float operations in the same order) with
+`USize` loops on unboxed `Float`s and in-place arrays (PLAN 7.1 items 3, 15):
+
+* the per-node constants of the two functions (`width / 2`, `height / 2`, `width + spacing`,
+  `height + spacing`) are computed once per layer instead of once per pass;
+* the overlap test is a disjunction over the pairs without side effects, so it may scan the pairs
+  in any order: the scan starts at the pair that overlapped in the previous pass (which usually
+  still does) and stops at the first overlap, instead of scanning from pair 0;
+* the bitwise "changed" test compares floats and only reads the bit patterns for `±0` and `NaN`. -/
+
+/-- `a[i]` with a `USize` index (`0.0` out of bounds, like `FloatArray.get!`). -/
+@[inline] private def fget (a : FloatArray) (i : USize) : Float :=
+  if h : i < a.usize then
+    have h1 : i.toNat < a.usize.toNat := (USize.lt_iff_toNat_lt).mp h
+    have h2 : a.usize.toNat ≤ a.size := by
+      simp only [FloatArray.usize, Nat.toUSize]
+      exact Nat.mod_le _ _
+    a.uget i (by omega)
+  else fl0p0
+
+/-- `a.set! i v` with a `USize` index (unchanged out of bounds). -/
+@[inline] private def fset (a : FloatArray) (i : USize) (v : Float) : FloatArray :=
+  if h : i < a.usize then
+    have h1 : i.toNat < a.usize.toNat := (USize.lt_iff_toNat_lt).mp h
+    have h2 : a.usize.toNat ≤ a.size := by
+      simp only [FloatArray.usize, Nat.toUSize]
+      exact Nat.mod_le _ _
+    a.uset i v (by omega)
+  else a
+
+/-- `a.toBits == b.toBits` without reading the bit patterns unless `a == b == ±0` or both are
+`NaN` (equal non-zero floats have equal bits, unequal non-`NaN` floats different ones). -/
+@[inline] def sameBits (a b : Float) : Bool :=
+  if a == b then a != fl0p0 || a.toBits == b.toBits
+  else a != a && b != b && a.toBits == b.toBits
+
+/-- The layer of the overlap removal loop: top-left corners `x`/`y`; `hw`/`hh` = `width / 2`,
+`height / 2` (as `contractLayerSoa`); `bw`/`bh` = `width + spacing`, `height + spacing` (as
+`overlapLayerSoa`); `halfS = spacing / 2`. -/
+structure LayerSoa where
+  x : FloatArray
+  y : FloatArray
+  hw : FloatArray
+  hh : FloatArray
+  bw : FloatArray
+  bh : FloatArray
+  halfS : Float
+
+/-- The layer of the nodes with top-left corners `x`/`y` and sizes `w`/`h`. -/
+def LayerSoa.mk' (x y w h : FloatArray) (spacing : Float) : LayerSoa :=
+  { x, y
+    hw := ⟨w.data.map (· / fl2p0)⟩, hh := ⟨h.data.map (· / fl2p0)⟩
+    bw := ⟨w.data.map (· + spacing)⟩, bh := ⟨h.data.map (· + spacing)⟩
+    halfS := spacing / 2.0 }
+
+/-- `overlapBounds` regrouped: with `a = x1 < x2 + width2 ∧ x2 < x1`, `b = x2 < x1 + width1 ∧
+x1 < x2`, `c = y1 < y2 + height2 ∧ y2 < y1` and `d = y2 < y1 + height1 ∧ y1 < y2` the four corner
+cases are `a ∧ c`, `b ∧ d`, `a ∧ d` (the third case lists `d`'s comparisons in the other order) and
+`b ∧ c`, so the test is `(a ∨ b) ∧ (c ∨ d)`. Every operand is a side-effect-free comparison, so the
+grouping gives the same result for all inputs (`NaN` included); the four-case form makes the
+compiler share sub-conditions through closures. -/
+@[inline] def overlapBoundsGrouped (x1 y1 width1 height1 x2 y2 width2 height2 : Float) : Bool :=
+  let a := x1 < x2 + width2 && x2 < x1
+  let b := x2 < x1 + width1 && x1 < x2
+  let c := y1 < y2 + height2 && y2 < y1
+  let d := y2 < y1 + height1 && y1 < y2
+  (a || b) && (c || d)
+
+/-- The pair test of `overlapLayerSoa` for the neighbours `i` and `j`. -/
+@[inline] private def pairOverlaps (l : LayerSoa) (i j : USize) : Bool :=
+  let halfS := l.halfS
+  overlapBoundsGrouped (fget l.x i - halfS) (fget l.y i - halfS) (fget l.bw i) (fget l.bh i)
+    (fget l.x j - halfS) (fget l.y j - halfS) (fget l.bw j) (fget l.bh j)
+
+/-- The first overlapping neighbour pair `(i, i + 1)` (`(n - 1, 0)` for the last node) with
+`i` in `from ..< to`, or `n`. -/
+private partial def scanPairs (l : LayerSoa) (n i to : USize) : USize :=
+  if i >= to then n
+  else if pairOverlaps l i (if i + 1 < n then i + 1 else 0) then i
+  else scanPairs l n (i + 1) to
+
+/-- `overlapLayerSoa` of the layer (`n` nodes) as the index of an overlapping neighbour pair, `n`
+when none overlaps: the pairs `start ..< n`, then `0 ..< start`. -/
+def overlapPairFrom (l : LayerSoa) (n start : USize) : USize :=
+  if n < 2 then n
+  else
+    let i := scanPairs l n start n
+    if i < n then i else scanPairs l n 0 start
+
+/-- One `contractLayerSoa` pass on the layer in place (`isContracting = false`, `n` nodes):
+`(cx + ux) - width / 2` with `ux = dx * (step / length)`; returns whether some coordinate changed
+bitwise (`changed` = accumulated so far). -/
+private partial def expandPass (px py step : Float) (hw hh : FloatArray) (n : USize) (x y : FloatArray)
+    (i : USize) (changed : Bool) : FloatArray × FloatArray × Bool :=
+  if i >= n then (x, y, changed)
+  else
+    let halfW := fget hw i
+    let halfH := fget hh i
+    let oldX := fget x i
+    let oldY := fget y i
+    let cx := oldX + halfW
+    let cy := oldY + halfH
+    let dx := cx - px
+    let dy := cy - py
+    let length := Float.sqrt (dx * dx + dy * dy)
+    let f := step / length
+    let ux := dx * f
+    let uy := dy * f
+    let newX := cx + ux - halfW
+    let newY := cy + uy - halfH
+    let changed := changed || !sameBits newX oldX || !sameBits newY oldY
+    expandPass px py step hw hh n (fset x i newX) (fset y i newY) (i + 1) changed
+
+/-- The overlap removal loop of a layer, `while overlapLayerSoa: contractLayerSoa(…, step, false)`
+with the Lean guards of `RadiusExtensionOverlapRemoval.extend`: no pass once `iterations` reaches
+`maxIterations`, stop after a pass that changes no coordinate. `hint` is the pair that overlapped
+in the previous pass. Returns the final corners. -/
+partial def expandLoop (px py step : Float) (maxIterations : Nat) (l : LayerSoa) (n : USize)
+    (iterations : Nat) (hint : USize) : FloatArray × FloatArray :=
+  let i := overlapPairFrom l n hint
+  if i >= n || iterations >= maxIterations then (l.x, l.y)
+  else
+    let ⟨x, y, hw, hh, bw, bh, halfS⟩ := l
+    let (x, y, changed) := expandPass px py step hw hh n x y 0 false
+    let l : LayerSoa := ⟨x, y, hw, hh, bw, bh, halfS⟩
+    if !changed then (l.x, l.y) else expandLoop px py step maxIterations l n (iterations + 1) i
+
 /-- `move_node_with_center(root_cx, root_cy, node, distance)`. -/
 def moveNodeWithCenter (_self : AbstractRadiusExtensionCompaction) (rootCx rootCy : Float) (node : NodeId)
     (distance : Float) : ElkM Unit := do

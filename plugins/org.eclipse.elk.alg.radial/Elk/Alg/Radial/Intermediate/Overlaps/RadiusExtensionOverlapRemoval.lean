@@ -70,26 +70,21 @@ partial def extend (base : AbstractRadiusExtensionCompaction) (sorter : Option I
     (successorCache : Std.HashMap NodeId (Array NodeId)) (rootCx rootCy : Float) : RadialM Unit := do
   if nodes.isEmpty then return
   let g ← getGraph
-  let mut xs : FloatArray := ⟨nodes.map fun n => (g.node n).x⟩
-  let mut ys : FloatArray := ⟨nodes.map fun n => (g.node n).y⟩
+  let xs : FloatArray := ⟨nodes.map fun n => (g.node n).x⟩
+  let ys : FloatArray := ⟨nodes.map fun n => (g.node n).y⟩
   let ws : FloatArray := ⟨nodes.map fun n => (g.node n).width⟩
   let hs : FloatArray := ⟨nodes.map fun n => (g.node n).height⟩
   let oldX0 := xs.get! 0
   let oldY0 := ys.get! 0
   if ← monitor.isLoggingEnabled then monitor.logGraph "Before removing overlaps"
-  let spacing := base.spacing
   let step := Float.ofInt base.compactionStep
-  let mut iterations := 0
-  while AbstractRadiusExtensionCompaction.overlapLayerSoa xs ys ws hs spacing do
-    if iterations >= MAX_ITERATIONS then break
-    let (nx, ny, changed) :=
-      AbstractRadiusExtensionCompaction.contractLayerSoa rootCx rootCy xs ys ws hs step false
-    xs := nx
-    ys := ny
-    iterations := iterations + 1
-    -- A pass that leaves every coordinate bit-identical is a fixed point: the remaining passes
-    -- up to the iteration guard would compute exactly the same values (e.g. `step = 0`).
-    if !changed then break
+  -- `while overlapLayerSoa: contractLayerSoa(…, step, false)` with the iteration guard; a pass that
+  -- leaves every coordinate bit-identical is a fixed point: the remaining passes up to the guard
+  -- would compute exactly the same values (e.g. `step = 0`). Unboxed loop, see
+  -- `AbstractRadiusExtensionCompaction.expandLoop`.
+  let layer := AbstractRadiusExtensionCompaction.LayerSoa.mk' xs ys ws hs base.spacing
+  let (xs, ys) := AbstractRadiusExtensionCompaction.expandLoop rootCx rootCy step MAX_ITERATIONS layer
+    nodes.size.toUSize 0 0
   for i in [0:nodes.size] do
     let x := xs.get! i
     let y := ys.get! i
