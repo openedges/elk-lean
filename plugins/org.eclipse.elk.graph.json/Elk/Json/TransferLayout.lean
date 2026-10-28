@@ -147,24 +147,62 @@ def recordCoordinateModes (el : ElementId) : ImportM Unit := do
   let i := (← getI).tables.index el
   modI (·.modifyTables (·.setModes i sm em))
 
+/-! Pure readers of the transfer tables (`globalX`, `shapeCoordsMode`, … on a table value read
+once), so the per-shape records below return plain floats and enum values. -/
+
+@[inline] private def tableGX (t : TransferTables) : ElementId → Float
+  | .edge _ => 0.0
+  | el => t.globalX.get! (t.index el)
+
+@[inline] private def tableGY (t : TransferTables) : ElementId → Float
+  | .edge _ => 0.0
+  | el => t.globalY.get! (t.index el)
+
+/-- `coordinateModes`' shape mode: the element's own mode unless it is `INHERIT` (or unset), then
+the JSON parent's (`PARENT` at the root). -/
+@[inline] private def resolveShapeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : ShapeCoords :=
+  match props.get? CoreOptions.JSON_SHAPE_COORDS with
+  | some .parent => .parent
+  | some .root => .root
+  | _ =>
+    match parent with
+    | some p => t.shapeCoords.getD (t.index p) .parent
+    | none => .parent
+
+/-- `coordinateModes`' edge mode (`CONTAINER` at the root). -/
+@[inline] private def resolveEdgeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : EdgeCoords :=
+  match props.get? CoreOptions.JSON_EDGE_COORDS with
+  | some .container => .container
+  | some .parent => .parent
+  | some .root => .root
+  | _ =>
+    match parent with
+    | some p => t.edgeCoords.getD (t.index p) .container
+    | none => .container
+
 /-- The global coordinates (`record_global_coords_*`) and the coordinate modes
 (`record_coordinate_modes`) of a node, port or label, in one state update. `parent` is both the
 element's parent and its JSON parent (they coincide for shapes). The two records touch different
-entries, so recording them together keeps the reference order's results. -/
+entries, so recording them together keeps the reference order's results. The values come from one
+read of the tables (which must be dead before the update, so it stays in place). -/
 def recordShape (el : ElementId) (parent : Option ElementId) (x y : Float) (props : PropertyMap) : ImportM Unit := do
-  let ancestor ← match parent with
-    | some p => shapeAncestor p
-    | none => pure none
-  let dx ← match ancestor with
-    | some a => globalX a
-    | none => pure 0.0
-  let dy ← match ancestor with
-    | some a => globalY a
-    | none => pure 0.0
-  let (sm, em) ← coordinateModes props parent
+  let st ← getI
+  -- `shape_ancestor`: edges resolve to their original parent node
+  let ancestor : Option ElementId := match parent with
+    | some (.edge e) => (tableGet? st.edgeOriginalParent e.idx).map ElementId.node
+    | other => other
+  let t := st.tables
+  let dx := match ancestor with
+    | some a => tableGX t a
+    | none => 0.0
+  let dy := match ancestor with
+    | some a => tableGY t a
+    | none => 0.0
+  let sm := resolveShapeMode t props parent
+  let em := resolveEdgeMode t props parent
   let gx := x + dx
   let gy := y + dy
-  let i := (← getI).tables.index el
+  let i := t.index el
   modI (·.modifyTables (·.setShape i gx gy sm em))
 
 /-- The coordinate adjustment of one edge (`adjust_edge_x` / `adjust_edge_y`) with its per-edge
@@ -256,19 +294,31 @@ def adjustParentY (parent : ElementId) (y : Float) : ImportM Float := do
     | .root => return y + (← globalY parent)
     | _ => return y
 
-/-- `transfer_xywh_to_json`: writes `x`, `y`, `width`, `height` (in this order). -/
-def transferXywh (x y w h : Float) (path : JsonPath) (parent : Option ElementId) : ImportM Unit := do
-  let ax ← match parent with
-    | some p => adjustParentX p x
-    | none => pure x
-  let ay ← match parent with
-    | some p => adjustParentY p y
-    | none => pure y
-  let vx := Value.ofFloatElk ax
-  let vy := Value.ofFloatElk ay
+/-- Writes `x`, `y`, `width`, `height` (in this order) into the object at `path`. -/
+@[inline] private def setXywh (path : JsonPath) (x y w h : Float) : ImportM Unit :=
+  let vx := Value.ofFloatElk x
+  let vy := Value.ofFloatElk y
   let vw := Value.ofFloatElk w
   let vh := Value.ofFloatElk h
   modI (·.modifyModel (·.setXywhAtFrom path 0 vx vy vw vh))
+
+/-- `transfer_xywh_to_json`: writes `x`, `y`, `width`, `height` (in this order). For shape parents
+`adjustParentX`/`adjustParentY` are evaluated on one read of the tables (plain floats). -/
+def transferXywh (x y w h : Float) (path : JsonPath) (parent : Option ElementId) : ImportM Unit := do
+  match parent with
+  | some (.edge e) =>
+    let ax ← adjustEdgeX e x
+    let ay ← adjustEdgeY e y
+    setXywh path ax ay w h
+  | some p =>
+    let t := (← getI).tables
+    let root := match t.shapeCoords.getD (t.index p) .parent with
+      | .root => true
+      | _ => false
+    let ax := if root then x + tableGX t p else x
+    let ay := if root then y + tableGY t p else y
+    setXywh path ax ay w h
+  | none => setXywh path x y w h
 
 /-- `recompute_fixed_order_vertical_port_surrounding_height`. -/
 def recomputeFixedOrderVerticalPortSurroundingHeight (n : NodeId) : ImportM (Option Float) := do
