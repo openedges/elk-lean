@@ -40,11 +40,14 @@ private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) 
   else
     false
 
+/-- Appends `pre`, `s` with serde_json escaping and `post` to `out`: `pre`/`post` carry the quotes
+and the punctuation around the literal, so a plain string costs three appends. -/
+@[inline] private def appendQuoted (out pre s post : String) : String :=
+  if hasEscapes s (Utf8.usize s) rfl 0 then s.foldl pushEscaped (out ++ pre) ++ post
+  else out ++ pre ++ s ++ post
+
 /-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
-def escapeInto (out s : String) : String :=
-  let out := out.push '"'
-  let out := if hasEscapes s (Utf8.usize s) rfl 0 then s.foldl pushEscaped out else out ++ s
-  out.push '"'
+def escapeInto (out s : String) : String := appendQuoted out "\"" s "\""
 
 /-- serde_json string escaping. -/
 def escapeString (s : String) : String := escapeInto "" s
@@ -66,61 +69,79 @@ decreasing_by omega
   | .int (.negSucc k) => pushNat (out.push '-') (k + 1)
   | n => out ++ n.render
 
-/-- Compact rendering (`serde_json::to_string`). -/
+mutual
+
+/-- Compact rendering (`serde_json::to_string`). The element loops are plain tail recursions (a
+`for` over `[0:n]` allocates its range object). -/
 partial def compact (sortKeys : Bool) (v : Value) (out : String) : String :=
   match v with
   | .null => out ++ "null"
   | .bool b => out ++ (if b then "true" else "false")
   | .num n => pushNumber out n
   | .str s => escapeInto out s
-  | .arr xs => Id.run do
-    let mut out := out.push '['
-    for h : i in [0:xs.size] do
-      if i != 0 then out := out.push ','
-      out := compact sortKeys xs[i] out
-    return out.push ']'
-  | .obj kvs => Id.run do
+  | .arr xs => compactItems sortKeys xs 0 (out ++ "[") ++ "]"
+  | .obj kvs =>
     let kvs := if sortKeys then sortEntries kvs else kvs
-    let mut out := out.push '{'
-    for h : i in [0:kvs.size] do
-      if i != 0 then out := out.push ','
-      let (k, x) := kvs[i]
-      out := (escapeInto out k).push ':'
-      out := compact sortKeys x out
-    return out.push '}'
+    compactMembers sortKeys kvs 0 (out ++ "{") ++ "}"
 
-@[inline] private def indent (out : String) (level : Nat) : String :=
-  out.pushn ' ' (2 * level)
+/-- `compact` of the elements `xs[i:]`, comma separated. -/
+partial def compactItems (sortKeys : Bool) (xs : Array Value) (i : Nat) (out : String) : String :=
+  if h : i < xs.size then
+    let out := if i != 0 then out ++ "," else out
+    compactItems sortKeys xs (i + 1) (compact sortKeys xs[i] out)
+  else out
+
+/-- `compact` of the members `kvs[i:]`, comma separated. -/
+partial def compactMembers (sortKeys : Bool) (kvs : Array (String × Value)) (i : Nat) (out : String) : String :=
+  if h : i < kvs.size then
+    let kv := kvs[i]
+    let out := appendQuoted out (if i == 0 then "\"" else ",\"") kv.1 "\":"
+    compactMembers sortKeys kvs (i + 1) (compact sortKeys kv.2 out)
+  else out
+
+end
+
+/-- `"\n"` followed by the indentation of levels `0 … 31` (two spaces per level). -/
+private def nlIndents : Array String := (Array.range 32).map fun l => "\n".pushn ' ' (2 * l)
+
+/-- A line break and the indentation of `level`. -/
+@[inline] private def nlIndent (level : Nat) : String :=
+  if h : level < nlIndents.size then nlIndents[level] else "\n".pushn ' ' (2 * level)
+
+mutual
 
 /-- Pretty rendering (`serde_json::to_string_pretty`, two-space indentation). -/
 partial def pretty (sortKeys : Bool) (v : Value) (level : Nat) (out : String) : String :=
   match v with
   | .arr xs =>
     if xs.isEmpty then out ++ "[]"
-    else Id.run do
-      let mut out := out ++ "[\n"
-      for h : i in [0:xs.size] do
-        if i != 0 then out := out ++ ",\n"
-        out := indent out (level + 1)
-        out := pretty sortKeys xs[i] (level + 1) out
-      out := out.push '\n'
-      out := indent out level
-      return out.push ']'
+    else prettyItems sortKeys xs (level + 1) (nlIndent (level + 1)) 0 (out ++ "[") ++ nlIndent level ++ "]"
   | .obj kvs =>
     if kvs.isEmpty then out ++ "{}"
-    else Id.run do
+    else
       let kvs := if sortKeys then sortEntries kvs else kvs
-      let mut out := out ++ "{\n"
-      for h : i in [0:kvs.size] do
-        if i != 0 then out := out ++ ",\n"
-        let (k, x) := kvs[i]
-        out := indent out (level + 1)
-        out := escapeInto out k ++ ": "
-        out := pretty sortKeys x (level + 1) out
-      out := out.push '\n'
-      out := indent out level
-      return out.push '}'
+      prettyMembers sortKeys kvs (level + 1) (nlIndent (level + 1)) 0 (out ++ "{") ++ nlIndent level ++ "}"
   | other => compact sortKeys other out
+
+/-- `pretty` of the elements `xs[i:]` at `level`, each on its own line (`inner` is `nlIndent level`). -/
+partial def prettyItems (sortKeys : Bool) (xs : Array Value) (level : Nat) (inner : String) (i : Nat)
+    (out : String) : String :=
+  if h : i < xs.size then
+    let out := (if i != 0 then out ++ "," else out) ++ inner
+    prettyItems sortKeys xs level inner (i + 1) (pretty sortKeys xs[i] level out)
+  else out
+
+/-- `pretty` of the members `kvs[i:]` at `level`, each on its own line. -/
+partial def prettyMembers (sortKeys : Bool) (kvs : Array (String × Value)) (level : Nat) (inner : String)
+    (i : Nat) (out : String) : String :=
+  if h : i < kvs.size then
+    let kv := kvs[i]
+    let out := (if i != 0 then out ++ "," else out) ++ inner
+    let out := appendQuoted out "\"" kv.1 "\": "
+    prettyMembers sortKeys kvs level inner (i + 1) (pretty sortKeys kv.2 level out)
+  else out
+
+end
 
 end Printer
 
