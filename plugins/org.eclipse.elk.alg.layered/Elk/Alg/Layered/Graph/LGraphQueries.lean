@@ -128,8 +128,9 @@ def nodeBorderToContentAreaCoordinates (a : LGraphArena) (n : LNodeId) (horizont
   | some g =>
     let gr := a.graph g
     a.modifyNode n fun nd =>
-      let x := if horizontal then nd.position.x - (gr.padding.left + gr.offset.x) else nd.position.x
-      let y := if vertical then nd.position.y - (gr.padding.top + gr.offset.y) else nd.position.y
+      -- Java: `pos.x - graphPadding.left - offset.x` (left to right)
+      let x := if horizontal then nd.position.x - gr.padding.left - gr.offset.x else nd.position.x
+      let y := if vertical then nd.position.y - gr.padding.top - gr.offset.y else nd.position.y
       { nd with position := ⟨x, y⟩ }
 
 /-- `LPort.getAbsoluteAnchor()`: owner position + port position + anchor. -/

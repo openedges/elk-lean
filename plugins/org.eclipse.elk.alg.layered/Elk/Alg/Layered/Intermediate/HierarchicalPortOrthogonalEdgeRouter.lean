@@ -40,9 +40,9 @@ Differences from Java reproduced from elk-rs:
 * `restoreDummy`: like Java (`getNodeMarginCalculator(adapt(graph, false)).processNode(adapt(dummy,
   false))`) the margins of the restored dummy are computed. (elk-rs searches the adapter's layer
   nodes for the dummy, which is not in a layer yet, and computes none.)
-* `fixCoordinates` / `correctSlantedEdgeSegments` process the last layer only when it differs from
-  the first one (Java processes a single layer twice); `fixCoordinates` returns for a graph without
-  layers (Java throws).
+* `correctSlantedEdgeSegments` processes the last layer only when it differs from the first one
+  (Java processes a single layer twice, which changes nothing there); `fixCoordinates` processes it
+  twice like Java (elk-rs once) and returns for a graph without layers (Java throws).
 * Missing properties fall back to defaults (`PORT_ANCHOR` → `(0, 0)`, unset spacings → `0`) and
   missing ports/edges skip the element (Java throws `NullPointerException`).
 * `Math.max` → Rust `f64::max` (`fmax`); sorts use the stable Rust `sort_by` with `partial_cmp`
@@ -188,12 +188,13 @@ def applyNorthSouthDummyPosition (dummy : LNodeId) : LayeredM Unit := do
   let x := nd.internal.portRatioOrPosition - (portAnchorOf nd).x
   modifyNode dummy fun n => { n with position := { n.position with x := x } }
 
-/-- `dummy.borderToContentAreaCoordinates(true, false)` as inlined by Rust: `x -= padding.left +
-offset.x` of the layered graph. -/
+/-- `dummy.borderToContentAreaCoordinates(true, false)`: `x = x - padding.left - offset.x` of the
+layered graph, left to right like Java (elk-rs subtracts `padding.left + offset.x`). -/
 private def borderToContentAreaX (graph : LGraphId) (dummy : LNodeId) : LayeredM Unit := do
   let gr ← getGraph graph
-  let d := gr.padding.left + gr.offset.x
-  modifyNode dummy fun n => { n with position := { n.position with x := n.position.x - d } }
+  let pl := gr.padding.left
+  let ox := gr.offset.x
+  modifyNode dummy fun n => { n with position := { n.position with x := n.position.x - pl - ox } }
 
 /-- `assignAscendingCoordinates(dummies, graph)` (Rust `assign_ascending_coordinates`): moves dummies
 right so that consecutive dummies keep `SPACING_PORT_PORT` between their margins, widening the graph
@@ -444,7 +445,8 @@ def fixCoordinatesForLayer (layer : LayerId) (constraints : PortConstraints) (gr
         else none
       if let some y := y? then
         requiredHeight := y + extSize.y
-        let y := y - (padding.top + offset.y)
+        -- `borderToContentAreaCoordinates(false, true)`: `y - padding.top - offset.y`
+        let y := y - padding.top - offset.y
         modifyNode node fun n => { n with position := { n.position with y := y } }
     newActualHeight := fmax newActualHeight requiredHeight
   let dy := newActualHeight - graphActualSize.y
@@ -469,8 +471,9 @@ def fixCoordinates (graph : LGraphId) : LayeredM Unit := do
   let layers := gr.layers
   let some first := layers[0]? | return
   fixCoordinatesForLayer first constraints graph
-  if layers.size > 1 then
-    fixCoordinatesForLayer layers[layers.size - 1]! constraints graph
+  -- Java processes `layers.get(size - 1)` even when it is the first layer again (the second pass
+  -- sees the graph height grown by the first one)
+  fixCoordinatesForLayer layers[layers.size - 1]! constraints graph
 
 /-! ## Step 6: slanted edge segments -/
 
