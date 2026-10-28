@@ -10,11 +10,12 @@ ELK Java outputs `<name>.java.json` from `ElkJavaBaseline`). Every input is laid
 
 * `nodemicro.java.layout`: the whole layout equals Java's (values exactly, tolerance `0`): stress,
   rectpacking, a rectpacking child graph (`MinSizePreProcessor` sizes the graph node by its labels
-  and ports), box and fixed (their padding default `15`).
+  and ports), box and fixed (their padding default `15`), force and radial (since agent OPT's
+  algorithm defaults and radial wedge semantics).
 * `nodemicro.java.sizing`: the node micro layout result equals Java's — node sizes, port positions
-  and sizes, port and node label positions (all relative to their node) — for algorithms whose
-  node placement still differs from Java (force, mrtree, radial: not part of the node micro
-  layout); node positions and edges are not compared.
+  and sizes, port and node label positions (all relative to their node) — for force, mrtree and
+  radial (mrtree's `AVOID_OVERLAP` edge routes still differ from Java); node positions and edges
+  are not compared.
 * `nodemicro.java.exceptions`: Java's exception class and message for every node size validation:
   `UnsupportedConfigurationException: Invalid port/node label placement: [..]` (`NodeContext`, also
   for the layered graph node through `computeInsideNodeLabelPadding`),
@@ -48,7 +49,7 @@ private def checkAgainstJava (name : String) (view : Value → Value) : TestM Un
     | _, .error err => report s!"{name}: Java output is JSON" false s!"{err}"
 
 def layout : Suite := suite "nodemicro.java.layout" do
-  for name in #["stress", "rectpacking", "rectpacking_child", "box", "fixed"] do
+  for name in #["stress", "rectpacking", "rectpacking_child", "box", "fixed", "force", "radial"] do
     checkAgainstJava name id
 
 def sizing : Suite := suite "nodemicro.java.sizing" do

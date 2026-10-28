@@ -1,0 +1,1 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"org.eclipse.elk.rectpacking"},"children":[{"id":"a","width":10.0,"height":10.0,"x":15.0,"y":15.0},{"id":"b","width":20.0,"height":10.0,"x":40.0,"y":15.0},{"id":"c","width":15.0,"height":25.0,"x":75.0,"y":15.0}],"x":0.0,"y":0.0,"width":105.0,"height":55.0}

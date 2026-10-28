@@ -1,0 +1,95 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeOverlap"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 40.1,
+   "height": 25.9
+  },
+  {
+   "id": "n1",
+   "width": 11.7,
+   "height": 33.5
+  },
+  {
+   "id": "n2",
+   "width": 10.7,
+   "height": 31.5
+  },
+  {
+   "id": "n3",
+   "width": 44.7,
+   "height": 27.4
+  },
+  {
+   "id": "n4",
+   "width": 35.1,
+   "height": 38.4
+  },
+  {
+   "id": "n5",
+   "width": 43.9,
+   "height": 11.5
+  },
+  {
+   "id": "n6",
+   "width": 10.5,
+   "height": 17.2
+  },
+  {
+   "id": "n7",
+   "width": 35.5,
+   "height": 22.3
+  },
+  {
+   "id": "n8",
+   "width": 49.4,
+   "height": 39.7,
+   "labels": [
+    {
+     "id": "n8l",
+     "text": "l",
+     "width": 11.5,
+     "height": 10.7
+    }
+   ]
+  },
+  {
+   "id": "n9",
+   "width": 10.1,
+   "height": 35.2
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n8"
+   ]
+  }
+ ]
+}

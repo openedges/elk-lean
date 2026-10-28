@@ -1,0 +1,128 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "radial",
+  "elk.radial.compactor": "WEDGE_COMPACTION",
+  "elk.radial.sorter": "NONE",
+  "elk.radial.rotation.outgoingEdgeAngles": "true",
+  "elk.radial.centerOnRoot": "true",
+  "elk.radial.radius": "50"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 44.5,
+   "height": 35.2,
+   "labels": [
+    {
+     "id": "n0l",
+     "text": "l",
+     "width": 9.8,
+     "height": 11.7
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "width": 36.4,
+   "height": 16.4
+  },
+  {
+   "id": "n2",
+   "width": 59.9,
+   "height": 27.6,
+   "labels": [
+    {
+     "id": "n2l",
+     "text": "l",
+     "width": 17.3,
+     "height": 13.1
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "width": 40.1,
+   "height": 14.0,
+   "labels": [
+    {
+     "id": "n3l",
+     "text": "l",
+     "width": 7.1,
+     "height": 12.7
+    }
+   ]
+  },
+  {
+   "id": "n4",
+   "width": 29.8,
+   "height": 17.5
+  },
+  {
+   "id": "n5",
+   "width": 22.6,
+   "height": 10.2
+  },
+  {
+   "id": "n6",
+   "width": 26.4,
+   "height": 35.1
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  }
+ ]
+}

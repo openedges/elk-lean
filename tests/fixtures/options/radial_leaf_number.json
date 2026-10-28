@@ -1,0 +1,112 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "radial",
+  "elk.radial.compactor": "WEDGE_COMPACTION",
+  "elk.radial.compactionStepSize": "5",
+  "elk.radial.wedgeCriteria": "LEAF_NUMBER",
+  "elk.radial.rotation.outgoingEdgeAngles": "true",
+  "elk.radial.radius": "100"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 47.5,
+   "height": 26.2
+  },
+  {
+   "id": "n1",
+   "width": 32.0,
+   "height": 33.7
+  },
+  {
+   "id": "n2",
+   "width": 25.4,
+   "height": 38.4
+  },
+  {
+   "id": "n3",
+   "width": 23.3,
+   "height": 24.8
+  },
+  {
+   "id": "n4",
+   "width": 42.8,
+   "height": 32.1,
+   "labels": [
+    {
+     "id": "n4l",
+     "text": "l",
+     "width": 11.3,
+     "height": 6.2
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "width": 17.7,
+   "height": 18.5
+  },
+  {
+   "id": "n6",
+   "width": 25.0,
+   "height": 34.0
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  }
+ ]
+}

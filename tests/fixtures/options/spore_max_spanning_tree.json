@@ -1,0 +1,105 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeCompaction",
+  "elk.processingOrder.treeConstruction": "MAXIMUM_SPANNING_TREE",
+  "elk.processingOrder.spanningTreeCostFunction": "INVERTED_OVERLAP"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 11.1,
+   "height": 13.9
+  },
+  {
+   "id": "n1",
+   "width": 54.2,
+   "height": 23.2
+  },
+  {
+   "id": "n2",
+   "width": 23.0,
+   "height": 29.8
+  },
+  {
+   "id": "n3",
+   "width": 22.7,
+   "height": 27.9
+  },
+  {
+   "id": "n4",
+   "width": 45.0,
+   "height": 36.9
+  },
+  {
+   "id": "n5",
+   "width": 58.2,
+   "height": 13.4
+  },
+  {
+   "id": "n6",
+   "width": 37.7,
+   "height": 25.2,
+   "labels": [
+    {
+     "id": "n6l",
+     "text": "l",
+     "width": 24.0,
+     "height": 14.4
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "width": 22.1,
+   "height": 20.3
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n0"
+   ]
+  }
+ ]
+}

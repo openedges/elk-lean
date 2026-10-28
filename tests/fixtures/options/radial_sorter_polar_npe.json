@@ -1,0 +1,82 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "radial",
+  "elk.radial.sorter": "POLAR_COORDINATE",
+  "elk.radial.wedgeCriteria": "NODE_SIZE",
+  "elk.radial.rotate": "true"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 23.8,
+   "height": 30.2
+  },
+  {
+   "id": "n1",
+   "width": 48.4,
+   "height": 32.1,
+   "labels": [
+    {
+     "id": "n1l",
+     "text": "l",
+     "width": 10.3,
+     "height": 14.3
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "width": 34.2,
+   "height": 17.8
+  },
+  {
+   "id": "n3",
+   "width": 46.5,
+   "height": 35.0
+  },
+  {
+   "id": "n4",
+   "width": 47.0,
+   "height": 29.2
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ]
+}

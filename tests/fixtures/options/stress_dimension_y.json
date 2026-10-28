@@ -1,0 +1,104 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "stress",
+  "elk.stress.dimension": "Y",
+  "elk.stress.desiredEdgeLength": "200"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 14.4,
+   "height": 26.5
+  },
+  {
+   "id": "n1",
+   "width": 54.0,
+   "height": 35.1
+  },
+  {
+   "id": "n2",
+   "width": 58.4,
+   "height": 32.0
+  },
+  {
+   "id": "n3",
+   "width": 43.7,
+   "height": 29.6
+  },
+  {
+   "id": "n4",
+   "width": 53.2,
+   "height": 27.2,
+   "labels": [
+    {
+     "id": "n4l",
+     "text": "l",
+     "width": 13.4,
+     "height": 13.1
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "width": 46.1,
+   "height": 24.9
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ]
+}

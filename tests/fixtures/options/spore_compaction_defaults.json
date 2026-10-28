@@ -1,0 +1,116 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeCompaction"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 32.4,
+   "height": 28.8
+  },
+  {
+   "id": "n1",
+   "width": 54.9,
+   "height": 17.2
+  },
+  {
+   "id": "n2",
+   "width": 56.2,
+   "height": 34.9,
+   "labels": [
+    {
+     "id": "n2l",
+     "text": "l",
+     "width": 16.5,
+     "height": 12.3
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "width": 34.6,
+   "height": 28.3
+  },
+  {
+   "id": "n4",
+   "width": 49.4,
+   "height": 21.9
+  },
+  {
+   "id": "n5",
+   "width": 55.1,
+   "height": 19.6
+  },
+  {
+   "id": "n6",
+   "width": 28.9,
+   "height": 38.6
+  },
+  {
+   "id": "n7",
+   "width": 44.1,
+   "height": 20.1
+  },
+  {
+   "id": "n8",
+   "width": 25.5,
+   "height": 31.3,
+   "labels": [
+    {
+     "id": "n8l",
+     "text": "l",
+     "width": 28.0,
+     "height": 12.5
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n1"
+   ]
+  }
+ ]
+}
