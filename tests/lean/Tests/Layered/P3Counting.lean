@@ -1812,10 +1812,98 @@ def crossMinSnapshotTests : Suite := suite "layered.p3order.cross_min_snapshot" 
   checkEq "build on the cross-formed graph" r
     (4, 4, 3, 1, 1, 0, #[3], #[0], 1, PortSide.east, #[2], true, true, true)
 
+/-! ## Differential tests of the Lean fast paths -/
+
+/-- A random number in `[0, bound)` (`bound > 0`). -/
+def rnd (r : IO.Ref Random) (bound : Nat) : BaseIO Nat := do
+  return (← r.modifyGet (·.nextInt bound)).toNat
+
+/-- A random permutation of `xs` (Fisher-Yates). -/
+def shuffle {α : Type} [Inhabited α] (r : IO.Ref Random) (xs : Array α) : BaseIO (Array α) := do
+  let mut a := xs
+  for k in [0:a.size] do
+    let i := a.size - 1 - k
+    if i > 0 then
+      let j ← rnd r (i + 1)
+      a := a.swapIfInBounds i j
+  return a
+
+/-- A random layered graph of `layers` layers: nodes with ports on random sides in random order,
+edges between consecutive layers (several per port: hyperedges), in-layer edges, edges skipping a
+layer and ports without edges; ids assigned in traversal order. -/
+def randomLayers (r : IO.Ref Random) (layers : Nat) : LayeredM (LGraphId × Nat) := do
+  let g ← newGraph {}
+  let ls ← makeLayers g layers
+  let mut ports : Array (Array LPortId) := Array.replicate layers #[]
+  for h : li in [0:ls.size] do
+    let n := 1 + (← rnd r 6)
+    for _ in [0:n] do
+      let node ← addNode {} g ls[li]
+      for _ in [0:(← rnd r 5)] do
+        let side := match ← rnd r 6 with
+          | 0 => PortSide.north
+          | 1 => .south
+          | 2 | 3 => .east
+          | _ => .west
+        let p ← addPort {} node side
+        ports := ports.modify li (·.push p)
+  for _ in [0:(← rnd r 30)] do
+    let kind ← rnd r 12
+    let la ← rnd r layers
+    let lb := if kind < 8 then la + 1 else if kind < 10 then la else la + 2
+    if h1 : la < ports.size then
+      if h2 : lb < ports.size then
+        let pa := ports[la]
+        let pb := ports[lb]
+        if pa.size > 0 && pb.size > 0 then
+          let s := pa[← rnd r pa.size]!
+          let t := pb[← rnd r pb.size]!
+          if (← rnd r 4) == 0 then connect t s else connect s t
+  let nPorts ← Tests.Layered.P3Counting.assignIds g
+  return (g, nPorts)
+
+/-- Runs `countCrossingsPure` and `countCrossingsFast` on random layer pairs (with persisting
+positions and shuffled node orders): the number of differing results (crossings, positions, or a
+scratch that is not zero afterwards) and of runs with crossings. -/
+def hyperedgeDifferential (seeds : Nat) : IO (Nat × Nat) := do
+  let mut mismatches := 0
+  let mut nonZero := 0
+  for seed in [0:seeds] do
+    let r ← IO.mkRef (Random.ofInt seed)
+    let (m, nz) ← runL do
+      let (g, nPorts) ← randomLayers r 3
+      let mut order ← nodeArray g
+      let mut posA : Array Int := Array.replicate nPorts 0
+      let mut posB : Array Int := Array.replicate nPorts 0
+      let mut scratch : HyperedgeCrossingsCounter.Scratch := {}
+      let mut m := 0
+      let mut nz := 0
+      for _ in [0:4] do
+        for li in [0:order.size - 1] do
+          let a ← get
+          let (ca, pa) := HyperedgeCrossingsCounter.countCrossingsPure a posA order[li]! order[li + 1]!
+          let (cb, pb, sc) := HyperedgeCrossingsCounter.countCrossingsFast a posB scratch order[li]! order[li + 1]!
+          posA := pa
+          posB := pb
+          scratch := sc
+          let clean := sc.marks.toList.all (· == 0) && sc.slots.all (· == 0)
+          if ca != cb || pa != pb || !clean then m := m + 1
+          if ca != 0 then nz := nz + 1
+        order ← order.mapM fun layer => shuffle r layer
+      return (m, nz)
+    mismatches := mismatches + m
+    nonZero := nonZero + nz
+  return (mismatches, nonZero)
+
+def fastPathTests : Suite := suite "layered.p3counting.fast_paths" do
+  let (mismatches, nonZero) ← hyperedgeDifferential 400
+  checkEq "hyperedge fast = port (400 random graphs, 3200 layer pairs)" mismatches 0
+  check s!"hyperedge differential runs count crossings ({nonZero} with crossings)" (nonZero > 400)
+
 /-! ## Suites -/
 
 def suites : Array Suite := #[bitTests, crossMinUtilTests, crossingsCounterTests, allCrossingsCounterTests,
   northSouthAllCrossingsTests, inLayerTwoNodeTests, betweenLayerTwoNodeTests, northSouthNeighbouringTests,
-  switchDeciderTests, greedySwitchHeuristicTests, crossMinSnapshotTests]
+  switchDeciderTests, greedySwitchHeuristicTests, crossMinSnapshotTests, fastPathTests]
 
 end Tests.Layered.P3Counting

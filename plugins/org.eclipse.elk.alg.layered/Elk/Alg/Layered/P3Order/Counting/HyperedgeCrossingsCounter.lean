@@ -1,5 +1,6 @@
 import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.P3Order.Counting.BinaryIndexedTree
+import Elk.Alg.Layered.P3Order.Counting.CrossMinUtil
 import Elk.Core.Util.Sort
 import Std.Data.HashMap
 import Std.Data.HashSet
@@ -59,10 +60,21 @@ def compare (a b : HyperedgeCorner) : Ordering :=
 
 end HyperedgeCorner
 
+/-- The scratch arrays of `HyperedgeCrossingsCounter.countCrossingsFast` (zero between calls; Lean
+only). -/
+structure HyperedgeCrossingsCounter.Scratch where
+  /-- Per node arena index: bit `0` in the left layer, bit `1` in the right layer. -/
+  marks : ByteArray := ByteArray.empty
+  /-- Per port arena index: `hyperedge index + 1` (`0`: none). -/
+  slots : Array Nat := #[]
+  deriving Inhabited
+
 /-- `HyperedgeCrossingsCounter`. -/
 structure HyperedgeCrossingsCounter where
   /-- `portPos` (indexed by `LPort.id`). -/
   portPositions : IO.Ref (Array Int)
+  /-- The scratch of `countCrossingsFast` (Lean only). -/
+  scratch : IO.Ref HyperedgeCrossingsCounter.Scratch
 
 namespace HyperedgeCrossingsCounter
 
@@ -70,7 +82,7 @@ namespace HyperedgeCrossingsCounter
 arguments are unused (as in Java/elk-rs). -/
 def new (_inLayerEdgeCount : Array Int) (_hasNorthSouthPorts : Array Bool) (portPositions : Array Int) :
     BaseIO HyperedgeCrossingsCounter := do
-  return { portPositions := ← IO.mkRef portPositions }
+  return { portPositions := ← IO.mkRef portPositions, scratch := ← IO.mkRef {} }
 
 /-- Rust `port_id(port)`: `port.id as usize`. -/
 @[inline] private def portIdOf (a : LGraphArena) (p : LPortId) : Nat := asUsize (a.port p).id
@@ -255,8 +267,319 @@ def countCrossingsPure (a : LGraphArena) (positions : Array Int) (leftLayer righ
   crossings := crossings + countOverlapCrossings rightCorners
   return (crossings, positions)
 
+/-! ### Allocation-poor counting (Lean only)
+
+`countCrossingsFast` computes what `countCrossingsPure` computes (the same crossings and the same
+writes to the position array) with node membership marks and port → hyperedge slots in scratch
+arrays indexed by arena index (all zero between calls) instead of `HashSet`/`HashMap`s,
+short-circuiting `any` tests where the port counts `filter(..).size > 0`, the sorts of the
+hyperedges and corners as `keyedStableSort` over unboxed keys (the same comparisons and moves as
+`stableSort` with `Hyperedge.compare`/`HyperedgeCorner.compare`, hence the same order), and tail
+recursive loops. The differential test `hyperedge fast = port` compares both on random layers. -/
+
+/-- The mark of a node (`0` beyond the marks). -/
+@[inline] def markOf (marks : ByteArray) (n : LNodeId) : UInt8 :=
+  if h : n.idx < marks.size then marks[n.idx] else 0
+
+/-- Sets bit `b` of the marks of `nodes[i:]` (`b = 0`: clears them). -/
+partial def markNodes (nodes : Array LNodeId) (i : Nat) (b : UInt8) (marks : ByteArray) : ByteArray :=
+  if h : i < nodes.size then
+    let k := nodes[i].idx
+    let marks := if k < marks.size then marks else marks ++ ByteArray.mk (Array.replicate (k + 1 - marks.size) 0)
+    markNodes nodes (i + 1) b (marks.set! k (if b == 0 then 0 else marks.get! k ||| b))
+  else marks
+
+/-- Whether the owner of the far end (`target` with `useTarget`, else `source`) of `e` has mark bit `b`
+(`endInSet`). -/
+@[inline] def endMarked (a : LGraphArena) (marks : ByteArray) (e : LEdgeId) (useTarget : Bool) (b : UInt8) : Bool :=
+  let ed := a.edge e
+  match (if useTarget then ed.target else ed.source) with
+  | some p =>
+    match (a.port p).owner with
+    | some n => markOf marks n &&& b != 0
+    | none => false
+  | none => false
+
+/-- Whether an edge of `edges[k:]` has its far end outside the nodes with mark bit `b`. -/
+partial def anyEndUnmarked (a : LGraphArena) (marks : ByteArray) (edges : Array LEdgeId) (useTarget : Bool) (b : UInt8)
+    (k : Nat) : Bool :=
+  if h : k < edges.size then !endMarked a marks edges[k] useTarget b || anyEndUnmarked a marks edges useTarget b (k + 1)
+  else false
+
+/-- Whether a port lies on the north side (without the derived `BEq`). -/
+@[inline] def isNorth (side : PortSide) : Bool :=
+  match side with
+  | .north => true
+  | _ => false
+
+/-- `assignPositions`, left layer: the ports of `nodes[i:]` (ports `ports[j:]` of the current node)
+with an outgoing edge leaving the left layer get consecutive positions from `count`. -/
+partial def assignLeft (a : LGraphArena) (marks : ByteArray) (nodes : Array LNodeId) (i : Nat) (ports : Array LPortId)
+    (j : Nat) (count : Int) (positions : Array Int) : Array Int × Int :=
+  if h : j < ports.size then
+    let port := ports[j]
+    if anyEndUnmarked a marks (a.port port).outgoingEdges true 1 0 then
+      assignLeft a marks nodes i ports (j + 1) (count + 1) (setPosition positions a port count)
+    else assignLeft a marks nodes i ports (j + 1) count positions
+  else if h : i < nodes.size then assignLeft a marks nodes (i + 1) (a.node nodes[i]).ports 0 count positions
+  else (positions, count)
+
+/-- The leading northern ports of `ports[j:]` with an incoming edge from outside the right layer. -/
+partial def northInputs (a : LGraphArena) (marks : ByteArray) (ports : Array LPortId) (j : Nat) (acc : Int) : Int :=
+  if h : j < ports.size then
+    let pt := a.port ports[j]
+    if isNorth pt.side then
+      northInputs a marks ports (j + 1) (if anyEndUnmarked a marks pt.incomingEdges false 2 0 then acc + 1 else acc)
+    else acc
+  else acc
+
+/-- The reversed port loop of `assignPositions` over `ports[0:j]` of a right-layer node. -/
+partial def assignRightPorts (a : LGraphArena) (marks : ByteArray) (ports : Array LPortId) (j : Nat)
+    (northInputPorts : Int) (targetCount otherInputPorts : Int) (positions : Array Int) : Array Int × Int × Int :=
+  if j > 0 then
+    match ports[j - 1]? with
+    | some port =>
+      let pt := a.port port
+      if anyEndUnmarked a marks pt.incomingEdges false 2 0 then
+        if isNorth pt.side then
+          assignRightPorts a marks ports (j - 1) northInputPorts (targetCount + 1) otherInputPorts
+            (setPosition positions a port targetCount)
+        else
+          assignRightPorts a marks ports (j - 1) northInputPorts targetCount (otherInputPorts + 1)
+            (setPosition positions a port (targetCount + northInputPorts + otherInputPorts))
+      else assignRightPorts a marks ports (j - 1) northInputPorts targetCount otherInputPorts positions
+    | none => assignRightPorts a marks ports (j - 1) northInputPorts targetCount otherInputPorts positions
+  else (positions, targetCount, otherInputPorts)
+
+/-- `assignPositions`, right layer, over `nodes[i:]`. -/
+partial def assignRight (a : LGraphArena) (marks : ByteArray) (nodes : Array LNodeId) (i : Nat) (targetCount : Int)
+    (positions : Array Int) : Array Int × Int :=
+  if h : i < nodes.size then
+    let ports := (a.node nodes[i]).ports
+    let north := northInputs a marks ports 0 0
+    let (positions, targetCount, other) := assignRightPorts a marks ports ports.size north targetCount 0 positions
+    assignRight a marks nodes (i + 1) (targetCount + other) positions
+  else (positions, targetCount)
+
+/-- The slot of a port (`hyperedge index + 1`, `0`: none). -/
+@[inline] def slotOf (slots : Array Nat) (p : LPortId) : Nat :=
+  if h : p.idx < slots.size then slots[p.idx] else 0
+
+/-- Sets the slot of a port (growing the slots). -/
+@[inline] def setSlot (slots : Array Nat) (p : LPortId) (v : Nat) : Array Nat :=
+  let slots := if p.idx < slots.size then slots else slots ++ Array.replicate (p.idx + 1 - slots.size) 0
+  slots.set! p.idx v
+
+/-- Sets the slots of `ports[k:]` to `v`. -/
+partial def setSlots (ports : Array LPortId) (k v : Nat) (slots : Array Nat) : Array Nat :=
+  if h : k < ports.size then setSlots ports (k + 1) v (setSlot slots ports[k] v) else slots
+
+/-- The hyperedges being collected (and whether each is still active) and the slots. -/
+structure Collect where
+  hyperedges : Array Hyperedge
+  active : Array Bool
+  slots : Array Nat
+  deriving Inhabited
+
+/-- One edge `sourcePort → targetPort` of `collectHyperedges` (the four slot cases). -/
+@[inline] def collectEdge (sourcePort targetPort : LPortId) (st : Collect) : Collect :=
+  match st with
+  | ⟨hyperedges, active, slots⟩ =>
+    let s := slotOf slots sourcePort
+    let t := slotOf slots targetPort
+    if s == 0 then
+      if t == 0 then
+        let id := hyperedges.size
+        ⟨hyperedges.push { identity := sourcePort.idx, ports := #[sourcePort, targetPort] }, active.push true,
+          setSlot (setSlot slots sourcePort (id + 1)) targetPort (id + 1)⟩
+      else
+        ⟨hyperedges.modifyIn (t - 1) fun h => { h with ports := h.ports.push sourcePort }, active,
+          setSlot slots sourcePort t⟩
+    else if t == 0 then
+      ⟨hyperedges.modifyIn (s - 1) fun h => { h with ports := h.ports.push targetPort }, active,
+        setSlot slots targetPort s⟩
+    else
+      let sourceId := s - 1
+      let targetId := t - 1
+      if sourceId != targetId && sourceId < hyperedges.size && targetId < hyperedges.size then
+        let targetPorts := hyperedges[targetId]!.ports
+        let slots := setSlots targetPorts 0 s slots
+        let hyperedges := hyperedges.modifyIn sourceId fun h => { h with ports := h.ports ++ targetPorts }
+        let hyperedges := hyperedges.modifyIn targetId fun h => { h with ports := #[] }
+        ⟨hyperedges, active.set! targetId false, slots⟩
+      else st
+
+/-- `collectHyperedges` over the left nodes `nodes[i:]`, their ports `ports[j:]` and the outgoing
+edges `edges[k:]` of the current port `port`. -/
+partial def collectLoop (a : LGraphArena) (marks : ByteArray) (nodes : Array LNodeId) (i : Nat) (ports : Array LPortId)
+    (j : Nat) (port : LPortId) (edges : Array LEdgeId) (k : Nat) (st : Collect) : Collect :=
+  if h : k < edges.size then
+    let e := edges[k]
+    match (a.edge e).target with
+    | some targetPort =>
+      if endMarked a marks e true 1 then collectLoop a marks nodes i ports j port edges (k + 1) st
+      else collectLoop a marks nodes i ports j port edges (k + 1) (collectEdge port targetPort st)
+    | none => collectLoop a marks nodes i ports j port edges (k + 1) st
+  else if h : j < ports.size then
+    let p := ports[j]
+    collectLoop a marks nodes i ports (j + 1) p (a.port p).outgoingEdges 0 st
+  else if h : i < nodes.size then collectLoop a marks nodes (i + 1) (a.node nodes[i]).ports 0 port #[] 0 st
+  else st
+
+/-- The bounds of a hyperedge over its ports `ports[k:]`. -/
+partial def boundsLoop (a : LGraphArena) (marks : ByteArray) (positions : Array Int) (ports : Array LPortId) (k : Nat)
+    (ul ll ur lr : Int) : Hyperedge → Hyperedge :=
+  if h : k < ports.size then
+    let port := ports[k]
+    let pos := positionOf positions a port
+    match (a.port port).owner with
+    | some n =>
+      let m := markOf marks n
+      if m &&& 1 != 0 then boundsLoop a marks positions ports (k + 1) (min ul pos) (max ll pos) ur lr
+      else if m &&& 2 != 0 then boundsLoop a marks positions ports (k + 1) ul ll (min ur pos) (max lr pos)
+      else boundsLoop a marks positions ports (k + 1) ul ll ur lr
+    | none => boundsLoop a marks positions ports (k + 1) ul ll ur lr
+  else fun h => { h with upperLeft := ul, lowerLeft := ll, upperRight := ur, lowerRight := lr }
+
+/-- The active hyperedges of `hs[i:]` with their bounds, pushed onto `out`; the slots of their ports
+are cleared. -/
+partial def finishHyperedges (a : LGraphArena) (marks : ByteArray) (positions : Array Int) (sourceCount targetCount : Int)
+    (hs : Array Hyperedge) (active : Array Bool) (i : Nat) (out : Array Hyperedge) (slots : Array Nat) :
+    Array Hyperedge × Array Nat :=
+  if h : i < hs.size then
+    if active[i]! then
+      let he := hs[i]
+      let he := boundsLoop a marks positions he.ports 0 sourceCount he.lowerLeft targetCount he.lowerRight he
+      finishHyperedges a marks positions sourceCount targetCount hs active (i + 1) (out.push he) (setSlots he.ports 0 0 slots)
+    else finishHyperedges a marks positions sourceCount targetCount hs active (i + 1) out slots
+  else (out, slots)
+
+/-- `Hyperedge.compare h1 h2 == .gt`. -/
+@[inline] def hyperedgeGreater (h1 h2 : Hyperedge) : Bool :=
+  if h1.upperLeft != h2.upperLeft then h1.upperLeft > h2.upperLeft
+  else if h1.upperRight != h2.upperRight then h1.upperRight > h2.upperRight
+  else h1.identity > h2.identity
+
+/-- The tree loop of `countStraightCrossings` for one value (`index` its leaf). -/
+partial def straightUp (index : Int) (tree : Array Int) (crossings : Int) : Array Int × Int :=
+  if index > 0 then
+    let crossings := if index % 2 > 0 then crossings + (tree[(index + 1).toNat]?.getD 0) else crossings
+    let index := (index - 1) / 2
+    straightUp index (tree.modify index.toNat (· + 1)) crossings
+  else (tree, crossings)
+
+/-- Marks the upper right positions `ur[i:]` in the compression table. -/
+partial def markDeltas (ur : Array Int) (i : Nat) (deltas : Array Int) : Array Int :=
+  if h : i < ur.size then markDeltas ur (i + 1) (deltas.setIfInBounds (asUsize ur[i]) 1) else deltas
+
+/-- The compression table from position `i` on: a marked entry gets the running `delta`, every
+unmarked one decrements it. -/
+partial def fillDeltas (i : Nat) (delta : Int) (deltas : Array Int) : Array Int :=
+  if h : i < deltas.size then
+    if deltas[i] == 1 then fillDeltas (i + 1) delta (deltas.set i delta) else fillDeltas (i + 1) (delta - 1) deltas
+  else deltas
+
+/-- The compressed values of `ur[i:]` (written in place) and their maximum `+ 1` (at least `q`). -/
+partial def compressValues (deltas : Array Int) (i : Nat) (q : Int) (ur : Array Int) : Array Int × Int :=
+  if h : i < ur.size then
+    let value := ur[i] + (deltas[asUsize ur[i]]?.getD 0)
+    compressValues deltas (i + 1) (max q (value + 1)) (ur.set i value)
+  else (ur, q)
+
+/-- The smallest power of two `≥ q` (from `firstIndex`). -/
+partial def powerAbove (q firstIndex : Int) : Int := if firstIndex < q then powerAbove q (firstIndex * 2) else firstIndex
+
+/-- The tree pass of `countStraightCrossings` over the compressed values `values[i:]`. -/
+partial def straightLoop (values : Array Int) (firstIndex : Int) (i : Nat) (tree : Array Int) (crossings : Int) : Int :=
+  if h : i < values.size then
+    let index := values[i] + firstIndex
+    let (tree, crossings) := straightUp index (tree.modify index.toNat (· + 1)) crossings
+    straightLoop values firstIndex (i + 1) tree crossings
+  else crossings
+
+/-- `countStraightCrossings` on the upper right positions `ur` of the sorted hyperedges. -/
+def countStraightCrossingsOf (ur : Array Int) (targetCount : Int) : Int :=
+  let deltas := fillDeltas 0 0 (markDeltas ur 0 (Array.replicate (targetCount + 1).toNat 0))
+  let (values, q) := compressValues deltas 0 0 ur
+  let firstIndex := powerAbove q 1
+  let treeSize := 2 * firstIndex - 1
+  straightLoop values (firstIndex - 1) 0 (Array.replicate treeSize.toNat 0) 0
+
+/-- `HyperedgeCorner.compare c1 c2 == .gt` on the corner keys `i` and `j` (position, opposite
+position, identity, upper). -/
+@[inline] def cornerGreater (pos opp : Array Int) (ids : Array Nat) (upper : ByteArray) (i j : Nat) : Bool :=
+  let pi := pos[i]!
+  let pj := pos[j]!
+  if pi != pj then pi > pj
+  else
+    let oi := opp[i]!
+    let oj := opp[j]!
+    if oi != oj then oi > oj
+    else
+      let ii := ids[i]!
+      let ij := ids[j]!
+      if ii != ij then ii > ij
+      else upper.get! i == 0 && upper.get! j != 0
+
+/-- The sweep of `countOverlapCrossings` over the sorted corner indices `perm[k:]`. -/
+partial def overlapSweep (upper : ByteArray) (perm : Array Nat) (k : Nat) (open_ crossings : Int) : Int :=
+  if h : k < perm.size then
+    if upper.get! perm[k] != 0 then overlapSweep upper perm (k + 1) (open_ + 1) crossings
+    else overlapSweep upper perm (k + 1) (open_ - 1) (crossings + (open_ - 1))
+  else crossings
+
+/-- `countOverlapCrossings` of one side: the corners `(upper, lower, id, upper corner)` and
+`(lower, upper, id, lower corner)` of every hyperedge (`left`: the left bounds, else the right ones),
+in hyperedge order. -/
+def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int := Id.run do
+  let n := 2 * hyperedges.size
+  let mut pos : Array Int := Array.emptyWithCapacity n
+  let mut opp : Array Int := Array.emptyWithCapacity n
+  let mut ids : Array Nat := Array.emptyWithCapacity n
+  let mut upper : ByteArray := ByteArray.emptyWithCapacity n
+  for h in hyperedges do
+    let u := if left then h.upperLeft else h.upperRight
+    let l := if left then h.lowerLeft else h.lowerRight
+    pos := (pos.push u).push l
+    opp := (opp.push l).push u
+    ids := (ids.push h.identity).push h.identity
+    upper := (upper.push 1).push 0
+  let perm := keyedStableSort n (cornerGreater pos opp ids upper)
+  return overlapSweep upper perm 0 0 0
+
+/-- `countCrossingsPure` with the scratch arrays (see "Allocation-poor counting"); the scratch is
+returned zeroed. -/
+def countCrossingsFast (a : LGraphArena) (positions : Array Int) (scratch : Scratch) (leftLayer rightLayer : Array LNodeId) :
+    Int × Array Int × Scratch :=
+  if leftLayer.isEmpty || rightLayer.isEmpty then (0, positions, scratch)
+  else
+    let marks := markNodes rightLayer 0 2 (markNodes leftLayer 0 1 scratch.marks)
+    let (positions, sourceCount) := assignLeft a marks leftLayer 0 #[] 0 0 positions
+    let (positions, targetCount) := assignRight a marks rightLayer 0 0 positions
+    let st := collectLoop a marks leftLayer 0 #[] 0 default #[] 0 ⟨#[], #[], scratch.slots⟩
+    let (hyperedges, slots) := finishHyperedges a marks positions sourceCount targetCount st.hyperedges st.active 0
+      (Array.emptyWithCapacity st.hyperedges.size) st.slots
+    let marks := markNodes rightLayer 0 0 (markNodes leftLayer 0 0 marks)
+    let perm := keyedStableSort hyperedges.size fun i j => hyperedgeGreater hyperedges[i]! hyperedges[j]!
+    let sorted := perm.map fun i => hyperedges[i]!
+    let crossings := countStraightCrossingsOf (sorted.map (·.upperRight)) targetCount
+    let crossings := crossings + countOverlapCrossingsOf sorted true
+    let crossings := crossings + countOverlapCrossingsOf sorted false
+    (crossings, positions, ⟨marks, slots⟩)
+
 /-- `countCrossings(leftLayer, rightLayer)`. -/
 def countCrossings (c : HyperedgeCrossingsCounter) (leftLayer rightLayer : Array LNodeId) : LayeredM Int := do
+  let a ← get
+  let positions ← c.portPositions.swap #[]
+  let scratch ← c.scratch.swap {}
+  let (crossings, positions, scratch) := countCrossingsFast a positions scratch leftLayer rightLayer
+  c.scratch.set scratch
+  c.portPositions.set positions
+  return crossings
+
+/-- `countCrossings` with the line-by-line port `countCrossingsPure` (reference of the differential
+test). -/
+def countCrossingsPort (c : HyperedgeCrossingsCounter) (leftLayer rightLayer : Array LNodeId) : LayeredM Int := do
   let a ← get
   let positions ← c.portPositions.swap #[]
   let (crossings, positions) := countCrossingsPure a positions leftLayer rightLayer
