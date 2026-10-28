@@ -330,16 +330,17 @@ stress 4 → 79/560, layered 554 → 750/1,715, force 0 → 0/614, mrtree 0 → 
 - 열거형 옵션은 `LayoutOptionData.parseValue`가 enum 클래스로 파싱한다(`Enum.valueOf`, 아니면 서수). elk-rs는 force·stress·
   mrtree·radial·rectpacking·SPOrE·DisCo·VertiFlex의 열거형 옵션에 파서가 없어 JSON 문자열을 무시했다.
 
-### 10.2 결과(시드 1~10 × 600, s/v/d; RJ1 병합본 대비)
+### 10.2 결과(시드 1~10 × 600, s/v/d; 기준 = RJ1+SEC 병합본 `2ad1aa5`, Java 결과는 같은 입력)
 
 | 집합 | 정확 일치 전 → 후 | 1e-6 전 → 후 |
 |---|---:|---:|
-| s | 912 → 1,016 / 1,205 | 917 → 1,020 |
-| v | 1,995 → **3,437** / 5,761 | 2,026 → 3,476 |
-| d(기본값 명시) | 2,268 → 3,437 / 5,761 | 2,302 → 3,476 |
-| o(새 옵션 집합, 시드 1~3 × 400) | 146 → 886 / 1,020·1,048 | 156 → 975 |
+| s | 963 → 1,082 / 1,205 | 968 → 1,086 |
+| v | 2,383 → **4,374** / 5,761 | 2,423 → 4,431 |
+| d(기본값 명시) | 2,748 → 4,374 / 5,761 | 2,796 → 4,431 |
+| o(새 옵션 집합, 시드 1~3 × 400, SEC 이전 측정) | 146 → 886 / 1,020·1,048 | 156 → 975 |
 
-d 집합이 v와 같아졌다(기본값을 명시해도 결과가 바뀌지 않음 = Lean의 기본값이 Java와 같다). 분류(s+v+d): DEF 1,625 → 418
-(mrtree 819 → 337, force 852 → 80, rectpacking 2 → 2), POS 2,481 → 566(stress 1,071 → 155, mrtree 792 → 322, force 416 → 78,
-radial 280 → 12), NML 1,268 → 46. 남은 DEF/POS: mrtree는 거의 전부 `AVOID_OVERLAP` 간선 경로(elk-rs의 재구성 라우터, 253/337),
-force/stress는 간선 라벨 위치만. 코퍼스 Java parity 1878/119(집합·차이 동일), elk-rs model parity 1447/1447.
+d 집합이 v와 같아졌다(기본값을 명시해도 결과가 바뀌지 않음 = Lean의 기본값이 Java와 같다). 분류(s+v+d): DEF 1,728 → 465
+(mrtree 867 → 371, force 908 → 93, rectpacking 2 → 2), POS 2,653 → 631(stress 1,140 → 177, mrtree 851 → 356, force 452 → 91,
+radial 288 → 8), NML 1,308 → 50. 남은 DEF/POS: mrtree는 거의 전부 `AVOID_OVERLAP` 간선 경로(elk-rs의 재구성 라우터),
+force/stress는 간선 라벨 위치만. SEC가 지적한 mrtree의 "출발점 아래 3 지점 굽힘"은 `LEVEL_PROC` 이식(`TREE_LEVEL` 계산)으로
+Java와 같아졌다. 코퍼스 Java parity 1878/119(집합·차이 동일), elk-rs model parity 1447/1447.
