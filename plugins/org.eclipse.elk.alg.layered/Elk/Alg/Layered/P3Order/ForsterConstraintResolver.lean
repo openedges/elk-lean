@@ -573,9 +573,27 @@ partial def setNodesBary (c : ForsterCtx) (nodes : Array LNodeId) (i : Nat) (kno
   if h : i < nodes.size then setNodesBary c nodes (i + 1) known value (setNodeBary c states nodes[i] known value)
   else states
 
+/-- `outgoingConstraints.push g` on an unshared group (the fields are taken apart, so the list is
+updated in place). -/
+@[inline] def pushOutgoing (g : Nat) : ConstraintGroup → ConstraintGroup
+  | ⟨sw, deg, nodes, out, inc, cnt⟩ => ⟨sw, deg, nodes, out.push g, inc, cnt⟩
+
+/-- `incomingConstraints.insert(0, g)` (`insertIdxIfInBounds 0`) in place. -/
+@[inline] def insertIncomingFront (g : Nat) : ConstraintGroup → ConstraintGroup
+  | ⟨sw, deg, nodes, out, inc, cnt⟩ => ⟨sw, deg, nodes, out, inc.insertIdxIfInBounds 0 g, cnt⟩
+
+/-- `incomingConstraints := #[]`, keeping the list's storage (`shrink 0` of the unshared list is the
+same empty list). -/
+@[inline] def clearIncoming : ConstraintGroup → ConstraintGroup
+  | ⟨sw, deg, nodes, out, inc, cnt⟩ => ⟨sw, deg, nodes, out, inc.shrink 0, cnt⟩
+
+/-- `outgoingConstraints := #[]`, `incomingConstraintsCount := 0`, keeping the list's storage. -/
+@[inline] def clearOutgoing : ConstraintGroup → ConstraintGroup
+  | ⟨sw, deg, nodes, out, inc, _⟩ => ⟨sw, deg, nodes, out.shrink 0, inc, 0⟩
+
 /-- `addConstraint(from, to)`. -/
 @[inline] def addConstraint (arena : Arena) (fromGroup toGroup : Nat) : Arena :=
-  let arena := arena.modifyIn fromGroup fun g => { g with outgoingConstraints := g.outgoingConstraints.push toGroup }
+  let arena := arena.modifyIn fromGroup (pushOutgoing toGroup)
   arena.modifyIn toGroup fun g => { g with incomingConstraintsCount := g.incomingConstraintsCount + 1 }
 
 /-- The arena and whether no `group_of` failed (the arena is the state at the failure otherwise). -/
@@ -589,8 +607,7 @@ structure ArenaOk where
 /-- The reset loop: no outgoing constraints and no incoming count for the groups `groups[i:]`. -/
 partial def resetOutgoing (groups : Array Nat) (i : Nat) (arena : Arena) : Arena :=
   if h : i < groups.size then
-    resetOutgoing groups (i + 1) (arena.modifyIn groups[i] fun g =>
-      { g with outgoingConstraints := #[], incomingConstraintsCount := 0 })
+    resetOutgoing groups (i + 1) (arena.modifyIn groups[i] clearOutgoing)
   else arena
 
 /-- The successor loop of group `gid` over `succs[k:]`. -/
@@ -669,7 +686,7 @@ partial def findReset (groups : Array Nat) (i : Nat) (active : Array Nat) (arena
     if h2 : gid < arena.size then
       let g := arena[gid]
       let source := !g.outgoingConstraints.isEmpty && g.incomingConstraintsCount == 0
-      let arena := arena.modifyIn gid fun x => { x with incomingConstraints := #[] }
+      let arena := arena.modifyIn gid clearIncoming
       findReset groups (i + 1) (if source then active.push gid else active) arena
     else findReset groups (i + 1) active arena
   else (arena, active)
@@ -695,7 +712,7 @@ partial def findLoop (c : ForsterCtx) (states : States) (groups : Array Nat) (ac
     let succ := outgoing[k]
     let incomingCount := if h2 : succ < arena.size then arena[succ].incomingConstraintsCount else 0
     let listLen := if h2 : succ < arena.size then arena[succ].incomingConstraints.size + 1 else 0
-    let arena := arena.modifyIn succ fun x => { x with incomingConstraints := x.incomingConstraints.insertIdxIfInBounds 0 gid }
+    let arena := arena.modifyIn succ (insertIncomingFront gid)
     findLoop c states groups (if incomingCount == listLen then active.push succ else active) head gid outgoing (k + 1) arena
   else if h : head < active.size then
     let g := active[head]
