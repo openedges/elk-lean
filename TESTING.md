@@ -116,6 +116,14 @@ dependencies, supported features).
   `tests/perf/report.md` lists per-scenario times, the lean/rust ratio and the 5% regression
   gate against `tests/perf/baseline_lean_api.csv` (refresh the baseline after an accepted
   optimisation). Numbers are machine specific; the report records the machine.
+- Corpus benchmark (every model of a parity manifest, `--mode models` on both sides):
+  ```sh
+  sh scripts/run_corpus_benchmark.sh 3 1 tests/perf/corpus   # needs tests/tmp/model_parity/inputs.tsv from run_model_parity.sh
+  ```
+  `tests/perf/corpus/report.md` gives the totals, the per-model ratio distribution and the slowest
+  models (`compare_perf.py --corpus`); the 5% gate applies to the total only, because sub-millisecond
+  models are too noisy per model. Run it on a quiet machine: under load the small models' ratios
+  swing by 2x between runs.
 - Profiling (macOS): `sh scripts/perf/profile_bench.sh <scenario>`, then
   `scripts/perf/sample_inclusive.py` / `sample_callers.py`; `scripts/perf/scan_generated_c.sh`
   checks the generated C for known traps (see `PLAN.md` 7.1).

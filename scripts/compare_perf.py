@@ -8,6 +8,13 @@ with `--baseline CSV`, applies the 5% regression gate of AGENTS.md to the lean_a
 (exit code 1 when a scenario got slower than `--threshold`).
 
     python3 scripts/compare_perf.py tests/perf tests/perf/report.md [--baseline B.csv] [--threshold 0.05]
+
+With `--corpus` (CSVs of `--mode models`, one row per model) the report gives the totals, the
+distribution of the per-model lean/rust_api ratios and the slowest models instead of a row per
+scenario; the regression gate then applies to the total time only (per-model times of sub-millisecond
+models are too noisy for a 5% gate).
+
+    python3 scripts/compare_perf.py tests/perf/corpus tests/perf/corpus/report.md --corpus [--baseline B.csv]
 """
 import argparse
 import csv
@@ -58,18 +65,75 @@ def geomean(xs):
     return math.exp(sum(math.log(x) for x in xs) / len(xs)) if xs else float("nan")
 
 
+def corpus_report(a, data: dict, base: dict) -> int:
+    """`--corpus`: totals, ratio distribution and slowest models over every model present on both sides."""
+    models = sorted({k[1] for k in data})
+    paired = [(s, data[("lean_api", s)], data[("rust_api", s)]) for s in models
+              if ("lean_api", s) in data and ("rust_api", s) in data and data[("rust_api", s)] > 0]
+    lean_total = sum(data[k] for k in data if k[0] == "lean_api")
+    rust_total = sum(data[k] for k in data if k[0] == "rust_api")
+    ratios = sorted(lean / rust for _, lean, rust in paired)
+    lines = ["# Corpus performance report", "", f"- machine: {machine()}",
+             f"- models: {len(models)} ({len(paired)} on both engines)", ""]
+    lines += ["| engine | total ms | models |", "|---|---|---|"]
+    for e in ["rust_native", "rust_api", "lean_api"]:
+        rows = [data[k] for k in data if k[0] == e]
+        if rows:
+            lines.append(f"| {e} | {sum(rows):.1f} | {len(rows)} |")
+    regressions = []
+    if paired:
+        lean_sum = sum(l for _, l, _ in paired)
+        rust_sum = sum(r for _, _, r in paired)
+        median = ratios[len(ratios) // 2]
+        lines += ["", f"- total lean/rust_api (paired models): {lean_sum / rust_sum:.2f}x "
+                      f"({lean_sum:.1f} ms vs {rust_sum:.1f} ms)",
+                  f"- per-model ratio: geometric mean {geomean(ratios):.2f}x, median {median:.2f}x, "
+                  f"min {ratios[0]:.2f}x, max {ratios[-1]:.2f}x"]
+        buckets = [(0, 0.8), (0.8, 1.0), (1.0, 1.2), (1.2, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, float("inf"))]
+        lines += ["", "| ratio | models |", "|---|---|"]
+        for lo, hi in buckets:
+            n = sum(1 for r in ratios if lo <= r < hi)
+            label = f"≥ {lo}" if hi == float("inf") else f"{lo} – {hi}"
+            lines.append(f"| {label} | {n} |")
+        by_ratio = sorted(paired, key=lambda t: t[1] / t[2], reverse=True)[:15]
+        lines += ["", "| slowest by ratio | lean ms | rust_api ms | ratio |", "|---|---|---|---|"]
+        lines += [f"| {s} | {l:.3f} | {r:.3f} | {l / r:.2f}x |" for s, l, r in by_ratio]
+        by_gap = sorted(paired, key=lambda t: t[1] - t[2], reverse=True)[:15]
+        lines += ["", "| largest absolute gap | lean ms | rust_api ms | ratio |", "|---|---|---|---|"]
+        lines += [f"| {s} | {l:.3f} | {r:.3f} | {l / r:.2f}x |" for s, l, r in by_gap]
+    if base:
+        base_total = sum(base[k] for k in base if k[0] == "lean_api" and k in data)
+        cur_total = sum(data[k] for k in base if k[0] == "lean_api" and k in data)
+        if base_total > 0:
+            change = cur_total / base_total - 1.0
+            lines += ["", f"- lean_api total vs baseline ({sum(1 for k in base if k in data)} common models): "
+                          f"{change * 100:+.1f}%"]
+            if change > a.threshold:
+                regressions.append(("total", change))
+                lines.append(f"- regression gate ({a.threshold * 100:.0f}%): FAIL")
+            else:
+                lines.append(f"- regression gate ({a.threshold * 100:.0f}%): pass")
+    Path(a.output).parent.mkdir(parents=True, exist_ok=True)
+    Path(a.output).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines))
+    return 1 if regressions else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("results_dir")
     ap.add_argument("output")
     ap.add_argument("--baseline")
     ap.add_argument("--threshold", type=float, default=0.05)
+    ap.add_argument("--corpus", action="store_true", help="CSVs of `--mode models`: totals and ratio distribution")
     a = ap.parse_args()
     data = {}
     for p in sorted(Path(a.results_dir).glob("*.csv")):
         if p.name.startswith("baseline"):
             continue
         data.update(load(p))
+    if a.corpus:
+        return corpus_report(a, data, load(Path(a.baseline)) if a.baseline else {})
     engines = [e for e in ["rust_native", "rust_api", "lean_api"] if any(k[0] == e for k in data)]
     scenarios = [s for s in ORDER if any(k[1] == s for k in data)]
     scenarios += sorted({k[1] for k in data} - set(scenarios))
