@@ -19,6 +19,12 @@ import Elk.Alg.Force
 directly, so the providers and the metadata are registered in the test binary either way.
 
 Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `force_ports_seed3` holds ELK Java's exception text (`<name>.error.txt`) since RJ1.
+Since FEL every `force`/`force_enum` expectation that ELK Java 0.12.0 produces equally is pinned to
+the elk-lean output equal to Java at tolerance 0 (`opt_java_status.tsv`): `force_rand15_labels_bends`,
+`eades_samepos_interactive` and `eades_rand15_labels_seed13` differed from Java in elk-rs (label
+positions of repeated edges, the Eades model's separation of coinciding particles), the Eades fixtures
+and two snapped stress/force ones by ulps (`Math.log` is fdlibm's, `javaLog`).
+* `force.fixtures.java`: inputs of `tests/fixtures/force/java/` against ELK Java at tolerance 0.
 -/
 namespace Tests.Force
 
@@ -107,6 +113,34 @@ def importTests : Suite := suite "force.import" do
   checkEq "no separation: nodes" graphs[0]!.nodes.size 6
   checkEq "no separation: edges" graphs[0]!.edges.size 4
   checkEq "no separation: labels" graphs[0]!.labels.size 4
+  -- Java object identity (FEL): the closing edge of a cycle is listed twice by the DFS of `split`;
+  -- Java then holds the same `FEdge` twice and its `FLabel` twice, the copy repeats their ids
+  let (t, troot) := ElkGraphUtil.createGraph
+  let (t, a) := t.createNode (some troot)
+  let (t, b) := t.createNode (some troot)
+  let (t, c) := t.createNode (some troot)
+  let (t, ab) := ElkGraphUtil.createSimpleEdge t (.node a) (.node b)
+  let (t, _) := t.createLabel (some (.edge ab)) "ab"
+  let (t, bc) := ElkGraphUtil.createSimpleEdge t (.node b) (.node c)
+  let (t, _) := t.createLabel (some (.edge bc)) "bc"
+  let (t, ca) := ElkGraphUtil.createSimpleEdge t (.node c) (.node a)
+  let (t, _) := t.createLabel (some (.edge ca)) "ca"
+  let ft ← importFGraph t troot
+  let comps := ComponentsProcessor.split ft
+  checkEq "cycle: one component" comps.size 1
+  let comp := comps[0]!
+  -- DFS from a: edge list [ca, bc, ab, ca], label list [ca, bc, ab, ca]
+  checkEq "cycle: edge list repeats the closing edge" comp.edges.size 4
+  checkEq "cycle: three edge copies" comp.arena.edgeSource.size 3
+  check "cycle: first and last edge entry are the same edge" (comp.edges[0]! == comp.edges[3]!)
+  checkEq "cycle: label list repeats the closing edge's label" comp.labels.size 4
+  checkEq "cycle: three label copies" comp.arena.labelCount 3
+  check "cycle: first and last label entry are the same label" (comp.labels[0]! == comp.labels[3]!)
+  checkEq "cycle: the repeated edge keeps one label" (comp.arena.edgeLabels[comp.edges[0]!.idx]!).size 1
+  let ident := ParticleIdentity.ofParticles comp.particleIds
+  check "cycle: the particle list has a repeated label" ident.hasRepeats
+  checkEq "cycle: its other entry" (ident.others 3) #[6]
+  checkEq "cycle: first entry of the repeat" (ident.first[6]!).toNat 3
 
 /-! ### Import details -/
 
@@ -458,7 +492,31 @@ def enumFixtureTests : Suite := suite "force.fixtures.enum" do
   Elk.Api.ensureInitialized
   runFixtures enumFixtureDir none
 
+/-- Directory of the fixtures with ELK Java 0.12.0 outputs (`<name>.java.json`, produced by the
+random-parity pipeline's harness `ElkJavaBaseline`). -/
+private def javaFixtureDir : System.FilePath := "tests/fixtures/force/java"
+
+/-- `force.fixtures.java` (FEL): force and stress layouts whose edges are listed twice by
+`ComponentsProcessor.split` (closing edges of cycles) — labels moved twice by `recombine`, repeated
+label particles, doubled bend points of `REPULSIVE_POWER`, the Eades model's `avoidSamePosition` —
+plus three random-parity inputs; the output must equal ELK Java's at tolerance 0. -/
+def javaFixtureTests : Suite := suite "force.fixtures.java" do
+  Elk.Api.ensureInitialized
+  let entries ← javaFixtureDir.readDir
+  let names := (entries.filterMap fun e =>
+    if e.fileName.endsWith ".json" && !e.fileName.endsWith ".java.json" then
+      some (e.fileName.dropEnd ".json".length).toString
+    else none).qsort (fun a b => a < b)
+  check "java fixtures found" (names.size >= 10)
+  for name in names do
+    let input ← IO.FS.readFile (javaFixtureDir / s!"{name}.json")
+    let expected ← IO.FS.readFile (javaFixtureDir / s!"{name}.java.json")
+    match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
+    | .error e => report s!"{name}: layout" false e
+    | .ok actual => checkJson s!"{name}: layout equal to ELK Java" actual expected
+
 def suites : Array Tests.Suite :=
-  #[importTests, importerTests, metaTests, formulaTests, layoutTests, fixtureTests, enumFixtureTests]
+  #[importTests, importerTests, metaTests, formulaTests, layoutTests, fixtureTests, enumFixtureTests,
+    javaFixtureTests]
 
 end Tests.Force

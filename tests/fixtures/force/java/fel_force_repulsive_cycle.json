@@ -1,0 +1,120 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n0",
+      "width": 30
+    },
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 30
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 30
+    },
+    {
+      "height": 30,
+      "id": "n4",
+      "width": 30
+    },
+    {
+      "height": 30,
+      "id": "n5",
+      "width": 30
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "labels": [
+        {
+          "height": 10,
+          "id": "e0l0",
+          "text": "label 0.0",
+          "width": 30
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "id": "e1",
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "id": "e2",
+      "labels": [
+        {
+          "height": 12,
+          "id": "e2l0",
+          "text": "label 2.0",
+          "width": 28
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n0"
+      ]
+    },
+    {
+      "id": "e3",
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ]
+    },
+    {
+      "id": "e4",
+      "labels": [
+        {
+          "height": 10,
+          "id": "e4l0",
+          "text": "label 4.0",
+          "width": 20
+        }
+      ],
+      "sources": [
+        "n4"
+      ],
+      "targets": [
+        "n5"
+      ]
+    },
+    {
+      "id": "e5",
+      "sources": [
+        "n5"
+      ],
+      "targets": [
+        "n3"
+      ]
+    }
+  ],
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.force.repulsivePower": "2",
+    "elk.randomSeed": "3"
+  }
+}
