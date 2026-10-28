@@ -1170,8 +1170,48 @@ def edgelessTests : Suite := suite "json.edgelessHierarchy" do
     | .error _ => check "output is valid JSON" false
   | .error e, _ | _, .error e => check s!"edgeless layout: {e}" false
 
+/-- Shape coordinates of nodes, ports and labels (`read_shape_layout` + `double_value_valid`):
+numbers, numeric strings, `null` (absent), non-finite values (`0`), invalid members (error), and
+the identifiers set together with them. -/
+def shapeLayoutTests : Suite := suite "json.import.shape_layout" do
+  let m ← importText "{id: 'root', children: [{id: 'n1', x: '12.5', y: null, width: 40, height: Infinity,
+    ports: [{id: 7, x: -3, width: '8'}], labels: [{text: 'a', x: 1, y: 2, width: NaN, height: 4.5}]}]}"
+  let n1 := (m.g.node m.root).children[0]!
+  let nd := m.g.node n1
+  checkFloat "node x from a numeric string" nd.x 12.5
+  checkFloat "node y null stays 0" nd.y 0.0
+  checkFloat "node width" nd.width 40.0
+  check "node height Infinity becomes 0" (nd.height == 0.0)
+  checkEq "node identifier" nd.identifier (some "n1")
+  let pt := m.g.port nd.ports[0]!
+  checkFloat "port x" pt.x (-3.0)
+  checkFloat "port width from a string" pt.width 8.0
+  checkFloat "port height absent" pt.height 0.0
+  checkEq "port identifier from a number" pt.identifier (some "7")
+  let lb := m.g.label nd.labels[0]!
+  checkFloat "label x" lb.x 1.0
+  checkFloat "label y" lb.y 2.0
+  check "label width NaN becomes 0" (lb.width == 0.0)
+  checkFloat "label height" lb.height 4.5
+  checkEq "label without id" lb.identifier none
+  for (what, text) in #[("node", "{id: 'r', children: [{id: 'n', width: true}]}"),
+                         ("port", "{id: 'r', children: [{id: 'n', ports: [{id: 'p', y: 'abc'}]}]}"),
+                         ("label", "{id: 'r', labels: [{text: 't', height: [1]}]}")] do
+    let err ← importError text
+    check s!"invalid {what} coordinate fails" ((err.getD "").endsWith "Invalid number value.")
+  -- ENUM values repeat across elements (the importer memoises their parses): every port keeps its own
+  let m ← importText "{id: 'r', children: [{id: 'n', ports: [
+    {id: 'p0', properties: {'port.side': 'WEST'}}, {id: 'p1', properties: {'port.side': 'EAST'}},
+    {id: 'p2', properties: {'port.side': 'WEST'}}, {id: 'p3', properties: {'port.side': 'west'}},
+    {id: 'p4', properties: {'port.side': 'bogus'}}, {id: 'p5', properties: {'port.side': 'EAST'}},
+    {id: 'p6', properties: {'port.side': '3'}}]}]}"
+  let nd := m.g.node (m.g.node m.root).children[0]!
+  let sides := nd.ports.map fun p => (m.g.port p).props.get? CoreOptions.PORT_SIDE
+  checkEq "memoised port sides" (sides.map fun s => s.map ElkEnum.javaName)
+    #[some "WEST", some "EAST", some "WEST", some "WEST", none, some "EAST", (ElkEnum.ofOrdinal? 3 : Option PortSide).map ElkEnum.javaName]
+
 def suites : Array Tests.Suite :=
   #[graphTests, edgeTests, sectionTests, idTests, layoutOptionImportTests, individualSpacingTests,
-    exportTests, transferTests, metadataCacheTests, layoutApiTests, edgelessTests]
+    exportTests, transferTests, metadataCacheTests, layoutApiTests, edgelessTests, shapeLayoutTests]
 
 end Tests.Json.Importer

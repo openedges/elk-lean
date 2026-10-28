@@ -87,6 +87,32 @@ def canParseValue (d : LayoutOptionData) : Bool :=
   | .enum | .enumSet | .object => d.parser.isSome
   | _ => true
 
+/-- Digits of `s` from byte `i` (`n` = byte size) accumulated into `acc`; `none` on a non-digit or
+as soon as the value exceeds `limit` (no later digit can bring it back into range). -/
+private partial def int32Digits (s : String) (n i : Nat) (acc limit : Nat) : Option Nat :=
+  if i < n then
+    let b := ElkEnum.utf8ByteAt s i
+    if b >= 48 && b <= 57 then
+      let acc := acc * 10 + (b - 48).toNat
+      if acc > limit then none else int32Digits s n (i + 1) acc limit
+    else none
+  else some acc
+
+/-- `parseInt32?` (Rust `s.parse::<i32>()`: an optional `+`/`-`, one or more ASCII digits, within the
+`i32` range) on the bytes of `s`, without the `List Char` of the reference. -/
+def parseInt32Bytes? (s : String) : Option Int :=
+  let n := s.utf8ByteSize
+  if n == 0 then none
+  else
+    let b0 := ElkEnum.utf8ByteAt s 0
+    let neg := b0 == 45
+    let start := if neg || b0 == 43 then 1 else 0
+    if start >= n then none
+    else
+      match int32Digits s n start 0 (if neg then 2147483648 else 2147483647) with
+      | some v => some (if neg then -(v : Int) else (v : Int))
+      | none => none
+
 /-- `parseValue(String)`: elk-rs semantics (`"null"` and empty strings yield
 `none`, except that an empty ENUMSET parses to the empty set via the parser). -/
 def parseValue (d : LayoutOptionData) (valueString : String) : Option PropValue :=
@@ -95,7 +121,7 @@ def parseValue (d : LayoutOptionData) (valueString : String) : Option PropValue 
   else
     match d.type with
     | .boolean => (PropValue.parseBool? valueString).map PropValue.bool
-    | .int => (parseInt32? valueString).map PropValue.int
+    | .int => (parseInt32Bytes? valueString).map PropValue.int
     | .double => (parseFloat? valueString).map PropValue.double
     | .string => some (PropValue.string valueString)
     | .enum | .enumSet | .object => d.parser.bind fun p => p valueString

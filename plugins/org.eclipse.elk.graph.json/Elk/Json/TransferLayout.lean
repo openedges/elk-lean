@@ -147,28 +147,84 @@ def recordCoordinateModes (el : ElementId) : ImportM Unit := do
   let i := (← getI).tables.index el
   modI (·.modifyTables (·.setModes i sm em))
 
+/-! Pure readers of the transfer tables (`globalX`, `shapeCoordsMode`, … on a table value read
+once), so the per-shape records below return plain floats and enum values. -/
+
+@[inline] private def tableGX (t : TransferTables) : ElementId → Float
+  | .edge _ => 0.0
+  | el => t.globalX.get! (t.index el)
+
+@[inline] private def tableGY (t : TransferTables) : ElementId → Float
+  | .edge _ => 0.0
+  | el => t.globalY.get! (t.index el)
+
+/-- `coordinateModes`' shape mode: the element's own mode unless it is `INHERIT` (or unset), then
+the JSON parent's (`PARENT` at the root). -/
+@[inline] private def resolveShapeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : ShapeCoords :=
+  match props.get? CoreOptions.JSON_SHAPE_COORDS with
+  | some .parent => .parent
+  | some .root => .root
+  | _ =>
+    match parent with
+    | some p => t.shapeCoords.getD (t.index p) .parent
+    | none => .parent
+
+/-- `coordinateModes`' edge mode (`CONTAINER` at the root). -/
+@[inline] private def resolveEdgeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : EdgeCoords :=
+  match props.get? CoreOptions.JSON_EDGE_COORDS with
+  | some .container => .container
+  | some .parent => .parent
+  | some .root => .root
+  | _ =>
+    match parent with
+    | some p => t.edgeCoords.getD (t.index p) .container
+    | none => .container
+
 /-- The global coordinates (`record_global_coords_*`) and the coordinate modes
 (`record_coordinate_modes`) of a node, port or label, in one state update. `parent` is both the
 element's parent and its JSON parent (they coincide for shapes). The two records touch different
-entries, so recording them together keeps the reference order's results. -/
+entries, so recording them together keeps the reference order's results. The values come from one
+read of the tables (which must be dead before the update, so it stays in place). -/
 def recordShape (el : ElementId) (parent : Option ElementId) (x y : Float) (props : PropertyMap) : ImportM Unit := do
-  let ancestor ← match parent with
-    | some p => shapeAncestor p
-    | none => pure none
-  let dx ← match ancestor with
-    | some a => globalX a
-    | none => pure 0.0
-  let dy ← match ancestor with
-    | some a => globalY a
-    | none => pure 0.0
-  let (sm, em) ← coordinateModes props parent
+  let st ← getI
+  -- `shape_ancestor`: edges resolve to their original parent node
+  let ancestor : Option ElementId := match parent with
+    | some (.edge e) => (tableGet? st.edgeOriginalParent e.idx).map ElementId.node
+    | other => other
+  let t := st.tables
+  let dx := match ancestor with
+    | some a => tableGX t a
+    | none => 0.0
+  let dy := match ancestor with
+    | some a => tableGY t a
+    | none => 0.0
+  let sm := resolveShapeMode t props parent
+  let em := resolveEdgeMode t props parent
   let gx := x + dx
   let gy := y + dy
-  let i := (← getI).tables.index el
+  let i := t.index el
   modI (·.modifyTables (·.setShape i gx gy sm em))
 
-/-- `adjust_edge_x`. -/
-def adjustEdgeX (e : EdgeId) (x : Float) : ImportM Float := do
+/-- The coordinate adjustment of one edge (`adjust_edge_x` / `adjust_edge_y`) with its per-edge
+lookups (coordinate mode, `insideSelfLoops.yo`, global offsets, self-loop compaction) done once.
+`kind`: `0` keeps the value, `1` adds the containing node's global offset (`ROOT`), `2` adds it and
+subtracts the original parent's (`PARENT`). `err`: `1` "Edge has no container.", `2` "Edge has no
+original parent." (thrown at the first adjustment, like the reference). -/
+structure EdgeAdjust where
+  kind : UInt8 := 0
+  cx : Float := 0.0
+  cy : Float := 0.0
+  ox : Float := 0.0
+  oy : Float := 0.0
+  /-- Self loop of a compacted node: x values right of `sourceX + 1e-9` move left by `delta`. -/
+  selfLoop : Bool := false
+  sourceX : Float := 0.0
+  delta : Float := 0.0
+  err : UInt8 := 0
+
+/-- `EdgeAdjust` of an edge (no state change; the values it reads are fixed during the edge's
+transfer: global coordinates and compaction deltas of nodes are recorded before any edge). -/
+def edgeAdjust (e : EdgeId) : ImportM EdgeAdjust := do
   let st ← getI
   let g ← getG
   let original := tableGet? st.edgeOriginalParent e.idx
@@ -177,42 +233,50 @@ def adjustEdgeX (e : EdgeId) (x : Float) : ImportM Float := do
     | none => pure .container
   let edge := g.edge e
   let yo := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
-  let some containing := edge.containingNode | throwJsonImport "Edge has no container."
-  let mut adjusted ← match mode with
-    | .root => if yo then pure x else do pure (x + (← globalX (.node containing)))
+  let some containing := edge.containingNode | return { err := 1 }
+  let cx ← globalX (.node containing)
+  let cy ← globalY (.node containing)
+  let base : EdgeAdjust ← match mode with
+    | .root => pure (if yo then {} else { kind := 1, cx, cy })
     | .parent =>
-      if yo then pure x
-      else do
-        let some orig := original | throwJsonImport "Edge has no original parent."
-        pure (x + (← globalX (.node containing)) - (← globalX (.node orig)))
-    | _ => pure x
+      if yo then pure {}
+      else
+        match original with
+        | some orig => pure { kind := 2, cx, cy, ox := ← globalX (.node orig), oy := ← globalY (.node orig) }
+        | none => pure { err := 2 }
+    | _ => pure {}
   let sourceNode := (edge.sources[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
   let targetNode := (edge.targets[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
   if let (some s, some t) := (sourceNode, targetNode) then
     if s == t then
       if let some delta := st.insideSelfLoopNodeXDelta.get? s then
-        let sourceX ← globalX (.node s)
-        if adjusted > sourceX + EPS9 then adjusted := adjusted - delta
-  return adjusted
+        return { base with selfLoop := true, sourceX := ← globalX (.node s), delta }
+  return base
+
+/-- Throws the error recorded in an `EdgeAdjust`. -/
+@[noinline] def EdgeAdjust.throwErr (a : EdgeAdjust) : ImportM Float :=
+  if a.err == 1 then throwJsonImport "Edge has no container."
+  else throwJsonImport "Edge has no original parent."
+
+/-- `adjust_edge_x` with a precomputed `EdgeAdjust` (same operations in the same order). -/
+@[inline] def EdgeAdjust.adjX (a : EdgeAdjust) (x : Float) : ImportM Float :=
+  if a.err != 0 then a.throwErr
+  else
+    let adjusted := if a.kind == 1 then x + a.cx else if a.kind == 2 then x + a.cx - a.ox else x
+    pure (if a.selfLoop && adjusted > a.sourceX + EPS9 then adjusted - a.delta else adjusted)
+
+/-- `adjust_edge_y` with a precomputed `EdgeAdjust`. -/
+@[inline] def EdgeAdjust.adjY (a : EdgeAdjust) (y : Float) : ImportM Float :=
+  if a.err != 0 then a.throwErr
+  else pure (if a.kind == 1 then y + a.cy else if a.kind == 2 then y + a.cy - a.oy else y)
+
+/-- `adjust_edge_x`. -/
+def adjustEdgeX (e : EdgeId) (x : Float) : ImportM Float := do
+  (← edgeAdjust e).adjX x
 
 /-- `adjust_edge_y`. -/
 def adjustEdgeY (e : EdgeId) (y : Float) : ImportM Float := do
-  let st ← getI
-  let g ← getG
-  let original := tableGet? st.edgeOriginalParent e.idx
-  let mode ← match original with
-    | some p => edgeCoordsMode (.node p)
-    | none => pure .container
-  let edge := g.edge e
-  let yo := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
-  let some containing := edge.containingNode | throwJsonImport "Edge has no container."
-  match mode with
-  | .root => if yo then return y else return y + (← globalY (.node containing))
-  | .parent =>
-    if yo then return y
-    let some orig := original | throwJsonImport "Edge has no original parent."
-    return y + (← globalY (.node containing)) - (← globalY (.node orig))
-  | _ => return y
+  (← edgeAdjust e).adjY y
 
 def adjustParentX (parent : ElementId) (x : Float) : ImportM Float := do
   match parent with
@@ -230,22 +294,31 @@ def adjustParentY (parent : ElementId) (y : Float) : ImportM Float := do
     | .root => return y + (← globalY parent)
     | _ => return y
 
-/-- `transfer_xywh_to_json`: writes `x`, `y`, `width`, `height` (in this order). -/
+/-- Writes `x`, `y`, `width`, `height` (in this order) into the object at `path`. -/
+@[inline] private def setXywh (path : JsonPath) (x y w h : Float) : ImportM Unit :=
+  let vx := Value.ofFloatElk x
+  let vy := Value.ofFloatElk y
+  let vw := Value.ofFloatElk w
+  let vh := Value.ofFloatElk h
+  modI (·.modifyModel (·.setXywhAtFrom path 0 vx vy vw vh))
+
+/-- `transfer_xywh_to_json`: writes `x`, `y`, `width`, `height` (in this order). For shape parents
+`adjustParentX`/`adjustParentY` are evaluated on one read of the tables (plain floats). -/
 def transferXywh (x y w h : Float) (path : JsonPath) (parent : Option ElementId) : ImportM Unit := do
-  let ax ← match parent with
-    | some p => adjustParentX p x
-    | none => pure x
-  let ay ← match parent with
-    | some p => adjustParentY p y
-    | none => pure y
-  modAt path fun o =>
-    match o with
-    | .obj kvs =>
-      let kvs := Value.setEntry kvs Key.x (.ofFloatElk ax)
-      let kvs := Value.setEntry kvs Key.y (.ofFloatElk ay)
-      let kvs := Value.setEntry kvs Key.width (.ofFloatElk w)
-      .obj (Value.setEntry kvs Key.height (.ofFloatElk h))
-    | other => other
+  match parent with
+  | some (.edge e) =>
+    let ax ← adjustEdgeX e x
+    let ay ← adjustEdgeY e y
+    setXywh path ax ay w h
+  | some p =>
+    let t := (← getI).tables
+    let root := match t.shapeCoords.getD (t.index p) .parent with
+      | .root => true
+      | _ => false
+    let ax := if root then x + tableGX t p else x
+    let ay := if root then y + tableGY t p else y
+    setXywh path ax ay w h
+  | none => setXywh path x y w h
 
 /-- `recompute_fixed_order_vertical_port_surrounding_height`. -/
 def recomputeFixedOrderVerticalPortSurroundingHeight (n : NodeId) : ImportM (Option Float) := do
@@ -365,24 +438,30 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
 /-- `transfer_layout_port`. -/
 def transferLayoutPort (p : PortId) : ImportM Unit := do
   let some path := tableGet? (← getI).portPath p.idx | throwJsonImport "Port did not exist in input."
-  let _ ← objectAt path
+  -- (the importer registers paths of JSON objects only, and the transfer never replaces them, so
+  -- the `json_object_mut` check of the reference always succeeds here)
   let port := (← getG).port p
   let parent := port.parent.map ElementId.node
   recordShape (.port p) parent port.x port.y port.props
   transferXywh port.x port.y port.width port.height path parent
   if let some parentNode := port.parent then
+    -- both deltas are read before any update (the updates do not touch them), and the state value
+    -- is dropped before the updates so that they stay in place
     let st ← getI
-    let side := port.props.getD CoreOptions.PORT_SIDE .undefined
-    if let some delta := st.insideSelfLoopNodeXDelta.get? parentNode then
-      if side == .east then
-        if let some x := ((← objectAt path).get? Key.x).bind (·.getFloat?) then
-          modAt path (·.set Key.x (.ofFloatElk (x - delta)))
-          modI fun s => { s with shiftedEastPortXDelta := s.shiftedEastPortXDelta.insert p delta }
-    if let some delta := st.compactedVerticalNodeYDelta.get? parentNode then
-      if side == .south then
-        if let some y := ((← objectAt path).get? Key.y).bind (·.getFloat?) then
-          modAt path (·.set Key.y (.ofFloatElk (y - delta)))
-          modI fun s => { s with shiftedSouthPortYDelta := s.shiftedSouthPortYDelta.insert p delta }
+    let dx? := st.insideSelfLoopNodeXDelta.get? parentNode
+    let dy? := st.compactedVerticalNodeYDelta.get? parentNode
+    if dx?.isSome || dy?.isSome then
+      let side := port.props.getD CoreOptions.PORT_SIDE .undefined
+      if let some delta := dx? then
+        if side == .east then
+          if let some x := ((← objectAt path).get? Key.x).bind (·.getFloat?) then
+            modAt path (·.set Key.x (.ofFloatElk (x - delta)))
+            modI fun s => { s with shiftedEastPortXDelta := s.shiftedEastPortXDelta.insert p delta }
+      if let some delta := dy? then
+        if side == .south then
+          if let some y := ((← objectAt path).get? Key.y).bind (·.getFloat?) then
+            modAt path (·.set Key.y (.ofFloatElk (y - delta)))
+            modI fun s => { s with shiftedSouthPortYDelta := s.shiftedSouthPortYDelta.insert p delta }
 
 def adjustXForShiftedEastPort (shape : ConnectableId) (x : Float) : ImportM Float := do
   match shape with
@@ -403,6 +482,7 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
   let st ← getI
   let g ← getG
   let edge := g.edge e
+  let adj ← edgeAdjust e
   let edgeId := ((tableGet? st.edgeIds e.idx).map (·.asString)).getD ""
   let isSelfLoop :=
     match edge.sources[0]?, edge.targets[0]? with
@@ -420,10 +500,10 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
       | none =>
         let fallbackId := s.identifier.getD s!"{edgeId}_s{i}"
         pure (.obj #[(Key.id, .str fallbackId)])
-    let mut startX ← adjustEdgeX e s.startX
-    let mut startY ← adjustEdgeY e s.startY
-    let mut endX ← adjustEdgeX e s.endX
-    let mut endY ← adjustEdgeY e s.endY
+    let mut startX ← adj.adjX s.startX
+    let mut startY ← adj.adjY s.startY
+    let mut endX ← adj.adjX s.endX
+    let mut endY ← adj.adjY s.endY
     if !isSelfLoop then
       if let some shape := s.incomingShape then
         startX ← adjustXForShiftedEastPort shape startX
@@ -434,9 +514,9 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
     let mut obj := base.set Key.startPoint (pointObject startX startY)
     obj := obj.set Key.endPoint (pointObject endX endY)
     if !s.bendPoints.isEmpty then
-      let mut bends : Array Value := #[]
+      let mut bends : Array Value := Array.emptyWithCapacity s.bendPoints.size
       for b in s.bendPoints do
-        bends := bends.push (pointObject (← adjustEdgeX e b.x) (← adjustEdgeY e b.y))
+        bends := bends.push (pointObject (← adj.adjX b.x) (← adj.adjY b.y))
       obj := obj.set Key.bendPoints (.arr bends)
     if let some shape := s.incomingShape then
       if let some id := idByElement st shape then obj := obj.set Key.incomingShape id.toValue
@@ -463,7 +543,7 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
     if !jps.isEmpty then
       let mut arr : Array Value := #[]
       for jp in jps do
-        arr := arr.push (pointObject (← adjustEdgeX e jp.x) (← adjustEdgeY e jp.y))
+        arr := arr.push (pointObject (← adj.adjX jp.x) (← adj.adjY jp.y))
       modAt path (·.set Key.junctionPoints (.arr arr))
   if let some cid := containerId then
     modAt path (·.set Key.container (.str cid))
@@ -475,7 +555,7 @@ where
 /-- `transfer_layout_label`. -/
 def transferLayoutLabel (l : LabelId) : ImportM Unit := do
   let some path := tableGet? (← getI).labelPath l.idx | throwJsonImport "Label did not exist in input."
-  let _ ← objectAt path
+  -- (`path` holds a JSON object, see `transferLayoutPort`)
   let label := (← getG).label l
   let parent := label.parent
   recordShape (.label l) parent label.x label.y label.props

@@ -89,6 +89,33 @@ def escapes : Suite := suite "json.printer.escape" do
   checkEq "unicode with escape" (Value.str "é\"→😀").render "\"é\\\"→😀\""
   checkEq "escaped key" (Value.obj #[("a\"b", .num (.int 1))]).render "{\"a\\\"b\":1}"
   checkEq "pretty escaped key" (Value.obj #[("k\n", .str "v\t")]).renderPretty "{\n  \"k\\n\": \"v\\t\"\n}"
+  -- ELK member names come from pre-rendered literals (also when the key is not the shared object),
+  -- other keys of the same length and first byte are quoted normally
+  let v := Value.obj #[("x", .num (.int 1)), (Key.width, .num (.int 2)), ("widtH", .num (.int 3)),
+    ("sourcePort", .str "p"), ("startPoint", .obj #[("y", .null)]), ("yy", .bool true)]
+  checkEq "member name literals (compact)" v.render
+    "{\"x\":1,\"width\":2,\"widtH\":3,\"sourcePort\":\"p\",\"startPoint\":{\"y\":null},\"yy\":true}"
+  -- integers are written two digits per step (inner pairs keep their zeros)
+  let ints : Array Int := #[0, 7, 10, 99, 100, 101, 109, 1000, 1009, 10005, 123456789, -1, -100, -2147483648,
+    9223372036854775807, -9223372036854775808, 18446744073709551615]
+  checkEq "integers" (Value.arr (ints.map Value.ofInt)).render ("[" ++ ",".intercalate (ints.map toString).toList ++ "]")
+  -- nesting below the pre-rendered indentation levels
+  let deep := (List.range 40).foldl (fun acc _ => Value.arr #[acc, .num (.int 1)]) (Value.obj #[("k", .num (.int 2))])
+  let expected := Id.run do
+    -- reference rendering of `deep` (the former one-piece-at-a-time printer)
+    let rec go (v : Value) (level : Nat) (out : String) (fuel : Nat) : String :=
+      match fuel, v with
+      | 0, _ => out
+      | fuel + 1, .arr xs =>
+        let out := xs.size.fold (init := out ++ "[\n") fun i _ acc =>
+          go xs[i]! (level + 1) ((if i != 0 then acc ++ ",\n" else acc).pushn ' ' (2 * (level + 1))) fuel
+        (out ++ "\n").pushn ' ' (2 * level) ++ "]"
+      | _ + 1, .obj _ => (((out ++ "{\n").pushn ' ' (2 * (level + 1)) ++ "\"k\": 2\n").pushn ' ' (2 * level)) ++ "}"
+      | _ + 1, other => out ++ other.render
+    return go deep 0 "" 100
+  checkEq "pretty nesting deeper than the indentation tables" deep.renderPretty expected
+  checkEq "member name literals (pretty)" v.renderPretty
+    "{\n  \"x\": 1,\n  \"width\": 2,\n  \"widtH\": 3,\n  \"sourcePort\": \"p\",\n  \"startPoint\": {\n    \"y\": null\n  },\n  \"yy\": true\n}"
 
 def suites : Array Suite := #[zmijCases, shortest, escapes]
 

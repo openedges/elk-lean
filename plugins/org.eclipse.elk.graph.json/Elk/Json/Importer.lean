@@ -29,6 +29,35 @@ def optionDataFor (id : String) : ImportM (Option LayoutOptionData) := do
     modI fun s => { s with optionCache := s.optionCache.insert id d }
     return d
 
+/-- Index of the `enumMemo` entry for option `oid` and value `value` from `i` (`memo.size` if none). -/
+private def enumMemoIndex (memo : Array (String × String × PropValue)) (oid value : String) (i : Nat) : Nat :=
+  if h : i < memo.size then
+    let e := memo[i]
+    if e.1 == oid && e.2.1 == value then i else enumMemoIndex memo oid value (i + 1)
+  else memo.size
+termination_by memo.size - i
+
+/-- Entries kept in `enumMemo` (ENUM/ENUMSET values repeat across the elements of a graph, e.g.
+`port.side`; a short list compares faster than a hash map). -/
+private def ENUM_MEMO_SIZE : Nat := 16
+
+/-- `LayoutOptionData.parseValue`, memoised per import for ENUM/ENUMSET options (pure parsers: a
+memo hit returns the value a new parse would). -/
+def parseOptionValue (od : LayoutOptionData) (value : String) : ImportM (Option PropValue) := do
+  match od.type with
+  | .enum | .enumSet =>
+    -- an empty or `null` value is decided by `parseValue` itself (no parser call)
+    if value.isEmpty || value == "null" then return od.parseValue value
+    let memo := (← getI).enumMemo
+    let i := enumMemoIndex memo od.id value 0
+    if h : i < memo.size then return some memo[i].2.2
+    match od.parseValue value with
+    | some v =>
+      if memo.size < ENUM_MEMO_SIZE then modI (·.pushEnumMemo (od.id, value, v))
+      return some v
+    | none => return none
+  | _ => return od.parseValue value
+
 /-- `set_option`: parses the string value with the option's parser and stores
 it under the canonical id. Unknown options and unparsable values are ignored. -/
 def setOption (props : PropertyMap) (id : String) (value : String) : ImportM PropertyMap := do
@@ -37,7 +66,7 @@ def setOption (props : PropertyMap) (id : String) (value : String) : ImportM Pro
       return props.set CoreOptions.DIRECTION d
   match ← optionDataFor id with
   | some od =>
-    match od.parseValue value with
+    match ← parseOptionValue od value with
     | some v => return props.setRawById od.id v
     | none => return props
   | none => return props
@@ -78,17 +107,44 @@ def transformIndividualSpacings (obj : Value) (props : PropertyMap) : ImportM Pr
     return props.set CoreOptions.SPACING_INDIVIDUAL { individual with props := inner }
   | _ => return props
 
-/-- Reads `x`, `y`, `width`, `height` (absent members stay unchanged). -/
-def readShapeLayout (obj : Value) : ImportM (Option Float × Option Float × Option Float × Option Float) := do
-  let x ← JsonAdapter.optDouble obj Key.x
-  let y ← JsonAdapter.optDouble obj Key.y
-  let w ← JsonAdapter.optDouble obj Key.width
-  let h ← JsonAdapter.optDouble obj Key.height
-  return (x, y, w, h)
+/-- `x`, `y`, `width`, `height` of a shape after `read_shape_layout` and `double_value_valid`, and
+whether every present member was a valid number. -/
+structure ShapeRead where
+  x : Float
+  y : Float
+  w : Float
+  h : Float
+  ok : Bool
 
-@[inline] private def upd (cur : Float) : Option Float → Float
-  | some v => doubleValueValid (some v)
-  | none => cur
+/-- `double_value_valid` of a present value: non-finite coordinates become `0`. -/
+@[inline] private def validCoord (v : Float) : Float := if v.isFinite then v else 0.0
+
+/-- `optDouble` + `double_value_valid` of the member `key` (first occurrence), pure: `cur` when
+absent or `null`, `false` in the second component for an invalid value. -/
+@[inline] private def shapeField (kvs : Array (String × Value)) (key : String) (cur : Float) : Float × Bool :=
+  let i := Value.keyIndex kvs key
+  if h : i < kvs.size then
+    match kvs[i].2 with
+    | .num n => (validCoord n.toFloat, true)
+    | .str s =>
+      match parseFloat? s with
+      | some f => (validCoord f, true)
+      | none => (cur, false)
+    | .null => (cur, true)
+    | _ => (cur, false)
+  else (cur, true)
+
+/-- `readShapeLayout` and the coordinate update (absent members keep `cx`, …) as one pure function
+(no `Option`/tuple results, the update closure gets plain floats). -/
+def readShape (obj : Value) (cx cy cw ch : Float) : ShapeRead :=
+  match obj with
+  | .obj kvs =>
+    let (x, okx) := shapeField kvs Key.x cx
+    let (y, oky) := shapeField kvs Key.y cy
+    let (w, okw) := shapeField kvs Key.width cw
+    let (h, okh) := shapeField kvs Key.height ch
+    ⟨x, y, w, h, okx && oky && okw && okh⟩
+  | _ => ⟨cx, cy, cw, ch, true⟩
 
 def registerNode (n : NodeId) (obj : Value) (path : JsonPath) : ImportM Unit := do
   let id ← JsonAdapter.getId obj
@@ -126,23 +182,26 @@ def transformLabels (obj : Value) (parent : ElementId) (path : JsonPath) : Impor
     let labelPath := (path.push (.key Key.labels)).push (.idx i)
     let text := (← JsonAdapter.optString labelObj Key.text).getD ""
     let l ← ElkM.createLabel (some parent) text
-    if JsonAdapter.hasKey labelObj Key.id then
-      if let some ident ← JsonAdapter.idSave labelObj then
-        modG (·.modifyLabel l fun x => { x with identifier := some ident })
+    let ident ← if JsonAdapter.hasKey labelObj Key.id then JsonAdapter.idSave labelObj else pure none
     modI (·.addLabelPath l labelPath)
-    let props ← transformProperties labelObj ((← getG).label l).props
-    let (x, y, w, h) ← readShapeLayout labelObj
-    modG (·.modifyLabel l fun lb => { lb with props, x := upd lb.x x, y := upd lb.y y, width := upd lb.width w, height := upd lb.height h })
+    let lb0 := (← getG).label l
+    let ident := if ident.isSome then ident else lb0.identifier
+    let props ← transformProperties labelObj lb0.props
+    let sh := readShape labelObj lb0.x lb0.y lb0.width lb0.height
+    if !sh.ok then throwJsonImport "Invalid number value."
+    modG (·.modifyLabel l fun lb => { lb with identifier := ident, props, x := sh.x, y := sh.y, width := sh.w, height := sh.h })
 
 /-- `transform_port`. -/
 def transformPort (obj : Value) (parent : NodeId) (path : JsonPath) : ImportM Unit := do
   let p ← ElkM.createPort (some parent)
   registerPort p obj path
-  if let some ident ← JsonAdapter.idSave obj then
-    modG (·.modifyPort p fun x => { x with identifier := some ident })
-  let props ← transformProperties obj ((← getG).port p).props
-  let (x, y, w, h) ← readShapeLayout obj
-  modG (·.modifyPort p fun pt => { pt with props, x := upd pt.x x, y := upd pt.y y, width := upd pt.width w, height := upd pt.height h })
+  let ident ← JsonAdapter.idSave obj
+  let pt0 := (← getG).port p
+  let ident := if ident.isSome then ident else pt0.identifier
+  let props ← transformProperties obj pt0.props
+  let sh := readShape obj pt0.x pt0.y pt0.width pt0.height
+  if !sh.ok then throwJsonImport "Invalid number value."
+  modG (·.modifyPort p fun pt => { pt with identifier := ident, props, x := sh.x, y := sh.y, width := sh.w, height := sh.h })
   transformLabels obj (.port p) path
 
 /-- `transform_ports`. -/
@@ -157,12 +216,14 @@ def transformPorts (obj : Value) (parent : NodeId) (path : JsonPath) : ImportM U
 partial def transformNode (obj : Value) (path : JsonPath) (parent : Option NodeId) : ImportM NodeId := do
   let n ← ElkM.createNode parent
   registerNode n obj path
-  if let some ident ← JsonAdapter.idSave obj then
-    modG (·.modifyNode n fun x => { x with identifier := some ident })
-  let props ← transformProperties obj ((← getG).node n).props
+  let ident ← JsonAdapter.idSave obj
+  let nd0 := (← getG).node n
+  let ident := if ident.isSome then ident else nd0.identifier
+  let props ← transformProperties obj nd0.props
   let props ← transformIndividualSpacings obj props
-  let (x, y, w, h) ← readShapeLayout obj
-  modG (·.modifyNode n fun nd => { nd with props, x := upd nd.x x, y := upd nd.y y, width := upd nd.width w, height := upd nd.height h })
+  let sh := readShape obj nd0.x nd0.y nd0.width nd0.height
+  if !sh.ok then throwJsonImport "Invalid number value."
+  modG (·.modifyNode n fun nd => { nd with identifier := ident, props, x := sh.x, y := sh.y, width := sh.w, height := sh.h })
   transformPorts obj n path
   transformLabels obj (.node n) path
   if let some children := JsonAdapter.optArray obj Key.children then
