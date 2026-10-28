@@ -1,0 +1,1 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"fixed","elk.edgeRouting":"ORTHOGONAL"},"children":[{"id":"a","width":20,"height":20},{"id":"b","x":60,"width":20,"height":20}],"edges":[{"id":"e","sources":["a"],"targets":["b"]}]}

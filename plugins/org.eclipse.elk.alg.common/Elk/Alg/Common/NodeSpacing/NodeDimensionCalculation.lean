@@ -312,11 +312,19 @@ private def sortedOrder (keys : Array Float) : Array Nat :=
   stableSort (Array.range keys.size) fun i j => Float.comparePartial (keys.getD i 0.0) (keys.getD j 0.0)
 
 /-- The `loop` of elk-rs `stack_horizontal_side_labels`: moves the label down (positive direction)
-or up past every placed rectangle it overlaps (gaps included) until it overlaps none. -/
+or up past every placed rectangle it overlaps (gaps included) until it overlaps none.
+
+Deviation from elk-rs (robustness, `docs/robustness-random-graphs.md`): in the negative direction
+the new coordinate `p.y - labelSize.y - gapY` can, after rounding, still satisfy the overlap test
+`absoluteY + labelSize.y > p.y - gapY`; the sweep then ends on the value it started with and elk-rs
+loops forever (ELK Java has no such loop and lays these graphs out). A sweep that adjusts without
+changing the coordinate would repeat identically, so the loop stops there; every input on which
+elk-rs terminates keeps its result. -/
 private def resolveHorizontalOverlaps (placed : Array ElkRectangle) (absoluteX absoluteY : Float) (labelSize : KVector)
     (config : HorizontalStackConfig) : Float := Id.run do
   let mut absoluteY := absoluteY
   while true do
+    let sweepStart := absoluteY
     let mut adjusted := false
     for p in placed do
       let horizontalOverlap := absoluteX < p.x + p.width + config.gapX && absoluteX + labelSize.x > p.x - config.gapX
@@ -324,7 +332,7 @@ private def resolveHorizontalOverlaps (placed : Array ElkRectangle) (absoluteX a
       if horizontalOverlap && verticalOverlap then
         absoluteY := if config.positiveDirection then p.y + p.height + config.gapY else p.y - labelSize.y - config.gapY
         adjusted := true
-    if !adjusted then break
+    if !adjusted || absoluteY == sweepStart then break
   return absoluteY
 
 /-- elk-rs `stack_horizontal_side_labels(entries, config)` (and `_generic`): nothing for no entries,

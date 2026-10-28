@@ -52,6 +52,30 @@ def toIGraphTransformer (t : ElkGraphTransformer) : IGraphTransformer NodeId whe
 def new : IO (IGraphTransformer NodeId) := do
   return (← create).toIGraphTransformer
 
+/-- `getIdentifier(element)` (private in Java) for an `ElkNode`: its identifier prefixed by the
+identifiers of its ancestors (`parent.child`), up to the first ancestor without one; `none` for a
+node without a (non-empty) identifier. -/
+def nodeIdentifier (g : ElkGraph) (node : NodeId) : Option String := Id.run do
+  let some id := (g.node node).identifier | return none
+  if id.isEmpty then return none
+  let mut path := id
+  let mut current := (g.node node).parent
+  -- at most one step per node (the parent chain of a well-formed graph is acyclic)
+  for _ in [0:g.nodes.size] do
+    let some parent := current | break
+    let some parentId := (g.node parent).identifier | break
+    if parentId.isEmpty then break
+    path := parentId ++ "." ++ path
+    current := (g.node parent).parent
+  return some path
+
+/-- `getOriginIdentifier(element)`: the identifier of the `ElkNode` an element originates from
+(`LGraphElement.getDesignation()`); `none` for other origins. Ports, edges and labels are not
+needed by the callers (node designations only). -/
+def getOriginIdentifier (g : ElkGraph) : Options.Origin → Option String
+  | .elkNode n => nodeIdentifier g n
+  | _ => none
+
 end ElkGraphTransformer
 
 end Elk.Alg.Layered.Graph.Transform

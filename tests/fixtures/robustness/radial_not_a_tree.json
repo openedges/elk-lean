@@ -1,0 +1,1 @@
+{"id":"root","layoutOptions":{"elk.algorithm":"radial"},"children":[{"id":"a","width":10,"height":10},{"id":"b","width":10,"height":10}],"edges":[{"id":"e0","sources":["a"],"targets":["b"]},{"id":"e1","sources":["b"],"targets":["a"]}]}
