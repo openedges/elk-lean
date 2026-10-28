@@ -579,23 +579,17 @@ def GapSegments.read (a : LGraphArena) (segments : Array SplineSegment) (ids : A
       ⟨tops.push s.hyperEdgeTopYPos, bottoms.push s.hyperEdgeBottomYPos, ys, starts.push ys.size,
         leftEmpty.push s.leftPorts.isEmpty⟩
 
-/-- `acc` plus the crossing counter contribution of the anchors `ys[k:stop]` (the right ports
-`ys[k:mid]` count `+1`, the left ports `-1`) that lie between `top` and `bottom`
+/-- `n` plus the number of the anchors `ys[k:stop]` that lie between `top` and `bottom`
 (`SplinesMath.isBetween`). -/
-partial def crossingCounter (ys : FloatArray) (k mid stop : Nat) (top bottom : Float) (acc : Int) : Int :=
+partial def countBetween (ys : FloatArray) (k stop : Nat) (top bottom : Float) (n : Nat) : Nat :=
   if k < stop then
-    if SplinesMath.isBetween ys[k]! top bottom then
-      crossingCounter ys (k + 1) mid stop top bottom (if k < mid then acc + 1 else acc - 1)
-    else crossingCounter ys (k + 1) mid stop top bottom acc
-  else acc
+    countBetween ys (k + 1) stop top bottom (if SplinesMath.isBetween (ys.get! k) top bottom then n + 1 else n)
+  else n
 
-/-- `crossingCounter ys k mid stop top bottom 0` with the usual single right and single left port
-handled inline. -/
-@[inline] def crossingCounterOf (ys : FloatArray) (k mid stop : Nat) (top bottom : Float) : Int :=
-  if mid == k + 1 && stop == k + 2 then
-    let r : Int := if SplinesMath.isBetween ys[k]! top bottom then 1 else 0
-    if SplinesMath.isBetween ys[k + 1]! top bottom then r - 1 else r
-  else crossingCounter ys k mid stop top bottom 0
+/-- `countBetween ys k stop top bottom 0` with the usual single port handled inline. -/
+@[inline] def countBetweenOf (ys : FloatArray) (k stop : Nat) (top bottom : Float) : Nat :=
+  if stop == k + 1 then (if SplinesMath.isBetween (ys.get! k) top bottom then 1 else 0)
+  else countBetween ys k stop top bottom 0
 
 /-- `Dependency.source`, `Dependency.target` and `Dependency.weight` of the dependencies of one gap, in
 creation order (`source`/`target` are local segment indices), and per local segment the positions
@@ -611,26 +605,31 @@ structure GapDepTable where
 `bottom0`, anchors `ys[r0:l0]`/`ys[l0:e0]`) and the segments `j, j + 1, …` (`edge1`): a weighted
 dependency between two vertically overlapping segments (two zero-weight dependencies if the order
 does not matter). The crossing counter of a segment is the number of its right ports minus the
-number of its left ports whose anchor lies within the other segment's hyperedge y-range. -/
+number of its left ports whose anchor lies within the other segment's hyperedge y-range; with these
+counts `edge0Counter < edge1Counter` is `rights0 + lefts1 < rights1 + lefts0` and the weight their
+difference, computed on `Nat`s. -/
 partial def dependencyRow (gs : GapSegments) (i : Nat) (top0 bottom0 : Float) (r0 l0 e0 j : Nat)
     (t : GapDepTable) : GapDepTable :=
   if j < gs.tops.size then
-    let top1 := gs.tops[j]!
-    let bottom1 := gs.bottoms[j]!
+    let top1 := gs.tops.get! j
+    let bottom1 := gs.bottoms.get! j
     if top0 > bottom1 || top1 > bottom0 then dependencyRow gs i top0 bottom0 r0 l0 e0 (j + 1) t
     else
-      let edge0Counter := crossingCounterOf gs.ys r0 l0 e0 top1 bottom1
-      let edge1Counter := crossingCounterOf gs.ys gs.starts[2 * j]! gs.starts[2 * j + 1]! gs.starts[2 * j + 2]!
-        top0 bottom0
+      let r1 := gs.starts[2 * j]!
+      let l1 := gs.starts[2 * j + 1]!
+      let e1 := gs.starts[2 * j + 2]!
+      -- `edge0Counter + lefts0 + lefts1` and `edge1Counter + lefts0 + lefts1`
+      let c0 := countBetweenOf gs.ys r0 l0 top1 bottom1 + countBetweenOf gs.ys l1 e1 top0 bottom0
+      let c1 := countBetweenOf gs.ys r1 l1 top0 bottom0 + countBetweenOf gs.ys l0 e0 top1 bottom1
       match t with
       | ⟨src, tgt, wgt, wo, wi⟩ =>
         let d := src.size
         let t : GapDepTable :=
-          if edge0Counter < edge1Counter then
-            ⟨src.push i, tgt.push j, wgt.push (edge1Counter - edge0Counter), wo.modifyIn i (·.push d),
+          if c0 < c1 then
+            ⟨src.push i, tgt.push j, wgt.push (Int.ofNat (c1 - c0)), wo.modifyIn i (·.push d),
               wi.modifyIn j (·.push d)⟩
-          else if edge1Counter < edge0Counter then
-            ⟨src.push j, tgt.push i, wgt.push (edge0Counter - edge1Counter), wo.modifyIn j (·.push d),
+          else if c1 < c0 then
+            ⟨src.push j, tgt.push i, wgt.push (Int.ofNat (c0 - c1)), wo.modifyIn j (·.push d),
               wi.modifyIn i (·.push d)⟩
           else ⟨(src.push j).push i, (tgt.push i).push j, (wgt.push 0).push 0, wo, wi⟩
         dependencyRow gs i top0 bottom0 r0 l0 e0 (j + 1) t
@@ -639,7 +638,7 @@ partial def dependencyRow (gs : GapSegments) (i : Nat) (top0 bottom0 : Float) (r
 /-- `createDependency` for every pair `i < j` of the local segments from `i` on, pairs in list order. -/
 partial def dependencyRows (gs : GapSegments) (i : Nat) (t : GapDepTable) : GapDepTable :=
   if i + 1 < gs.tops.size then
-    let t := dependencyRow gs i gs.tops[i]! gs.bottoms[i]! gs.starts[2 * i]! gs.starts[2 * i + 1]!
+    let t := dependencyRow gs i (gs.tops.get! i) (gs.bottoms.get! i) gs.starts[2 * i]! gs.starts[2 * i + 1]!
       gs.starts[2 * i + 2]! (i + 1) t
     dependencyRows gs (i + 1) t
   else t
