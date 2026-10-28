@@ -15,7 +15,8 @@ elk-rs uses a separate one).
 The hyperedge identity used as the last sort key (Rust: address of the first source port, Java:
 `hashCode()`) is the arena index of that port. Identities are unique per active hyperedge, so the
 count does not depend on their actual values. The `edges` list of the Rust `Hyperedge` is only
-used for tracing and is not kept.
+used for tracing and is not kept. `countCrossings` runs `countCrossingsFast` (see "Allocation-poor
+counting"); `countCrossingsPure` is the line-by-line port (`countCrossingsPort`, differential test).
 -/
 namespace Elk.Alg.Layered.P3Order.Counting
 

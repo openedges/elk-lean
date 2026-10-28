@@ -20,8 +20,10 @@ when that range is much larger than the number of elements (nested graphs whose 
 created late).
 
 Lean-only precomputed values (no Rust counterpart; all derived from the captured data):
-`portFlags` (per port id: predecessors, successors, a far end in the owner's layer, side code) and
-`nodeOrderFixed` (per flat node: `PORT_CONSTRAINTS.isOrderFixed` at build time). The crossing
+`portFlags` (per port id: predecessors, successors, a far end in the owner's layer, side code),
+`nodeOrderFixed` (per flat node: `PORT_CONSTRAINTS.isOrderFixed` at build time) and `portEndsOk`
+(per port id: its captured far ends are exactly its live ones, so a count over `endIds` equals the
+live edge loop: every edge has both end points, one captured port per id). The crossing
 minimisation only permutes the ports of a node without nested graph and changes neither port
 ids, port sides, edges nor the `PORT_CONSTRAINTS` of such a node (only the parent node of a nested
 graph gets `FIXED_ORDER` and a rewritten port list), so for these nodes the captured values equal

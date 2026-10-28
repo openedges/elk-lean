@@ -24,10 +24,12 @@ Representation:
   set (`set_snapshot`, called by the barycenter heuristic after the `GraphInfoHolder` built it)
   and from the live graph otherwise (`LNode.id`, `Layer.id`, `LNode.type`); both are kept
   (`snapshot`). The `ArenaSync` property reads of elk-rs are plain arena reads.
-- One `processConstraints` call runs on local copies of the resolver state (`ForsterData`)
-  in `ExceptT String (StateM ForsterData)`; the arena is only read. A layer without any
-  constraint (`unconstrained`) skips the passes, which would change neither the order nor a
-  barycenter.
+- `ForsterM` is the line-by-line port: one call runs on local copies of the resolver state
+  (`ForsterData`) in `ExceptT String (StateM ForsterData)`; the arena is only read.
+  `processConstraints` runs the equivalent allocation-free passes of `ForsterFast` (the same reads
+  and writes, see there; `processConstraintsPort` keeps the port for the differential test). A
+  layer without any constraint (`unconstrained`) skips the passes, which would change neither the
+  order nor a barycenter.
 - `BarycenterState` keeps the barycenter unboxed (`barycenterValue`, `hasBarycenter`);
   `barycenter`/`setBarycenter` are the `Option` view.
 
