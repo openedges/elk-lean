@@ -212,7 +212,9 @@ def localPosition (a : LGraphArena) (h : SelfLoopHolder) (nodeSize labelSize : K
     (alignment : SelfHyperLoopLabels.Alignment) (reference : Option SelfLoopPortId) : KVector :=
   let ref := reference.map (LabelPlacer.portAnchor a h)
   match alignment with
-  | .center => ⟨(nodeSize.x - labelSize.x) / 2.0, (nodeSize.y - labelSize.y) / 2.0⟩
+  -- Java `LabelPlacer.computeCoordinates` sets only `x` for `CENTER`; the block's `y` stays `0`
+  -- unless the side (north/south) sets it, so a centred block on the east/west side is top aligned
+  | .center => ⟨(nodeSize.x - labelSize.x) / 2.0, 0.0⟩
   | .left => ⟨(ref.map (·.x)).getD 0.0, (nodeSize.y - labelSize.y) / 2.0⟩
   | .right => ⟨(ref.map (·.x - labelSize.x)).getD (nodeSize.x - labelSize.x), (nodeSize.y - labelSize.y) / 2.0⟩
   | .top => ⟨(nodeSize.x - labelSize.x) / 2.0, (ref.map (·.y)).getD 0.0⟩

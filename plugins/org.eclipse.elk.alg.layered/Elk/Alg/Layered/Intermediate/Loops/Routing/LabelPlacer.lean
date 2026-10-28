@@ -54,11 +54,13 @@ def portAnchor (a : LGraphArena) (h : SelfLoopHolder) (p : SelfLoopPortId) : KVe
   let port := a.port (h.lPortOf p)
   ⟨port.position.x + port.anchor.x, port.position.y + port.anchor.y⟩
 
-/-- `pick_topmost_port(leftmost, rightmost)`: the one with the smaller `y` (leftmost on ties). -/
+/-- `pick_topmost_port(leftmost, rightmost)`: the one with the smaller `y` (leftmost on ties). Java
+compares the port positions (`getLPort().getPosition().y`) without the anchors (elk-rs adds them). -/
 def pickTopmostPort (a : LGraphArena) (h : SelfLoopHolder) (leftmost rightmost : Option SelfLoopPortId) :
     Option SelfLoopPortId :=
   match leftmost, rightmost with
-  | some left, some right => if (portAnchor a h right).y < (portAnchor a h left).y then some right else some left
+  | some left, some right =>
+    if (a.port (h.lPortOf right)).position.y < (a.port (h.lPortOf left)).position.y then some right else some left
   | some left, none => some left
   | none, some right => some right
   | none, none => none
@@ -113,9 +115,10 @@ def assignSideAndAlignment (a : LGraphArena) (h : SelfLoopHolder) (l : SelfHyper
         else set .north .center none
       (l', false)
     | some .fourSides | none =>
+      -- ELK Java 0.12.0 reads the leftmost port's side twice (`rightmostPortSide =
+      -- slLoop.getLeftmostPort()...`), so only the leftmost port decides
       let leftSide := sideOf leftmost
-      let rightSide := sideOf rightmost
-      let side : PortSide := if leftSide == .north || rightSide == .north then .south else .north
+      let side : PortSide := if leftSide == .north then .south else .north
       (set side .center none, true)
 
 /-- `assign_one_sided_sequenced(loops, side)` on the loops with the given indices: sorted by
