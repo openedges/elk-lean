@@ -1858,9 +1858,64 @@ def randomLayers (r : IO.Ref Random) (layers : Nat) : LayeredM (LGraphId × Nat)
         if pa.size > 0 && pb.size > 0 then
           let s := pa[← rnd r pa.size]!
           let t := pb[← rnd r pb.size]!
-          if (← rnd r 4) == 0 then connect t s else connect s t
+          if (← rnd r 40) == 0 then
+            -- an edge without target
+            let e ← createEdge
+            setEdgeSource e (some s)
+          else if (← rnd r 4) == 0 then connect t s else connect s t
   let nPorts ← Tests.Layered.P3Counting.assignIds g
   return (g, nPorts)
+
+/-- Sorts the ports of random nodes by side (stably) and caches the port sides of random nodes
+(the cache may then describe an unsorted list, which `getPortSideView` detects). -/
+def randomPortOrders (r : IO.Ref Random) (order : Array (Array LNodeId)) : LayeredM Unit := do
+  for layer in order do
+    for node in layer do
+      let k ← rnd r 3
+      if k == 0 then
+        let a ← get
+        let sorted := stableSort (a.node node).ports fun p q => compare (sideCode (a.port p).side) (sideCode (a.port q).side)
+        modifyNode node fun x => { x with ports := sorted }
+      if k <= 1 then cachePortSides node
+
+/-- Runs `countInLayerCrossingsOnSide` on a counter with and one without the snapshot, on every
+layer and side, with shuffled node orders: the number of differing results or position arrays and
+of calls with crossings. -/
+def inLayerDifferential (seeds : Nat) : IO (Nat × Nat) := do
+  let mut mismatches := 0
+  let mut nonZero := 0
+  for seed in [0:seeds] do
+    let r ← IO.mkRef (Random.ofInt (seed + 1000))
+    let (m, nz) ← runL do
+      let (g, _) ← randomLayers r 3
+      -- more in-layer edges
+      for layer in ← nodeArray g do
+        let a ← get
+        let ports := layer.foldl (fun acc n => acc ++ (a.node n).ports) #[]
+        if ports.size > 1 then
+          for _ in [0:(← rnd r 6)] do
+            connect ports[← rnd r ports.size]! ports[← rnd r ports.size]!
+      let nPorts ← Tests.Layered.P3Counting.assignIds g
+      randomPortOrders r (← nodeArray g)
+      let mut order ← nodeArray g
+      let s ← CrossMinSnapshot.build order nPorts
+      let live ← CrossingsCounter.ofPositions (Array.replicate nPorts 0)
+      let snap ← CrossingsCounter.ofPositions (Array.replicate nPorts 0)
+      snap.setSnapshot s
+      let mut m := 0
+      let mut nz := 0
+      for _ in [0:3] do
+        for layer in order do
+          for side in #[PortSide.west, .east, .north, .south] do
+            let x ← live.countInLayerCrossingsOnSide layer side
+            let y ← snap.countInLayerCrossingsOnSide layer side
+            if x != y || (← live.currentPositions) != (← snap.currentPositions) then m := m + 1
+            if x != 0 then nz := nz + 1
+        order ← order.mapM fun layer => shuffle r layer
+      return (m, nz)
+    mismatches := mismatches + m
+    nonZero := nonZero + nz
+  return (mismatches, nonZero)
 
 /-- Runs `countCrossingsPure` and `countCrossingsFast` on random layer pairs (with persisting
 positions and shuffled node orders): the number of differing results (crossings, positions, or a
@@ -1895,10 +1950,78 @@ def hyperedgeDifferential (seeds : Nat) : IO (Nat × Nat) := do
     nonZero := nonZero + nz
   return (mismatches, nonZero)
 
+/-- A random graph of two layers with north/south port dummies (`addNorthSouthEdge`, both
+directions), long-edge dummies, normal nodes with east/west ports and random layout units; the
+layers shuffled, ids assigned, random port side caches. -/
+def randomNorthSouthGraph (r : IO.Ref Random) : LayeredM (LGraphId × Nat) := do
+  let g ← newGraph {}
+  let ls ← makeLayers g 2
+  let mut nodes : Array (Array LNodeId) := #[#[], #[]]
+  for li in [0:2] do
+    for _ in [0:1 + (← rnd r 5)] do
+      let n ← addNode {} g ls[li]!
+      nodes := nodes.modify li (·.push n)
+      if (← rnd r 4) == 0 then
+        setNodeTypeLongEdge n
+        let w ← addPort {} n .west
+        let e ← addPort {} n .east
+        if li == 1 && nodes[0]!.size > 0 then connect (← addPort {} nodes[0]![← rnd r nodes[0]!.size]! .east) w
+        if (← rnd r 2) == 0 then connect e (← addPort {} n .east)
+  for li in [0:2] do
+    let normals ← nodes[li]!.filterM fun n => do return (← getNode n).type == .normal
+    let others := nodes[1 - li]!
+    for n in normals do
+      for _ in [0:(← rnd r 4)] do
+        if others.size > 0 then
+          let dummy ← addNode {} g ls[li]!
+          let side := if (← rnd r 2) == 0 then PortSide.north else .south
+          addNorthSouthEdge {} side n dummy others[← rnd r others.size]! ((← rnd r 2) == 0)
+      if (← rnd r 3) == 0 then
+        modifyNode n fun x => { x with internal := { x.internal with inLayerLayoutUnit := some n } }
+  -- shuffled layers
+  for l in ls do
+    let shuffled ← shuffle r (← getLayer l).nodes
+    modifyLayer l fun x => { x with nodes := shuffled }
+  randomPortOrders r (← nodeArray g)
+  let nPorts ← Tests.Layered.P3Counting.assignIds g
+  return (g, nPorts)
+
+/-- `countNorthSouthPortCrossingsInLayer` (fast loops) against the port's loops on two counters with
+persisting positions: the number of differing results or positions and of calls with crossings. -/
+def northSouthDifferential (seeds : Nat) : IO (Nat × Nat) := do
+  let mut mismatches := 0
+  let mut nonZero := 0
+  for seed in [0:seeds] do
+    let r ← IO.mkRef (Random.ofInt (seed + 2000))
+    let (m, nz) ← runL do
+      let (g, nPorts) ← randomNorthSouthGraph r
+      let mut order ← nodeArray g
+      let fast ← CrossingsCounter.ofPositions (Array.replicate nPorts 0)
+      let port ← CrossingsCounter.ofPositions (Array.replicate nPorts 0)
+      let mut m := 0
+      let mut nz := 0
+      for _ in [0:3] do
+        for layer in order do
+          let x ← fast.countNorthSouthPortCrossingsInLayer layer
+          let y ← port.countNorthSouthPortCrossingsInLayerPort layer
+          if x != y || (← fast.currentPositions) != (← port.currentPositions) then m := m + 1
+          if x != 0 then nz := nz + 1
+        order ← order.mapM fun layer => shuffle r layer
+      return (m, nz)
+    mismatches := mismatches + m
+    nonZero := nonZero + nz
+  return (mismatches, nonZero)
+
 def fastPathTests : Suite := suite "layered.p3counting.fast_paths" do
+  let (mismatches, nonZero) ← northSouthDifferential 400
+  checkEq "north/south fast loops = port loops (400 random graphs, 2400 calls)" mismatches 0
+  check s!"north/south differential calls count crossings ({nonZero} with crossings)" (nonZero > 200)
   let (mismatches, nonZero) ← hyperedgeDifferential 400
   checkEq "hyperedge fast = port (400 random graphs, 3200 layer pairs)" mismatches 0
   check s!"hyperedge differential runs count crossings ({nonZero} with crossings)" (nonZero > 400)
+  let (mismatches, nonZero) ← inLayerDifferential 400
+  checkEq "in-layer snapshot path = live path (400 random graphs, 14400 calls)" mismatches 0
+  check s!"in-layer differential calls count crossings ({nonZero} with crossings)" (nonZero > 300)
 
 /-! ## Suites -/
 

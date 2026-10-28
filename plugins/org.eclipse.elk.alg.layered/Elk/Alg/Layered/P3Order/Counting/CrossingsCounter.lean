@@ -428,6 +428,115 @@ private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Arr
     else countBetweenSnapLoop s positions pids (i + 1) n t pend np crossings
   else crossings
 
+/-! ### In-layer counting on the snapshot path
+
+`countInLayerCrossingsOnSide` with a snapshot numbers the side views top-down like
+`initPositions` (the views reversed unless the side is `EAST`, see `numberSideViewsSnapRev`) and
+counts on a packed tree over the captured ids (elk-rs `count_in_layer_crossings_on_ports_snap`):
+the far ends of a port are its `endIds` range (incoming sources, then outgoing targets), in the same
+layer when their captured owner layer is the port's. This equals the live loop when every numbered
+port has `portEndsOk` (otherwise the live path runs, numbering the same positions again). The tree
+keeps `add`'s size of entries beyond the buckets; like the between-layer path, the tree and the node
+cardinalities are not stored (the `AllCrossingsCounter` never reads them before a reset). -/
+
+/-- `numberSideViewsSnap` with every view reversed (`getPorts` top-down of a side other than `EAST`):
+the current node's view `ports[lo:j]` is walked downwards. -/
+private partial def numberSideViewsSnapRev (a : LGraphArena) (s : CrossMinSnapshot) (nodes : Array LNodeId)
+    (side : PortSide) (k : Nat) (ports : Array LPortId) (j lo : Nat) (filter stable : Bool)
+    (start : Nat) (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
+  if lo < j then
+    match ports[j - 1]? with
+    | some p =>
+      let pid := s.portId p
+      let onSide := if stable then s.portFlag pid >>> 3 == sideCode side else sideIs (a.port p).side side
+      if !onSide then
+        if filter then
+          numberSideViewsSnapRev a s nodes side k ports (j - 1) lo filter stable start len positions pids
+        else
+          numberSideViewsSnapRev a s nodes side k ports ports.size 0 true stable start start positions pids
+      else
+        let liveId := if stable then pid else asUsize (a.port p).id
+        numberSideViewsSnapRev a s nodes side k ports (j - 1) lo filter stable start (len + 1)
+          (setPosition positions liveId len) (writeAt pids len pid)
+    | none => numberSideViewsSnapRev a s nodes side k ports (j - 1) lo filter stable start len positions pids
+  else if h : k < nodes.size then
+    let node := nodes[k]
+    let stable := isStableNode s node
+    if stable && noPortOnSide s node side then
+      numberSideViewsSnapRev a s nodes side (k + 1) #[] 0 0 false stable len len positions pids
+    else
+      let nd := a.node node
+      match cachedRange a node nd side with
+      | some (lo, hi) =>
+        numberSideViewsSnapRev a s nodes side (k + 1) nd.ports hi lo false stable len len positions pids
+      | none =>
+        numberSideViewsSnapRev a s nodes side (k + 1) nd.ports nd.ports.size 0 true stable len len positions pids
+  else (positions, pids, len)
+
+/-- Whether every captured id of `pids[i:n]` has `portEndsOk`. -/
+private partial def allEndsOk (s : CrossMinSnapshot) (pids : Array Nat) (i n : Nat) : Bool :=
+  if h : i < n ∧ i < pids.size then s.portEndsOkAt pids[i] && allEndsOk s pids (i + 1) n else true
+
+/-- Sum of `rank(endPosition)` over the in-layer far ends `ends[k:hi]` (owner layer `li`) above `cur`. -/
+private partial def rankInLayerSnap (s : CrossMinSnapshot) (positions : Array Int) (t : Array Nat) (n : Nat) (cur : Int)
+    (li : Nat) (ends : Array Nat) (k hi acc : Nat) : Nat :=
+  if h : k < hi ∧ k < ends.size then
+    let other := ends[k]
+    if s.portOwnerLayer other == li then
+      let e := positions[other]?.getD 0
+      rankInLayerSnap s positions t n cur li ends (k + 1) hi
+        (if e > cur then acc + BinaryIndexedTree.rankPacked t n (asUsize e) else acc)
+    else rankInLayerSnap s positions t n cur li ends (k + 1) hi acc
+  else acc
+
+/-- The number of far ends of `ends[k:hi]` outside layer `li` (between-layer edges). -/
+private partial def countBetweenEnds (s : CrossMinSnapshot) (li : Nat) (ends : Array Nat) (k hi acc : Nat) : Nat :=
+  if h : k < hi ∧ k < ends.size then
+    countBetweenEnds s li ends (k + 1) hi (if s.portOwnerLayer ends[k] == li then acc else acc + 1)
+  else acc
+
+/-- `add(endPosition)` for the in-layer far ends of `ends[k:hi]` above `cur`; the tree size (`add`
+counts an entry beyond the buckets too) is returned with the tree. -/
+private partial def addInLayerSnap (s : CrossMinSnapshot) (positions : Array Int) (cur : Int) (li : Nat) (ends : Array Nat)
+    (k hi n : Nat) (t : Array Nat) (size : Nat) : Array Nat × Nat :=
+  if h : k < hi ∧ k < ends.size then
+    let other := ends[k]
+    if s.portOwnerLayer other == li then
+      let e := positions[other]?.getD 0
+      if e > cur then
+        let x := asUsize e
+        if x < n then
+          let b := n + 1 + x
+          addInLayerSnap s positions cur li ends (k + 1) hi n
+            (BinaryIndexedTree.incLoopPacked (t.set! b (t[b]! + 1)) (n + 1).toUSize (x + 1).toUSize) (size + 1)
+        else addInLayerSnap s positions cur li ends (k + 1) hi n t (size + 1)
+      else addInLayerSnap s positions cur li ends (k + 1) hi n t size
+    else addInLayerSnap s positions cur li ends (k + 1) hi n t size
+  else (t, size)
+
+/-- `countInLayerCrossingsOnPorts` over the captured ids `pids[i:n]` on a fresh packed tree `t` of
+`n` buckets holding `size` entries. -/
+private partial def countInLayerSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (pids : Array Nat) (i n : Nat)
+    (t : Array Nat) (size : Nat) (crossings : Int) : Int :=
+  if h : i < n ∧ i < pids.size then
+    let pid := pids[i]
+    let cur := positions[pid]?.getD 0
+    -- `removeAll(cur)`
+    let x := asUsize cur
+    let c := if x < n then t[n + 1 + x]! else 0
+    let t := if c != 0 then BinaryIndexedTree.decLoopPacked (t.set! (n + 1 + x) 0) (n + 1).toUSize (x + 1).toUSize c else t
+    let size := size - c
+    let ends := s.endIds
+    let lo := s.endLo pid
+    let hi := s.endHi pid
+    let li := s.portOwnerLayer pid
+    let ranks := rankInLayerSnap s positions t n cur li ends lo hi 0
+    let between := countBetweenEnds s li ends lo hi 0
+    let crossings := crossings + (ranks : Int) + (size : Int) * (between : Int)
+    let (t, size) := addInLayerSnap s positions cur li ends lo hi n t size
+    countInLayerSnapLoop s positions pids (i + 1) n t size crossings
+  else crossings
+
 /-- Like `rankEnds` for the in-layer edges only; also counts the between-layer edges. -/
 private partial def rankInLayerEnds (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (port : LPortId)
     (cur : Int) (edges : Array LEdgeId) (i : Nat) (acc betweenLayer : Int) : Int × Int :=
@@ -526,6 +635,179 @@ def countNorthSouthCrossingsOnPorts (a : LGraphArena) (positions : Array Int) (t
         ends := ends.push endPosition
     tree := addEndsArray tree ends
   return (crossings, tree)
+
+/-! ### North/south counting without intermediate arrays (Lean only)
+
+`initPositionsForNorthSouthCountingFast`/`countNorthSouthCrossingsOnPortsFast` do what
+`initPositionsForNorthSouthCounting`/`countNorthSouthCrossingsOnPorts` do (the same positions in
+the same order, the same port list, the same tree operations in the same order) without building
+the side views, the filtered port lists, the target lists or the `for` loop states: the side views
+are walked in place (`sideView`, the same view as `getPortSideView`), and the targets of a port are
+read twice (ranks, then additions; the additions of a port commute). -/
+
+/-- The numbering state: positions, the numbered ports and the next index. -/
+structure NSState where
+  positions : Array Int
+  ports : Array LPortId
+  index : Int
+  deriving Inhabited
+
+/-- Numbers port `p` (`positions[LPort.id] := index`, pushed onto the ports). -/
+@[inline] def nsNumber (a : LGraphArena) (p : LPortId) (st : NSState) : NSState :=
+  match st with
+  | ⟨positions, ports, index⟩ => ⟨setPosition positions (portIdOf a p) index, ports.push p, index + 1⟩
+
+/-- Numbers the ports of a side view from position `j` (`v`: `ports[lo:hi]` when cached, else the
+ports on `side`), only those with a `PORT_DUMMY` with `needDummy`. -/
+partial def nsNumberView (a : LGraphArena) (ports : Array LPortId) (v : SideView) (side : PortSide) (needDummy : Bool)
+    (j : Nat) (st : NSState) : NSState :=
+  if v.cached then
+    if h : j < v.hi ∧ j < ports.size then
+      let p := ports[j]
+      let st := if !needDummy || (a.port p).internal.portDummy.isSome then nsNumber a p st else st
+      nsNumberView a ports v side needDummy (j + 1) st
+    else st
+  else if h : j < ports.size then
+    let p := ports[j]
+    let pt := a.port p
+    let st := if sideIs pt.side side && (!needDummy || pt.internal.portDummy.isSome) then nsNumber a p st else st
+    nsNumberView a ports v side needDummy (j + 1) st
+  else st
+
+/-- The first port of a side view from position `j` (`none` for an empty view). -/
+partial def viewFirst (a : LGraphArena) (ports : Array LPortId) (v : SideView) (side : PortSide) (j : Nat) : Option LPortId :=
+  if v.cached then
+    if h : j < v.hi ∧ j < ports.size then some ports[j] else none
+  else if h : j < ports.size then
+    if sideIs (a.port ports[j]).side side then some ports[j] else viewFirst a ports v side (j + 1)
+  else none
+
+/-- `getPortSideView(side)[0]?` of a node. -/
+@[inline] def firstOnSide (a : LGraphArena) (n : LNodeId) (side : PortSide) : Option LPortId :=
+  let nd := a.node n
+  let v := sideView a n nd side
+  viewFirst a nd.ports v side (if v.cached then v.lo else 0)
+
+/-- `emptyStack(stack, ports, EAST, index)`: numbers the first eastern port of every stacked dummy
+(LIFO). -/
+partial def nsEmptyStack (a : LGraphArena) (stack : Array LNodeId) (st : NSState) : Array LNodeId × NSState :=
+  if stack.isEmpty then (stack, st)
+  else
+    let dummy := stack.back!
+    let stack := stack.pop
+    match firstOnSide a dummy .east with
+    | some p => nsEmptyStack a stack (nsNumber a p st)
+    | none => nsEmptyStack a stack st
+
+/-- The node loop of `initPositionsForNorthSouthCounting` from `nodes[i]` (`hasLast`/`last`: the last
+layout unit). -/
+partial def nsInitLoop (a : LGraphArena) (nodes : Array LNodeId) (i : Nat) (stack : Array LNodeId) (hasLast : Bool)
+    (last : LNodeId) (st : NSState) : NSState :=
+  if h : i < nodes.size then
+    let current := nodes[i]
+    let nd := a.node current
+    let layoutUnit := nd.internal.inLayerLayoutUnit
+    let changed := hasLast && last != current && (match layoutUnit with
+      | some u => u != last
+      | none => false)
+    let (stack, st) := if changed then nsEmptyStack a stack st else (stack, st)
+    let (hasLast, last) := match layoutUnit with
+      | some u => (true, u)
+      | none => (hasLast, last)
+    match nd.type with
+    | .normal =>
+      let vn := sideView a current nd .north
+      let st := nsNumberView a nd.ports vn .north true (if vn.cached then vn.lo else 0) st
+      let (stack, st) := nsEmptyStack a stack st
+      let vs := sideView a current nd .south
+      let st := nsNumberView a nd.ports vs .south true (if vs.cached then vs.lo else 0) st
+      nsInitLoop a nodes (i + 1) stack hasLast last st
+    | .northSouthPort =>
+      let st := match firstOnSide a current .west with
+        | some p => nsNumber a p st
+        | none => st
+      let stack := if (firstOnSide a current .east).isSome then stack.push current else stack
+      nsInitLoop a nodes (i + 1) stack hasLast last st
+    | .longEdge =>
+      let vw := sideView a current nd .west
+      let st := nsNumberView a nd.ports vw .west false (if vw.cached then vw.lo else 0) st
+      let stack := if (firstOnSide a current .east).isSome then stack.push current else stack
+      nsInitLoop a nodes (i + 1) stack hasLast last st
+    | _ => nsInitLoop a nodes (i + 1) stack hasLast last st
+  else (nsEmptyStack a stack st).2
+
+/-- `initPositionsForNorthSouthCounting(nodes)` (see "North/south counting without intermediate arrays"). -/
+def initPositionsForNorthSouthCountingFast (a : LGraphArena) (positions : Array Int) (nodes : Array LNodeId) :
+    Array Int × Array LPortId :=
+  let st := nsInitLoop a nodes 0 #[] false default ⟨positions, #[], 0⟩
+  (st.positions, st.ports)
+
+/-- Sum of `rank(endPosition) * degree` over the ports `targets[k:]` above `cur` (the degree of each
+target's own port with `ownDegree`, else `degree`). -/
+partial def nsRankPorts (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (cur : Int)
+    (targets : Array LPortId) (k : Nat) (acc : Int) : Int :=
+  if h : k < targets.size then
+    let tp := targets[k]
+    let e := positionIn positions a tp
+    nsRankPorts a positions tree cur targets (k + 1)
+      (if e > cur then acc + tree.rank (asUsize e) * ((a.port tp).degree : Int) else acc)
+  else acc
+
+/-- `add(endPosition)` for the ports `targets[k:]` above `cur`. -/
+partial def nsAddPorts (a : LGraphArena) (positions : Array Int) (cur : Int) (targets : Array LPortId) (k : Nat)
+    (tree : BinaryIndexedTree) : BinaryIndexedTree :=
+  if h : k < targets.size then
+    let e := positionIn positions a targets[k]
+    nsAddPorts a positions cur targets (k + 1) (if e > cur then tree.add (asUsize e) else tree)
+  else tree
+
+/-- The port loop of `countNorthSouthCrossingsOnPorts` (the targets of `northSouthTargetsAndDegrees`). -/
+partial def nsCountLoop (a : LGraphArena) (positions : Array Int) (ports : Array LPortId) (i : Nat)
+    (tree : BinaryIndexedTree) (crossings : Int) : Int × BinaryIndexedTree :=
+  if h : i < ports.size then
+    let port := ports[i]
+    let cur := positionIn positions a port
+    let tree := tree.removeAll (asUsize cur)
+    let pt := a.port port
+    let nodeType := match pt.owner with
+      | some n => (a.node n).type
+      | none => NodeType.normal
+    match nodeType with
+    | .normal =>
+      match pt.internal.portDummy with
+      | some dummy =>
+        let targets := (a.node dummy).ports
+        let crossings := nsRankPorts a positions tree cur targets 0 crossings
+        nsCountLoop a positions ports (i + 1) (nsAddPorts a positions cur targets 0 tree) crossings
+      | none => nsCountLoop a positions ports (i + 1) tree crossings
+    | .longEdge =>
+      let other := match pt.owner with
+        | some n => (a.node n).ports.find? (· != port)
+        | none => none
+      match other with
+      | some o =>
+        let e := positionIn positions a o
+        if e > cur then
+          let crossings := crossings + tree.rank (asUsize e) * ((a.port o).degree : Int)
+          nsCountLoop a positions ports (i + 1) (tree.add (asUsize e)) crossings
+        else nsCountLoop a positions ports (i + 1) tree crossings
+      | none => nsCountLoop a positions ports (i + 1) tree crossings
+    | .northSouthPort =>
+      match pt.internal.origin with
+      | some (.lPort originPort) =>
+        let e := positionIn positions a originPort
+        if e > cur then
+          let crossings := crossings + tree.rank (asUsize e) * (pt.degree : Int)
+          nsCountLoop a positions ports (i + 1) (tree.add (asUsize e)) crossings
+        else nsCountLoop a positions ports (i + 1) tree crossings
+      | _ => nsCountLoop a positions ports (i + 1) tree crossings
+    | _ => nsCountLoop a positions ports (i + 1) tree crossings
+  else (crossings, tree)
+
+/-- `countNorthSouthCrossingsOnPorts(ports)` (see "North/south counting without intermediate arrays"). -/
+def countNorthSouthCrossingsOnPortsFast (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree)
+    (ports : Array LPortId) : Int × BinaryIndexedTree :=
+  nsCountLoop a positions ports 0 tree 0
 
 /-- `connectedInLayerPortsSortedByPosition(upperNode, lowerNode, side)`: the side's ports of both
 nodes with non-self-loop edges plus the far ends of their in-layer edges, de-duplicated in
@@ -660,11 +942,38 @@ def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (
       if !nodes.isEmpty then c.nodeCardinalities.set (Array.replicate nodes.size 0)
       c.indexTree.set (BinaryIndexedTree.new 0)
       return 0
+    -- the snapshot path (see "In-layer counting on the snapshot path")
+    let a ← get
+    let positions ← c.portPositions.swap #[]
+    let pids ← c.idScratch.swap #[]
+    -- `getPorts(node, side, true)`: the `EAST` views as they are, the others reversed
+    let (positions, pids, n) := if sideIs side .east then
+        numberSideViewsSnap a s nodes side true 0 #[] 0 0 false false 0 0 positions pids
+      else numberSideViewsSnapRev a s nodes side 0 #[] 0 0 false false 0 0 positions pids
+    if !allEndsOk s pids 0 n then
+      -- ports whose far ends the snapshot does not know: the live path (which numbers the same again)
+      c.portPositions.set positions
+      c.idScratch.set pids
+    else
+      let crossings := countInLayerSnapLoop s positions pids 0 n (Array.replicate (2 * n + 1) 0) 0 0
+      c.portPositions.set positions
+      c.idScratch.set pids
+      return crossings
   let ports ← c.initPortPositionsForInLayerCrossings nodes side
   c.withTree countInLayerCrossingsOnPorts ports
 
-/-- `countNorthSouthPortCrossingsInLayer(layer)`. -/
+/-- `countNorthSouthPortCrossingsInLayer(layer)` (with the `…Fast` loops). -/
 def countNorthSouthPortCrossingsInLayer (c : CrossingsCounter) (layer : Array LNodeId) : LayeredM Int := do
+  let a ← get
+  let positions ← c.portPositions.swap #[]
+  let (positions, ports) := initPositionsForNorthSouthCountingFast a positions layer
+  c.portPositions.set positions
+  c.indexTree.set (BinaryIndexedTree.new ports.size)
+  c.withTree countNorthSouthCrossingsOnPortsFast ports
+
+/-- `countNorthSouthPortCrossingsInLayer(layer)` with the line-by-line port loops (reference of the
+differential test). -/
+def countNorthSouthPortCrossingsInLayerPort (c : CrossingsCounter) (layer : Array LNodeId) : LayeredM Int := do
   let a ← get
   let positions ← c.portPositions.swap #[]
   let (positions, ports) := initPositionsForNorthSouthCounting a positions layer
