@@ -82,9 +82,9 @@ def metadataTests : Suite := suite "rectpacking.metadata" do
     check "width approximation default GREEDY"
       ((o.defaultValue.bind PropCodec.dec : Option WidthApproximationStrategy) == some .greedy)
     checkEq "width approximation type" o.type LayoutOptionType.enum
-    -- Rust registers no choices and no parser for ENUM options of this plugin
-    checkEq "width approximation no choices (elk-rs)" o.choices.size 0
-    check "width approximation cannot parse (elk-rs)" (!o.canParseValue)
+    -- Java registers the enum class (choices and parser); elk-rs had neither (agent OPT)
+    checkEq "width approximation choices (Java)" o.choices #["GREEDY", "TARGET_WIDTH"]
+    check "width approximation parses (Java)" o.canParseValue
   -- whitespace_elimination_defaults
   match ← LayoutMetaDataService.getOptionData RectPackingOptions.WHITE_SPACE_ELIMINATION_STRATEGY.id with
   | none => report "whitespace elimination option registered" false
@@ -291,9 +291,13 @@ def approximationTests : Suite := suite "rectpacking.p1" do
   -- vs 0.02 → WDB (0, 40)
   checkPos "area driven D" g5 kids[2]! 0.0 40.0
   check "area driven target width" ((g5.node root).props.get InternalProperties.TARGET_WIDTH == some 60.0)
-  -- TargetWidthWidthApproximator: default -1 when unset (elk-rs), else the option value
-  let (_, _, g6) ← runRP g (TargetWidthWidthApproximator.phase.process root ProgressMonitor.null)
-  check "target width default -1" ((g6.node root).props.get InternalProperties.TARGET_WIDTH == some (-1.0))
+  -- TargetWidthWidthApproximator: Java's `UnsupportedConfigurationException` when the option is unset
+  -- (elk-rs used the property default -1; agent OPT), else the option value
+  match ← (runRP g (TargetWidthWidthApproximator.phase.process root ProgressMonitor.null)).toBaseIO with
+  | .ok _ => report "target width unset: Java exception" false "no exception"
+  | .error e =>
+    checkEq "target width unset: Java exception" (toString e)
+      "org.eclipse.elk.core.UnsupportedConfigurationException: A target width has to be set if the TargetWidthWidthApproximator should be used."
   let g7 := g.setNodeProp root RectPackingOptions.WIDTH_APPROXIMATION_TARGET_WIDTH 123.0
   let (_, _, g7) ← runRP g7 (TargetWidthWidthApproximator.phase.process root ProgressMonitor.null)
   check "target width copied" ((g7.node root).props.get InternalProperties.TARGET_WIDTH == some 123.0)

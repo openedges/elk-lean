@@ -272,8 +272,10 @@ def recombine (components : Array FGraph) : FGraph := Id.run do
     let size := boundingSize graph
     maxRowWidth := fmax maxRowWidth size.x
     totalArea := totalArea + size.x * size.y
+  -- Java `(float) Math.sqrt(totalArea) * result.getProperty(ForceOptions.ASPECT_RATIO)` (force
+  -- default 1.6f) and `ForceOptions.SPACING_NODE_NODE` (force default 80)
   let aspectRatio := result.props.getD ForceOptions.ASPECT_RATIO fl1p0
-  maxRowWidth := fmax maxRowWidth (Float.sqrt totalArea * aspectRatio)
+  maxRowWidth := fmax maxRowWidth (Float.toF32 (Float.sqrt totalArea) * aspectRatio)
   let spacing := result.props.getD ForceOptions.SPACING_NODE_NODE fl0p0
   let mut xpos : Float := fl0p0
   let mut ypos : Float := fl0p0

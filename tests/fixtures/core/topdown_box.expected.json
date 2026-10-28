@@ -45,18 +45,18 @@
           "height": 60,
           "id": "h2a",
           "width": 80,
-          "x": 19.4024,
-          "y": 19.4024
+          "x": 16.4024,
+          "y": 16.4024
         },
         {
           "height": 70,
           "id": "h2b",
           "width": 90,
-          "x": 19.4024,
-          "y": 94.4024
+          "x": 16.4024,
+          "y": 91.4024
         }
       ],
-      "height": 175,
+      "height": 169,
       "id": "h2",
       "layoutOptions": {
         "elk.algorithm": "box",
@@ -64,7 +64,7 @@
         "elk.topdown.sizeApproximator": "COUNT_CHILDREN",
         "elk.topdownLayout": "true"
       },
-      "width": 120,
+      "width": 114,
       "x": 60,
       "y": 5
     },

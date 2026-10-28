@@ -70,10 +70,11 @@ def metadataTests : Suite := suite "radial.metadata" do
       (((o.defaultValue.bind PropCodec.dec : Option AnnulusWedgeCriteria)) == some .nodeSize)
     checkEq "wedge criteria name" o.name "Annulus Wedge Criteria"
     checkEq "wedge criteria type" o.type LayoutOptionType.enum
-    -- parity with elk-rs: no choices and no parser for the enum options
-    checkEq "wedge criteria choices (elk-rs: none)" o.choices (#[] : Array String)
-    check "wedge criteria parser (elk-rs: none)" o.parser.isNone
-    check "wedge criteria value strings are not parsed" (o.parseValue "LEAF_NUMBER").isNone
+    -- Java registers the enum class (choices and parser); elk-rs had neither (agent OPT)
+    checkEq "wedge criteria choices (Java)" o.choices #["LEAF_NUMBER", "NODE_SIZE"]
+    check "wedge criteria parser (Java)" o.parser.isSome
+    check "wedge criteria value strings are parsed"
+      ((o.parseValue "LEAF_NUMBER").bind PropCodec.dec == some AnnulusWedgeCriteria.leafNumber)
   -- order_id_targets_nodes
   match ← LayoutMetaDataService.getOptionData RadialOptions.ORDER_ID.id with
   | none => report "order id option registered" false
@@ -256,11 +257,14 @@ def compactionHelperTests : Suite := suite "radial.compactionHelpers" do
   let fa (a : Array Float) : FloatArray := ⟨a⟩
   -- two overlapping boxes and two separate ones
   check "overlap_layer_soa: overlapping neighbours"
-    (AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0, 10.0]) (fa #[0.0, 0.0]) (fa #[20.0, 20.0]) (fa #[20.0, 20.0]) 0.0)
+    (AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0, 10.0]) (fa #[0.0, 5.0]) (fa #[20.0, 20.0]) (fa #[20.0, 20.0]) 0.0)
+  -- Java's corner cases are strict on both axes: the same top (or left) coordinate never overlaps
+  check "overlap_layer_soa: equal top coordinates do not overlap (Java)"
+    (!AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0, 10.0]) (fa #[0.0, 0.0]) (fa #[20.0, 20.0]) (fa #[20.0, 20.0]) 0.0)
   check "overlap_layer_soa: separate boxes"
     (!AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0, 50.0]) (fa #[0.0, 0.0]) (fa #[20.0, 20.0]) (fa #[20.0, 20.0]) 0.0)
   check "overlap_layer_soa: spacing makes boxes overlap"
-    (AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0, 25.0]) (fa #[0.0, 0.0]) (fa #[20.0, 20.0]) (fa #[20.0, 20.0]) 10.0)
+    (AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0, 25.0]) (fa #[0.0, 3.0]) (fa #[20.0, 20.0]) (fa #[20.0, 20.0]) 10.0)
   check "overlap_layer_soa: a single node never overlaps"
     (!AbstractRadiusExtensionCompaction.overlapLayerSoa (fa #[0.0]) (fa #[0.0]) (fa #[20.0]) (fa #[20.0]) 5.0)
   -- expanding a node by a step of 2 along the line from the origin
@@ -278,7 +282,7 @@ def compactionHelperTests : Suite := suite "radial.compactionHelpers" do
     AbstractRadiusExtensionCompaction.contractLayerSoa 0.0 0.0 (fa #[10.0]) (fa #[0.0]) (fa #[20.0]) (fa #[20.0]) 0.0 false
   checkFloat "contract_layer_soa with step 0 keeps the layer" (xs.get! 0) 10.0
   check "contract_layer_soa with step 0 reports no change" (!changed)
-  check "derived default has compaction step 0" (({} : AbstractRadiusExtensionCompaction).compactionStep == 0)
+  check "default compaction step is Java's 1" (({} : AbstractRadiusExtensionCompaction).compactionStep == 1)
   -- polar comparison uses the POSITION property
   let (g, parent) := ElkGraphUtil.createGraph
   let (g, a) := g.createNode (some parent)

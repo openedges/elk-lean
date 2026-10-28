@@ -10,6 +10,7 @@
 | `make_json_manifest.py` | Input manifest from the corpus `.json` models |
 | `merge_parity_manifests.py` | Joins the oracle and elk-lean batch manifests for the comparison script |
 | `run_random_java_parity.sh` | Random-graph ELK Java parity: generate (`gen_nodesize_graphs.py`) + sanitise (`sanitize_for_java.py`), ELK Java per set with a watchdog, elk-lean (and `--with-oracle` elk-rs) per input with a time limit, outcome/error/layout comparison (`random_java_parity.py`), mismatch classification (`classify_random_parity.py`) → `<out>/report.md`, `details.tsv`, `tests/random_parity/report.md` |
+| `gen_option_graphs.py` | Random flat graphs of the non-layered algorithms with random values of their own options ("o" sets of `run_random_java_parity.sh --sets o`: force model, stress dimension, radial compactor/sorter/wedge/translation, mrtree weighting/routing/search order, rectangle packing strategies, VertiFlex strategy, SPOrE processing order) |
 | `sanitize_for_java.py` | Copies `gen_nodesize_graphs.py` graphs so that ELK Java's node size calculator validation accepts them ("v" sets; see its docstring for the three changes) |
 | `random_java_parity.py` | Driver of `run_random_java_parity.sh` (stages gen, java, lean, rs, report) |
 | `classify_random_parity.py` | Groups the random-graph mismatches by origin layout unit (algorithm, difference kinds) and option features with lift |

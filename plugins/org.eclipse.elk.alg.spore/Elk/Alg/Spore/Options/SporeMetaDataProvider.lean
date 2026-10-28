@@ -9,13 +9,12 @@ Port of `options/spore_meta_data_provider.rs` (elk-rs), the counterpart of the J
 `apply`: the two algorithms (`org.eclipse.elk.sporeOverlap`, `org.eclipse.elk.sporeCompaction`),
 the ten options, and the option supports of both algorithms (in the Rust order).
 
+The five ENUM options are registered with their choices and the enum parser like the Java provider,
+so a string value such as `"org.eclipse.elk.processingOrder.treeConstruction":
+"MAXIMUM_SPANNING_TREE"` in a JSON graph takes effect (the Rust `register_option` helper of this
+plugin never attaches one, so elk-rs drops the strings; elk-lean followed that before agent OPT).
+
 Rust semantics kept on purpose (they differ from the generated Java provider):
-* ENUM options are registered **without** enum choices and **without** a parser (the Rust
-  `register_option` helper of this plugin never attaches one, unlike the layered helper). A string
-  value for such an option (for example `"org.eclipse.elk.processingOrder.treeConstruction":
-  "MAXIMUM_SPANNING_TREE"` in a JSON graph) therefore cannot be parsed
-  (`LayoutOptionData.parseValue` is `none`) and is dropped by the importer, exactly as in elk-rs.
-  Typed values set through the property API work. (Java registers the enum choices.)
 * No legacy ids, no option dependencies, no lower/upper bounds, no category and no supported
   graph features are registered.
 * The default of an option is the property default (`property_default_any`); options without a
@@ -45,6 +44,16 @@ def registerOption {α : Type} [PropCodec α] (r : Registry) (property : Propert
     { id := property.id, type := optionType, defaultValue := propertyDefault property, name,
       description, targets := EnumSet.of targets, visibility, group := group.getD "" }
 
+/-- `register_option` for an ENUM option: as `registerOption`, plus the Java enum choices (constant
+names in ordinal order) and the enum parser (Java `LayoutOptionData.parseValue` of an `ENUM`). -/
+def registerEnumOption {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+    (name description : String) (targets : Array LayoutOptionTarget)
+    (visibility : LayoutOptionVisibility) (group : Option String) : Registry :=
+  r.registerOption
+    { id := property.id, type := .enum, defaultValue := propertyDefault property, name,
+      description, targets := EnumSet.of targets, visibility, group := group.getD "",
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+
 /-- `register_algorithms`: the overlap removal and the compaction algorithm. -/
 def registerAlgorithms (r : Registry) : Registry :=
   let overlap : LayoutAlgorithmData :=
@@ -67,15 +76,15 @@ def registerOptions (r : Registry) : Registry :=
     "Underlying Layout Algorithm"
     "A layout algorithm that is applied to the graph before it is compacted. If this is null, nothing is applied before compaction."
     targetParents .visible none
-  let r := registerOption r SporeCompactionOptions.STRUCTURE_EXTRACTION_STRATEGY .enum
+  let r := registerEnumOption r SporeCompactionOptions.STRUCTURE_EXTRACTION_STRATEGY
     "Structure Extraction Strategy"
     "This option defines what kind of triangulation or other partitioning of the plane is applied to the vertices."
     targetParents .advanced (some "structure")
-  let r := registerOption r SporeCompactionOptions.PROCESSING_ORDER_TREE_CONSTRUCTION .enum
+  let r := registerEnumOption r SporeCompactionOptions.PROCESSING_ORDER_TREE_CONSTRUCTION
     "Tree Construction Strategy"
     "Whether a minimum spanning tree or a maximum spanning tree should be constructed."
     targetParents .advanced (some "processingOrder")
-  let r := registerOption r SporeCompactionOptions.PROCESSING_ORDER_SPANNING_TREE_COST_FUNCTION .enum
+  let r := registerEnumOption r SporeCompactionOptions.PROCESSING_ORDER_SPANNING_TREE_COST_FUNCTION
     "Cost Function for Spanning Tree"
     "The cost function is used in the creation of the spanning tree."
     targetParents .visible (some "processingOrder")
@@ -83,11 +92,11 @@ def registerOptions (r : Registry) : Registry :=
     "Root node for spanning tree construction"
     "The identifier of the node that is preferred as the root of the spanning tree. If this is null, the first node is chosen."
     targetParents .advanced (some "processingOrder")
-  let r := registerOption r SporeCompactionOptions.PROCESSING_ORDER_ROOT_SELECTION .enum
+  let r := registerEnumOption r SporeCompactionOptions.PROCESSING_ORDER_ROOT_SELECTION
     "Root selection for spanning tree"
     "This sets the method used to select a root node for the construction of a spanning tree"
     targetParents .advanced (some "processingOrder")
-  let r := registerOption r SporeCompactionOptions.COMPACTION_COMPACTION_STRATEGY .enum
+  let r := registerEnumOption r SporeCompactionOptions.COMPACTION_COMPACTION_STRATEGY
     "Compaction Strategy"
     "This option defines how the compaction is applied."
     targetParents .advanced (some "compaction")
@@ -108,8 +117,9 @@ false). -/
 def registerSupports (r : Registry) : Registry :=
   let overlap := SporeOverlapRemovalOptions.ALGORITHM_ID
   let r := r.addOptionSupport overlap SporeOverlapRemovalOptions.UNDERLYING_LAYOUT_ALGORITHM.id none
-  let r := r.addOptionSupport overlap CoreOptions.PADDING.id (some (PropCodec.enc (ElkPadding.ofAny 8.0)))
-  let r := r.addOptionSupport overlap CoreOptions.SPACING_NODE_NODE.id (some (.double 8.0))
+  let r := r.addOptionSupport overlap CoreOptions.PADDING.id (propertyDefault SporeOverlapRemovalOptions.PADDING)
+  let r := r.addOptionSupport overlap CoreOptions.SPACING_NODE_NODE.id
+    (propertyDefault SporeOverlapRemovalOptions.SPACING_NODE_NODE)
   let r := r.addOptionSupport overlap SporeOverlapRemovalOptions.STRUCTURE_EXTRACTION_STRATEGY.id none
   let r := r.addOptionSupport overlap SporeOverlapRemovalOptions.OVERLAP_REMOVAL_MAX_ITERATIONS.id none
   let r := r.addOptionSupport overlap SporeOverlapRemovalOptions.OVERLAP_REMOVAL_RUN_SCANLINE.id none
@@ -120,8 +130,9 @@ def registerSupports (r : Registry) : Registry :=
   let r := r.addOptionSupport compaction SporeCompactionOptions.PROCESSING_ORDER_SPANNING_TREE_COST_FUNCTION.id none
   let r := r.addOptionSupport compaction SporeCompactionOptions.PROCESSING_ORDER_PREFERRED_ROOT.id none
   let r := r.addOptionSupport compaction SporeCompactionOptions.PROCESSING_ORDER_ROOT_SELECTION.id none
-  let r := r.addOptionSupport compaction CoreOptions.PADDING.id (some (PropCodec.enc (ElkPadding.ofAny 8.0)))
-  let r := r.addOptionSupport compaction CoreOptions.SPACING_NODE_NODE.id (some (.double 8.0))
+  let r := r.addOptionSupport compaction CoreOptions.PADDING.id (propertyDefault SporeCompactionOptions.PADDING)
+  let r := r.addOptionSupport compaction CoreOptions.SPACING_NODE_NODE.id
+    (propertyDefault SporeCompactionOptions.SPACING_NODE_NODE)
   let r := r.addOptionSupport compaction SporeCompactionOptions.STRUCTURE_EXTRACTION_STRATEGY.id none
   let r := r.addOptionSupport compaction SporeCompactionOptions.COMPACTION_COMPACTION_STRATEGY.id none
   let r := r.addOptionSupport compaction SporeCompactionOptions.COMPACTION_ORTHOGONAL.id none

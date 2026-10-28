@@ -163,7 +163,8 @@
   "height": 212,
   "id": "root",
   "layoutOptions": {
-    "elk.algorithm": "org.eclipse.elk.vertiflex"
+    "elk.algorithm": "org.eclipse.elk.vertiflex",
+    "elk.vertiflex.layoutStrategy": "BEND"
   },
   "width": 149.5,
   "x": 0,

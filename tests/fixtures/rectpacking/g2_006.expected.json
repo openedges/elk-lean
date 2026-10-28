@@ -3,26 +3,26 @@
     {
       "height": 30,
       "id": "n0",
-      "width": 30,
+      "width": 105,
       "x": 100,
       "y": 0
     },
     {
       "height": 30,
       "id": "n1",
-      "width": 30,
-      "x": 145,
+      "width": 105,
+      "x": 220,
       "y": 0
     },
     {
       "height": 30,
       "id": "n2",
-      "width": 30,
-      "x": 190,
+      "width": 105,
+      "x": 340,
       "y": 0
     },
     {
-      "height": 50,
+      "height": 73,
       "id": "n3",
       "layoutOptions": {
         "elk.rectpacking.inNewRow": "true"
@@ -32,28 +32,28 @@
       "y": 45
     },
     {
-      "height": 30,
+      "height": 73,
       "id": "n4",
       "width": 30,
       "x": 145,
       "y": 45
     },
     {
-      "height": 30,
+      "height": 73,
       "id": "n5",
       "width": 30,
       "x": 190,
       "y": 45
     },
     {
-      "height": 30,
+      "height": 73,
       "id": "n6",
       "width": 30,
       "x": 235,
       "y": 45
     },
     {
-      "height": 30,
+      "height": 73,
       "id": "n7",
       "width": 30,
       "x": 280,
@@ -67,80 +67,80 @@
       "y": 45
     },
     {
-      "height": 30,
+      "height": 73,
       "id": "n9",
       "width": 30,
       "x": 370,
       "y": 45
     },
     {
-      "height": 30,
+      "height": 73,
       "id": "n10",
       "width": 30,
       "x": 415,
       "y": 45
     },
     {
-      "height": 10,
+      "height": 34,
       "id": "n11",
-      "width": 100,
+      "width": 113,
       "x": 100,
       "y": 133
     },
     {
       "height": 34,
       "id": "n12",
-      "width": 69,
-      "x": 215,
+      "width": 72.25,
+      "x": 228,
       "y": 133
     },
     {
-      "height": 30,
+      "height": 34,
       "id": "n13",
-      "width": 30,
-      "x": 299,
+      "width": 33.25,
+      "x": 315.25,
       "y": 133
     },
     {
-      "height": 30,
+      "height": 34,
       "id": "n14",
-      "width": 30,
-      "x": 344,
+      "width": 33.25,
+      "x": 363.5,
       "y": 133
     },
     {
-      "height": 30,
+      "height": 34,
       "id": "n15",
-      "width": 30,
-      "x": 389,
+      "width": 33.25,
+      "x": 411.75,
       "y": 133
     },
     {
       "height": 30,
       "id": "n16",
-      "width": 30,
+      "width": 75,
       "x": 100,
       "y": 182
     },
     {
       "height": 30,
       "id": "n17",
-      "width": 30,
-      "x": 145,
-      "y": 182
-    },
-    {
-      "height": 30,
-      "id": "n18",
-      "width": 30,
+      "width": 75,
       "x": 190,
       "y": 182
     },
     {
       "height": 30,
+      "id": "n18",
+      "width": 75,
+      "x": 280,
+      "y": 182
+    },
+    {
+      "height": 30,
       "id": "n19",
-      "width": 30,
-      "x": 235,
+      "width": 75,
+      "x": 370,
       "y": 182
     }
   ],

@@ -4,29 +4,29 @@
       "height": 10,
       "id": "n0",
       "width": 10,
-      "x": 17,
-      "y": 32
+      "x": 25,
+      "y": 40
     },
     {
       "height": 20,
       "id": "n1",
       "width": 20,
-      "x": 12,
-      "y": 67
+      "x": 20,
+      "y": 75
     },
     {
       "height": 5,
       "id": "n2",
       "width": 30,
-      "x": 47,
-      "y": 34.5
+      "x": 55,
+      "y": 42.5
     },
     {
       "height": 30,
       "id": "n3",
       "width": 5,
-      "x": 59.5,
-      "y": 62
+      "x": 67.5,
+      "y": 70
     }
   ],
   "edges": [
@@ -35,14 +35,20 @@
       "id": "e0",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 30,
+              "y": 53
+            }
+          ],
           "endPoint": {
-            "x": 22,
-            "y": 67
+            "x": 30,
+            "y": 75
           },
           "id": "e0_s0",
           "startPoint": {
-            "x": 22,
-            "y": 42
+            "x": 30,
+            "y": 50
           }
         }
       ],
@@ -58,14 +64,20 @@
       "id": "e1",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 70,
+              "y": 53
+            }
+          ],
           "endPoint": {
-            "x": 62,
-            "y": 62
+            "x": 70,
+            "y": 70
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 62,
-            "y": 39.5
+            "x": 70,
+            "y": 47.5
           }
         }
       ],
@@ -77,13 +89,13 @@
       ]
     }
   ],
-  "height": 89,
+  "height": 105,
   "id": "root",
   "layoutOptions": {
     "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
     "org.eclipse.elk.separateConnectedComponents": false
   },
-  "width": 84,
+  "width": 100,
   "x": 0,
   "y": 0
 }

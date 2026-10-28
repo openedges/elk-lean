@@ -6,8 +6,8 @@
           "height": 18.671,
           "id": "n0",
           "width": 62.433,
-          "x": 12,
-          "y": 12
+          "x": 19.999999999999996,
+          "y": 20
         },
         {
           "height": 1,
@@ -16,8 +16,8 @@
             "org.eclipse.elk.mrtree.treeLevel": 1
           },
           "width": 54,
-          "x": 94.2165,
-          "y": 20.8355
+          "x": 102.2165,
+          "y": 28.8355
         }
       ],
       "edges": [
@@ -28,18 +28,18 @@
             {
               "bendPoints": [
                 {
-                  "x": 89.43299999999999,
-                  "y": 21.3355
+                  "x": 97.43299999999999,
+                  "y": 29.3355
                 }
               ],
               "endPoint": {
-                "x": 94.2165,
-                "y": 21.3355
+                "x": 102.2165,
+                "y": 29.3355
               },
               "id": "e0_s0",
               "startPoint": {
-                "x": 74.43299999999999,
-                "y": 21.3355
+                "x": 82.43299999999999,
+                "y": 29.3355
               }
             }
           ],
@@ -51,7 +51,7 @@
           ]
         }
       ],
-      "height": 42.671,
+      "height": 58.671,
       "id": "inner",
       "layoutOptions": {
         "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
@@ -60,16 +60,16 @@
         "org.eclipse.elk.mrtree.edgeEndTextureLength": 0,
         "org.eclipse.elk.spacing.edgeNode": 15
       },
-      "width": 164.433,
-      "x": 12,
-      "y": 12
+      "width": 180.433,
+      "x": 20,
+      "y": 19.999999999999996
     },
     {
       "height": 20,
       "id": "other",
       "width": 20,
-      "x": 84.2165,
-      "y": 74.3355
+      "x": 100.2165,
+      "y": 98.3355
     }
   ],
   "edges": [
@@ -78,14 +78,20 @@
       "id": "oe",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 110.2165,
+              "y": 81.67099999999999
+            }
+          ],
           "endPoint": {
-            "x": 94.2165,
-            "y": 74.3355
+            "x": 110.2165,
+            "y": 98.3355
           },
           "id": "oe_s0",
           "startPoint": {
-            "x": 94.2165,
-            "y": 54.67099999999999
+            "x": 110.2165,
+            "y": 78.67099999999999
           }
         }
       ],
@@ -97,12 +103,12 @@
       ]
     }
   ],
-  "height": 117.67099999999999,
+  "height": 157.671,
   "id": "outer",
   "layoutOptions": {
     "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree"
   },
-  "width": 188.433,
+  "width": 220.433,
   "x": 0,
   "y": 0
 }

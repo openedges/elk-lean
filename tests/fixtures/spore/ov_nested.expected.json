@@ -6,32 +6,32 @@
           "height": 30,
           "id": "g1a",
           "width": 40,
-          "x": 12,
-          "y": 12
+          "x": 8,
+          "y": 8
         },
         {
           "height": 30,
           "id": "g1b",
           "width": 40,
-          "x": 72,
-          "y": 42
+          "x": 56,
+          "y": 32
         },
         {
           "height": 30,
           "id": "g1c",
           "width": 30,
-          "x": 102,
-          "y": 92
+          "x": 80,
+          "y": 70
         }
       ],
-      "height": 134,
+      "height": 108,
       "id": "g1",
       "layoutOptions": {
         "algorithm": "org.eclipse.elk.sporeOverlap"
       },
-      "width": 144,
-      "x": 12,
-      "y": 12.545454545454547
+      "width": 118,
+      "x": 8,
+      "y": 8
     },
     {
       "children": [
@@ -39,47 +39,47 @@
           "height": 30,
           "id": "g2a",
           "width": 40,
-          "x": 12,
-          "y": 12
+          "x": 8,
+          "y": 8
         },
         {
           "height": 30,
           "id": "g2b",
           "width": 40,
-          "x": 70.125,
-          "y": 68.47058823529412
+          "x": 53.375,
+          "y": 51.05882352941177
         },
         {
           "height": 30,
           "id": "g2c",
           "width": 30,
-          "x": 20.125,
-          "y": 62
+          "x": 15.375,
+          "y": 46
         }
       ],
-      "height": 110.47058823529412,
+      "height": 89.05882352941177,
       "id": "g2",
       "layoutOptions": {
         "algorithm": "org.eclipse.elk.sporeCompaction"
       },
-      "width": 122.125,
-      "x": 168.25,
-      "y": 166.54545454545456
+      "width": 101.375,
+      "x": 125.88588534107402,
+      "y": 124
     },
     {
       "height": 50,
       "id": "z",
       "width": 50,
-      "x": 176,
-      "y": 12
+      "x": 134,
+      "y": 39
     }
   ],
-  "height": 289.01604278074865,
+  "height": 221.05882352941177,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeOverlap"
   },
-  "width": 302.375,
+  "width": 235.26088534107402,
   "x": 0,
   "y": 0
 }

@@ -165,12 +165,14 @@ def metaSuite : Suite := suite "spore.meta" do
   checkEqR "structure type" s.type LayoutOptionType.enum
   checkEqR "structure visibility" s.visibility LayoutOptionVisibility.advanced
   checkEq "structure group" s.group "structure"
-  -- Rust: enum options of this plugin have neither choices nor a parser
-  check "structure has no parser" s.parser.isNone
-  check "structure cannot be parsed" (!s.canParseValue)
-  check "structure no choices" s.choices.isEmpty
+  -- Java: the enum options carry the choices and the parser of their enum class (elk-rs: neither;
+  -- agent OPT)
+  check "structure has a parser" s.parser.isSome
+  check "structure can be parsed" s.canParseValue
+  checkEq "structure choices" s.choices #["DELAUNAY_TRIANGULATION"]
   let t ← opt "org.eclipse.elk.processingOrder.treeConstruction"
-  check "tree construction string value is not parsed" (t.parseValue "MAXIMUM_SPANNING_TREE").isNone
+  check "tree construction string value is parsed"
+    ((t.parseValue "MAXIMUM_SPANNING_TREE").bind PropCodec.dec == some TreeConstructionStrategy.maximumSpanningTree)
   checkEq "tree construction name" t.name "Tree Construction Strategy"
   checkEqR "tree construction default" (t.defaultValue.bind PropCodec.dec) (some TreeConstructionStrategy.minimumSpanningTree)
   let c ← opt "org.eclipse.elk.processingOrder.spanningTreeCostFunction"
@@ -484,8 +486,11 @@ def shrinkSuite : Suite := suite "spore.shrink" do
 
 /-- `scanline_overlap_removal_test.rs` `build_graph`. -/
 private def scanlineGraph (runScanline : Bool) : ElkGraph × NodeId × Array NodeId :=
+  -- the elk-rs test runs with the core node spacing 20 (the SPOrE default is 8, Java's
+  -- `SporeOverlapRemovalOptions.SPACING_NODE_NODE`)
   mkElk #[(0.0, 30.0, 160.0, 20.0), (150.0, 40.0, 160.0, 20.0), (150.0, 0.0, 20.0, 20.0), (150.0, 70.0, 20.0, 20.0)]
-    fun g root => g.setNodeProp root SporeOverlapRemovalOptions.OVERLAP_REMOVAL_RUN_SCANLINE runScanline
+    fun g root => (g.setNodeProp root SporeOverlapRemovalOptions.OVERLAP_REMOVAL_RUN_SCANLINE runScanline).setNodeProp
+      root CoreOptions.SPACING_NODE_NODE 20.0
 
 /-- `has_overlaps`: some pair of nodes overlaps (negative shortest distance). -/
 private def hasOverlaps (g : ElkGraph) (root : NodeId) : Bool := Id.run do

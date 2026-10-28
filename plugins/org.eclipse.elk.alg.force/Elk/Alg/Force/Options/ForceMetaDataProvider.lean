@@ -9,11 +9,14 @@ generated from `Force.melk`. `metaDataProvider.apply` registers, in the order of
 the algorithm entry `org.eclipse.elk.force`, the five force options, and the option supports
 (`registerSupports`, in Rust order) with their algorithm specific defaults.
 
-Rust semantics kept on purpose (they differ from the generated Java provider):
-* The ENUM option `MODEL` is registered **without** enum choices and **without** a parser
-  (elk-rs `register_option` never calls `.choices(..)`/`.parser(..)` here). Consequently a string
-  value such as `"EADES"` coming from JSON or `.elkt` cannot be parsed and is ignored by the importers,
-  exactly like in the elk-rs oracle; the model can only be selected by storing the property directly.
+The ENUM option `MODEL` is registered with its choices and the enum parser like the Java provider,
+so `"elk.force.model": "EADES"` from JSON or `.elkt` selects the Eades model (elk-rs registers it
+without choices and parser and ignores the string, which elk-lean followed before agent OPT:
+"oracle 특이점" F1). The algorithm specific defaults of the option supports are those of the
+redeclared `ForceOptions` constants (Java `addOptionSupport(.., X_DEFAULT)`; the aspect ratio is
+`1.6f` widened to double, elk-rs registers `1.6`).
+
+Rust semantics kept:
 * No legacy ids and no option dependencies are registered.
 * Option supports that name an option nobody registered are dropped by
   `LayoutMetaDataService.applyRegistry`, like `Registry::apply_dependencies` does.
@@ -42,6 +45,15 @@ def registerOption {α : Type} [PropCodec α] (r : Registry) (property : Propert
     { id := property.id, type := optionType, defaultValue := propertyDefault property, name,
       description, targets := EnumSet.of targets, visibility := .visible, group := "", lowerBound }
 
+/-- `register_option` for an ENUM option: as `registerOption`, plus the Java enum choices (constant
+names in ordinal order) and the enum parser (Java `LayoutOptionData.parseValue` of an `ENUM`). -/
+def registerEnumOption {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+    (name description : String) (targets : Array LayoutOptionTarget) : Registry :=
+  r.registerOption
+    { id := property.id, type := .enum, defaultValue := propertyDefault property, name,
+      description, targets := EnumSet.of targets, visibility := .visible, group := "",
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+
 /-- elk-rs `register_algorithm`: "ELK Force" with the features `MULTI_EDGES` and `EDGE_LABELS`. -/
 def algorithmData : LayoutAlgorithmData :=
   let d : LayoutAlgorithmData :=
@@ -55,7 +67,7 @@ def algorithmData : LayoutAlgorithmData :=
 
 /-- elk-rs `register_options`. -/
 def registerOptions (r : Registry) : Registry :=
-  let r := registerOption r ForceOptions.MODEL .enum "Force Model"
+  let r := registerEnumOption r ForceOptions.MODEL "Force Model"
     "Determines the model for force calculation." targetParents
   let r := registerOption r ForceOptions.ITERATIONS .int "Iterations"
     "The number of iterations on the force model." targetParents (some (OptionBound.atLeastInt 1))
@@ -69,15 +81,15 @@ def registerOptions (r : Registry) : Registry :=
     "Factor for repulsive forces in Eades' model." targetParents (some (OptionBound.greaterThan 0.0))
 
 /-- elk-rs `register_supports`: the options known to the algorithm with their algorithm specific
-default (registration order of Rust). -/
+default (registration order of Rust; the values of the redeclared `ForceOptions` constants). -/
 def optionSupports : Array (String × Option PropValue) := #[
-  (CoreOptions.PRIORITY.id, some (.int 1)),
-  (CoreOptions.SPACING_NODE_NODE.id, some (.double 80.0)),
-  (CoreOptions.SPACING_EDGE_LABEL.id, some (.double 5.0)),
-  (CoreOptions.ASPECT_RATIO.id, some (.double 1.6)),
-  (CoreOptions.RANDOM_SEED.id, some (.int 1)),
-  (CoreOptions.SEPARATE_CONNECTED_COMPONENTS.id, some (.bool true)),
-  (CoreOptions.PADDING.id, some (PropCodec.enc (ElkPadding.ofAny 50.0))),
+  (CoreOptions.PRIORITY.id, propertyDefault ForceOptions.PRIORITY),
+  (CoreOptions.SPACING_NODE_NODE.id, propertyDefault ForceOptions.SPACING_NODE_NODE),
+  (CoreOptions.SPACING_EDGE_LABEL.id, propertyDefault ForceOptions.SPACING_EDGE_LABEL),
+  (CoreOptions.ASPECT_RATIO.id, propertyDefault ForceOptions.ASPECT_RATIO),
+  (CoreOptions.RANDOM_SEED.id, propertyDefault ForceOptions.RANDOM_SEED),
+  (CoreOptions.SEPARATE_CONNECTED_COMPONENTS.id, propertyDefault ForceOptions.SEPARATE_CONNECTED_COMPONENTS),
+  (CoreOptions.PADDING.id, propertyDefault ForceOptions.PADDING),
   (CoreOptions.INTERACTIVE.id, none),
   (CoreOptions.PORT_CONSTRAINTS.id, none),
   (CoreOptions.EDGE_LABELS_INLINE.id, some (.bool false)),
@@ -96,7 +108,7 @@ def optionSupports : Array (String × Option PropValue) := #[
   (CoreOptions.TOPDOWN_SCALE_FACTOR.id, none),
   (CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH.id, none),
   (CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO.id, none),
-  (CoreOptions.TOPDOWN_NODE_TYPE.id, some (PropCodec.enc TopdownNodeTypes.hierarchicalNode))]
+  (CoreOptions.TOPDOWN_NODE_TYPE.id, propertyDefault ForceOptions.TOPDOWN_NODE_TYPE)]
 
 /-- elk-rs `register_supports`. -/
 def registerSupports (r : Registry) : Registry :=

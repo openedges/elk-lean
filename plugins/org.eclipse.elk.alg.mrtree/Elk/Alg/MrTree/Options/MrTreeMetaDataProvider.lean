@@ -10,12 +10,14 @@ of the Rust `apply`: the algorithm `org.eclipse.elk.mrtree` (category `org.eclip
 `DISCONNECTED`), the eight mrtree options, and the option supports (Rust order) with their algorithm
 specific defaults.
 
+The ENUM options (`weighting`, `edgeRoutingMode`, `searchOrder`) are registered with their choices
+and the enum parser like the Java provider, so their string values from JSON / `.elkt` take effect
+(elk-rs registers neither and drops the strings, which elk-lean followed before agent OPT). The
+algorithm specific defaults of the option supports are those of the redeclared `MrTreeOptions`
+constants (aspect ratio `1.6f` widened to double; elk-rs `1.6`).
+
 Rust semantics kept on purpose (they differ from the generated Java provider):
-* ENUM options (`weighting`, `edgeRoutingMode`, `searchOrder`) and the OBJECT option
-  `graphProperties` are registered **without** enum choices and **without** a parser
-  (`register_option` never attaches one). A string value for them in a JSON or `.elkt` graph cannot
-  be parsed and is dropped by the importers, exactly like in the elk-rs oracle; typed values set
-  through the property API work.
+* The OBJECT option `graphProperties` (an internal property in Java) is registered without a parser.
 * No legacy ids and no option dependencies are registered; the only bounds are the inclusive lower
   bounds `edgeEndTextureLength >= 0.0` and `treeLevel >= 0`.
 * `init_reflect` (registration of clone/default functions for the option value types) has no Lean
@@ -46,6 +48,15 @@ def registerOption {α : Type} [PropCodec α] (r : Registry) (property : Propert
     { id := property.id, type := optionType, defaultValue := propertyDefault property, name,
       description, targets := EnumSet.of targets, visibility, group := "", lowerBound }
 
+/-- `register_option` for an ENUM option: as `registerOption`, plus the Java enum choices (constant
+names in ordinal order) and the enum parser (Java `LayoutOptionData.parseValue` of an `ENUM`). -/
+def registerEnumOption {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+    (name description : String) (targets : Array LayoutOptionTarget) : Registry :=
+  r.registerOption
+    { id := property.id, type := .enum, defaultValue := propertyDefault property, name,
+      description, targets := EnumSet.of targets, visibility := .visible, group := "",
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+
 /-- elk-rs `register_algorithm`: "ELK Mr. Tree" with the feature `DISCONNECTED`. -/
 def algorithmData : LayoutAlgorithmData :=
   let d : LayoutAlgorithmData :=
@@ -70,25 +81,25 @@ def registerOptions (r : Registry) : Registry :=
   let r := registerOption r MrTreeOptions.POSITION_CONSTRAINT .int "Position Constraint"
     "When set to a positive number this option will force the algorithm to place the node to the specified position within the tree layer if weighting is set to constraint."
     targetNodes
-  let r := registerOption r MrTreeOptions.WEIGHTING .enum "Weighting of Nodes"
+  let r := registerEnumOption r MrTreeOptions.WEIGHTING "Weighting of Nodes"
     "Which weighting to use when computing a node order." targetParents
-  let r := registerOption r MrTreeOptions.EDGE_ROUTING_MODE .enum "Edge Routing Mode"
+  let r := registerEnumOption r MrTreeOptions.EDGE_ROUTING_MODE "Edge Routing Mode"
     "Chooses an edge routing algorithm." targetParents
-  let r := registerOption r MrTreeOptions.SEARCH_ORDER .enum "Search Order"
+  let r := registerEnumOption r MrTreeOptions.SEARCH_ORDER "Search Order"
     "Which search order to use when computing a spanning tree." targetParents
   registerOption r MrTreeOptions.GRAPH_PROPERTIES .object "Graph Properties"
     "Properties of the graph that can be used to skip unnecessary processing steps." targetParents
     .advanced
 
 /-- elk-rs `register_supports`: the options known to the algorithm with their algorithm specific
-default (registration order of Rust). -/
+default (registration order of Rust; the values of the redeclared `MrTreeOptions` constants). -/
 def optionSupports : Array (String × Option PropValue) := #[
-  (CoreOptions.PADDING.id, some (PropCodec.enc (ElkPadding.ofAny 20.0))),
+  (CoreOptions.PADDING.id, propertyDefault MrTreeOptions.PADDING),
   (CoreOptions.SPACING_NODE_NODE.id, some (.double 20.0)),
-  (CoreOptions.SPACING_EDGE_NODE.id, some (.double 3.0)),
-  (CoreOptions.ASPECT_RATIO.id, some (.double 1.6)),
-  (CoreOptions.PRIORITY.id, some (.int 1)),
-  (CoreOptions.SEPARATE_CONNECTED_COMPONENTS.id, some (.bool true)),
+  (CoreOptions.SPACING_EDGE_NODE.id, propertyDefault MrTreeOptions.SPACING_EDGE_NODE),
+  (CoreOptions.ASPECT_RATIO.id, propertyDefault MrTreeOptions.ASPECT_RATIO),
+  (CoreOptions.PRIORITY.id, propertyDefault MrTreeOptions.PRIORITY),
+  (CoreOptions.SEPARATE_CONNECTED_COMPONENTS.id, propertyDefault MrTreeOptions.SEPARATE_CONNECTED_COMPONENTS),
   (CoreOptions.DEBUG_MODE.id, none),
   (CoreOptions.DIRECTION.id, some (PropCodec.enc Direction.undefined)),
   (CoreOptions.INTERACTIVE.id, none),
@@ -104,7 +115,7 @@ def optionSupports : Array (String × Option PropValue) := #[
   (CoreOptions.TOPDOWN_SCALE_FACTOR.id, none),
   (CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH.id, none),
   (CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO.id, none),
-  (CoreOptions.TOPDOWN_NODE_TYPE.id, some (PropCodec.enc TopdownNodeTypes.hierarchicalNode)),
+  (CoreOptions.TOPDOWN_NODE_TYPE.id, propertyDefault MrTreeOptions.TOPDOWN_NODE_TYPE),
   (MrTreeOptions.WEIGHTING.id, none),
   (MrTreeOptions.SEARCH_ORDER.id, none),
   (MrTreeOptions.EDGE_ROUTING_MODE.id, none),

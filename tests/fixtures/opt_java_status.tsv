@@ -1,0 +1,316 @@
+# elk-rs oracle fixtures re-pinned by agent OPT (Java option semantics): dir, fixture, old->new outcome, comparison of the new elk-lean result with ELK Java 0.12.0 (java_exact: tol 0; java_equal: 1e-6, edge sections Java does not write ignored; java_differs: first difference; java_error*: Java's exception)
+dir	fixture	change	java
+tests/fixtures/force	force_aspect_seed4	ok->ok	java_exact
+tests/fixtures/force	force_bends_mixed_seed9	ok->ok	java_exact
+tests/fixtures/force	force_bends_seed3	ok->ok	java_exact
+tests/fixtures/force	force_chain3_seed3	ok->ok	java_exact
+tests/fixtures/force	force_chain5_noseed	ok->ok	java_exact
+tests/fixtures/force	force_components_seed4	ok->ok	java_exact
+tests/fixtures/force	force_cycle4_seed2	ok->ok	java_exact
+tests/fixtures/force	force_eades_ignored_seed3	ok->ok	java_equal
+tests/fixtures/force	force_fixedsize_seed3	ok->ok	java_exact
+tests/fixtures/force	force_interactive	ok->ok	java_exact
+tests/fixtures/force	force_iter1000_seed3	ok->ok	java_exact
+tests/fixtures/force	force_labels_inline_seed6	ok->ok	java_exact
+tests/fixtures/force	force_labels_seed6	ok->ok	java_exact
+tests/fixtures/force	force_microlayout_seed3	ok->ok	java_exact
+tests/fixtures/force	force_multiedge_seed3	ok->ok	java_exact
+tests/fixtures/force	force_neg_seed	ok->ok	java_exact
+tests/fixtures/force	force_nested_seed3	ok->ok	java_exact
+tests/fixtures/force	force_nosep_seed3	ok->ok	java_exact
+tests/fixtures/force	force_omit_micro_seed3	ok->ok	java_exact
+tests/fixtures/force	force_priority_seed1	ok->ok	java_exact
+tests/fixtures/force	force_rand15_labels_bends	ok->ok	java_differs /edges[12]/labels[0]/x: 827.8080555641832 vs 210.59875369036223
+tests/fixtures/force	force_rand20_seed21	ok->ok	java_exact
+tests/fixtures/force	force_rand25_comps_seed8	ok->ok	java_exact
+tests/fixtures/force	force_rand40_seed5	ok->ok	java_exact
+tests/fixtures/force	force_ring12_seed11	ok->ok	java_exact
+tests/fixtures/force	force_samepos_interactive	ok->ok	java_exact
+tests/fixtures/force	force_single	ok->ok	java_exact
+tests/fixtures/force	force_tree6_seed7	ok->ok	java_exact
+tests/fixtures/force	force_triangle_seed5	ok->ok	java_exact
+tests/fixtures/force	force_zero_size_seed3	ok->ok	java_exact
+tests/fixtures/force	stress_components	ok->ok	java_exact
+tests/fixtures/force	stress_dimension_x_ignored	ok->ok	java_exact
+tests/fixtures/force	stress_fixed_interactive	ok->ok	java_exact
+tests/fixtures/force	stress_interactive	ok->ok	java_exact
+tests/fixtures/force	stress_interactive_ring	ok->ok	java_exact
+tests/fixtures/force	stress_labels	ok->ok	java_exact
+tests/fixtures/force_enum	eades_bends_seed3	ok->ok	java_exact
+tests/fixtures/force_enum	eades_chain3_seed3	ok->ok	java_exact
+tests/fixtures/force_enum	eades_chain6_noseed	ok->ok	java_exact
+tests/fixtures/force_enum	eades_components_seed4	ok->ok	java_equal
+tests/fixtures/force_enum	eades_cycle5_seed2	ok->ok	java_equal
+tests/fixtures/force_enum	eades_explicit_fr_seed3	ok->ok	java_exact
+tests/fixtures/force_enum	eades_interactive	ok->ok	java_equal
+tests/fixtures/force_enum	eades_labels_inline_seed6	ok->ok	java_exact
+tests/fixtures/force_enum	eades_labels_seed6	ok->ok	java_exact
+tests/fixtures/force_enum	eades_ordinal_seed3	ok->ok	java_equal
+tests/fixtures/force_enum	eades_params_seed8	ok->ok	java_exact
+tests/fixtures/force_enum	eades_priority_seed1	ok->ok	java_exact
+tests/fixtures/force_enum	eades_rand15_labels_seed13	ok->ok	java_differs /edges[3]/labels[0]/x: 255.8812509923552 vs 321.98716459537013
+tests/fixtures/force_enum	eades_rand20_seed21	ok->ok	java_equal
+tests/fixtures/force_enum	eades_rand30_comps_seed5	ok->ok	java_equal
+tests/fixtures/force_enum	eades_samepos_interactive	ok->ok	java_differs /children[0]/y: 146.04646964475194 vs 50
+tests/fixtures/force_enum	eades_tree6_seed7	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimXY_interactive	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimXY_rand15	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimX_fixed_interactive	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimX_interactive	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimX_rand15	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimY_components	ok->ok	java_exact
+tests/fixtures/force_enum	stress_dimY_interactive	ok->ok	java_exact
+tests/fixtures/mrtree	corpus_000_algebraic_heateropentank_HeaterOpenTank	ok->ok	java_exact
+tests/fixtures/mrtree	corpus_090_gt_diningphilosophers_DiningPhilosophers	ok->ok	java_differs /children[0]/x: 618.5 vs 618
+tests/fixtures/mrtree	corpus_180_ptolemy_execdemos_demos_OrderedMerge	ok->ok	java_exact
+tests/fixtures/mrtree	corpus_270_wireless_evaderandpursuer_EvaderAndPursu	ok->ok	java_differs /edges[3]/sections[0]/endPoint/x: 126.16666666666666 vs 105.83333333333333
+tests/fixtures/mrtree	corpus_450_ptolemy_execdemos_demos_Controllers	ok->ok	java_exact
+tests/fixtures/mrtree	corpus_540_wireless_smartparking_SmartParking	ok->ok	java_exact
+tests/fixtures/mrtree	hand_apportion	ok->ok	java_exact
+tests/fixtures/mrtree	hand_apportion_wide	ok->ok	java_exact
+tests/fixtures/mrtree	hand_binary_down	ok->ok	java_exact
+tests/fixtures/mrtree	hand_binary_left	ok->ok	java_exact
+tests/fixtures/mrtree	hand_binary_right	ok->ok	java_exact
+tests/fixtures/mrtree	hand_binary_up	ok->ok	java_exact
+tests/fixtures/mrtree	hand_chain	ok->ok	java_exact
+tests/fixtures/mrtree	hand_compact_down_tex0	ok->ok	java_exact
+tests/fixtures/mrtree	hand_compact_down_tex12	ok->ok	java_exact
+tests/fixtures/mrtree	hand_compact_left_tex0	ok->ok	java_differs /children[4]/x: 84.5 vs 80
+tests/fixtures/mrtree	hand_compact_left_tex12	ok->ok	java_differs /children[4]/x: 84.5 vs 80
+tests/fixtures/mrtree	hand_compact_right_tex0	ok->ok	java_differs /children[4]/x: 115.5 vs 115
+tests/fixtures/mrtree	hand_compact_right_tex12	ok->ok	java_differs /children[4]/x: 115.5 vs 115
+tests/fixtures/mrtree	hand_compact_up_tex0	ok->ok	java_differs /children[2]/y: 105.0 vs 100
+tests/fixtures/mrtree	hand_compact_up_tex12	ok->ok	java_differs /children[2]/y: 105.0 vs 100
+tests/fixtures/mrtree	hand_components	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_down_tex0	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_down_tex12	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_left_tex0	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_left_tex12	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_right_tex0	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_right_tex12	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_up_tex0	ok->ok	java_exact
+tests/fixtures/mrtree	hand_levels_up_tex12	ok->ok	java_exact
+tests/fixtures/mrtree	hand_no_separation	ok->ok	java_exact
+tests/fixtures/mrtree	hand_star	ok->ok	java_exact
+tests/fixtures/mrtree	mt_big_006	ok->ok	java_exact
+tests/fixtures/mrtree	mt_big_134	ok->ok	java_differs /children[1]/y: 114.8 vs 114.613
+tests/fixtures/mrtree	mt_big_262	ok->ok	java_exact
+tests/fixtures/mrtree	mt_compact_069	ok->ok	java_exact
+tests/fixtures/mrtree	mt_compact_197	ok->ok	java_differs /children[0]/y: 426.46349999999995 vs 461.5
+tests/fixtures/mrtree	mt_cyclic_002	ok->error	java_error_differs java.lang.StringIndexOutOfBoundsException: Range [0, 5) out of bounds for length 4
+tests/fixtures/mrtree	mt_cyclic_130	ok->ok	java_differs /children[0]/children[2]/y: 453.3 vs 412.55
+tests/fixtures/mrtree	mt_cyclic_258	ok->ok	java_exact
+tests/fixtures/mrtree	mt_dense_067	ok->ok	java_differs /children[2]/y: 278.02049999999997 vs 242.4925
+tests/fixtures/mrtree	mt_dense_195	ok->ok	java_differs /edges[6]/sections[0]/bendPoints: length 9 vs 7
+tests/fixtures/mrtree	mt_forest_001	ok->ok	java_exact
+tests/fixtures/mrtree	mt_forest_129	ok->ok	java_exact
+tests/fixtures/mrtree	mt_forest_257	ok->ok	java_exact
+tests/fixtures/mrtree	mt_labels_199	ok->ok	java_exact
+tests/fixtures/mrtree	mt_levels_004	ok->ok	java_exact
+tests/fixtures/mrtree	mt_levels_132	ok->ok	java_exact
+tests/fixtures/mrtree	mt_levels_260	ok->ok	java_exact
+tests/fixtures/mrtree	mt_tree_064	ok->ok	java_differs /children[2]/y: 261.55 vs 239.6
+tests/fixtures/mrtree	mt_tree_192	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_apportion	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_apportion_wide	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_bfs_two_parents	error->ok	java_equal
+tests/fixtures/mrtree/enum	hand_binary_down	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_binary_left	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_binary_right	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_binary_up	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_chain	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_compact_down_tex0	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_compact_down_tex12	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_compact_left_tex0	ok->ok	java_differs /children[4]/x: 84.5 vs 80
+tests/fixtures/mrtree/enum	hand_compact_left_tex12	ok->ok	java_differs /children[4]/x: 84.5 vs 80
+tests/fixtures/mrtree/enum	hand_compact_right_tex0	ok->ok	java_differs /children[4]/x: 115.5 vs 115
+tests/fixtures/mrtree/enum	hand_compact_right_tex12	ok->ok	java_differs /children[4]/x: 115.5 vs 115
+tests/fixtures/mrtree/enum	hand_compact_up_tex0	ok->ok	java_differs /children[2]/y: 105.0 vs 100
+tests/fixtures/mrtree/enum	hand_compact_up_tex12	ok->ok	java_differs /children[2]/y: 105.0 vs 100
+tests/fixtures/mrtree/enum	hand_components	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_interactive_constraint	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_down_tex0	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_down_tex12	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_left_tex0	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_left_tex12	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_right_tex0	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_right_tex12	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_up_tex0	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_levels_up_tex12	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_no_separation	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_route_avoid_overlap	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_route_middle_to_middle	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_route_none	ok->error	java_error_equal
+tests/fixtures/mrtree/enum	hand_search_bfs	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_search_dfs	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_star	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_weighting_constraint	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_weighting_descendants	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_weighting_fan	ok->ok	java_exact
+tests/fixtures/mrtree/enum	hand_weighting_model_order	ok->ok	java_exact
+tests/fixtures/mrtree/enum	mt_big_006	error->ok	java_error java.lang.StringIndexOutOfBoundsException: Range [0, 12) out of bounds for length 11
+tests/fixtures/mrtree/enum	mt_big_134	ok->ok	java_exact
+tests/fixtures/mrtree/enum	mt_compact_189	ok->error	java_error_equal
+tests/fixtures/mrtree/enum	mt_cyclic_114	ok->ok	java_exact
+tests/fixtures/mrtree/enum	mt_dense_043	ok->ok	java_differs /edges[40]/sections: only in java
+tests/fixtures/mrtree/enum	mt_dense_171	ok->ok	java_differs /children[0]/x: 145.75 vs 124.75
+tests/fixtures/mrtree/enum	mt_forest_097	ok->ok	java_exact
+tests/fixtures/mrtree/enum	mt_levels_084	ok->ok	java_exact
+tests/fixtures/mrtree/enum	mt_tree_008	ok->ok	java_differs /children[12]/x: 160.0 vs 115
+tests/fixtures/mrtree/enum	mt_tree_136	ok->error	java_error_equal
+tests/fixtures/radial	rad_all_options	ok->error	java_error_equal
+tests/fixtures/radial	rad_center_root	ok->ok	java_exact
+tests/fixtures/radial	rad_compact_radial	ok->ok	java_equal
+tests/fixtures/radial	rad_compact_wedge	ok->ok	java_exact
+tests/fixtures/radial	rad_fixed_size	ok->ok	java_exact
+tests/fixtures/radial	rad_hierarchy	ok->ok	java_equal
+tests/fixtures/radial	rad_labels	ok->ok	java_exact
+tests/fixtures/radial	rad_leaf_wedge	ok->ok	java_equal
+tests/fixtures/radial	rad_opt_crossing	ok->ok	java_exact
+tests/fixtures/radial	rad_opt_edgelength	ok->ok	java_equal
+tests/fixtures/radial	rad_opt_edgelength_pos	ok->ok	java_exact
+tests/fixtures/radial	rad_outgoing_angles	ok->ok	java_exact
+tests/fixtures/radial	rad_radius_padding	ok->ok	java_equal
+tests/fixtures/radial	rad_random24_wedge	ok->ok	java_exact
+tests/fixtures/radial	rad_random30	ok->error	java_error_equal
+tests/fixtures/radial	rad_root_choice	ok->ok	java_exact
+tests/fixtures/radial	rad_rotate	ok->ok	java_exact
+tests/fixtures/radial	rad_rotate_wedge	ok->ok	java_equal
+tests/fixtures/radial	rad_sorter_id	ok->ok	java_exact
+tests/fixtures/radial	rad_sorter_polar	ok->error	java_error_equal
+tests/fixtures/radial	rad_star_overlap	ok->ok	java_exact
+tests/fixtures/radial	rad_tree_basic	ok->ok	java_exact
+tests/fixtures/radial	rnd1_03	ok->ok	java_exact
+tests/fixtures/radial	rnd1_22	ok->error	java_error_equal
+tests/fixtures/radial	rnd1_40	ok->error	java_error_equal
+tests/fixtures/radial	rnd1_58	ok->ok	java_exact
+tests/fixtures/radial	rnd2_14	ok->error	java_error_equal
+tests/fixtures/radial	rnd2_31	ok->error	java_error_equal
+tests/fixtures/radial	rnd2_49	ok->error	java_error_equal
+tests/fixtures/radial	rnd2_65	ok->ok	java_differs /children[0]/x: nan vs None
+tests/fixtures/radial	rnd3_02	ok->error	java_error_equal
+tests/fixtures/radial	rnd3_18	ok->error	java_error_equal
+tests/fixtures/radial	rnd3_34	ok->ok	java_exact
+tests/fixtures/radial	rnd3_55	ok->ok	java_exact
+tests/fixtures/radial	rnd4_13	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_all_options	ok->error	java_error_equal
+tests/fixtures/radial/enum	rad_center_root	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_compact_radial	ok->ok	java_equal
+tests/fixtures/radial/enum	rad_compact_wedge	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_fixed_size	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_hierarchy	ok->ok	java_equal
+tests/fixtures/radial/enum	rad_labels	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_leaf_wedge	ok->ok	java_equal
+tests/fixtures/radial/enum	rad_opt_crossing	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_opt_edgelength	ok->ok	java_equal
+tests/fixtures/radial/enum	rad_opt_edgelength_pos	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_outgoing_angles	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_radius_padding	ok->ok	java_equal
+tests/fixtures/radial/enum	rad_random24_wedge	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_random30	ok->error	java_error_equal
+tests/fixtures/radial/enum	rad_root_choice	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_rotate	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_rotate_wedge	ok->ok	java_equal
+tests/fixtures/radial/enum	rad_sorter_id	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_sorter_polar	ok->error	java_error_equal
+tests/fixtures/radial/enum	rad_star_overlap	ok->ok	java_exact
+tests/fixtures/radial/enum	rad_tree_basic	ok->ok	java_exact
+tests/fixtures/radial/enum	rnd1_09	ok->error	java_error_equal
+tests/fixtures/radial/enum	rnd1_27	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd1_43	ok->ok	java_exact
+tests/fixtures/radial/enum	rnd2_03	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd2_22	ok->error	java_error_equal
+tests/fixtures/radial/enum	rnd2_38	ok->ok	java_exact
+tests/fixtures/radial/enum	rnd2_55	ok->error	java_error_equal
+tests/fixtures/radial/enum	rnd2_72	ok->ok	java_exact
+tests/fixtures/radial/enum	rnd3_04	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd3_21	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd3_37	ok->ok	java_exact
+tests/fixtures/radial/enum	rnd3_56	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd3_79	ok->error	java_error_equal
+tests/fixtures/radial/enum	rnd4_15	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd4_29	ok->ok	java_equal
+tests/fixtures/radial/enum	rnd4_45	ok->ok	java_equal
+tests/fixtures/spore	co_basic	ok->ok	java_exact
+tests/fixtures/spore	co_big_small	ok->ok	java_exact
+tests/fixtures/spore	co_dup_positions	ok->ok	java_differs /children[0]/x: 8.000023129513927 vs 8
+tests/fixtures/spore	co_edges	ok->ok	java_exact (after SEC merge)
+tests/fixtures/spore	co_float	ok->ok	java_exact
+tests/fixtures/spore	co_grid	ok->ok	java_differs /children[3]/x: 56.0 vs 104
+tests/fixtures/spore	co_line	ok->ok	java_exact
+tests/fixtures/spore	co_line_orth	ok->ok	java_exact
+tests/fixtures/spore	co_many	ok->ok	java_exact
+tests/fixtures/spore	co_negative	ok->ok	java_exact
+tests/fixtures/spore	co_nested	ok->ok	java_exact
+tests/fixtures/spore	co_noprop_debug	ok->ok	java_exact
+tests/fixtures/spore	co_orth	ok->ok	java_exact
+tests/fixtures/spore	co_ports	ok->ok	java_exact
+tests/fixtures/spore	co_preferred_root	ok->ok	java_exact
+tests/fixtures/spore	co_ring	ok->ok	java_exact
+tests/fixtures/spore	co_single	ok->ok	java_exact
+tests/fixtures/spore	co_two	ok->ok	java_exact
+tests/fixtures/spore	co_under_box	ok->ok	java_differs /children[0]/x: 15.0 vs 8
+tests/fixtures/spore	co_under_random	ok->ok	java_differs /children[0]/x: 437.72264046770255 vs 430.72264046770255
+tests/fixtures/spore	co_zero_size	ok->ok	java_exact
+tests/fixtures/spore	ov_basic	ok->ok	java_exact
+tests/fixtures/spore	ov_big_small	ok->ok	java_exact
+tests/fixtures/spore	ov_cluster	ok->ok	java_differs /children[0]/x: 19.93617021276596 vs 17.93617021276596
+tests/fixtures/spore	ov_edges_multi	ok->ok	java_exact (after SEC merge)
+tests/fixtures/spore	ov_float	ok->ok	java_exact
+tests/fixtures/spore	ov_grid	ok->ok	java_exact
+tests/fixtures/spore	ov_identical	ok->ok	java_differs /children[1]/x: 48.17692866444963 vs 50.728361371643246
+tests/fixtures/spore	ov_identical3	ok->ok	java_differs /children[1]/x: 55.99999999999999 vs 50.728361371643246
+tests/fixtures/spore	ov_line	ok->ok	java_exact
+tests/fixtures/spore	ov_many	ok->ok	java_exact
+tests/fixtures/spore	ov_maxiter0	ok->ok	java_exact
+tests/fixtures/spore	ov_maxiter1	ok->ok	java_exact
+tests/fixtures/spore	ov_negative	ok->ok	java_exact
+tests/fixtures/spore	ov_nested	ok->ok	java_exact
+tests/fixtures/spore	ov_no_overlap	ok->ok	java_exact
+tests/fixtures/spore	ov_noscan	ok->ok	java_exact
+tests/fixtures/spore	ov_ports_labels	ok->ok	java_exact
+tests/fixtures/spore	ov_ring	ok->ok	java_exact
+tests/fixtures/spore	ov_same_center	ok->ok	java_differs /children[0]/x: 10.702086381325163 vs 8
+tests/fixtures/spore	ov_single	ok->ok	java_exact
+tests/fixtures/spore	ov_touching	ok->ok	java_exact
+tests/fixtures/spore	ov_two	ok->ok	java_exact
+tests/fixtures/spore	ov_under_blank	ok->ok	java_exact
+tests/fixtures/spore	ov_under_box	ok->ok	java_differs /children[0]/x: 15.0 vs 8
+tests/fixtures/spore	ov_under_fixed	ok->ok	java_differs /children[0]/x: 103.81280788177338 vs 96.81280788177338
+tests/fixtures/spore	ov_under_random	ok->ok	java_differs /children[0]/x: 230.68485825957572 vs 223.68485825957572
+tests/fixtures/spore	ov_under_unknown	ok->ok	java_exact
+tests/fixtures/spore	ov_zero_size	ok->ok	java_error java.lang.IllegalStateException: Invalid hitboxes for scanline overlap calculation.
+tests/fixtures/core	random	ok->ok	java_equal
+tests/fixtures/core	random_ports_loops	ok->ok	java_equal
+tests/fixtures/core	topdown_box	ok->ok	java_error java.lang.IllegalStateException: IDataType class expected for layout option org.eclipse.elk.topdown.
+tests/fixtures/vertiflex	bend_constraints	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_001	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_005	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_006	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_007	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_008	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_010	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_011	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_rnd_012	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_small	ok->ok	java_exact
+tests/fixtures/vertiflex	bend_spacing	ok->ok	java_exact
+tests/fixtures/vertiflex	err_deep_two_children	error->ok	java_exact
+tests/fixtures/vertiflex	err_two_children	error->ok	java_exact
+tests/fixtures/vertiflex	vf_strategy_ignored	ok->ok	java_exact
+tests/fixtures/rectpacking	g1_124	ok->error	java_error_equal
+tests/fixtures/rectpacking	g1_136	ok->error	java_error_equal
+tests/fixtures/rectpacking	g2_025	ok->error	java_error_equal
+tests/fixtures/rectpacking	g2_103	ok->error	java_error_equal
+tests/fixtures/rectpacking	g2_252	ok->error	java_error_equal
+tests/fixtures/rectpacking	g2_342	ok->error	java_error_equal
+tests/fixtures/rectpacking	g2_377	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g3_052	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g3_087	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g3_116	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g3_158	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g3_170	ok->error	java_error_differs java.lang.ArrayIndexOutOfBoundsException: arraycopy: source index -1 out of bounds (Java fails earlier)
+tests/fixtures/rectpacking/enum	g4_095	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g4_141	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g4_272	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g4_282	ok->error	java_error_equal
+tests/fixtures/rectpacking/enum	g4_285	ok->error	java_error_equal

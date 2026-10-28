@@ -465,7 +465,8 @@
   "layoutOptions": {
     "elk.algorithm": "org.eclipse.elk.vertiflex",
     "elk.spacing.nodeNode": "10",
-    "elk.vertiflex.considerNodeModelOrder": "false"
+    "elk.vertiflex.considerNodeModelOrder": "false",
+    "elk.vertiflex.layoutStrategy": "BEND"
   },
   "width": 277,
   "x": 0,

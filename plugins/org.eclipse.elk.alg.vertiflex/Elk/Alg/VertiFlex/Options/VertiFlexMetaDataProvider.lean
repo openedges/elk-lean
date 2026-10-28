@@ -11,12 +11,10 @@ the option supports (`SPACING_NODE_NODE` default `20.0`, `PADDING` default `5` o
 `INTERACTIVE`, `PORT_CONSTRAINTS`, `EDGE_LABELS_INLINE` default `false`,
 `OMIT_NODE_MICRO_LAYOUT`, `MARGINS`, then the four VertiFlex options).
 
-Deviation from Java that is kept from Rust: `register_option` of elk-rs does not install an enum
-parser or the choices for `LAYOUT_STRATEGY`, so `elk.vertiflex.layoutStrategy` given as a string
-(JSON `layoutOptions`, ELK Text) is not parseable and the algorithm always uses `STRAIGHT`;
-`BEND` is only reachable by setting the property programmatically (`PropCodec.enc`). To get the
-Java behaviour, add `choices := LayoutOptionData.enumChoices EdgeRoutingStrategy` and
-`parser := some (LayoutOptionData.enumParser EdgeRoutingStrategy)` to the option.
+The ENUM option `LAYOUT_STRATEGY` is registered with its choices and the enum parser like the Java
+provider, so `elk.vertiflex.layoutStrategy: BEND` from JSON / ELK Text selects the bend router
+(`register_option` of elk-rs installs neither, so elk-rs always uses `STRAIGHT` for string inputs;
+elk-lean followed that before agent OPT: "oracle 특이점" F5).
 -/
 namespace Elk.Alg.VertiFlex.Options
 
@@ -34,20 +32,27 @@ def registerAlgorithm (r : Registry) : Registry :=
       definingBundleId := some "org.eclipse.elk.alg.vertiflex" }
   r.registerAlgorithm ((data.addSupportedFeature .multiEdges).addSupportedFeature .edgeLabels)
 
-/-- `register_option`. Like Rust, the ENUM option `LAYOUT_STRATEGY` gets neither `choices` nor a
-`parser` (deliberate deviation from Java, see the module doc), so the option strings of JSON /
-ELK Text inputs cannot be parsed and are ignored. -/
+/-- `register_option` for the non-enum options. -/
 private def registerOption {α : Type} [PropCodec α] (r : Registry) (property : Property α)
     (type : LayoutOptionType) (name description : String) (target : LayoutOptionTarget) : Registry :=
   r.registerOption
     { id := property.id, type, defaultValue := property.default.map PropCodec.enc,
       name, description, targets := EnumSet.of #[target], visibility := .visible }
 
+/-- `register_option` for an ENUM option, with the Java enum choices (constant names in ordinal
+order) and the enum parser (Java `LayoutOptionData.parseValue` of an `ENUM`). -/
+private def registerEnumOption {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+    (name description : String) (target : LayoutOptionTarget) : Registry :=
+  r.registerOption
+    { id := property.id, type := .enum, defaultValue := property.default.map PropCodec.enc,
+      name, description, targets := EnumSet.of #[target], visibility := .visible,
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+
 /-- `register_options`. -/
 def registerOptions (r : Registry) : Registry :=
   let r := registerOption r VertiFlexOptions.VERTICAL_CONSTRAINT .double
     "Fixed vertical position" "The Y position that the node should be fixed at." .nodes
-  let r := registerOption r VertiFlexOptions.LAYOUT_STRATEGY .enum
+  let r := registerEnumOption r VertiFlexOptions.LAYOUT_STRATEGY
     "Edge layout strategy"
     "Strategy for the layout of the children. 'straight' for straight line drawings, 'bend' for a possible bend. When straight edges are prioritized the nodes will be reordered in order to guarantee that straight edges are possible. If bend points are enabled on the other hand, the given model order of the nodes is maintained and bend points are introduced to prevent edge node overlaps."
     .nodes

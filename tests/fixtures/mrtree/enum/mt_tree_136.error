@@ -1,0 +1,1 @@
+java.lang.IllegalArgumentException: The vector chain must contain at least a source and a target point.

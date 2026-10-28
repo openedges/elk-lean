@@ -4,66 +4,66 @@
       "height": 28,
       "id": "n0",
       "width": 25,
-      "x": 12,
-      "y": 58
+      "x": 8,
+      "y": 54
     },
     {
       "height": 35,
       "id": "n1",
       "width": 11,
-      "x": 47,
-      "y": 15
+      "x": 43,
+      "y": 11
     },
     {
       "height": 24,
       "id": "n2",
       "width": 50,
-      "x": 14,
-      "y": 30
+      "x": 10,
+      "y": 26
     },
     {
       "height": 15,
       "id": "n3",
       "width": 36,
-      "x": 66,
-      "y": 52
+      "x": 62,
+      "y": 48
     },
     {
       "height": 32,
       "id": "n4",
       "width": 31,
-      "x": 48,
-      "y": 87
+      "x": 44,
+      "y": 83
     },
     {
       "height": 28,
       "id": "n5",
       "width": 40,
-      "x": 51,
-      "y": 15
+      "x": 47,
+      "y": 11
     },
     {
       "height": 24,
       "id": "n6",
       "width": 45,
-      "x": 18,
-      "y": 12
+      "x": 14,
+      "y": 8
     },
     {
       "height": 38,
       "id": "n7",
       "width": 39,
-      "x": 56,
-      "y": 88
+      "x": 52,
+      "y": 84
     }
   ],
-  "height": 138,
+  "height": 130,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeOverlap",
     "org.eclipse.elk.overlapRemoval.maxIterations": 0
   },
-  "width": 114,
+  "width": 106,
   "x": 0,
   "y": 0
 }

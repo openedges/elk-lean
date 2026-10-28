@@ -6,32 +6,32 @@
           "height": 30,
           "id": "g1a",
           "width": 40,
-          "x": 12,
-          "y": 12
+          "x": 8,
+          "y": 8
         },
         {
           "height": 30,
           "id": "g1b",
           "width": 40,
-          "x": 72,
-          "y": 15
+          "x": 56,
+          "y": 10.4
         },
         {
           "height": 30,
           "id": "g1c",
           "width": 30,
-          "x": 58.896551724137964,
-          "y": 65
+          "x": 47.241379310344826,
+          "y": 48.40000000000003
         }
       ],
-      "height": 107,
+      "height": 86.40000000000003,
       "id": "g1",
       "layoutOptions": {
         "algorithm": "org.eclipse.elk.sporeCompaction"
       },
-      "width": 124,
-      "x": 12,
-      "y": 12
+      "width": 104,
+      "x": 8,
+      "y": 8
     },
     {
       "children": [
@@ -39,47 +39,47 @@
           "height": 30,
           "id": "g2a",
           "width": 40,
-          "x": 12,
-          "y": 12
+          "x": 8,
+          "y": 8
         },
         {
           "height": 30,
           "id": "g2b",
           "width": 40,
-          "x": 62,
-          "y": 62
+          "x": 46,
+          "y": 46
         },
         {
           "height": 30,
           "id": "g2c",
           "width": 30,
-          "x": 67,
-          "y": 112
+          "x": 51,
+          "y": 84
         }
       ],
-      "height": 154,
+      "height": 122,
       "id": "g2",
       "layoutOptions": {
         "algorithm": "org.eclipse.elk.sporeOverlap"
       },
-      "width": 114,
-      "x": 156,
-      "y": 14.364556962025318
+      "width": 94,
+      "x": 120,
+      "y": 8.566075949367097
     },
     {
       "height": 50,
       "id": "z",
       "width": 50,
-      "x": 57.98303287380701,
-      "y": 139
+      "x": 43.38231631382316,
+      "y": 102.40000000000003
     }
   ],
-  "height": 201,
+  "height": 160.40000000000003,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeCompaction"
   },
-  "width": 282,
+  "width": 222,
   "x": 0,
   "y": 0
 }

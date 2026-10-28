@@ -6,11 +6,14 @@ Port of `abstract_radius_extension_compaction.rs` (elk-rs): the base of the radi
 and of the overlap removal. The base class is a plain value (`compactionStep`, `spacing`);
 the Lean subclasses hold it in their context.
 
-Parity note: the Rust subclasses are created with `::default()`, a derived `Default` that sets
-`compaction_step` to `0` (Java and `AbstractRadiusExtensionCompaction::new()` use `1`).
-The compactions overwrite the step with `COMPACTION_STEP_SIZE` before use, the overlap removal
-does not, so its layer expansion is a no-op (up to floating point rounding of `cx + 0 - half_w`).
-`compactionStep` therefore defaults to `0` here.
+Java semantics (agent OPT; elk-rs differs in all three points, which elk-lean followed before):
+* `compactionStep` is the Java field initialiser `1`. The compactions overwrite it with
+  `COMPACTION_STEP_SIZE`, the overlap removal does not, so it expands layers by 1 per pass (the Rust
+  subclasses are created with a derived `Default`, step `0`, which makes the overlap removal a no-op).
+* `contractLayer` scales the edge vector by `x *= compactionStep / length` (the quotient first;
+  Rust computes `dx * step / length`).
+* `overlap` is Java's four corner cases with strict inequalities on both sides, so two bounds with
+  the same left (or top) coordinate never overlap (Rust tests interval intersection).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -24,8 +27,8 @@ open Elk.Graph
 
 /-- `AbstractRadiusExtensionCompaction`. -/
 structure AbstractRadiusExtensionCompaction where
-  /-- `compaction_step` (`i32`; `0` for `::default()`). -/
-  compactionStep : Int := 0
+  /-- `compactionStep` (Java field initialiser `1`). -/
+  compactionStep : Int := 1
   /-- `spacing`. -/
   spacing : Float := fl0p0
   deriving Inhabited
@@ -56,12 +59,24 @@ def contractLayer (self : AbstractRadiusExtensionCompaction) (root : NodeId) (la
     let dx := xPos - parentX
     let dy := yPos - parentY
     let length := Float.sqrt (dx * dx + dy * dy)
-    let ux := dx * step / length
-    let uy := dy * step / length
+    -- Java `x *= compactionStep / length`
+    let f := step / length
+    let ux := dx * f
+    let uy := dy * f
     if isContracting then
       ElkM.modifyNode node fun m => { m with x := xPos - ux - halfW, y := yPos - uy - halfH }
     else
       ElkM.modifyNode node fun m => { m with x := xPos + ux - halfW, y := yPos + uy - halfH }
+
+/-- Java `overlap(node1, node2)` on the bounds enlarged by the spacing (`x1, y1, width1, height1` and
+`x2, ..`): the four corner cases "left upper / right lower / left lower / right upper corner
+overlap", each with strict inequalities, so equal left or equal top coordinates never overlap. -/
+@[inline] def overlapBounds (x1 y1 width1 height1 x2 y2 width2 height2 : Float) : Bool :=
+  if (x1 < x2 + width2 && x2 < x1) && (y1 < y2 + height2 && y2 < y1) then true
+  else if (x2 < x1 + width1 && x1 < x2) && (y2 < y1 + height1 && y1 < y2) then true
+  else if (x1 < x2 + width2 && x2 < x1) && (y1 < y2 && y2 < y1 + height1) then true
+  else if (x2 < x1 + width1 && x1 < x2) && (y1 < y2 + height2 && y2 < y1) then true
+  else false
 
 /-- `overlap_layer_soa(x, y, w, h, spacing)`: whether two cyclically neighbouring nodes overlap.
 The coordinate arrays are unboxed `FloatArray`s (the Rust `&[f64]` slices). -/
@@ -79,7 +94,7 @@ def overlapLayerSoa (x y w h : FloatArray) (spacing : Float) : Bool := Id.run do
     let y2 := y.get! j - halfS
     let w2 := w.get! j + spacing
     let h2 := h.get! j + spacing
-    if x1 < x2 + w2 && x2 < x1 + w1 && y1 < y2 + h2 && y2 < y1 + h1 then return true
+    if overlapBounds x1 y1 w1 h1 x2 y2 w2 h2 then return true
   return false
 
 /-- `contract_layer_soa(parent_x, parent_y, x, y, w, h, step, is_contracting)`: returns the new
@@ -100,8 +115,10 @@ def contractLayerSoa (parentX parentY : Float) (x y w h : FloatArray) (step : Fl
     let dx := cx - parentX
     let dy := cy - parentY
     let length := Float.sqrt (dx * dx + dy * dy)
-    let ux := dx * step / length
-    let uy := dy * step / length
+    -- Java `x *= compactionStep / length`
+    let f := step / length
+    let ux := dx * f
+    let uy := dy * f
     let newX := if isContracting then cx - ux - halfW else cx + ux - halfW
     let newY := if isContracting then cy - uy - halfH else cy + uy - halfH
     if newX.toBits != oldX.toBits || newY.toBits != oldY.toBits then changed := true
@@ -132,13 +149,11 @@ def moveNode (_self : AbstractRadiusExtensionCompaction) (root node : NodeId) (d
   let unitY := differenceY / length
   ElkM.modifyNode node fun n => { n with x := n.x + unitX * distance, y := n.y + unitY * distance }
 
-/-- `overlap(node1, node2)` on the arena: whether the bounds (with spacing) intersect. -/
+/-- `overlap(node1, node2)` on the arena (Java corner cases, `overlapBounds`). -/
 def overlapPure (self : AbstractRadiusExtensionCompaction) (g : ElkGraph) (node1 node2 : NodeId) : Bool :=
   let (x1, y1, width1, height1) := nodeBounds (g.node node1) self.spacing
   let (x2, y2, width2, height2) := nodeBounds (g.node node2) self.spacing
-  let xOverlap := x1 < x2 + width2 && x2 < x1 + width1
-  let yOverlap := y1 < y2 + height2 && y2 < y1 + height1
-  xOverlap && yOverlap
+  overlapBounds x1 y1 width1 height1 x2 y2 width2 height2
 
 /-- `overlap(node1, node2)`. -/
 def overlap (self : AbstractRadiusExtensionCompaction) (node1 node2 : NodeId) : ElkM Bool :=
@@ -154,7 +169,7 @@ def overlapLayer (self : AbstractRadiusExtensionCompaction) (nodes : Array NodeI
     let j := if i < bounds.size - 1 then i + 1 else 0
     let (x1, y1, w1, h1) := bounds[i]!
     let (x2, y2, w2, h2) := bounds[j]!
-    if x1 < x2 + w2 && x2 < x1 + w1 && y1 < y2 + h2 && y2 < y1 + h1 then overlapping := true
+    if overlapBounds x1 y1 w1 h1 x2 y2 w2 h2 then overlapping := true
   return overlapping
 
 end AbstractRadiusExtensionCompaction

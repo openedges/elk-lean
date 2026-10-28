@@ -74,12 +74,15 @@ def IN_NEW_ROW : Property Bool :=
 def ORDER_BY_SIZE : Property Bool :=
   Property.withDefault "org.eclipse.elk.rectpacking.orderBySize" false
 
-/-- `RectPackingOptions.PADDING` (`CoreOptions.PADDING`). -/
-def PADDING : Property ElkPadding := CoreOptions.PADDING
-/-- `RectPackingOptions.SPACING_NODE_NODE` (`CoreOptions.SPACING_NODE_NODE`). -/
-def SPACING_NODE_NODE : Property Float := CoreOptions.SPACING_NODE_NODE
-/-- `RectPackingOptions.ASPECT_RATIO` (`CoreOptions.ASPECT_RATIO`, no property default). -/
-def ASPECT_RATIO : Property Float := CoreOptions.ASPECT_RATIO
+/-- `RectPackingOptions.PADDING`: Java redeclares `CoreOptions.PADDING` with the rectangle packing
+default `15` on every side (`supports org.eclipse.elk.padding = new ElkPadding(15)`). -/
+def PADDING : Property ElkPadding := Property.ofProperty CoreOptions.PADDING (ElkPadding.ofAny 15.0)
+/-- `RectPackingOptions.SPACING_NODE_NODE`: `CoreOptions.SPACING_NODE_NODE` with the rectangle
+packing default `15`. -/
+def SPACING_NODE_NODE : Property Float := Property.ofProperty CoreOptions.SPACING_NODE_NODE 15.0
+/-- `RectPackingOptions.ASPECT_RATIO`: `CoreOptions.ASPECT_RATIO` with the rectangle packing
+default `1.3` (a double literal in `RectPacking.melk`, unlike the `1.3f` of the box layouter). -/
+def ASPECT_RATIO : Property Float := Property.ofProperty CoreOptions.ASPECT_RATIO 1.3
 /-- `RectPackingOptions.CONTENT_ALIGNMENT` (`CoreOptions.CONTENT_ALIGNMENT`). -/
 def CONTENT_ALIGNMENT : Property (EnumSet ContentAlignment) := CoreOptions.CONTENT_ALIGNMENT
 /-- `RectPackingOptions.NODE_SIZE_CONSTRAINTS` (`CoreOptions.NODE_SIZE_CONSTRAINTS`). -/

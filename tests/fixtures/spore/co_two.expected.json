@@ -4,15 +4,15 @@
       "height": 30,
       "id": "a",
       "width": 30,
-      "x": 12,
-      "y": 12
+      "x": 8,
+      "y": 8
     },
     {
       "height": 30,
       "id": "b",
       "width": 30,
-      "x": 62,
-      "y": 49.5
+      "x": 46,
+      "y": 36.5
     }
   ],
   "edges": [
@@ -22,13 +22,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 62,
-            "y": 53.25
+            "x": 46,
+            "y": 40.25
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 42,
-            "y": 38.25
+            "x": 38,
+            "y": 34.25
           }
         }
       ],
@@ -40,12 +40,12 @@
       ]
     }
   ],
-  "height": 91.5,
+  "height": 74.5,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeCompaction"
   },
-  "width": 104,
+  "width": 84,
   "x": 0,
   "y": 0
 }

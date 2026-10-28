@@ -204,15 +204,16 @@ def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
     | .modelOrder => pure ()
   monitor.done
 
-/-- `get_layout_processor_configuration(graph)`. -/
-def configuration (graph : TGraphId) : MrTreeM (Option TreeProcessorConfiguration) := do
-  let mut config : TreeProcessorConfiguration :=
+/-- `getLayoutProcessorConfiguration(graph)`: Java's `INTERMEDIATE_PROCESSING_CONFIG`, `ROOT_PROC`,
+`FAN_PROC` and `LEVEL_PROC` before `P2_NODE_ORDERING` for every weighting. elk-rs adds `FAN_PROC` only
+for a weighting other than `MODEL_ORDER` and never `LEVEL_PROC`, so its `TREE_LEVEL`s stay unset and
+the `AVOID_OVERLAP` edge router sees a single level (followed before agent OPT). -/
+def configuration (_graph : TGraphId) : MrTreeM (Option TreeProcessorConfiguration) := do
+  let config : TreeProcessorConfiguration :=
     LayoutProcessorConfiguration.create.addBefore TreeLayoutPhases.p2NodeOrdering
       IntermediateProcessorStrategy.rootProc
-  let weighting := ((← MrTreeM.getGraph graph).props.get MrTreeOptions.WEIGHTING).getD .modelOrder
-  if weighting != .modelOrder then
-    config := config.addBefore TreeLayoutPhases.p2NodeOrdering IntermediateProcessorStrategy.fanProc
-  return some config
+  let config := config.addBefore TreeLayoutPhases.p2NodeOrdering IntermediateProcessorStrategy.fanProc
+  return some (config.addBefore TreeLayoutPhases.p2NodeOrdering IntermediateProcessorStrategy.levelProc)
 
 /-- The `NodeOrderer` phase. -/
 def phase : TreePhase :=

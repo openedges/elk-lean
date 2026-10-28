@@ -10,12 +10,11 @@ the Rust `apply`: the algorithm `org.eclipse.elk.rectpacking` ("ELK Rectangle Pa
 thirteen options, and the option supports (with the algorithm defaults `aspectRatio` 1.3,
 `nodeSize.fixedGraphSize` false, `padding` 15, `spacing.nodeNode` 15).
 
+The four ENUM options are registered with their choices and the enum parser like the Java provider,
+so their string values from JSON take effect (the Rust `register_option` helper of this plugin never
+attaches one, so elk-rs drops the strings; elk-lean followed that before agent OPT).
+
 Rust semantics kept on purpose (they differ from the generated Java provider):
-* ENUM options are registered **without** enum choices and **without** a parser (the Rust
-  `register_option` helper of this plugin never attaches one; `init_reflect` only registers
-  clone/default functions). A string value of such an option in a JSON graph therefore cannot be
-  parsed (`LayoutOptionData.parseValue` is `none`) and is dropped by the importer, as in elk-rs.
-  Typed values set through the property API work. (Java registers the enum choices.)
 * No category (the algorithm lands in the "Other" backup category), no legacy ids, no option
   dependencies, no upper bounds and no supported graph features. The lower bounds of
   `packing.compaction.iterations` (1), `currentPosition` (-1) and `desiredPosition` (-1) are
@@ -49,6 +48,16 @@ def registerOption {α : Type} [PropCodec α] (r : Registry) (property : Propert
       description, targets := EnumSet.of targets, visibility, group := group.getD "",
       lowerBound := lowerBound }
 
+/-- `register_option` for an ENUM option: as `registerOption`, plus the Java enum choices (constant
+names in ordinal order) and the enum parser (Java `LayoutOptionData.parseValue` of an `ENUM`). -/
+def registerEnumOption {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
+    (name description : String) (targets : Array LayoutOptionTarget)
+    (visibility : LayoutOptionVisibility) (group : Option String) : Registry :=
+  r.registerOption
+    { id := property.id, type := .enum, defaultValue := propertyDefault property, name,
+      description, targets := EnumSet.of targets, visibility, group := group.getD "",
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
+
 /-- `register_algorithm`. -/
 def registerAlgorithm (r : Registry) : Registry :=
   r.registerAlgorithm
@@ -64,31 +73,31 @@ def registerAlgorithm (r : Registry) : Registry :=
 
 /-- `register_options`, in the Rust order. -/
 def registerOptions (r : Registry) : Registry :=
-  let r := registerOption r RectPackingOptions.WIDTH_APPROXIMATION_STRATEGY .enum
+  let r := registerEnumOption r RectPackingOptions.WIDTH_APPROXIMATION_STRATEGY
     "Width Approximation Strategy" "Strategy for finding an initial width of the drawing."
-    targetParents .visible (some "widthApproximation") none
+    targetParents .visible (some "widthApproximation")
   let r := registerOption r RectPackingOptions.WIDTH_APPROXIMATION_TARGET_WIDTH .double
     "Target Width" "Target width for placement; padding is added externally."
     targetParents .visible (some "widthApproximation") none
-  let r := registerOption r RectPackingOptions.WIDTH_APPROXIMATION_OPTIMIZATION_GOAL .enum
+  let r := registerEnumOption r RectPackingOptions.WIDTH_APPROXIMATION_OPTIMIZATION_GOAL
     "Optimization Goal"
     "Optimization goal for approximation of the bounding box given by the first iteration."
-    targetParents .visible (some "widthApproximation") none
+    targetParents .visible (some "widthApproximation")
   let r := registerOption r RectPackingOptions.WIDTH_APPROXIMATION_LAST_PLACE_SHIFT .boolean
     "Shift Last Placed" "Allow a shift when placing behind or below the last placed rectangle."
     targetParents .visible (some "widthApproximation") none
-  let r := registerOption r RectPackingOptions.PACKING_STRATEGY .enum
+  let r := registerEnumOption r RectPackingOptions.PACKING_STRATEGY
     "Compaction Strategy" "Strategy for finding an initial placement on nodes."
-    targetParents .visible (some "packing") none
+    targetParents .visible (some "packing")
   let r := registerOption r RectPackingOptions.PACKING_COMPACTION_ROW_HEIGHT_REEVALUATION .boolean
     "Row Height Reevaluation" "Reevaluate row height during compaction if needed."
     targetParents .visible (some "packing.compaction") none
   let r := registerOption r RectPackingOptions.PACKING_COMPACTION_ITERATIONS .int
     "Compaction iterations" "Number of compaction iterations."
     targetParents .visible (some "packing.compaction") (some (OptionBound.atLeastInt 1))
-  let r := registerOption r RectPackingOptions.WHITE_SPACE_ELIMINATION_STRATEGY .enum
+  let r := registerEnumOption r RectPackingOptions.WHITE_SPACE_ELIMINATION_STRATEGY
     "White Space Approximation Strategy" "Strategy for expanding nodes to eliminate whitespace."
-    targetParents .visible (some "whiteSpaceElimination") none
+    targetParents .visible (some "whiteSpaceElimination")
   let r := registerOption r RectPackingOptions.TRYBOX .boolean
     "Try box layout first" "Check whether regions are stackable to use box layout."
     targetParents .advanced none none
@@ -108,10 +117,11 @@ def registerOptions (r : Registry) : Registry :=
 /-- `register_supports`, in the Rust order. -/
 def registerSupports (r : Registry) : Registry :=
   let algo := RectPackingOptions.ALGORITHM_ID
-  let r := r.addOptionSupport algo CoreOptions.ASPECT_RATIO.id (some (.double 1.3))
+  let r := r.addOptionSupport algo CoreOptions.ASPECT_RATIO.id (propertyDefault RectPackingOptions.ASPECT_RATIO)
   let r := r.addOptionSupport algo CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE.id (some (.bool false))
-  let r := r.addOptionSupport algo CoreOptions.PADDING.id (some (PropCodec.enc (ElkPadding.ofAny 15.0)))
-  let r := r.addOptionSupport algo CoreOptions.SPACING_NODE_NODE.id (some (.double 15.0))
+  let r := r.addOptionSupport algo CoreOptions.PADDING.id (propertyDefault RectPackingOptions.PADDING)
+  let r := r.addOptionSupport algo CoreOptions.SPACING_NODE_NODE.id
+    (propertyDefault RectPackingOptions.SPACING_NODE_NODE)
   let r := r.addOptionSupport algo CoreOptions.CONTENT_ALIGNMENT.id none
   let r := r.addOptionSupport algo CoreOptions.NODE_SIZE_CONSTRAINTS.id none
   let r := r.addOptionSupport algo CoreOptions.NODE_SIZE_MINIMUM.id none

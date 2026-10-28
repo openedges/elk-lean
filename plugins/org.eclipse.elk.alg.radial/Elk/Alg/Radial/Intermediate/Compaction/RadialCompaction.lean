@@ -28,12 +28,13 @@ open Elk.Graph Elk.Core.Options Elk.Alg.Radial.Options Elk.Alg.Radial.Sorting
 
 namespace RadialCompaction
 
-/-- `calculate_radius(root, node)`: the distance between the centers. -/
+/-- `calculateRadius(node)`: the distance between the upper left corners of `node` and the root
+(Java reads `getX()`/`getY()`; elk-rs measures between the centers, agent OPT). -/
 def calculateRadius (root node : NodeId) : ElkM Float := do
-  let (xPos, yPos) ← AbstractRadiusExtensionCompaction.nodeCenter node
-  let (rootX, rootY) ← AbstractRadiusExtensionCompaction.nodeCenter root
-  let vectorX := xPos - rootX
-  let vectorY := yPos - rootY
+  let n ← ElkM.getNode node
+  let r ← ElkM.getNode root
+  let vectorX := n.x - r.x
+  let vectorY := n.y - r.y
   return Float.sqrt (vectorX * vectorX + vectorY * vectorY)
 
 /-- `overlapping(root, nodes)`. -/

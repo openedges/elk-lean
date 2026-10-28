@@ -4,8 +4,8 @@
       "height": 30,
       "id": "a",
       "width": 40,
-      "x": 12,
-      "y": 12
+      "x": 8,
+      "y": 8
     }
   ],
   "edges": [
@@ -15,13 +15,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 32,
-            "y": 27
+            "x": 28,
+            "y": 23
           },
           "id": "e0_s0",
           "startPoint": {
-            "x": 32,
-            "y": 27
+            "x": 28,
+            "y": 23
           }
         }
       ],
@@ -33,12 +33,12 @@
       ]
     }
   ],
-  "height": 54,
+  "height": 46,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeCompaction"
   },
-  "width": 64,
+  "width": 56,
   "x": 0,
   "y": 0
 }

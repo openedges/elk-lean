@@ -1,0 +1,111 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "mrtree",
+  "elk.mrtree.weighting": "FAN",
+  "elk.mrtree.searchOrder": "DFS",
+  "elk.mrtree.compaction": "true",
+  "elk.spacing.edgeNode": "3"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 27.7,
+   "height": 36.7
+  },
+  {
+   "id": "n1",
+   "width": 55.8,
+   "height": 38.3
+  },
+  {
+   "id": "n2",
+   "width": 25.7,
+   "height": 30.9
+  },
+  {
+   "id": "n3",
+   "width": 18.5,
+   "height": 15.2
+  },
+  {
+   "id": "n4",
+   "width": 19.5,
+   "height": 35.7,
+   "labels": [
+    {
+     "id": "n4l",
+     "text": "l",
+     "width": 6.9,
+     "height": 7.8
+    }
+   ]
+  },
+  {
+   "id": "n5",
+   "width": 25.8,
+   "height": 37.2
+  },
+  {
+   "id": "n6",
+   "width": 49.3,
+   "height": 17.4
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n6"
+   ]
+  }
+ ]
+}

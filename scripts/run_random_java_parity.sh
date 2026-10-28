@@ -6,7 +6,9 @@
 #       [--with-oracle] [--force] [--stages gen,java,lean,rs,report] [--no-publish]
 # 1. generate `gen_nodesize_graphs.py <dir> <count> <seed>` per seed ("s" sets; the generator's seed
 #    semantics are kept, so seed k reproduces agent HX's set k) and the copies sanitised for ELK
-#    Java's node size validation ("v" sets, `sanitize_for_java.py`);
+#    Java's node size validation ("v" sets, `sanitize_for_java.py`); "o" sets (`--sets o`,
+#    `gen_option_graphs.py`) are flat graphs of the non-layered algorithms with random values of
+#    their own options (force model, stress dimension, radial compactor/sorter, mrtree routing, ...);
 # 2. ELK Java (`ElkJavaBaseline`, unmodified Maven Central 0.12.0) one JVM per set with a watchdog;
 # 3. elk-lean `elk layout` one process per input with a time limit; optionally elk-rs (`--with-oracle`);
 # 4. compare (tol 0 and 1e-6, error class and text) -> <out_dir>/report.md, <out_dir>/details.tsv,

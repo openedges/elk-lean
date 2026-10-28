@@ -4,38 +4,38 @@
       "height": 20,
       "id": "a",
       "width": 20,
-      "x": 12,
-      "y": 12
+      "x": 8,
+      "y": 8
     },
     {
       "height": 20,
       "id": "b",
       "width": 20,
-      "x": 32,
-      "y": 12
+      "x": 28,
+      "y": 8
     },
     {
       "height": 20,
       "id": "c",
       "width": 20,
-      "x": 12,
-      "y": 32
+      "x": 8,
+      "y": 28
     },
     {
       "height": 20,
       "id": "d",
       "width": 20,
-      "x": 32,
-      "y": 32
+      "x": 28,
+      "y": 28
     }
   ],
-  "height": 64,
+  "height": 56,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeOverlap",
     "org.eclipse.elk.spacing.nodeNode": 0
   },
-  "width": 64,
+  "width": 56,
   "x": 0,
   "y": 0
 }

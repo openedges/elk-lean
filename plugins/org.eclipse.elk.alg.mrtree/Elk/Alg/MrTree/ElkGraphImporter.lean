@@ -1,6 +1,7 @@
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Elk.Graph
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Math.KVector
 import Elk.Core.Options
 import Elk.Core.Util.ElkUtil
@@ -107,7 +108,8 @@ def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
     minY := fmin minY (n.position.y - n.size.y / fl2p0)
     maxX := fmax maxX (n.position.x + n.size.x / fl2p0)
     maxY := fmax maxY (n.position.y + n.size.y / fl2p0)
-  let padding := ((← ElkM.getNode root).props.get MrTreeOptions.PADDING).getD {}
+  -- Java `elkgraph.getProperty(MrTreeOptions.PADDING)`: the mrtree default (20) is stored when unset
+  let padding := (← ElkM.getNodePropSticky root MrTreeOptions.PADDING).getD {}
   for node in graph.nodes do
     let n := a.node node
     let some (.elkNode elkNode) := n.internal.origin | continue
@@ -116,13 +118,10 @@ def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
   for edge in graph.edges do
     let te := a.edge edge
     let some (.elkEdge elkEdge) := te.internal.origin | continue
-    let mut bendPoints := te.bendPoints
-    if bendPoints.size < 2 then
-      let (some s, some t) := (te.source, te.target) | continue
-      let sn := a.node s
-      let tn := a.node t
-      bendPoints := #[⟨sn.position.x + sn.size.x / fl2p0, sn.position.y + sn.size.y / fl2p0⟩,
-        ⟨tn.position.x + tn.size.x / fl2p0, tn.position.y + tn.size.y / fl2p0⟩]
+    -- Java `ElkUtil.applyVectorChain(tEdge.getBendPoints(), ..)`: an edge the router left without
+    -- points (`EDGE_ROUTING_MODE = NONE`) is Java's `IllegalArgumentException` (elk-rs routes it
+    -- centre to centre instead, which elk-lean followed before agent OPT)
+    let bendPoints := te.bendPoints
     -- Java `ElkGraphUtil.firstEdgeSection(elkedge, true, true)` (elk-rs keeps the other sections)
     let edgeSection ← modifyGet fun g =>
       let (g, s) := ElkGraphUtil.firstEdgeSection g elkEdge true true; (s, g)

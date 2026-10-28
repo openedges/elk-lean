@@ -226,7 +226,8 @@
     "elk.algorithm": "org.eclipse.elk.vertiflex",
     "elk.padding": "[top=5,left=7,bottom=9,right=11]",
     "elk.spacing.nodeNode": "35",
-    "elk.vertiflex.layerDistance": "20"
+    "elk.vertiflex.layerDistance": "20",
+    "elk.vertiflex.layoutStrategy": "BEND"
   },
   "width": 256,
   "x": 0,

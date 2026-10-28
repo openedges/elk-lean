@@ -9,8 +9,10 @@ Port of `stress_meta_data_provider.rs` (elk-rs), the counterpart of the Java `St
 generated from `Stress.melk`. `metaDataProvider.apply` registers the algorithm entry
 `org.eclipse.elk.stress`, the five stress options and the option supports, in Rust order.
 
-As for `ForceMetaDataProvider`, the ENUM option `DIMENSION` is registered without enum choices and
-without a parser (Rust semantics): `"elk.stress.dimension": "X"` from JSON is ignored by the oracle.
+As for `ForceMetaDataProvider`, the ENUM option `DIMENSION` is registered with its choices and the
+enum parser like the Java provider, so `"elk.stress.dimension": "X"` from JSON takes effect (elk-rs
+registers neither and ignores the string, which elk-lean followed before agent OPT: "oracle 특이점"
+F1).
 -/
 namespace Elk.Alg.Force.Options
 
@@ -42,7 +44,7 @@ def registerOptions (r : Registry) : Registry :=
     "Desired Edge Length"
     "Either specified for parent nodes or for individual edges, where the latter takes higher precedence."
     targetParentsEdges
-  let r := ForceMetaDataProvider.registerOption r StressOptions.DIMENSION .enum "Layout Dimension"
+  let r := ForceMetaDataProvider.registerEnumOption r StressOptions.DIMENSION "Layout Dimension"
     "Dimensions that are permitted to be altered during layout." targetParents
   let r := ForceMetaDataProvider.registerOption r StressOptions.EPSILON .double "Stress Epsilon"
     "Termination criterion for the iterative process." targetParents
