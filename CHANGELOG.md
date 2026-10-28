@@ -35,8 +35,10 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
   link a Lean runtime rebuilt without GMP (`ELK_NO_GMP=1`, `scripts/build_runtime_nogmp.sh`), so
   they contain no LGPL code; output is byte-identical to the toolchain runtime
   (`docs/gmp-licensing.md`).
-- **WASM** (`plugins/org.eclipse.elk.wasm`, emscripten 6.0.13, `-sMEMORY64=2`): Node CJS and
-  browser ESM builds, about 18.9 MB `.wasm`; realworld corpus 550/550, 1.34x the native runtime.
+- **WASM** (`plugins/org.eclipse.elk.wasm`, emscripten 6.0.13, `-sMEMORY64=2`, 4 GB maximum
+  memory): Node CJS and browser ESM builds, about 19 MB `.wasm`; realworld corpus 550/550, about
+  1.4x the native runtime; an instance that ran out of memory reports a clear error and the npm
+  loaders replace it on the next call.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
