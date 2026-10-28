@@ -6,6 +6,82 @@ with the ELK release they port (see `VERSIONING.md`).
 
 ## [Unreleased]
 
+(nothing yet)
+
+## [0.12.0] - unreleased
+
+First release: a pure Lean 4 port of the Eclipse Layout Kernel 0.12.0 (reference ELK / elkjs
+0.12.0, performance and secondary parity oracle elk-rs 0.12.1 at `eb586b6d`). Not yet tagged or
+published; the numbers below are the `AGENTS.md` snapshot of 2026-10-27.
+
+### Delivered
+- **ELK port**: all layered phases (P1 cycle breaking to P5 edge routing, 59 intermediate
+  processors, components, compound graphs, wrapping, self loops) and the other algorithms: force,
+  stress, mrtree, radial, rectpacking, spore (overlap removal and compaction), disco,
+  topdownpacking, vertiflex. Option metadata (`known_layout_algorithms/options/categories`)
+  follows elk-rs; source layout mirrors the Java plugin structure (one Lean file per Java class).
+- **CLI** (`elk`): `layout`, `convert` (`.elkt` parser, `.elkt`/`.elkg` to JSON),
+  `algorithms|options|categories`, `bench` (the 26 elk-rs `perf_benchmark` scenarios, same CSV),
+  `--trace-dir` layered phase traces, `--version`.
+- **C API** (`plugins/org.eclipse.elk.ffi/include/elk_lean.h`, `scripts/build_ffi.sh`): JSON in /
+  JSON out layout, metadata queries, error reporting, thread registration; native smoke test.
+- **Node.js addon** (`plugins/org.eclipse.elk.napi`, Node-API C, worker_threads capable) and the
+  **elkjs-compatible npm package** `elk-lean` (`plugins/org.eclipse.elk.js`): native addon with a
+  WASM fallback, elkjs API and typings, `workerUrl` worker support (the stack-enlarged Worker mode
+  for very deep recursion is still pending). JS tests: 51/51 (including the three WASM
+  modes). Addon vs CLI output: 1447/1448 byte identical.
+- **WASM** (`plugins/org.eclipse.elk.wasm`, emscripten 6.0.13, `-sMEMORY64=2`): Node CJS and
+  browser ESM builds, about 18.9 MB `.wasm`; realworld corpus 550/550, 1.34x the native runtime.
+- License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
+
+### Verification status
+- `lake build`: 0 warnings, 0 errors. `lake test`: 13777 passed, 0 failed (1 skipped: BK oracle
+  replay, needs `ELK_BK_ORACLE_TRACES`).
+- **Result parity against unmodified ELK Java 0.12.0** (corpus of 1,998 models, 1,997 compared; 1
+  fails identically on both sides): 1,878 exact (tolerance 0). The other 119 depend on the Java
+  execution context (see below); against Java with patch 0001 applied all of them match.
+- **Layered phase-step traces against ELK Java** (tolerance 0, strict order): 1,817/1,997 match in
+  every step. The remaining 180 are caused on the Java side: 170 non-finite intermediate port
+  coordinates, 7 self-loop edge orders, 3 partition port orders (details in `HISTORY.md`).
+- **Parity against elk-rs** (secondary): model parity 1447/1447 (tolerance 1e-6), strict phase
+  trace 1447/1447. Byte identity with elk-rs is 1060/1447; the rest differ only in `-0.0`,
+  snapping or values below 4e-12 and are no longer a gate.
+- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.91x
+  (layered 1.07 to 1.13x, force 0.86 to 0.88x, stress 1.01 to 1.06x, mrtree 1.0x, rectpacking 0.87
+  to 1.03x, radial 0.2 to 0.4x, splines routing 1.25x, hierarchy 1.17 to 1.22x). Repeated layouts
+  keep RSS flat. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
+
+### Known differences
+- **119 context-dependent models**: ELK Java iterates a few `HashMap`/`HashSet`s keyed by objects
+  without their own `hashCode` (self-loop port sides, partition members), so its result depends
+  on identity hash codes handed out earlier in the JVM. elk-lean uses the enumeration order
+  (patch 0001 for Java); of 172 models whose Java result varies between runs, 170 equal one of
+  the observed Java results. Models listed in `HISTORY.md`.
+- **ticket 213** (`tickets/layered/213_componentsCompaction.elkt`): unmodified Java emits NaN
+  coordinates; elk-lean keeps a finite result on purpose.
+- **topdownpacking** is registered by Java ELK but not by elk-rs/elkjs; elk-lean registers it as
+  a Lean extension at rank 100, after the nine elk-rs algorithms (order layered, disco, force,
+  mrtree, radial, rectpacking, spore, stress, vertiflex).
+- **Behaviours inherited from elk-rs where it deviates from Java** (recorded as "oracle
+  quirks" (오라클 특이점) rows in `HISTORY.md`): `NodePromotion` Nikolov strategies are no-ops (only the two
+  model-order strategies are implemented); `BreakingPointInserter.applyCuts` index counting for
+  the second and later cuts; vertiflex `considerNodeModelOrder` panics for nodes with exactly two
+  children in elk-rs; enum options without a parser (`elk.force.model`, `elk.stress.dimension`,
+  vertiflex `layoutStrategy`) ignore their JSON string value as in elk-rs; spore/overlap
+  handlers iterate sets in insertion order where elk-rs is nondeterministic. The result
+  reference remains ELK Java; wherever these differ from Java the Java comparison column of
+  the corpus run is authoritative.
+- 3 interactive models give different output with and without `--trace-dir`: tracing forces the
+  layered algorithm (closed as intended behaviour, see `HISTORY.md`).
+
+### Not yet available
+- Packages are not published (all `package.json` carry `"private": true`).
+- Only macOS arm64 builds have been exercised. Linux (glibc x64/arm64, musl), Windows and
+  CI builds are drafted in `.gitlab-ci.yml` but untested. The GMP (LGPL) static-linking question is
+  open. See `docs/release-dry-run-0.12.0.md`.
+
+## Project scaffold (pre-release history)
+
 ### ELK Porting
 - Project scaffold for the ELK 0.12.0 port (Phase 0): Lake package with one
   library per ELK plugin, C helper shim, CLI and test driver stubs, reference
