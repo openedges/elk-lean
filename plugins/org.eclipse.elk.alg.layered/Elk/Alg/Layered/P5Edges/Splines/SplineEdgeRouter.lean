@@ -22,10 +22,10 @@ router places the nodes horizontally (`LGraphUtil.placeNodesHorizontally`) and s
 ## State and arena mapping
 - The Rust struct fields are `SplineEdgeRouter.State`, threaded with `RouterM := StateT State LayeredM`.
 - `SplineSegmentRef` → `SplineSegmentId` into `State.segments` (creation order = Rust
-  `all_spline_segments` order); `DependencyRef` → `DependencyId`, numbered in creation order
-  (`State.dependencyCount`). The dependencies of a layer gap only live while the gap is ranked: they
-  are the arrays of `GapDeps` (see "Dependency graph, cycle breaking and ranking of one layer gap"),
-  the segments keep their final `outgoing`/`incoming` id lists.
+  `all_spline_segments` order); `DependencyRef` → `DependencyId` into the dependency table of
+  `State` (one array per `Dependency` field, `State.dependencies` assembles them). While a layer gap
+  is ranked its dependencies are the arrays of `GapDeps` (see "Dependency graph, cycle breaking and
+  ranking of one layer gap"); the final ones are appended to the table.
 - `left/right_ports_layer` and `edges_remaining_layer` (`Vec` + linear `contains`/`remove`) keep the
   Rust order in arrays; a `Std.HashSet` answers the membership tests (an edge is pushed at most once
   per layer pair, so the set and the array stay in sync).
@@ -236,12 +236,16 @@ def layoutProcessorConfiguration (graphProperties : EnumSet GraphProperties) : L
     configuration := configuration.addAll END_EDGE_LABEL_PROCESSING_ADDITIONS
   return configuration
 
-/-- Rust `SplineEdgeRouter` fields plus the segment table and the dependency id counter. -/
+/-- Rust `SplineEdgeRouter` fields plus the segment and dependency tables. -/
 structure State where
   /-- Segment table: `SplineSegmentId.idx` indexes it (creation order = `all_spline_segments`). -/
   segments : Array SplineSegment := #[]
-  /-- Number of dependencies created so far (the next `DependencyId`). -/
-  dependencyCount : Nat := 0
+  /-- Dependency table, `Dependency.source` per `DependencyId.idx` (final, after cycle breaking). -/
+  dependencySources : Array SplineSegmentId := #[]
+  /-- Dependency table, `Dependency.target`. -/
+  dependencyTargets : Array SplineSegmentId := #[]
+  /-- Dependency table, `Dependency.weight`. -/
+  dependencyWeights : Array Int := #[]
   /-- `edges_remaining_layer`. -/
   edgesRemainingLayer : Array LEdgeId := #[]
   /-- Membership of `edgesRemainingLayer`. -/
@@ -273,6 +277,12 @@ structure State where
   /-- The routes stored as `SPLINE_ROUTE_START` (start edge → segment chain), in `startEdges` order. -/
   routeStarts : Array (LEdgeId × Array SplineSegmentId) := #[]
   deriving Inhabited
+
+/-- The dependency table as `Dependency` values (`DependencyId.idx` indexes it). -/
+def State.dependencies (s : State) : Array Dependency :=
+  s.dependencySources.size.fold (init := Array.emptyWithCapacity s.dependencySources.size) fun d h deps =>
+    deps.push { source := s.dependencySources[d], target := s.dependencyTargets[d]!,
+                weight := s.dependencyWeights[d]! }
 
 /-- Router monad. -/
 abbrev RouterM := StateT State LayeredM
@@ -682,6 +692,15 @@ def createDependencies (gs : GapSegments) (base : Nat) : GapDeps :=
     let incoming := dependencyLists n base tgt
     ⟨base, src, tgt, wgt, outgoing, incoming, weightedOutgoing, weightedIncoming⟩
 
+/-- The dependencies created by `new Dependency(source[p], target[p], weight[p])` for the positions
+`p` in order (ids from `base`) on the local segments `0 … n - 1`. -/
+def GapDeps.ofTable (n base : Nat) (source target : Array Nat) (weight : Array Int) : GapDeps :=
+  let weighted (owner : Array Nat) : Array (Array Nat) :=
+    owner.size.fold (init := Array.replicate n #[]) fun p h lists =>
+      if weight[p]! > 0 then lists.modifyIn owner[p] (·.push p) else lists
+  ⟨base, source, target, weight, dependencyLists n base source, dependencyLists n base target, weighted source,
+    weighted target⟩
+
 /-- Working state of `breakCycles` (per local segment). -/
 structure CycleState where
   /-- `SplineSegment.mark`. -/
@@ -946,17 +965,31 @@ def topologicalNumbering (g : GapDeps) (leftEmpty : Array Bool) : RankState :=
     else ⟨rank, inweight, outweight, queue, maxRank⟩
 
 /-- Writes the ranking of the gap's segments `ids` back (dependency lists, mark, weights, rank) and
-advances the dependency id counter. -/
+appends the gap's dependencies to the dependency table. -/
 def writeGapRanking (ids : Array SplineSegmentId) (g : GapDeps) (mark : Array Int) (rs : RankState) :
     RouterM Unit :=
   match g with
-  | ⟨_, src, _, _, outgoing, incoming, _, _⟩ =>
+  | ⟨_, src, tgt, wgt, outgoing, incoming, _, _⟩ =>
     modify fun s =>
       let segments := ids.size.fold (init := s.segments) fun i h segments =>
         segments.modifyIn ids[i].idx fun x => { x with
           outgoing := outgoing[i]!, incoming := incoming[i]!, mark := mark[i]!, inweight := rs.inweight[i]!,
           outweight := rs.outweight[i]!, rank := rs.rank[i]! }
-      { s with segments, dependencyCount := s.dependencyCount + src.size }
+      { s with segments, dependencySources := s.dependencySources ++ src.map (ids[·]!),
+               dependencyTargets := s.dependencyTargets ++ tgt.map (ids[·]!),
+               dependencyWeights := s.dependencyWeights ++ wgt }
+
+/-- `breakCycles` and `topologicalNumbering` of the gap's segments `ids` with the dependencies `deps`
+(ids from the table size), written back (`writeGapRanking`); a draw of the generator is written back
+to the graph when it is the graph's (Rust shares the generator). -/
+def rankGap (graph : LGraphId) (ids : Array SplineSegmentId) (deps : GapDeps) (leftEmpty : Array Bool) :
+    RouterM Unit := do
+  let (deps, cycles, random, drawn) := breakCycles deps (← get).random
+  if drawn then
+    modify fun s => { s with random := random }
+    if (← get).sharedRandom then
+      LayeredM.setGraphRandom graph random
+  writeGapRanking ids deps cycles.mark (topologicalNumbering deps leftEmpty)
 
 /-- `createSegmentsAndComputeRanking()`: hyperedge segments (left side reversed/non-reversed, then
 right side), single-edge segments, dependencies between every pair (in list order), cycle breaking
@@ -985,12 +1018,7 @@ def createSegmentsAndComputeRanking (graph : LGraphId) : RouterM Unit := do
         segments, edgeToSegmentMap := map, splineSegmentsLayer := layerSegments, edgesRemainingLayer := remaining,
         edgesRemainingSet := remainingSet }
       pure (layerSegments, gs)
-  let (deps, cycles, random, drawn) := breakCycles (createDependencies gs (← get).dependencyCount) (← get).random
-  if drawn then
-    modify fun s => { s with random := random }
-    if (← get).sharedRandom then
-      LayeredM.setGraphRandom graph random
-  writeGapRanking layerSegments deps cycles.mark (topologicalNumbering deps gs.leftEmpty)
+  rankGap graph layerSegments (createDependencies gs (← get).dependencySources.size) gs.leftEmpty
 
 /-- The walk of `getEdgeChain` continued from `chain` (which ends with `current`): the successors of
 `current` up to (excluding) the first repeated edge. The repetition test scans `chain` while it is

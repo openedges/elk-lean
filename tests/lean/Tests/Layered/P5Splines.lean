@@ -488,11 +488,9 @@ def routerCycleTests : Suite := suite "layered.p5splines.SplineEdgeRouter.cycles
         let s0 ← SplineEdgeRouter.addSegment {}
         let s1 ← SplineEdgeRouter.addSegment {}
         let s2 ← SplineEdgeRouter.addSegment {}
-        SplineEdgeRouter.newDependency s0 s1 1
-        SplineEdgeRouter.newDependency s1 s2 1
-        SplineEdgeRouter.newDependency s2 s0 1
-        SplineEdgeRouter.breakCycles g #[s0, s1, s2]
-        SplineEdgeRouter.topologicalNumbering #[s0, s1, s2]
+        -- `new Dependency(S0, S1, 1)`, `(S1, S2, 1)`, `(S2, S0, 1)`; no segment has left ports
+        let deps := SplineEdgeRouter.GapDeps.ofTable 3 0 #[0, 1, 2] #[1, 2, 0] #[1, 1, 1]
+        SplineEdgeRouter.rankGap g #[s0, s1, s2] deps #[true, true, true]
       let ((), st) ← body.run { random := Random.ofInt 0, sharedRandom := true }
       return (g, st))
   let marks := st.segments.map (·.mark)
