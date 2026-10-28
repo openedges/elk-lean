@@ -189,7 +189,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | **5. 기타 알고리즘** | force/stress, mrtree, radial, rectpacking, spore, disco, topdownpacking, vertiflex, libavoid/graphviz 스텁 | 알고리즘별 parity | 해당 알고리즘 모델 model parity 100%, `known_layout_algorithms()` 일치 |
 | **6. 텍스트 포맷** | `.elkt` 파서(elk-rs `elkt_test_loader` + elk-live TS 파서 참고), CLI `convert` | `elk convert x.elkt --to json` | 898개 `.elkt` 변환 성공, Java export와 의미 동일 |
 | **7. 전수 검증·최적화** (진행 중) | ELK Java 기준값·단계별 trace(`scripts/run_java_*`), elk-rs 보조 parity, 메모리 수명 검사, 성능 최적화(FastFloat·파서·zmij·force/stress·P3·P5·mrtree/rectpacking) | `HISTORY.md` 수치, `tests/perf/report.md` | Java 결과 정확 일치 1,878/1,997(나머지는 Java 컨텍스트 의존·NaN 예외), Java 단계별 1,817/1,997(나머지 Java 측 요인), elk-rs 1,447/1,447; 성능은 2차 최적화(PF2·PN·PJ·PL5·PL3b)와 전역 `Array.modifyIn`으로 합성 26개 기하평균 **0.91배**(elk-rs 수준 달성, 7.1 참조). 남은 일: 메모리 수명 재측정, 스플라인 라우팅·hierarchy(1.2배)·JSON 고정 비용 |
-| **8. 배포** (대부분 완료) | `Elk.Ffi`+`elk_lean.h` C API, NAPI C 애드온, WASM(emscripten, MEMORY64=2), npm 패키지(elkjs 호환 로더/Worker/typings, WASM 폴백), `node:test` 51개 | `elk-lean` npm 패키지(미게시) | NAPI vs CLI 1,447/1,448 바이트 일치, WASM 550/550; 남은 일: Linux/Windows 빌드, 게시, GMP 라이선스 검토 |
+| **8. 배포** (대부분 완료) | `Elk.Ffi`+`elk_lean.h` C API, NAPI C 애드온, WASM(emscripten, MEMORY64=2), npm 패키지(elkjs 호환 로더/Worker/typings, WASM 폴백, 깊은 재귀용 `workerStackSizeMb` Worker 모드), `node:test` 56개, `.gitlab-ci.yml` 초안·`CHANGELOG.md`·릴리스 예행 문서 | `elk-lean` npm 패키지(미게시) | NAPI vs CLI 1,447/1,448 바이트 일치, WASM 550/550; 남은 일: Linux/Windows 빌드(CI 미실행), 게시(`private` 제거), GMP 라이선스 검토(G1) |
 | **9. 릴리스** | CHANGELOG, 문서, 태그 | `v0.12.0` | 품질 게이트 전항목 통과 |
 
 병렬화: Phase 1~2는 규약을 정하는 단계이므로 직렬로 진행한다. Phase 3 이후는 플러그인/서브패키지 단위로 서브에이전트에 분배한다(각 작업은 "대응 Rust 파일 목록 + 규약 문서 + parity 명령"을 받고, 빌드 경고 0·테스트 통과·parity 수치를 보고한다).
@@ -236,14 +236,14 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 - **CLI**: `elk layout [-f json|elkt] [-a <algorithm>] [-o out] [--pretty] [--sort-keys] [--trace-dir DIR] [--lenient] input`, `elk convert`, `elk algorithms|options|categories`, `elk --version`.
 - **FFI**: `@[export elk_layout_json] (graph options : String) : String`(오류는 JSON `{"error": "..."}`), `elk_known_layout_algorithms/options/categories`, `elk_init`(모듈 initializer + `ensureInitialized`).
 - **NAPI**: Node-API C 애드온(`plugins/org.eclipse.elk.napi/src/elk_napi.c`)이 `libelklean.a`(`elk_lean.h` C API, `scripts/build_ffi.sh`)를 링크, elk-rs와 같은 6개 플랫폼 패키지 구조(`scripts/build_napi.sh`).
-- **WASM**(`plugins/org.eclipse.elk.wasm`, `scripts/build_wasm.sh`): Lean 런타임 `src/runtime`(v4.35.0 소스, 단일 스레드, GMP 없음, libuv 호환 셈 `c/uv_compat`)과 Init/Std C(툴체인 `lean -c`로 재생성, 릴리스 오브젝트와 793/793 바이트 일치 검증) + 모든 Elk 모듈 C + `elk_lean.c`를 emscripten 6.0.13으로 컴파일. **`-sMEMORY64=2`**(64비트 C를 wasm32로 낮춤): Lean 생성 C는 32비트 타깃에서 `2^31` 이상 리터럴을 매번 힙 bignum으로 만들고 해제하지 않아(누수·느림) 순수 wasm32는 쓰지 않는다. 산출물: Node CJS(동기 초기화) + 브라우저 ESM, `.wasm` 18.9 MB(brotli 2.0 MB), mimalloc. 깊은 재귀는 JS 엔진 스택 한계에 걸리므로 npm 패키지는 스택을 키운 Worker 모드를 제공한다.
+- **WASM**(`plugins/org.eclipse.elk.wasm`, `scripts/build_wasm.sh`): Lean 런타임 `src/runtime`(v4.35.0 소스, 단일 스레드, GMP 없음, libuv 호환 셈 `c/uv_compat`)과 Init/Std C(툴체인 `lean -c`로 재생성, 릴리스 오브젝트와 793/793 바이트 일치 검증) + 모든 Elk 모듈 C + `elk_lean.c`를 emscripten 6.0.13으로 컴파일. **`-sMEMORY64=2`**(64비트 C를 wasm32로 낮춤): Lean 생성 C는 32비트 타깃에서 `2^31` 이상 리터럴을 매번 힙 bignum으로 만들고 해제하지 않아(누수·느림) 순수 wasm32는 쓰지 않는다. 산출물: Node CJS(동기 초기화) + 브라우저 ESM, `.wasm` 18.9 MB(brotli 2.0 MB), mimalloc. 깊은 재귀(JSON 중첩·compound 계층·mrtree/radial 트리 순회)는 호출 스레드의 JS 엔진 스택(V8 기본 약 1 MB)에 걸리므로 npm 패키지의 `workerUrl` 모드는 `worker_threads` Worker를 `resourceLimits.stackSizeMb`(옵션 `workerStackSizeMb`, 기본 64 MB)로 만들고 그래프를 JSON 문자열로 전달한다(구조화 복제는 약 1,000단계, `JSON.stringify`는 약 3,000단계가 한계; W2 측정표는 `plugins/org.eclipse.elk.js/README.md` "Limits"). 브라우저 Web Worker의 스택은 JS에서 바꿀 수 없어 응답성 확보용이다. `MEMORY64=2`는 emsdk 6.0.13에서 deprecated 경고(#27952)만 있고 제거 일정이 없으며 `MEMORY64=1`(진짜 wasm64)은 1.95배로 느려서 **유지**(emsdk 올릴 때 재확인, `plugins/org.eclipse.elk.wasm/README.md`).
 - **npm**: elk-rs `plugins/org.eclipse.elk.js`의 로더(플랫폼 NAPI → 로컬 .node → WASM 폴백, Worker 모드)와 typings 구조를 그대로 이식.
 
 ## 9. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
 |---|---|---|
-| WASM: Lean 런타임의 emscripten 빌드가 현재 CI에서 비활성(libuv/pthread 의존) | 브라우저 배포 지연 | **해결(W1)**: libuv 호환 셈 + `MEMORY64=2`로 빌드, realworld 550/550 일치, 네이티브 대비 1.5배. 남은 위험: `MEMORY64=2`가 emscripten 6에서 deprecated |
+| WASM: Lean 런타임의 emscripten 빌드가 현재 CI에서 비활성(libuv/pthread 의존) | 브라우저 배포 지연 | **해결(W1)**: libuv 호환 셈 + `MEMORY64=2`로 빌드, realworld 550/550 일치, 네이티브 대비 1.5배. `MEMORY64=2` deprecated(W2 조사): 제거 일정 없음, 대안 `MEMORY64=1`은 1.95배로 느림 → emsdk 6.0.13 고정 유지, 제거가 잡히면 `-m64` + `wasm-opt --memory64-lowering` 자체 수행 검토 |
 | Lean 컴파일 시간(대형 do-block 느린 elaboration) | 개발 속도 | 파일당 1 클래스 유지, 긴 함수 분할, `maxHeartbeats` 상향, 모듈 병렬 빌드 |
 | in-place 규약 위반으로 O(n²) 복사 | 성능 | 코드리뷰 체크리스트, 벤치마크 회귀 게이트(5%) |
 | 안정 정렬에서 비일관 비교자의 결과 차이(TimSort vs 병합) | parity 드리프트 | drift 발생 시 해당 비교자에 한해 TimSort 동작 재현 |
