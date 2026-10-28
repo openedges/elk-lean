@@ -1,0 +1,1 @@
+{"id": "root", "children": [{"id": "n0", "children": [{"id": "a", "width": 10, "height": 10, "layoutOptions": {"elk.layered.layering.layerConstraint": "FIRST"}}, {"id": "b", "width": 10, "height": 10, "layoutOptions": {"elk.layered.layering.layerConstraint": "FIRST"}}], "edges": [{"id": "e", "sources": ["b"], "targets": ["a"]}]}, {"id": "n1", "width": 5, "height": 5}]}

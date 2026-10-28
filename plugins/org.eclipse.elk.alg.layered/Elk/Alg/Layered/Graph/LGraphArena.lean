@@ -30,6 +30,12 @@ structure LGraphArena where
   edges : Array LEdge := #[]
   labels : Array LLabel := #[]
   layers : Array Layer := #[]
+  /-- The node a processor names in the exception it is about to throw (set right before the
+  `throw`; `none` otherwise). Java names such nodes by `LNode.getDesignation()`, whose fallback is
+  the identifier path of the origin `ElkNode`, which the arena does not know: the processors use
+  `nodeDesignation` and `LayeredLayoutProvider.layout` puts the identifier path into the message
+  (error path only). -/
+  errorNode : Option LNodeId := none
   deriving Inhabited
 
 namespace LGraphArena

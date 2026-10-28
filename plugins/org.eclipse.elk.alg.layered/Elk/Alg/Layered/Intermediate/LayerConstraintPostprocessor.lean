@@ -36,19 +36,23 @@ def portOwnerType (port : Option LPortId) : LayeredM NodeType := do
   let some owner := (← getPort p).owner | return .normal
   return (← getNode owner).type
 
-/-- `throwUpUnlessNoIncomingEdges(node)`: a `FIRST` node may only have incoming edges from label dummies. -/
+/-- `throwUpUnlessNoIncomingEdges(node)`: a `FIRST` node may only have incoming edges from label dummies
+(the node is recorded in `LGraphArena.errorNode`, see `LayerConstraintPreprocessor`). -/
 def throwUpUnlessNoIncomingEdges (node : LNodeId) : LayeredM Unit := do
   for edge in (← withArena (·.nodeIncomingEdges node)) do
     if (← portOwnerType (← getEdge edge).source) != .label then
       let designation ← withArena (·.nodeDesignation node)
-      throwUnsupportedConfiguration s!"Node '{designation}' has its layer constraint set to FIRST, but has at least one incoming edge that does not come from a FIRST_SEPARATE node. That must not happen."
+      modify fun a => { a with errorNode := some node }
+      -- Java's text has two spaces after "that" (string concatenation)
+      throwUnsupportedConfiguration s!"Node '{designation}' has its layer constraint set to FIRST, but has at least one incoming edge that  does not come from a FIRST_SEPARATE node. That must not happen."
 
 /-- `throwUpUnlessNoOutgoingEdges(node)`: a `LAST` node may only have outgoing edges to label dummies. -/
 def throwUpUnlessNoOutgoingEdges (node : LNodeId) : LayeredM Unit := do
   for edge in (← withArena (·.nodeOutgoingEdges node)) do
     if (← portOwnerType (← getEdge edge).target) != .label then
       let designation ← withArena (·.nodeDesignation node)
-      throwUnsupportedConfiguration s!"Node '{designation}' has its layer constraint set to LAST, but has at least one outgoing edge that does not go to a LAST_SEPARATE node. That must not happen."
+      modify fun a => { a with errorNode := some node }
+      throwUnsupportedConfiguration s!"Node '{designation}' has its layer constraint set to LAST, but has at least one outgoing edge that  does not go to a LAST_SEPARATE node. That must not happen."
 
 /-- `moveLabelsToLabelLayer(node, incoming, labelLayer)`: the label dummies at the other end of the
 node's incoming (or outgoing) edges move to the label layer. -/

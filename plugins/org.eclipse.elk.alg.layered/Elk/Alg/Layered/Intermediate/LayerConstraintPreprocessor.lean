@@ -76,18 +76,22 @@ def isAcceptableIncidentEdge (edge : LEdgeId) : LayeredM Bool := do
   return sourceType == some .externalPort && targetType == some .externalPort
 
 /-- `ensureNoInacceptableEdges(node)`: throws `UnsupportedConfigurationException` for incoming edges of
-`FIRST_SEPARATE` and outgoing edges of `LAST_SEPARATE` nodes (except external-port-to-external-port). -/
+`FIRST_SEPARATE` and outgoing edges of `LAST_SEPARATE` nodes (except external-port-to-external-port).
+The node is recorded in `LGraphArena.errorNode` so that the provider can name it like Java's
+`getDesignation()` (identifier path). -/
 def ensureNoInacceptableEdges (node : LNodeId) : LayeredM Unit := do
   match ← layerConstraintOf node with
   | .firstSeparate =>
     for edge in (← withArena (·.nodeIncomingEdges node)) do
       if !(← isAcceptableIncidentEdge edge) then
         let designation ← withArena (·.nodeDesignation node)
+        modify fun a => { a with errorNode := some node }
         throwUnsupportedConfiguration s!"Node '{designation}' has its layer constraint set to FIRST_SEPARATE, but has at least one incoming edge. FIRST_SEPARATE nodes must not have incoming edges."
   | .lastSeparate =>
     for edge in (← withArena (·.nodeOutgoingEdges node)) do
       if !(← isAcceptableIncidentEdge edge) then
         let designation ← withArena (·.nodeDesignation node)
+        modify fun a => { a with errorNode := some node }
         throwUnsupportedConfiguration s!"Node '{designation}' has its layer constraint set to LAST_SEPARATE, but has at least one outgoing edge. LAST_SEPARATE nodes must not have outgoing edges."
   | _ => pure ()
 

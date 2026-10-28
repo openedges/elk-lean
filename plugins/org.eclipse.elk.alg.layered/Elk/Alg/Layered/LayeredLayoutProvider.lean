@@ -52,6 +52,22 @@ private def withHierarchicalProcessorMessage (layeredGraph : LGraphId) (x : LImp
     let child ← liftLayered (LayeredM.withArena (·.graphToStringWith (ElkGraphTransformer.getOriginIdentifier elkGraph) graph))
     throwUnsupportedGraph (ElkLayered.hierarchicalProcessorMessage strategy child)
 
+/-- Java names the node of a processor exception by `LNode.getDesignation()` (first label text, else
+the identifier path of the origin `ElkNode`, `ElkGraphTransformer.getOriginIdentifier`, else the
+index); the processor recorded the node in `LGraphArena.errorNode` and named it by
+`nodeDesignation` (the arena has no ElkGraph), so `Node '<that name>'` is replaced here by the Java
+designation. Other errors pass unchanged. -/
+private def withNodeDesignations (x : LImportM Unit) : LImportM Unit :=
+  tryCatch x fun err => do
+    let some node ← liftLayered (LayeredM.withArena (·.errorNode)) | throw err
+    let msg := toString err
+    let plain := s!"Node '{← liftLayered (LayeredM.withArena (·.nodeDesignation node))}'"
+    if (msg.splitOn plain).length < 2 then throw err
+    let elkGraph ← liftElk get
+    let designation ← liftLayered (LayeredM.withArena
+      (·.nodeDesignationWith (ElkGraphTransformer.getOriginIdentifier elkGraph) node))
+    throw (IO.userError (msg.replace plain s!"Node '{designation}'"))
+
 /-- `layout(ElkNode, IElkProgressMonitor)`. -/
 def layout (root : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   applyLayeredAlgorithmDefaults root
@@ -61,11 +77,12 @@ def layout (root : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
     (fun g => (g.node root).props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit) <$> get
   let run : LImportM Unit := do
     let layeredGraph ← transformer.importGraph root
-    if hierarchyHandling == HierarchyHandling.includeChildren then
-      withHierarchicalProcessorMessage layeredGraph
-        (liftLayered (algorithm.doCompoundLayout layeredGraph (some monitor)))
-    else
-      liftLayered (algorithm.doLayout layeredGraph (some monitor))
+    withNodeDesignations do
+      if hierarchyHandling == HierarchyHandling.includeChildren then
+        withHierarchicalProcessorMessage layeredGraph
+          (liftLayered (algorithm.doCompoundLayout layeredGraph (some monitor)))
+      else
+        liftLayered (algorithm.doLayout layeredGraph (some monitor))
     if !(← monitor.isCanceled) then
       transformer.applyLayout layeredGraph
   let _ ← StateRefT'.run run (default : LGraphArena)
