@@ -52,6 +52,8 @@ structure GlobalOptions where
 /-- Stores `v` at index `i` of a table indexed by element ids, growing it with `none`. -/
 def tableSet {α : Type} (t : Array (Option α)) (i : Nat) (v : α) : Array (Option α) :=
   if i < t.size then t.set! i (some v)
+  -- elements are created densely: the next id is usually the table size
+  else if i == t.size then t.push (some v)
   else (t ++ Array.replicate (i - t.size) none).push (some v)
 
 /-- `tableSet` when `v` is present; the table is unchanged otherwise. -/

@@ -445,18 +445,23 @@ def transferLayoutPort (p : PortId) : ImportM Unit := do
   recordShape (.port p) parent port.x port.y port.props
   transferXywh port.x port.y port.width port.height path parent
   if let some parentNode := port.parent then
+    -- both deltas are read before any update (the updates do not touch them), and the state value
+    -- is dropped before the updates so that they stay in place
     let st ← getI
-    let side := port.props.getD CoreOptions.PORT_SIDE .undefined
-    if let some delta := st.insideSelfLoopNodeXDelta.get? parentNode then
-      if side == .east then
-        if let some x := ((← objectAt path).get? Key.x).bind (·.getFloat?) then
-          modAt path (·.set Key.x (.ofFloatElk (x - delta)))
-          modI fun s => { s with shiftedEastPortXDelta := s.shiftedEastPortXDelta.insert p delta }
-    if let some delta := st.compactedVerticalNodeYDelta.get? parentNode then
-      if side == .south then
-        if let some y := ((← objectAt path).get? Key.y).bind (·.getFloat?) then
-          modAt path (·.set Key.y (.ofFloatElk (y - delta)))
-          modI fun s => { s with shiftedSouthPortYDelta := s.shiftedSouthPortYDelta.insert p delta }
+    let dx? := st.insideSelfLoopNodeXDelta.get? parentNode
+    let dy? := st.compactedVerticalNodeYDelta.get? parentNode
+    if dx?.isSome || dy?.isSome then
+      let side := port.props.getD CoreOptions.PORT_SIDE .undefined
+      if let some delta := dx? then
+        if side == .east then
+          if let some x := ((← objectAt path).get? Key.x).bind (·.getFloat?) then
+            modAt path (·.set Key.x (.ofFloatElk (x - delta)))
+            modI fun s => { s with shiftedEastPortXDelta := s.shiftedEastPortXDelta.insert p delta }
+      if let some delta := dy? then
+        if side == .south then
+          if let some y := ((← objectAt path).get? Key.y).bind (·.getFloat?) then
+            modAt path (·.set Key.y (.ofFloatElk (y - delta)))
+            modI fun s => { s with shiftedSouthPortYDelta := s.shiftedSouthPortYDelta.insert p delta }
 
 def adjustXForShiftedEastPort (shape : ConnectableId) (x : Float) : ImportM Float := do
   match shape with
