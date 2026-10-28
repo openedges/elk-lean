@@ -159,17 +159,12 @@ def updateGraph (imp : ElkGraphImporter) (graph : Graph) : IO Graph := do
   imp.ref.modify fun s => { s with nodeMap := updatedMap }
   return Graph.rebuildIndexMap { graph with tEdges := none, tree := none, vertices }
 
-/-- Rust `first_edge_section(edge, true, true)`: the first section of the edge, reset (no bend
-points, zero start and end) and followed by `retain_last`; creates a section if there is none. -/
-private def firstEdgeSection (edge : EdgeId) : ElkM SectionId := do
-  let sections := (← ElkM.getEdge edge).sections
-  match sections[0]? with
-  | none => ElkM.createSection (some edge)
-  | some first =>
-    ElkM.modifySection first fun s =>
-      { s with bendPoints := #[], startX := fl0p0, startY := fl0p0, endX := fl0p0, endY := fl0p0 }
-    modify (·.retainLastEdgeSection edge)
-    return first
+/-- Java `ElkGraphUtil.firstEdgeSection(e, true, true)`: the first section of the edge, reset (no
+bend points, zero start and end), the other sections removed; creates a section if there is none.
+(Rust `first_edge_section` resets the first section and then keeps the *last* one, so with several
+sections it routed a detached section.) -/
+private def firstEdgeSection (edge : EdgeId) : ElkM SectionId :=
+  modifyGet fun g => let (g, s) := ElkGraphUtil.firstEdgeSection g edge true true; (s, g)
 
 /-- Bounds `(x, y, width, height)` of a node. -/
 private def nodeBounds (n : NodeId) : ElkM (Float × Float × Float × Float) := do

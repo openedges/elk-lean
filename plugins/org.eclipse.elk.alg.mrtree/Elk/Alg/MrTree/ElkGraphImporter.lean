@@ -25,8 +25,8 @@ No `TLabel`s are created.
 `applyLayout` writes the result of the (packed) graph back: the bounding box of the node boxes (centre
 ± half size, `f64::min`/`f64::max`), every node's top-left position and its *public* properties (Rust
 copies the whole property map, which contains the internal properties too; those are typed fields in
-Lean and are not written back), every edge's bend points into its first section (created if missing;
-Rust neither resets it nor removes further sections, unlike Java `firstEdgeSection(edge, true, true)`),
+Lean and are not written back), every edge's bend points into its first section (Java `firstEdgeSection(edge, true, true)`: created
+if missing, reset, further sections removed; Rust neither resets it nor removes further sections),
 where an edge with fewer than two bend points gets the chain `source centre -> target centre`
 (`position + size / 2` of the tree nodes). The layout node is resized to the box plus padding (unless
 `NODE_SIZE_FIXED_GRAPH_SIZE`, without moving ports or labels) and `CHILD_AREA_WIDTH`/`HEIGHT` are set.
@@ -122,9 +122,9 @@ def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
       let tn := a.node t
       bendPoints := #[⟨sn.position.x + sn.size.x / fl2p0, sn.position.y + sn.size.y / fl2p0⟩,
         ⟨tn.position.x + tn.size.x / fl2p0, tn.position.y + tn.size.y / fl2p0⟩]
-    let edgeSection ← match (← ElkM.getEdge elkEdge).sections[0]? with
-      | some s => pure s
-      | none => ElkM.createSection (some elkEdge)
+    -- Java `ElkGraphUtil.firstEdgeSection(elkedge, true, true)` (elk-rs keeps the other sections)
+    let edgeSection ← modifyGet fun g =>
+      let (g, s) := ElkGraphUtil.firstEdgeSection g elkEdge true true; (s, g)
     ElkUtil.applyVectorChain bendPoints edgeSection
   let paddingHorizontal := padding.left + padding.right
   let paddingVertical := padding.top + padding.bottom

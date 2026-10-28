@@ -1,0 +1,61 @@
+{
+  "children": [
+    {
+      "height": 30,
+      "id": "n1",
+      "width": 30
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 30
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 5,
+              "y": 6
+            }
+          ],
+          "endPoint": {
+            "x": 3,
+            "y": 4
+          },
+          "id": "sa",
+          "incomingShape": "n1",
+          "startPoint": {
+            "x": 1,
+            "y": 2
+          }
+        },
+        {
+          "endPoint": {
+            "x": 9,
+            "y": 10
+          },
+          "id": "sb",
+          "outgoingShape": "n2",
+          "startPoint": {
+            "x": 7,
+            "y": 8
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force"
+  }
+}
