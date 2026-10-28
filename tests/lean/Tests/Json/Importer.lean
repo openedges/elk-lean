@@ -1199,6 +1199,16 @@ def shapeLayoutTests : Suite := suite "json.import.shape_layout" do
                          ("label", "{id: 'r', labels: [{text: 't', height: [1]}]}")] do
     let err ← importError text
     check s!"invalid {what} coordinate fails" ((err.getD "").endsWith "Invalid number value.")
+  -- ENUM values repeat across elements (the importer memoises their parses): every port keeps its own
+  let m ← importText "{id: 'r', children: [{id: 'n', ports: [
+    {id: 'p0', properties: {'port.side': 'WEST'}}, {id: 'p1', properties: {'port.side': 'EAST'}},
+    {id: 'p2', properties: {'port.side': 'WEST'}}, {id: 'p3', properties: {'port.side': 'west'}},
+    {id: 'p4', properties: {'port.side': 'bogus'}}, {id: 'p5', properties: {'port.side': 'EAST'}},
+    {id: 'p6', properties: {'port.side': '3'}}]}]}"
+  let nd := m.g.node (m.g.node m.root).children[0]!
+  let sides := nd.ports.map fun p => (m.g.port p).props.get? CoreOptions.PORT_SIDE
+  checkEq "memoised port sides" (sides.map fun s => s.map ElkEnum.javaName)
+    #[some "WEST", some "EAST", some "WEST", some "WEST", none, some "EAST", (ElkEnum.ofOrdinal? 3 : Option PortSide).map ElkEnum.javaName]
 
 def suites : Array Tests.Suite :=
   #[graphTests, edgeTests, sectionTests, idTests, layoutOptionImportTests, individualSpacingTests,

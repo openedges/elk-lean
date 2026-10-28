@@ -29,6 +29,35 @@ def optionDataFor (id : String) : ImportM (Option LayoutOptionData) := do
     modI fun s => { s with optionCache := s.optionCache.insert id d }
     return d
 
+/-- Index of the `enumMemo` entry for option `oid` and value `value` from `i` (`memo.size` if none). -/
+private def enumMemoIndex (memo : Array (String × String × PropValue)) (oid value : String) (i : Nat) : Nat :=
+  if h : i < memo.size then
+    let e := memo[i]
+    if e.1 == oid && e.2.1 == value then i else enumMemoIndex memo oid value (i + 1)
+  else memo.size
+termination_by memo.size - i
+
+/-- Entries kept in `enumMemo` (ENUM/ENUMSET values repeat across the elements of a graph, e.g.
+`port.side`; a short list compares faster than a hash map). -/
+private def ENUM_MEMO_SIZE : Nat := 16
+
+/-- `LayoutOptionData.parseValue`, memoised per import for ENUM/ENUMSET options (pure parsers: a
+memo hit returns the value a new parse would). -/
+def parseOptionValue (od : LayoutOptionData) (value : String) : ImportM (Option PropValue) := do
+  match od.type with
+  | .enum | .enumSet =>
+    -- an empty or `null` value is decided by `parseValue` itself (no parser call)
+    if value.isEmpty || value == "null" then return od.parseValue value
+    let memo := (← getI).enumMemo
+    let i := enumMemoIndex memo od.id value 0
+    if h : i < memo.size then return some memo[i].2.2
+    match od.parseValue value with
+    | some v =>
+      if memo.size < ENUM_MEMO_SIZE then modI (·.pushEnumMemo (od.id, value, v))
+      return some v
+    | none => return none
+  | _ => return od.parseValue value
+
 /-- `set_option`: parses the string value with the option's parser and stores
 it under the canonical id. Unknown options and unparsable values are ignored. -/
 def setOption (props : PropertyMap) (id : String) (value : String) : ImportM PropertyMap := do
@@ -37,7 +66,7 @@ def setOption (props : PropertyMap) (id : String) (value : String) : ImportM Pro
       return props.set CoreOptions.DIRECTION d
   match ← optionDataFor id with
   | some od =>
-    match od.parseValue value with
+    match ← parseOptionValue od value with
     | some v => return props.setRawById od.id v
     | none => return props
   | none => return props
