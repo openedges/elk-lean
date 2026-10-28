@@ -1,4 +1,7 @@
+import Elk.Core.Exceptions
 import Elk.Core.Util.Adapters.GraphAdapters
+import Elk.Core.Util.Java
+import Elk.Core.Util.JavaSort
 import Elk.Core.Util.Sort
 import Elk.Core.Util.ElkTrace
 /-!
@@ -17,28 +20,39 @@ namespace Elk.Core.Util.Adapters
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options
 
-/-- `ElkGraphAdapters.PortComparator` (`DEFAULT_PORTLIST_SORTER`): by port side ordinal,
-then `PORT_INDEX` (when both are set), then by the coordinate along the side. -/
-def PortComparator.compare (g : ElkGraph) (p1 p2 : PortId) : Ordering :=
+/-- Message of the `IllegalStateException` thrown by `ElkGraphAdapters.PortComparator` for two ports
+with `UNDEFINED` side and no `PORT_INDEX` difference. -/
+def PortComparator.undefinedSideMessage : String := "Port side is undefined"
+
+/-- `ElkGraphAdapters.PortComparator.compare(port1, port2)` (`DEFAULT_PORTLIST_SORTER`): by port side
+ordinal (`UNDEFINED` first), then by `PORT_INDEX` when both ports have one (Java `int` difference),
+then by the coordinate along the side (`Double.compare`; NORTH `x`, EAST `y`, SOUTH reversed `x`,
+WEST reversed `y`). Two ports with side `UNDEFINED` reach the last step and Java throws
+`IllegalStateException("Port side is undefined")`: returned as `.error undefinedSideMessage`
+(elk-rs answers `Equal` instead). -/
+def PortComparator.compare (g : ElkGraph) (p1 p2 : PortId) : Except String Ordering :=
   let port1 := g.port p1
   let port2 := g.port p2
   let side1 := port1.props.getD CoreOptions.PORT_SIDE PortSide.undefined
   let side2 := port2.props.getD CoreOptions.PORT_SIDE PortSide.undefined
   let ordinalDifference : Int := (ElkEnum.ordinal side1 : Int) - (ElkEnum.ordinal side2 : Int)
-  if ordinalDifference != 0 then Ord.compare ordinalDifference 0
+  if ordinalDifference != 0 then .ok (Ord.compare ordinalDifference 0)
   else
+    -- `Integer index1 - index2` (Java `int` arithmetic)
     let byIndex : Option Ordering := match port1.props.get CoreOptions.PORT_INDEX, port2.props.get CoreOptions.PORT_INDEX with
-      | some i1, some i2 => if i1 - i2 != 0 then some (Ord.compare (i1 - i2) 0) else none
+      | some i1, some i2 =>
+        let indexDifference := Int.wrap32 (i1 - i2)
+        if indexDifference != 0 then some (Ord.compare indexDifference 0) else none
       | _, _ => none
     match byIndex with
-    | some o => o
+    | some o => .ok o
     | none =>
       match side1 with
-      | .north => Float.comparePartial port1.x port2.x
-      | .east => Float.comparePartial port1.y port2.y
-      | .south => Float.comparePartial port2.x port1.x
-      | .west => Float.comparePartial port2.y port1.y
-      | .undefined => .eq
+      | .north => .ok (Float.compareJava port1.x port2.x)
+      | .east => .ok (Float.compareJava port1.y port2.y)
+      | .south => .ok (Float.compareJava port2.x port1.x)
+      | .west => .ok (Float.compareJava port2.y port1.y)
+      | .undefined => .error PortComparator.undefinedSideMessage
 
 /-- The adapters of an `ElkGraph`: graph = parent node, elements by typed id. -/
 abbrev ElkAdapters := GraphAdapters ElkM NodeId NodeId PortId LabelId EdgeId
@@ -105,21 +119,34 @@ private def labelOps (vol : IO.Ref (Array Int)) : ElementOps ElkM LabelId where
   setVolatileId l v := setVol vol l.idx v
   defaultOverride := offsetOverride
 
-/-- `ElkNodeAdapter.sortPortList()`: sorts the node's ports with `PortComparator` when the
-port constraints fix the order (stable sort, like Rust `sort_by`). -/
+/-- `ElkNodeAdapter.sortPortList()`: when the port constraints fix the order, sorts the node's ports
+with `PortComparator` like Java's `ECollections.sort(element.getPorts(), comparator)` (the list as an
+array, `Arrays.sort` = JDK 21 `TimSort` via `javaSortByM`, then moved into that order). The
+comparator's `IllegalStateException("Port side is undefined")` and TimSort's
+`IllegalArgumentException("Comparison method violates its general contract!")` propagate; the port
+list is then unchanged (Java sorts a copy). elk-rs sorts stably and never throws. -/
 def sortPortList (n : NodeId) : ElkM Unit := do
   let nd ← ElkM.getNode n
   let constraints := nd.props.getD CoreOptions.PORT_CONSTRAINTS PortConstraints.undefined
   if constraints.isOrderFixed then
-    let g ← get
     let trace := ElkTrace.global.corePortSort
-    let portIds (ps : Array PortId) : String :=
-      ", ".intercalate (ps.toList.map fun p => (g.port p).identifier.getD "<no-port-id>")
-    let before := if trace then portIds nd.ports else ""
-    let sorted := stableSort nd.ports (fun a b => PortComparator.compare g a b)
-    ElkM.modifyNode n fun x => { x with ports := sorted }
-    if trace then
-      IO.eprintln s!"rust-core-port-sort: node={nd.identifier.getD "<no-node-id>"} constraints={constraints} before=[{before}] after=[{portIds sorted}]"
+    let (sorted, traceLine) ← ElkM.withGraph fun g =>
+      let portIds (ps : Array PortId) : String :=
+        ", ".intercalate (ps.toList.map fun p => (g.port p).identifier.getD "<no-port-id>")
+      let result := javaSortByM nd.ports (fun a b => PortComparator.compare g a b)
+      let traceLine := match result with
+        | .ok (.ok sorted) =>
+          if trace then
+            some s!"rust-core-port-sort: node={nd.identifier.getD "<no-node-id>"} constraints={constraints} before=[{portIds nd.ports}] after=[{portIds sorted}]"
+          else none
+        | _ => none
+      (result, traceLine)
+    match sorted with
+    | .error msg => Elk.Core.throwIllegalState msg
+    | .ok (.error _) => throw (IO.userError JavaSort.contractViolationError)
+    | .ok (.ok sorted) =>
+      ElkM.modifyNode n fun x => { x with ports := sorted }
+      if let some line := traceLine then IO.eprintln line
 
 /-- `ElkPortAdapter.hasCompoundConnections()`. -/
 def hasCompoundConnections (p : PortId) : ElkM Bool := do

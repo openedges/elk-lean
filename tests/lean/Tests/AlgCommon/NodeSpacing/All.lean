@@ -78,6 +78,15 @@ private def nodeMargin (n : NodeId) : ElkM ElkMargin := do
 private def microLayout (graph : NodeId) : ElkM Unit := do
   (← NodeMicroLayout.forGraph graph).execute
 
+/-- elk-rs' `NodeMicroLayout::execute` (`sortPortLists`, the simplified ELK path
+`calculateLabelAndNodeSizesForElk`, `calculateNodeMargins`). `NodeMicroLayout` follows ELK Java and
+no longer takes this path; the port label stacking tests below still exercise it. -/
+private def elkRsMicroLayout (graph : NodeId) : ElkM Unit := do
+  let a ← ElkGraphAdapters.adapt graph
+  NodeDimensionCalculation.sortPortLists a graph
+  NodeDimensionCalculation.calculateLabelAndNodeSizesForElk a graph
+  NodeDimensionCalculation.calculateNodeMargins a graph
+
 /-- Absolute rectangle `(port + label position, label size)` of a port's first label. -/
 private def firstLabelRect (p : PortId) : ElkM ElkRectangle := do
   let pt ← ElkM.getPort p
@@ -356,7 +365,10 @@ def nextToPortRuleTests : Suite := suite "alg.common.nodespacing.NodeDimensionCa
   checkEqR "hand: label placement relation: next to port → centered"
     (labelPlacementRelation 0 2 false false true false false false true) .centered
 
-/-! ### `nodespacing_test.rs`: outside / constrained port label placement -/
+/-! ### `nodespacing_test.rs`: outside / constrained port label placement
+
+These elk-rs tests check the label stacking of elk-rs' simplified ELK path, so they run
+`elkRsMicroLayout` (ELK Java has no such stacking; `NodeMicroLayout` now runs the cell system). -/
 
 /-- elk-rs `outside_north_label_x_positions(placements, port_count)`. -/
 private def outsideNorthLabelXPositions (placements : Array PortLabelPlacement) (portCount : Nat) : IO (Array Float) :=
@@ -370,7 +382,7 @@ private def outsideNorthLabelXPositions (placements : Array PortLabelPlacement) 
       let port ← mkPort node (index.toFloat * 12.0) 0.0 8.0 4.0 (some .north) (some index)
       let _ ← mkLabel (.port port) 0.0 0.0 6.0 2.0
       ports := ports.push port
-    microLayout root
+    elkRsMicroLayout root
     ports.mapM fun p => do return (← ElkM.getLabel (← ElkM.getPort p).labels[0]!).x
 
 /-- elk-rs `constrained_outside_north_label_rectangles()`: sorted by x. -/
@@ -386,7 +398,7 @@ private def constrainedOutsideNorthLabelRectangles : IO (Array ElkRectangle) := 
     let port ← mkPort node (index.toFloat * 3.0) 0.0 8.0 4.0 (some .north) (some index)
     let _ ← mkLabel (.port port) 0.0 0.0 24.0 6.0
     ports := ports.push port
-  microLayout root
+  elkRsMicroLayout root
   let rects ← ports.mapM firstLabelRect
   return stableSort rects fun l r => Float.comparePartial l.x r.x
 
@@ -410,10 +422,10 @@ private def constrainedInsideRects (side : PortSide) (nodeWidth : Float) (portXs
     let port ← mkPort node portXs[i]! y 8.0 4.0 (some side) (some i)
     let _ ← mkLabel (.port port) 0.0 0.0 labelWidth 6.0
     ports := ports.push port
-  microLayout root
+  elkRsMicroLayout root
   ports.mapM firstLabelRect
 
-def portLabelPlacementTests : Suite := suite "alg.common.nodespacing.NodeMicroLayout port label placement" do
+def portLabelPlacementTests : Suite := suite "alg.common.nodespacing.NodeMicroLayout port label placement (elk-rs path)" do
   let xs ← outsideNorthLabelXPositions #[.outside] 2
   check "rust: outside_two_ports_places_first_label_on_other_side (-7, 9)"
     (xs.size == 2 && close xs[0]! (-7.0) && close xs[1]! 9.0)
