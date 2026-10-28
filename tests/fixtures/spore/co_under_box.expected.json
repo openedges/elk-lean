@@ -4,52 +4,52 @@
       "height": 13,
       "id": "n0",
       "width": 46,
-      "x": 54.08653846153846,
-      "y": 55
+      "x": 12,
+      "y": 46
     },
     {
       "height": 14,
       "id": "n1",
       "width": 31,
-      "x": 59.08653846153846,
-      "y": 21
+      "x": 46.90909090909091,
+      "y": 12
     },
     {
       "height": 24,
       "id": "n2",
       "width": 19,
-      "x": 12.125,
-      "y": 44
+      "x": 92.9090909090909,
+      "y": 12
     },
     {
       "height": 23,
       "id": "n3",
       "width": 38,
-      "x": 12.125,
-      "y": 88
+      "x": 68.9090909090909,
+      "y": 51
     },
     {
       "height": 12,
       "id": "n4",
       "width": 24,
-      "x": 12,
-      "y": 12
+      "x": 13.949367088607596,
+      "y": 14
     },
     {
       "height": 29,
       "id": "n5",
       "width": 36,
-      "x": 70.125,
-      "y": 88
+      "x": 12.543478260869565,
+      "y": 79
     }
   ],
-  "height": 129,
+  "height": 120,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeCompaction",
     "org.eclipse.elk.underlyingLayoutAlgorithm": "box"
   },
-  "width": 118.12500000000001,
+  "width": 123.9090909090909,
   "x": 0,
   "y": 0
 }

@@ -22,9 +22,6 @@ Two independent paths, both ported from elk-rs (the oracle):
 `InsideNodeLabelGrid` (label sizes only, no label handles).
 
 Oracle facts reproduced on purpose:
-* `processWithOptions` computes the node padding (`NodeLabelAndSizeUtilities.computeNodePadding`,
-  elk-rs `set_node_padding`) but discards it, so `COMPUTE_PADDING` never changes the node there;
-  `processNode` does apply its own computed padding.
 * `processWithOptions` applies the node size and then the port positions, port contexts sorted by
   volatile id and zipped with `NodeAdapter.getPorts()` (the volatile id is the port index).
 * `PortContext.portRatioOrPosition` stays `0.0` (see `PortContextCreator`).
@@ -34,6 +31,10 @@ Oracle facts reproduced on purpose:
   `NodeContext` without a parent graph).
 
 Deviations from elk-rs:
+* `processWithOptions` applies the node padding computed with `COMPUTE_PADDING`
+  (`NodeLabelAndSizeUtilities.setNodePadding`) like Java; elk-rs' `set_node_padding` only returns it
+  and `process_with_options` discards it.
+* `NodeContext.new` throws Java's `Invalid port/node label placement` exceptions.
 * The `ElkTrace` (`sizing`, `sizingLabels`) and `DEBUG_NODE_LABEL_PADDING` diagnostics only print
   to stderr and are not ported (the functions are generic over the monad).
 * elk-rs' `DynLabel` type erasure is unnecessary: the layout structures hold the label handles
@@ -1068,8 +1069,9 @@ def applyPortPositions (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L)
 /-- Java `NodeLabelAndSizeCalculator.process(graph, node, applyStuff, ignoreInsidePortLabels)`
 (elk-rs `process_with_options(node, layout_direction, apply_stuff, ignore_inside_port_labels)`):
 the full 7-phase cell system pipeline. Returns the node size that was (`applyStuff`) or would be
-applied. With `applyStuff`, the node size, the port positions and the node and port label
-positions are written through the adapters; the computed node padding is discarded (elk-rs).
+applied. With `applyStuff`, the node padding (`COMPUTE_PADDING`), the node size, the port positions
+and the node and port label positions are written through the adapters (Java `setNodePadding`,
+`applyStuff`).
 `applyStuff := false, ignoreInsidePortLabels := true` is the importer path that computes a lower
 bound for a hierarchical node's size. Throws `IllegalArgumentException` for ports without side. -/
 def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
@@ -1105,8 +1107,9 @@ def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) 
   -- (without labels in the label cells this would only lay out the outer label containers,
   -- whose rectangles are not read below: skipped, see `LabelPlacer.hasLabelsToPlace`)
   let ctx ← if LabelPlacer.hasLabelsToPlace ctx then LabelPlacer.placeLabels a ctx else pure ctx
-  -- elk-rs `set_node_padding` only returns the padding, which `process_with_options` discards
-  let _discardedNodePadding := NodeLabelAndSizeUtilities.computeNodePadding ctx
+  -- Java `setNodePadding` (elk-rs `set_node_padding` only returns the padding and
+  -- `process_with_options` discards it)
+  NodeLabelAndSizeUtilities.setNodePadding a ctx
   -- applyStuff: write computed sizes/positions back to the adapter
   a.node.setSize node ctx.nodeSize
   applyPortPositions a ctx
@@ -1572,9 +1575,14 @@ def processNode (a : GraphAdapters m G N P L E) (node : N) (layoutDirection : Di
 /-- Java `NodeLabelAndSizeCalculator.computeInsideNodeLabelPadding(graph, node, layoutDirection)`
 (elk-rs `compute_inside_node_label_padding(node, layout_direction)`): the padding required to place
 the inside non-center node labels (`InsideNodeLabelGrid.computeInsidePadding`). Spacings are
-individual or inherited from the node's parent graph (elk-rs). -/
-def computeInsideNodeLabelPadding (a : GraphAdapters m G N P L E) (node : N) (layoutDirection : Direction) :
-    m ElkPadding := do
+individual or inherited from the node's parent graph (elk-rs). Throws like the Java
+`new NodeContext(null, node)` for an invalid port or node label placement of the node
+(`NodeContext.validatePlacements`; elk-rs does not check). -/
+def computeInsideNodeLabelPadding [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
+    (layoutDirection : Direction) : m ElkPadding := do
+  NodeContext.validatePlacements
+    (← a.node.getPropertyD node CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty)
+    (← a.node.getPropertyD node CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty)
   let grid ← InsideNodeLabelGrid.new a node layoutDirection
   return grid.computeInsidePadding
 

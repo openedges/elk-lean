@@ -61,6 +61,33 @@ def checkJson (name : String) (actual expected : String) (tol : Float := 0.0) : 
   | .error err, _ => report name false s!"actual is not JSON: {err}"
   | _, .error err => report name false s!"expected is not JSON: {err}"
 
+/-- The JSON API (`Elk.Api.catchLayout`, elk-rs `catch_layout`) wraps exceptions without an
+`org.eclipse.elk.core.` class as `UnsupportedConfigurationException: …`; this removes that wrapper
+in front of `java.*` classes, giving Java's `Throwable.toString()` text. -/
+def javaExceptionText (e : String) : String :=
+  let wrapper := "org.eclipse.elk.core.UnsupportedConfigurationException: "
+  if e.startsWith (wrapper ++ "java.") then (e.drop wrapper.length).toString else e
+
+/-- The node micro layout view of one node: without its position (`x`, `y`) and its edges,
+recursively through `children`; size, ports (with their node-relative positions and their labels)
+and node labels stay. -/
+partial def nodeSizingView : Value → Value
+  | .obj kvs => .obj (kvs.filterMap fun (k, v) =>
+      if k == "x" || k == "y" || k == "edges" then none
+      else if k == "children" then
+        some (k, match v with
+          | .arr cs => .arr (cs.map nodeSizingView)
+          | other => other)
+      else some (k, v))
+  | v => v
+
+/-- The node micro layout view of a layout document: the root graph without its size (set by the
+layout algorithm) and every node in `nodeSizingView`. Compares node sizing and port/label placement
+where the node placement of the algorithm is not part of the comparison. -/
+def layoutSizingView : Value → Value
+  | .obj kvs => nodeSizingView (.obj (kvs.filter fun (k, _) => k != "width" && k != "height"))
+  | v => v
+
 /-- `checkJson` as a Boolean (for suites that accept one of several references). -/
 def jsonEquivalent (actual expected : String) (tol : Float := 0.0) : Bool :=
   match Elk.Json.parse actual, Elk.Json.parse expected (lenient := true) with

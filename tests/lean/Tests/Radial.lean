@@ -408,10 +408,18 @@ private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit :
   check s!"fixtures found in {dir}" (names.size >= minimum)
   for name in names do
     let input ← IO.FS.readFile (dir / s!"{name}.json")
-    let expected ← IO.FS.readFile (dir / s!"{name}.expected.json")
-    match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
-    | .error e => report s!"{name}: layout" false e
-    | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
+    let result ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true)
+    -- `<name>.error`: ELK Java rejects the input with the exception text in the file
+    if ← (dir / s!"{name}.error").pathExists then
+      let expectedError := (← IO.FS.readFile (dir / s!"{name}.error")).trimAscii.toString
+      match result with
+      | .error e => checkEq s!"{name}: fails with the ELK Java exception" (javaExceptionText e) expectedError
+      | .ok _ => report s!"{name}: fails with the ELK Java exception" false "layout succeeded"
+    else
+      let expected ← IO.FS.readFile (dir / s!"{name}.expected.json")
+      match result with
+      | .error e => report s!"{name}: layout" false e
+      | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
 
 /-- `radial.fixtures`: `Elk.Api.layoutJson` reproduces the stock elk-rs output byte-for-byte. -/
 def fixtureTests : Suite := suite "radial.fixtures" do

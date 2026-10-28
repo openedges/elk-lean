@@ -15,8 +15,7 @@ Inside port label cells: Java has one `AtomicCell` per side, shared by
 cell, which is updated once (`updateInsidePortLabelCells`).
 
 Deviations from Java (following elk-rs): see `HorizontalPortPlacementSizeCalculator` (fixed
-ratios read `PortContext.portRatioOrPosition`, margins set up once, strict ratio tolerance,
-`fmax`). The first label's height is the size recorded in the label cell (Java re-reads
+ratios read `PortContext.portRatioOrPosition`, margins set up once, `fmax`). The first label's height is the size recorded in the label cell (Java re-reads
 `label.getSize()`; label sizes do not change during the calculation).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler

@@ -789,12 +789,13 @@ def providerTests : Suite := suite "rectpacking.provider" do
   let g := g.setNodeProp root RectPackingOptions.TRYBOX true
   let g ← runLayout g root
   check "trybox: priorities set" ((g.node k[0]!).props.get CoreOptions.PRIORITY == some 3)
-  -- box layout with the values of the engine snapshot: padding 12, spacing 20 (core defaults, not
-  -- the rectangle packing defaults); one box per row (oracle: (12, 12), (12, 52), (12, 92))
-  checkPosE "trybox: box n0" g k[0]! 12.0 12.0
-  checkPosE "trybox: box n1" g k[1]! 12.0 52.0
-  checkPosE "trybox: box n2" g k[2]! 12.0 92.0
-  checkSizeE "trybox: graph" g root 44.0 124.0
+  -- box layout with the box defaults padding 15 and spacing 15 (ELK Java 0.12.0 on the same graph:
+  -- (15, 15), (50, 15), (15, 50), 85 × 85; elk-rs reads the engine snapshot's core defaults 12 / 20
+  -- and gets one box per row: (12, 12), (12, 52), (12, 92), 44 × 124)
+  checkPosE "Java: trybox: box n0" g k[0]! 15.0 15.0
+  checkPosE "Java: trybox: box n1" g k[1]! 50.0 15.0
+  checkPosE "Java: trybox: box n2" g k[2]! 15.0 50.0
+  checkSizeE "Java: trybox: graph" g root 85.0 85.0
   -- the interactive visitor
   let (g, root, _) := mkGraph #[(10.0, 10.0)]
   let g := g.setNodeProp root CoreOptions.ALGORITHM "rectpacking"
@@ -826,7 +827,12 @@ private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit :
       let expected ← IO.FS.readFile expectedFile
       match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
       | .error e => report s!"{name}: layout" false e
-      | .ok actual => checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
+      | .ok actual =>
+        -- optional debugging aid: `ELK_RECTPACKING_ACTUAL_DIR` receives the actual outputs
+        if let some d ← IO.getEnv "ELK_RECTPACKING_ACTUAL_DIR" then
+          IO.FS.createDirAll d
+          IO.FS.writeFile (System.FilePath.mk d / s!"{name}.json") actual
+        checkJson s!"{name}: matches oracle" actual expected (tol := ELK_RS_FIXTURE_TOL)
     else
       -- no oracle output: elk-rs panics (e.g. NONE packing + a whitespace eliminator)
       match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with

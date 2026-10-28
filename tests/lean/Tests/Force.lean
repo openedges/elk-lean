@@ -420,7 +420,8 @@ private def runFixtures (dir : System.FilePath) (dumpDir : Option String) : Test
       | .error e =>
         -- the exception class prefix is the core's business (the validation reports
         -- `GraphValidationException`, elk-rs wraps it): compare the message only
-        let msg (t : String) : String := (t.dropWhile (· != ':')).drop 2 |>.toString
+        -- (`javaExceptionText` first: a `java.*` class wrapped by the JSON API keeps its message)
+        let msg (t : String) : String := ((javaExceptionText t).dropWhile (· != ':')).drop 2 |>.toString
         checkEq s!"{name}: error message matches oracle" (msg e) (msg (← IO.FS.readFile errorPath))
     else if !(← expectedPath.pathExists) then
       report s!"{name}: expected output exists" false s!"missing {expectedPath}"

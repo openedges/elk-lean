@@ -319,7 +319,8 @@ def minSizeTests : Suite := suite "alg.common.nodespacing.internal.algorithm.min
   checkFloat "hand: 10 / (0.75 - 0.25)" (f 10.0 0.25 0.75) 20.0
   checkFloat "ratios closer than 0.01 count as equal" (f 10.0 0.3 0.305) 0.0
   checkFloat "equal ratios" (f 10.0 0.0 0.0) 0.0
-  checkFloat "hand: elk-rs tolerance is strict: |0 - 0.01| is not < 0.01 → 10 / 0.01" (f 10.0 0.0 0.01) 1000.0 1e-6
+  checkFloat "Java: DoubleMath.fuzzyEquals accepts |0 - 0.01| <= 0.01 → equal (elk-rs: 10 / 0.01)" (f 10.0 0.0 0.01) 0.0
+  checkFloat "hand: ratios 0.02 apart differ → 10 / 0.02" (f 10.0 0.0 0.02) 500.0 1e-6
 
 /-! ### Port margins (`SizeConstraint.PORT_LABELS`) -/
 

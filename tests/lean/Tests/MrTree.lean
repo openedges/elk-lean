@@ -857,7 +857,8 @@ private def firstDiff (a b : String) : String := Id.run do
   return "identical"
 
 /-- Every `<name>.json` of `dir` lays out to `<name>.expected.json` byte for byte; with
-`<name>.error` instead of an expected file the layout must fail. -/
+`<name>.error` instead of an expected file the layout must fail (with the ELK Java exception text
+if the file starts with a Java class name). -/
 private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit := do
   let names ← fixtureNames dir
   check s!"fixtures found in {dir}" (names.size >= minimum)
@@ -865,8 +866,13 @@ private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit :
     let input ← IO.FS.readFile (dir / s!"{name}.json")
     let result ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true)
     if ← (dir / s!"{name}.error").pathExists then
+      let expectedError := (← IO.FS.readFile (dir / s!"{name}.error")).trimAscii.toString
       match result with
-      | .error _ => check s!"{name}: fails like the oracle" true
+      | .error e =>
+        -- older marker files describe the elk-rs failure; files with a Java class hold Java's text
+        if !(expectedError.startsWith "java." || expectedError.startsWith "org.eclipse.") then
+          check s!"{name}: fails like the oracle" true
+        else checkEq s!"{name}: fails with the ELK Java exception" (javaExceptionText e) expectedError
       | .ok _ => report s!"{name}: fails like the oracle" false "layout succeeded"
     else
       let expected ← IO.FS.readFile (dir / s!"{name}.expected.json")

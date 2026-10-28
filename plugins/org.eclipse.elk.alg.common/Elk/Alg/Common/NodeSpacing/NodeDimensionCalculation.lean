@@ -783,6 +783,21 @@ port lists are sorted (`sortPortLists`). For an `ElkGraph` use `calculateLabelAn
 def calculateLabelAndNodeSizes [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (graph : G) : m Unit :=
   calculateLabelAndNodeSizesWith a graph NodeDimensionFlags.global.useFullProcess
 
+/-- Java `NodeDimensionCalculation.calculateLabelAndNodeSizes(adapter)` exactly as ELK Java runs it
+(`NodeLabelAndSizeCalculator.process(adapter)`): for every node of the graph, in
+`GraphAdapter.getNodes()` order, the full cell system pipeline
+`NodeLabelAndSizeCalculator.process(graph, node, true, false)` (layout direction = the graph's
+`DIRECTION`). Used by `NodeMicroLayout`. Throws like Java for invalid port or node label placements
+(`NodeContext.new`) and for ports without side (`PortContextCreator`), at the first such node.
+Unlike elk-rs (`calculateLabelAndNodeSizesForElk` / `calculateLabelAndNodeSizesWith`) there is no
+`processNode` pass and no simplified port label placement. Make sure the port lists are sorted
+(`sortPortLists`). -/
+def calculateLabelAndNodeSizesJava [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (graph : G) :
+    m Unit := do
+  let layoutDirection ← a.graph.getPropertyD graph CoreOptions.DIRECTION Direction.undefined
+  for node in ← a.getNodes graph do
+    let _ ← NodeLabelAndSizeCalculator.process a node layoutDirection
+
 /-- `NodeDimensionCalculation.calculateNodeMargins(adapter)`: node margins of all nodes of the
 graph with a default `NodeMarginCalculator` (everything included). -/
 def calculateNodeMargins (a : GraphAdapters m G N P L E) (graph : G) : m Unit :=
