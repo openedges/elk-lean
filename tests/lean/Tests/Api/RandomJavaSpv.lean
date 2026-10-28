@@ -19,6 +19,8 @@ All of them differed from Java before their fix. Inputs come from `scripts/run_r
   the tree node, not from the layout graph.
 * `vertiflex_port_edges_ignored`, `vertiflex_port_target_cast`: the tree walks use the node's own edges
   (`getOutgoingEdges()`); a port target is Java's `ClassCastException`.
+* `vertiflex_constraint_before_cast`: the vertical constraint check casts edge by edge, so a child that
+  violates its constraint is reported before a later edge's `ClassCastException`.
 * `rectpacking_recompact_same_row` (`v10/g0460`): `RowFillingAndCompaction` compacts the same row again.
 * `rectpacking_stale_parent_row` (`v8/g0580`): Java's strong parent-row references (a block of a removed
   next row is added to the row twice), `RectRow.removeBlock` of the first occurrence, `Double.MIN_VALUE`.
@@ -49,7 +51,7 @@ def fixtures : Array String := #[
   "sort_by_input_model_ports", "orthogonal_insert_sorted_float"]
 
 /-- The fixtures whose layout fails with Java's exception (`<name>.java.error`). -/
-def errorFixtures : Array String := #["vertiflex_port_target_cast"]
+def errorFixtures : Array String := #["vertiflex_port_target_cast", "vertiflex_constraint_before_cast"]
 
 def layouts : Suite := suite "spv.java" do
   for name in fixtures do

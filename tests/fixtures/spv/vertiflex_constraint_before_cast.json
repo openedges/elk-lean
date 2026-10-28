@@ -1,0 +1,59 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "vertiflex"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 20,
+   "height": 20,
+   "layoutOptions": {
+    "elk.vertiflex.verticalConstraint": "100"
+   }
+  },
+  {
+   "id": "n1",
+   "width": 20,
+   "height": 20,
+   "layoutOptions": {
+    "elk.vertiflex.verticalConstraint": "10"
+   }
+  },
+  {
+   "id": "n2",
+   "width": 20,
+   "height": 20,
+   "ports": [
+    {
+     "id": "p",
+     "width": 4,
+     "height": 4,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "p"
+   ]
+  }
+ ]
+}

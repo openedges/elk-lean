@@ -62,9 +62,10 @@ partial def checkVerticalConstraintValidity (root : NodeId) (currentMinConstrain
     | none => currentMinConstraint
   let margins := node.props.getD CoreOptions.MARGINS {}
   let newMinConstraint := rootHeight + node.height + javaMax margins.bottom nodeNodeSpacing
-  -- Java `root.getOutgoingEdges()` with `(ElkNode) getTargets().get(0)` (see `outgoingChildren`)
-  let children ← VertiFlexUtil.outgoingChildren root
-  for child in children do
+  -- Java `root.getOutgoingEdges()` with `(ElkNode) getTargets().get(0)` per edge (`edgeChild`): a
+  -- child that violates its constraint is reported before a later edge's `ClassCastException`
+  for edge in (← ElkM.getNode root).outgoingEdges do
+    let child ← VertiFlexUtil.edgeChild edge
     let childNode ← ElkM.getNode child
     if childNode.props.has VertiFlexOptions.VERTICAL_CONSTRAINT then
       let childConstraint := (childNode.props.get VertiFlexOptions.VERTICAL_CONSTRAINT).getD fl0p0
@@ -73,7 +74,7 @@ partial def checkVerticalConstraintValidity (root : NodeId) (currentMinConstrain
         let identifier := childNode.identifier.getD "null"
         throwUnsupportedConfiguration
           s!"Invalid vertical constraints. Node {identifier} has a vertical constraint that is too low for its ancestors."
-  for child in children do
+  for child in ← VertiFlexUtil.outgoingChildren root do
     checkVerticalConstraintValidity child newMinConstraint nodeNodeSpacing
 
 /-- `set_graph_size(graph)`: the size of the graph is the bounding box of the children (with

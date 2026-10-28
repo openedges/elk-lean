@@ -30,20 +30,23 @@ def PORT_CAST_EXCEPTION : String :=
   "org.eclipse.elk.graph.ElkNode (org.eclipse.elk.graph.impl.ElkPortImpl and org.eclipse.elk.graph.ElkNode " ++
   "are in unnamed module of loader 'app')"
 
+/-- `(ElkNode) edge.getTargets().get(0)`: the target node of an edge; a port target is Java's
+`ClassCastException`, an edge without targets its `IndexOutOfBoundsException`. -/
+def edgeChild (e : EdgeId) : ElkM NodeId := do
+  let g : ElkGraph ← get
+  let target : Option ConnectableId := (g.edge e).targets[0]?
+  match target with
+  | some (ConnectableId.node c) => return c
+  | some (ConnectableId.port _) => throw (IO.userError PORT_CAST_EXCEPTION)
+  | none => throw (IO.userError "java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0")
+
 /-- The children of a tree node as Java's phases read them: `(ElkNode)
 node.getOutgoingEdges().get(i).getTargets().get(0)` — only the edges of the node itself (not of its
 ports; elk-rs used `all_outgoing_edges`), in edge order; a port target is Java's
 `ClassCastException`, an edge without targets its `IndexOutOfBoundsException`. -/
 def outgoingChildren (n : NodeId) : ElkM (Array NodeId) := do
   let g : ElkGraph ← get
-  let mut children : Array NodeId := #[]
-  for e in (g.node n).outgoingEdges do
-    let target : Option ConnectableId := (g.edge e).targets[0]?
-    match target with
-    | some (ConnectableId.node c) => children := children.push c
-    | some (ConnectableId.port _) => throw (IO.userError PORT_CAST_EXCEPTION)
-    | none => throw (IO.userError "java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0")
-  return children
+  (g.node n).outgoingEdges.mapM edgeChild
 
 /-- Java `ElkGraphUtil.firstEdgeSection(edge, true, true)` of the edge routers: the first section of
 the edge (created if missing), reset, the other sections removed. elk-rs `ensure_single_section`
