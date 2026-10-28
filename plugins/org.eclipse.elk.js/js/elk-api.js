@@ -7,6 +7,7 @@
  *
  * Supports two modes:
  *  - Worker mode: workerUrl or workerFactory provided → delegates to a Web Worker / worker_threads
+ *    running js/elk-worker.js (the layout request carries the graph as a JSON string)
  *  - Direct mode: neither provided → calls the backend synchronously and wraps in a Promise
  *
  * A backend is an object with four functions returning JSON strings and throwing an Error
@@ -69,7 +70,10 @@ class ELK {
       algorithms: algorithms
     })
       .then((r) => this.initialized = true)
-      .catch(console.error);
+      .catch((err) => {
+        // terminateWorker() before the answer rejects the request; that is not an error
+        if (!this.worker.terminated) console.error(err);
+      });
   }
 
   layout(graph, {
@@ -93,16 +97,26 @@ class ELK {
       }
     }
 
-    // Worker mode
+    // Worker mode: graph and result travel as JSON strings. Structured cloning (postMessage of
+    // the object) recurses per nesting level and fails at ~1000 compound levels on the default
+    // V8 stack; JSON.stringify gets about three times as deep and JSON.parse is iterative.
+    let graphJson;
+    let optionsJson;
+    try {
+      graphJson = JSON.stringify(graph);
+      optionsJson = JSON.stringify(layoutOptions || {});
+    } catch (err) {
+      return Promise.reject(err);
+    }
     return this.worker.postMessage({
       cmd: 'layout',
-      graph: graph,
-      layoutOptions: layoutOptions,
+      graphJson: graphJson,
+      optionsJson: optionsJson,
       options: {
         logging: logging,
         measureExecutionTime: measureExecutionTime,
       }
-    });
+    }).then((result) => typeof result === 'string' ? JSON.parse(result) : result);
   }
 
   knownLayoutAlgorithms() {
@@ -159,6 +173,24 @@ class PromisedWorker {
         this.receive(this, answer);
       }, 0);
     };
+    // A worker that fails outside a command (script/backend load error, Web Worker `error`
+    // event, worker_threads `error`/`exit`) rejects the pending requests instead of leaving them
+    // unsettled.
+    this.worker.onerror = (err) => {
+      setTimeout(() => {
+        this.rejectAll(err);
+      }, 0);
+    };
+  }
+
+  rejectAll(err) {
+    const error = err instanceof Error ? err
+      : new Error(err && err.message ? err.message : 'elk-lean: layout worker failed');
+    const pending = this.resolvers;
+    this.resolvers = {};
+    for (const id of Object.keys(pending)) {
+      pending[id](error);
+    }
   }
 
   postMessage(msg) {
@@ -193,6 +225,7 @@ class PromisedWorker {
 
   terminate() {
     if (this.worker) {
+      this.terminated = true;
       this.worker.terminate();
     }
   }

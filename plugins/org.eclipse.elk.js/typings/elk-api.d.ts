@@ -133,6 +133,13 @@ export interface ELKConstructorArguments {
     algorithms?: string[]
     workerUrl?: string
     workerFactory?: (url?: string) => Worker
+    /**
+     * elk-lean (Node.js only): stack size in MB of the `worker_threads` Worker created for
+     * `workerUrl` (`resourceLimits.stackSizeMb`, default 64). Deeply nested or deeply recursive
+     * graphs need more stack than the ~1 MB V8 default (WASM backend) or the 4 MB worker_threads
+     * default (native addon). Ignored with `workerFactory` and in browsers.
+     */
+    workerStackSizeMb?: number
 }
 
 declare const ElkConstructor: {
