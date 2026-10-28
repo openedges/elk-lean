@@ -5,36 +5,34 @@ import Elk.Alg.MrTree.Options.MrTreeOptions
 /-!
 # `org.eclipse.elk.alg.mrtree.p3place.NodePlacer`
 
-Port of `p3place/node_placer.rs` (elk-rs), the phase `P3_NODE_PLACEMENT`. elk-rs replaces the Java
-implementation (Walker's algorithm over the `LEVELHEIGHT`/neighbour properties, followed by the
-`DirectionProcessor` and `NodePositionProcessor`) by a self-contained Reingold-Tilford pass over a
-struct-of-arrays copy of the tree (`TreeSoA`); this port follows Rust:
+The phase `P3_NODE_PLACEMENT` of ELK Java: Walker's algorithm (`firstWalk`, `apportion`,
+`secondWalk`) over the properties set by the `LevelHeightProcessor` and the `NeighborsProcessor`,
+followed by the `DirectionProcessor` and the `NodePositionProcessor`. elk-rs replaced it by a
+self-contained Reingold-Tilford pass over a breadth-first copy of the tree in which every node is
+reached once (elk-lean followed it before agent RJ3); ELK Java walks the trees as they are:
 
-1. `TreeSoA::build`: breadth first from the first `ROOT` node over the `direct_children` caches; a
-   child already reached is skipped (it gets no second parent), but a node whose cache is non-empty
-   is no leaf even if all its children were skipped. Per node: half the width (vertical direction)
-   or height (horizontal), half the size, and the full height (vertical) or width (horizontal); per
-   BFS level the level height is the maximum full extent (`f64::max` from 0); consecutive nodes of a
-   level are left neighbours, and siblings if their BFS parents coincide.
-2. `first_walk`: post-order prelim/modifier computation; a leaf is placed `spacing + mean width`
-   right of its left sibling, an inner node centred over its first and last child or, with a left
-   sibling, right of it with `modifier = prelim - midpoint` followed by `apportion`.
-3. `apportion`: Rust's bounded variant (at most 256 rounds; gives up when an ancestor, a left sibling
-   chain or the ancestor neighbour is missing; distributes the move over the left siblings between
-   the node and the ancestor neighbour).
-4. `second_walk`: `x = prelim + modifier sum`, `y = level top + level height / 2`, both rounded
-   (`f64::round`, then `as i32`, saturating) and transformed by the layout direction (Rust inlines
-   the `DirectionProcessor`); the node position becomes the integer centre minus half the node
-   size (Rust inlines the `NodePositionProcessor`). `XCOOR`/`YCOOR`/`PRELIM`/`MODIFIER` are not
-   written. Nodes not reached from the root keep their positions.
+* `getChildren()` are the targets of the outgoing edges, so a child linked by parallel edges (kept by
+  the `BFS` treeification) or a node with several parents (`BFS`) is listed and visited once per
+  edge; the levels of the `LevelHeightProcessor`/`NeighborsProcessor` are the concatenations of the
+  children lists of the previous level, duplicates included, and the last assignment of a node's
+  `LEVELHEIGHT`, neighbours and siblings wins (a node listed twice in a row becomes its own right and
+  left sibling);
+* `getParent()` is the source of the first incoming edge;
+* positions are `(int) Math.round(x)` (half up), the direction transform works on these `int`s, the
+  `NodePositionProcessor` copies them to the nodes reached from the root over the children lists and
+  then moves *every* node of the graph by half its size.
 
-`DIRECTION` is read with `unwrap_or(UNDEFINED)`; `UNDEFINED` becomes `DOWN` and is written back to
-the graph. `SPACING_NODE_NODE` is read with `unwrap_or(0.0)`. The processor configuration only slots
-`ROOT_PROC` before `P2_NODE_ORDERING`.
+The walker properties (`PRELIM`, `MODIFIER`, `LEVELHEIGHT`, `LEFTSIBLING`, `RIGHTSIBLING`,
+`LEFTNEIGHBOR`, `XCOOR`, `YCOOR`) are not read by later phases, so they live in arrays indexed by a
+dense node index (`Walker`) instead of the nodes. Java behaviour that cannot terminate is cut off: a
+node that is its own right sibling makes `secondWalk` recurse forever (Java's
+`java.lang.StackOverflowError`, thrown here after as many steps as there are level entries plus one),
+a left sibling chain that is a cycle makes `apportion` loop forever (Java hangs; Lean throws
+`java.lang.StackOverflowError` too after as many steps as there are nodes), and a missing ancestor in
+`apportion` is Java's `NullPointerException`.
 
-Rust indexes `children[0]` of a non-leaf node without children (only possible if a node has two
-parents in the treeified graph, e.g. after a `BFS` treeification); that panics in Rust and throws
-`IndexOutOfBoundsException` here.
+`DIRECTION` `UNDEFINED` becomes `DOWN` and is written back to the graph (Java `NodePlacer.process`;
+the `LevelHeightProcessor` runs before and still sees `UNDEFINED`, which is vertical).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -49,248 +47,301 @@ open Elk.Alg.MrTree.Options Elk.Alg.MrTree.Intermediate
 
 namespace NodePlacer
 
-/-- `TreeSoA`: the tree in BFS order (index 0 = root). -/
-structure TreeSoA where
+/-- Java's `java.lang.StackOverflowError` (no message). -/
+def stackOverflow : String := "java.lang.StackOverflowError"
+
+/-- The walker state by dense node index. -/
+structure Walker where
   nodes : Array TNodeId
+  /-- `getChildren()`: the targets of the outgoing edges (duplicates included). -/
   children : Array (Array Nat)
+  /-- `getParent()`: the source of the first incoming edge. -/
   parent : Array (Option Nat)
-  leftSibling : Array (Option Nat)
-  leftNeighbor : Array (Option Nat)
-  rightSibling : Array (Option Nat)
-  isLeaf : Array Bool
+  /-- Half the node width (vertical direction) or height (`meanNodeWidth`). -/
   halfWidth : Array Float
-  halfSizeX : Array Float
-  halfSizeY : Array Float
-  levelheight : Array Float
+  levelHeight : Array Float
+  leftSibling : Array (Option Nat)
+  rightSibling : Array (Option Nat)
+  leftNeighbor : Array (Option Nat)
   prelim : Array Float
   modifier : Array Float
+  xcoor : Array Int
+  ycoor : Array Int
   deriving Inhabited
 
-namespace TreeSoA
+namespace Walker
 
-/-- `TreeSoA::build(root, is_vertical)`. -/
-def build (a : TArena) (root : TNodeId) (isVertical : Bool) : TreeSoA := Id.run do
-  let mut nodes : Array TNodeId := #[root]
-  let mut indexMap : Std.HashMap TNodeId Nat := ({} : Std.HashMap TNodeId Nat).insert root 0
-  let mut childrenVec : Array (Array Nat) := #[#[]]
-  let mut parentVec : Array (Option Nat) := #[none]
-  let mut isLeafVec : Array Bool := #[true]
-  let mut halfWidthVec : Array Float := #[fl0p0]
-  let mut halfSizeXVec : Array Float := #[fl0p0]
-  let mut halfSizeYVec : Array Float := #[fl0p0]
-  let mut fullDimVec : Array Float := #[fl0p0]
-  let mut levelRanges : Array (Nat × Nat) := #[]
-  let mut levelStart := 0
-  let mut levelEnd := 1
-  while levelStart < levelEnd do
-    levelRanges := levelRanges.push (levelStart, levelEnd)
-    for idx in [levelStart:levelEnd] do
-      let node := a.node nodes[idx]!
-      let size := node.size
-      halfWidthVec := halfWidthVec.set! idx (if isVertical then size.x / fl2p0 else size.y / fl2p0)
-      halfSizeXVec := halfSizeXVec.set! idx (size.x / fl2p0)
-      halfSizeYVec := halfSizeYVec.set! idx (size.y / fl2p0)
-      fullDimVec := fullDimVec.set! idx (if isVertical then size.y else size.x)
-      let childRefs := node.directChildren
-      isLeafVec := isLeafVec.set! idx childRefs.isEmpty
-      let mut childIndices : Array Nat := #[]
-      for child in childRefs do
-        if !indexMap.contains child then
-          let ci := nodes.size
-          indexMap := indexMap.insert child ci
-          nodes := nodes.push child
-          childrenVec := childrenVec.push #[]
-          parentVec := parentVec.push (some idx)
-          isLeafVec := isLeafVec.push true
-          halfWidthVec := halfWidthVec.push fl0p0
-          halfSizeXVec := halfSizeXVec.push fl0p0
-          halfSizeYVec := halfSizeYVec.push fl0p0
-          fullDimVec := fullDimVec.push fl0p0
-          childIndices := childIndices.push ci
-      childrenVec := childrenVec.set! idx childIndices
-      -- a node whose children were all reached before (a BFS treeification of a cyclic graph can
-      -- leave a node with several parents; Java walks such a child once per parent) is a leaf of the
-      -- tree arrays: elk-rs keeps `is_leaf = false` and panics on its empty child list (agent OPT;
-      -- the multi-parent placement of Java is not reproduced)
-      if childIndices.isEmpty then isLeafVec := isLeafVec.set! idx true
-    levelStart := levelEnd
-    levelEnd := nodes.size
-  let n := nodes.size
-  let mut levelheight : Array Float := Array.replicate n fl0p0
-  let mut leftSibling : Array (Option Nat) := Array.replicate n none
-  let mut leftNeighbor : Array (Option Nat) := Array.replicate n none
-  let mut rightSibling : Array (Option Nat) := Array.replicate n none
-  for (start, stop) in levelRanges do
-    let mut height : Float := fl0p0
-    for i in [start:stop] do
-      height := fmax height fullDimVec[i]!
-    let mut prev : Option Nat := none
-    for idx in [start:stop] do
-      levelheight := levelheight.set! idx height
-      if let some p := prev then
-        leftNeighbor := leftNeighbor.set! idx (some p)
-        if parentVec[p]! == parentVec[idx]! then
-          leftSibling := leftSibling.set! idx (some p)
-          rightSibling := rightSibling.set! p (some idx)
-      prev := some idx
-  return { nodes, children := childrenVec, parent := parentVec, leftSibling, leftNeighbor,
-           rightSibling, isLeaf := isLeafVec, halfWidth := halfWidthVec, halfSizeX := halfSizeXVec,
-           halfSizeY := halfSizeYVec, levelheight, prelim := Array.replicate n fl0p0,
-           modifier := Array.replicate n fl0p0 }
+/-- Indexes `n` (and the nodes reachable from it over children and parents) and fills the
+structural arrays. -/
+def build (a : TArena) (nodes : Array TNodeId) (isVertical : Bool) : Walker × Std.HashMap TNodeId Nat :=
+  Id.run do
+    let mut index : Std.HashMap TNodeId Nat := {}
+    let mut order : Array TNodeId := #[]
+    let mut queue := nodes
+    let mut qi := 0
+    -- index every node of the graph, then every node met as a child or parent
+    while qi < queue.size do
+      let n := queue[qi]!
+      qi := qi + 1
+      if index.contains n then continue
+      index := index.insert n order.size
+      order := order.push n
+      let x := a.node n
+      for e in x.outgoingEdges do
+        if let some t := (a.edge e).target then
+          if !index.contains t then queue := queue.push t
+      if let some e := x.incomingEdges[0]? then
+        if let some s := (a.edge e).source then
+          if !index.contains s then queue := queue.push s
+    let mut children : Array (Array Nat) := Array.mkEmpty order.size
+    let mut parent : Array (Option Nat) := Array.mkEmpty order.size
+    let mut halfWidth : Array Float := Array.mkEmpty order.size
+    for n in order do
+      let x := a.node n
+      children := children.push (x.outgoingEdges.filterMap fun e => (a.edge e).target.bind index.get?)
+      parent := parent.push (x.incomingEdges[0]?.bind fun e => (a.edge e).source.bind index.get?)
+      halfWidth := halfWidth.push (if isVertical then x.size.x / fl2p0 else x.size.y / fl2p0)
+    let k := order.size
+    return ({ nodes := order, children, parent, halfWidth, levelHeight := Array.replicate k fl0p0,
+              leftSibling := Array.replicate k none, rightSibling := Array.replicate k none,
+              leftNeighbor := Array.replicate k none, prelim := Array.replicate k fl0p0,
+              modifier := Array.replicate k fl0p0, xcoor := Array.replicate k 0,
+              ycoor := Array.replicate k 0 }, index)
 
-/-- `mean_node_width(left, right)`. -/
-@[inline] def meanNodeWidth (soa : TreeSoA) (left right : Nat) : Float :=
-  soa.halfWidth[left]! + soa.halfWidth[right]!
+/-- The next level: the concatenation of the children lists of the level's entries. -/
+@[inline] def nextLevel (w : Walker) (level : Array Nat) : Array Nat :=
+  level.foldl (fun acc i => acc ++ w.children[i]!) #[]
 
-/-- `get_left_most(start_children, depth)`. -/
-partial def getLeftMost (soa : TreeSoA) (startChildren : Array Nat) (depth : Int) : Option Nat :=
-  if startChildren.isEmpty then none
-  else if depth > 1 then
-    getLeftMost soa (startChildren.foldl (fun acc i => acc ++ soa.children[i]!) #[]) (depth - 1)
+/-- Bound of the level sizes (Java builds them lazily and would run out of time or memory). -/
+def LEVEL_LIMIT : Nat := 50000000
+
+/-- `LevelHeightProcessor.setNeighbors`: every entry of a level gets the largest node height
+(vertical) or width of the level (`height < size`, starting at 0). -/
+def setLevelHeights (a : TArena) (w : Walker) (root : Nat) (horizontal : Bool) : Except String Walker := do
+  let mut w := w
+  let mut level := #[root]
+  let mut entries := 0
+  while !level.isEmpty do
+    entries := entries + level.size
+    if entries > LEVEL_LIMIT then throw "java.lang.OutOfMemoryError: Java heap space"
+    let mut height := fl0p0
+    for i in level do
+      let size := (a.node w.nodes[i]!).size
+      let s := if horizontal then size.x else size.y
+      if height < s then height := s
+    for i in level do
+      w := { w with levelHeight := w.levelHeight.set! i height }
+    level := w.nextLevel level
+  return w
+
+/-- `NeighborsProcessor.setNeighbors` from the children of the root. -/
+def setNeighbors (w : Walker) (root : Nat) : Walker := Id.run do
+  let mut w := w
+  let mut level := w.children[root]!
+  while !level.isEmpty do
+    let mut lN : Option Nat := none
+    for cN in level do
+      if let some l := lN then
+        w := { w with leftNeighbor := w.leftNeighbor.set! cN (some l) }
+        if w.parent[cN]! == w.parent[l]! then
+          w := { w with rightSibling := w.rightSibling.set! l (some cN), leftSibling := w.leftSibling.set! cN (some l) }
+      lN := some cN
+    level := w.nextLevel level
+  return w
+
+/-- `meanNodeWidth(leftNode, rightNode)`. -/
+@[inline] def meanNodeWidth (w : Walker) (left right : Nat) : Float :=
+  w.halfWidth[left]! + w.halfWidth[right]!
+
+/-- `TreeUtil.getLeftMost(currentLevel, depth)` over the children lists. -/
+partial def getLeftMost (w : Walker) (currentLevel : Array Nat) (depth : Int) : Option Nat :=
+  if currentLevel.isEmpty then none
+  else if depth > 1 then getLeftMost w (w.nextLevel currentLevel) (depth - 1)
   else if depth < 0 then
-    let nextLevel := startChildren.foldl (fun acc i => acc ++ soa.children[i]!) #[]
-    if !nextLevel.isEmpty then getLeftMost soa nextLevel depth else startChildren[0]?
-  else startChildren[0]?
+    let next := w.nextLevel currentLevel
+    if !next.isEmpty then getLeftMost w next depth else currentLevel[0]?
+  else currentLevel[0]?
 
-end TreeSoA
+end Walker
 
-/-- `apportion_soa(soa, node_idx)`. -/
-def apportion (spacing : Float) (soa : TreeSoA) (nodeIdx : Nat) : TreeSoA := Id.run do
-  let mut soa := soa
-  let children := soa.children[nodeIdx]!
+/-- Java's `NullPointerException` of `apportion` (an ancestor of the leftmost node or of its neighbour
+missing). -/
+private def apportionNpe (var : String) : String :=
+  s!"java.lang.NullPointerException: Cannot invoke \"org.eclipse.elk.alg.mrtree.graph.TNode.getProperty(org.eclipse.elk.graph.properties.IProperty)\" because \"{var}\" is null"
+
+/-- `apportion(cN, level)`. -/
+def apportion (spacing : Float) (w : Walker) (cN : Nat) : Except String Walker := do
+  let mut w := w
+  let children := w.children[cN]!
   let mut leftmost : Option Nat := children[0]?
-  let mut neighbor : Option Nat := leftmost.bind fun lm => soa.leftNeighbor[lm]!
+  let mut neighbor : Option Nat := leftmost.bind fun lm => w.leftNeighbor[lm]!
   let mut compareDepth : Nat := 1
-  let mut apportionIterations := 0
   while true do
-    let (some lmIdx, some nbIdx) := (leftmost, neighbor) | break
-    apportionIterations := apportionIterations + 1
-    if apportionIterations > 256 then return soa
-    let mut leftModSum := 0.0
-    let mut rightModSum := 0.0
-    let mut ancestorLeftmost := lmIdx
-    let mut ancestorNeighbor := nbIdx
+    let (some lm, some nb) := (leftmost, neighbor) | break
+    let mut leftModSum := fl0p0
+    let mut rightModSum := fl0p0
+    let mut ancestorLeftmost : Option Nat := some lm
+    let mut ancestorNeighbor : Option Nat := some nb
     for _ in [0:compareDepth] do
-      let some alp := soa.parent[ancestorLeftmost]! | return soa
-      let some anp := soa.parent[ancestorNeighbor]! | return soa
-      ancestorLeftmost := alp
-      ancestorNeighbor := anp
-      rightModSum := rightModSum + soa.modifier[ancestorLeftmost]!
-      leftModSum := leftModSum + soa.modifier[ancestorNeighbor]!
-    let mean := soa.meanNodeWidth lmIdx nbIdx
-    let mut moveDistance := soa.prelim[nbIdx]! + leftModSum + spacing + mean - soa.prelim[lmIdx]!
-      - rightModSum
-    if moveDistance > 0.0 then
-      let mut current := nodeIdx
-      let mut leftSiblings := 0
-      let mut found := false
-      let mut seenCount := 0
+      ancestorLeftmost := ancestorLeftmost.bind fun x => w.parent[x]!
+      ancestorNeighbor := ancestorNeighbor.bind fun x => w.parent[x]!
+      let some al := ancestorLeftmost | throw (apportionNpe "ancestorLeftmost")
+      rightModSum := rightModSum + w.modifier[al]!
+      let some an := ancestorNeighbor | throw (apportionNpe "ancestorNeighbor")
+      leftModSum := leftModSum + w.modifier[an]!
+    let ancestorNb := ancestorNeighbor.getD 0
+    let mean := w.meanNodeWidth lm nb
+    let mut moveDistance := w.prelim[nb]! + leftModSum + spacing + mean - w.prelim[lm]! - rightModSum
+    if 0.0 < moveDistance then
+      let mut leftSibling : Option Nat := some cN
+      let mut leftSiblings : Nat := 0
+      let mut steps := 0
       while true do
-        seenCount := seenCount + 1
-        if seenCount > soa.nodes.size then return soa
-        if current == ancestorNeighbor then
-          found := true
-          break
+        let some ls := leftSibling | break
+        if ls == ancestorNb then break
+        steps := steps + 1
+        -- a cyclic left sibling chain: Java loops forever
+        if steps > w.nodes.size then throw stackOverflow
         leftSiblings := leftSiblings + 1
-        match soa.leftSibling[current]! with
-        | some ls => current := ls
-        | none => break
-      if !found || leftSiblings == 0 then return soa
-      let portion := moveDistance / Float.ofNat leftSiblings
-      current := nodeIdx
-      seenCount := 0
-      while current != ancestorNeighbor do
-        seenCount := seenCount + 1
-        if seenCount > soa.nodes.size then return soa
-        soa := { soa with
-          prelim := soa.prelim.modify current (· + moveDistance)
-          modifier := soa.modifier.modify current (· + moveDistance) }
-        moveDistance := moveDistance - portion
-        match soa.leftSibling[current]! with
-        | some ls => current := ls
-        | none => return soa
+        leftSibling := w.leftSibling[ls]!
+      if leftSibling.isSome then
+        let portion := moveDistance / Float.ofNat leftSiblings
+        let mut cur := cN
+        while cur != ancestorNb do
+          w := { w with prelim := w.prelim.modify cur (· + moveDistance),
+                        modifier := w.modifier.modify cur (· + moveDistance) }
+          moveDistance := moveDistance - portion
+          -- the chain reaches `ancestorNeighbor` (checked above)
+          cur := (w.leftSibling[cur]!).getD ancestorNb
+      else
+        return w
     compareDepth := compareDepth + 1
-    if soa.isLeaf[lmIdx]! then
-      leftmost := soa.getLeftMost children compareDepth
+    if w.children[lm]!.isEmpty then
+      leftmost := w.getLeftMost children compareDepth
     else
-      leftmost := soa.children[lmIdx]![0]?
-    neighbor := leftmost.bind fun lm => soa.leftNeighbor[lm]!
-  return soa
+      leftmost := w.children[lm]![0]?
+    neighbor := leftmost.bind fun x => w.leftNeighbor[x]!
+  return w
 
-/-- `first_walk_soa(soa, idx)`. -/
-partial def firstWalk (spacing : Float) (soa : TreeSoA) (idx : Nat) : Except String TreeSoA := do
-  let mut soa := { soa with modifier := soa.modifier.set! idx 0.0 }
-  if soa.isLeaf[idx]! then
-    let prelim := match soa.leftSibling[idx]! with
-      | some ls => soa.prelim[ls]! + spacing + soa.meanNodeWidth ls idx
-      | none => 0.0
-    return { soa with prelim := soa.prelim.set! idx prelim }
-  let children := soa.children[idx]!
+/-- `firstWalk(cN, level)`. -/
+partial def firstWalk (spacing : Float) (w : Walker) (cN : Nat) : Except String Walker := do
+  let mut w := { w with modifier := w.modifier.set! cN fl0p0 }
+  let lS := w.leftSibling[cN]!
+  let children := w.children[cN]!
+  if children.isEmpty then
+    let p := match lS with
+      | some l => w.prelim[l]! + spacing + w.meanNodeWidth l cN
+      | none => fl0p0
+    return { w with prelim := w.prelim.set! cN p }
   for child in children do
-    soa ← firstWalk spacing soa child
-  let some firstChild := children[0]?
-    | throw "java.lang.IndexOutOfBoundsException: index out of bounds: the len is 0 but the index is 0"
-  let lastChild := children[children.size - 1]!
-  let midPoint := (soa.prelim[lastChild]! + soa.prelim[firstChild]!) / 2.0
-  match soa.leftSibling[idx]! with
-  | some ls =>
-    let p := soa.prelim[ls]! + spacing + soa.meanNodeWidth ls idx
-    soa := { soa with prelim := soa.prelim.set! idx p, modifier := soa.modifier.set! idx (p - midPoint) }
-    return apportion spacing soa idx
-  | none => return { soa with prelim := soa.prelim.set! idx midPoint }
+    w ← firstWalk spacing w child
+  let lM := children[0]!
+  let rM := children[children.size - 1]!
+  let midPoint := (w.prelim[rM]! + w.prelim[lM]!) / fl2p0
+  match lS with
+  | some l =>
+    let p := w.prelim[l]! + spacing + w.meanNodeWidth l cN
+    w := { w with prelim := w.prelim.set! cN p, modifier := w.modifier.set! cN (p - midPoint) }
+    apportion spacing w cN
+  | none => return { w with prelim := w.prelim.set! cN midPoint }
 
-/-- Rust `x.round() as i32` (round half away from zero, saturating, NaN to 0). -/
+/-- Java `(int) Math.round(x)`: round half up (`floor(x + 0.5)`; elk-rs rounds half away from zero,
+which differs for negative halves such as `-2.5`), saturated to `long`, then narrowed to `int`
+(two's complement wrap; NaN to 0). -/
 @[inline] def roundToI32 (x : Float) : Int :=
-  max (-2147483648) (min 2147483647 (Float.roundToInt x))
+  Int.wrap32 (Float.javaRound x)
 
-/-- `second_walk_soa(soa, idx, y_coor, mod_sum)`: appends the final positions (by SoA index). -/
-partial def secondWalk (spacing : Float) (direction : Direction) (soa : TreeSoA) (idx : Nat)
-    (yCoor modSum : Float) (acc : Array (Nat × KVector)) : Array (Nat × KVector) := Id.run do
-  let xTemp := soa.prelim[idx]! + modSum
-  let yTemp := yCoor + soa.levelheight[idx]! / 2.0
-  let xr := roundToI32 xTemp
-  let yr := roundToI32 yTemp
-  let (xcoor, ycoor) : Int × Int := match direction with
-    | .up => (xr, -yr)
-    | .right => (yr, xr)
-    | .left => (-yr, xr)
-    | _ => (xr, yr)
-  let posX := Float.ofInt xcoor - soa.halfSizeX[idx]!
-  let posY := Float.ofInt ycoor - soa.halfSizeY[idx]!
-  let mut acc := acc.push (idx, ⟨posX, posY⟩)
-  if !soa.isLeaf[idx]! then
-    if let some firstChild := soa.children[idx]![0]? then
-      acc := secondWalk spacing direction soa firstChild (yCoor + soa.levelheight[idx]! + spacing)
-        (modSum + soa.modifier[idx]!) acc
-  if let some rs := soa.rightSibling[idx]! then
-    acc := secondWalk spacing direction soa rs yCoor modSum acc
-  return acc
+/-- Whether `secondWalk` from `root` recurses forever: a cycle of the "first child" and "right
+sibling" steps it follows (Java's `java.lang.StackOverflowError`). Iterative three-colour search. -/
+def secondWalkLoops (w : Walker) (root : Nat) : Bool := Id.run do
+  -- 0 unvisited, 1 on the stack, 2 done
+  let mut color : Array UInt8 := Array.replicate w.nodes.size 0
+  let mut stack : Array (Nat × Nat) := #[(root, 0)]
+  color := color.set! root 1
+  while !stack.isEmpty do
+    let (t, k) := stack.back!
+    let next : Option Nat :=
+      if k == 0 then w.children[t]![0]? else if k == 1 then w.rightSibling[t]! else none
+    if k ≥ 2 then
+      stack := stack.pop
+      color := color.set! t 2
+      continue
+    stack := stack.set! (stack.size - 1) (t, k + 1)
+    if let some n := next then
+      if color[n]! == 1 then return true
+      if color[n]! == 0 then
+        color := color.set! n 1
+        stack := stack.push (n, 0)
+  return false
 
-/-- `NodePlacer::process`. -/
+/-- `secondWalk(tNode, yCoor, modsum)` (terminates: `secondWalkLoops` is false). -/
+partial def secondWalk (spacing : Float) (w : Walker) (tNode : Nat) (yCoor modsum : Float) : Walker := Id.run do
+  let xTemp := w.prelim[tNode]! + modsum
+  let yTemp := yCoor + w.levelHeight[tNode]! / fl2p0
+  let mut w := { w with xcoor := w.xcoor.set! tNode (roundToI32 xTemp),
+                        ycoor := w.ycoor.set! tNode (roundToI32 yTemp) }
+  if let some first := w.children[tNode]![0]? then
+    w := secondWalk spacing w first (yCoor + w.levelHeight[tNode]! + spacing) (modsum + w.modifier[tNode]!)
+  if let some rs := w.rightSibling[tNode]! then
+    w := secondWalk spacing w rs yCoor modsum
+  return w
+
+/-- `NodePlacer.process` with the `LevelHeightProcessor` and `NeighborsProcessor` before it and the
+`DirectionProcessor` and `NodePositionProcessor` after it (see the module doc). -/
 def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
   discard <| monitor.begin "Processor order nodes" 2.0
   let g ← MrTreeM.getGraph graph
   let spacing := (g.props.get MrTreeOptions.SPACING_NODE_NODE).getD 0.0
-  let mut direction := (g.props.get MrTreeOptions.DIRECTION).getD .undefined
+  let levelDirection := (g.props.get MrTreeOptions.DIRECTION).getD .undefined
+  let mut direction := levelDirection
   if direction == .undefined then
     direction := .down
     MrTreeM.setGraphProp graph MrTreeOptions.DIRECTION direction
   let a ← get
-  let root := g.nodes.find? fun n => (a.node n).internal.root
-  if let some root := root then
-    let soa := TreeSoA.build a root direction.isVertical
-    let soa ← match firstWalk spacing soa 0 with
-      | .ok s => pure s
-      | .error e => throw (IO.userError e)
-    monitor.worked 1.0
-    let levelHeight := soa.levelheight[0]!
-    let positions := secondWalk spacing direction soa 0 (0.0 - levelHeight / 2.0) 0.0 #[]
-    for (idx, pos) in positions do
-      MrTreeM.modifyNode soa.nodes[idx]! fun n => { n with position := pos }
-    monitor.worked 1.0
+  let nodes := g.nodes
+  -- Java `roots.getFirst()` (every processor takes the first `ROOT` of the node list)
+  let some rootNode := nodes.find? fun n => (a.node n).internal.root
+    | throw (IO.userError "java.util.NoSuchElementException")
+  let (w, index) := Walker.build a nodes direction.isVertical
+  let root := index[rootNode]!
+  let w ← match Walker.setLevelHeights a w root levelDirection.isHorizontal with
+    | .ok w => pure w
+    | .error e => throw (IO.userError e)
+  let w := Walker.setNeighbors w root
+  let w ← match firstWalk spacing w root with
+    | .ok w => pure w
+    | .error e => throw (IO.userError e)
+  monitor.worked 1.0
+  if secondWalkLoops w root then throw (IO.userError stackOverflow)
+  let w := secondWalk spacing w root (fl0p0 - w.levelHeight[root]! / fl2p0) fl0p0
+  monitor.worked 1.0
+  -- `DirectionProcessor` (on the `int` coordinates of every listed node) and `NodePositionProcessor`
+  let mut w := w
+  if direction != .down then
+    for n in nodes do
+      let i := index[n]!
+      let x := w.xcoor[i]!
+      let y := w.ycoor[i]!
+      let (x, y) := match direction with
+        | .up => (x, Int.wrap32 (-y))
+        | .right => (y, x)
+        | .left => (Int.wrap32 (-y), x)
+        | _ => (x, y)
+      w := { w with xcoor := w.xcoor.set! i x, ycoor := w.ycoor.set! i y }
+  let setPos (i : Nat) : MrTreeM Unit :=
+    MrTreeM.modifyNode w.nodes[i]! fun n => { n with position := ⟨Float.ofInt w.xcoor[i]!, Float.ofInt w.ycoor[i]!⟩ }
+  setPos root
+  let mut level := w.children[root]!
+  while !level.isEmpty do
+    for i in level do setPos i
+    level := w.nextLevel level
+  for n in nodes do
+    MrTreeM.modifyNode n fun x => { x with position := ⟨x.position.x - x.size.x / fl2p0, x.position.y - x.size.y / fl2p0⟩ }
   monitor.done
 
-/-- `get_layout_processor_configuration`: `ROOT_PROC` before `P2_NODE_ORDERING`. -/
+/-- `getLayoutProcessorConfiguration`: `ROOT_PROC` before `P2_NODE_ORDERING` (the
+`LEVEL_HEIGHT`/`NEIGHBORS_PROC` and `DIRECTION_PROC`/`NODE_POSITION_PROC` of Java are part of
+`process`; no other processor runs between them and this phase). -/
 def configuration : TreeProcessorConfiguration :=
   LayoutProcessorConfiguration.create.addBefore TreeLayoutPhases.p2NodeOrdering
     IntermediateProcessorStrategy.rootProc

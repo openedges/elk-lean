@@ -2,14 +2,16 @@
 """Driver of `scripts/run_random_java_parity.sh` (see there for the usage).
 
 Stages (each skipped when its result is already in <out_dir> unless --force):
-  gen    <out>/gen/s<seed> (gen_nodesize_graphs.py OUT COUNT SEED), <out>/gen/v<seed> (sanitize_for_java.py)
+  gen    <out>/gen/s<seed> (gen_nodesize_graphs.py OUT COUNT SEED), <out>/gen/v<seed> (sanitize_for_java.py),
+         <out>/gen/d<seed> (--explicit-defaults), <out>/gen/o<seed> (gen_option_graphs.py OUT COUNT SEED),
+         <out>/gen/p<seed> (gen_p3_graphs.py OUT SEED <out>/gen/v<seed>: layered roots only)
   java   <out>/java/<set>/ : ELK Java 0.12.0 (`ElkJavaBaseline`), one JVM per set with a watchdog: a
          model that makes no progress for --java-timeout seconds is recorded as `timeout`, the JVM is
          killed and restarted on the remaining models (chunk directories of symlinks); a per-set alarm
          (--java-set-timeout) records everything left as `timeout`. outcomes.tsv: file, outcome, error.
   lean   <out>/lean/<set>/ : `elk layout` per input (one process each, --jobs in parallel, --timeout
-         seconds): ok / exception (first stderr line) / timeout / overflow (`Stack overflow detected`)
-         / crash (other signal). outcomes.tsv + the layouts.
+         seconds): ok / exception (first stderr line) / timeout / overflow (`Stack overflow detected`,
+         or Java's `java.lang.StackOverflowError` reported by elk-lean) / crash (other signal). outcomes.tsv + the layouts.
   rs     (--with-oracle) <out>/rs/<set>/ : elk-rs `model_parity_layout_runner`, one process per input.
   report details.tsv, report.md (and compare/<set>/ with the compare_model_parity_layouts.py output
          at tol 0 and 1e-6).
@@ -80,7 +82,7 @@ def stage_gen(a, seeds, sets):
                 shutil.rmtree(o_dir, ignore_errors=True)
                 subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_option_graphs.py"), o_dir,
                                 str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
-        if not {"s", "v", "d"} & set(sets):
+        if not {"s", "v", "d", "p"} & set(sets):
             continue
         s_dir = os.path.join(a.out, "gen", f"s{seed}")
         if a.force or not os.path.isdir(s_dir) or len(inputs_of(s_dir)) != a.count:
@@ -88,13 +90,25 @@ def stage_gen(a, seeds, sets):
             subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_nodesize_graphs.py"), s_dir,
                             str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
         for kind, extra in (("v", []), ("d", ["--explicit-defaults"])):
-            if kind not in sets:
+            # the p sets are derived from the v sets
+            if kind not in sets and not (kind == "v" and "p" in sets):
                 continue
             k_dir = os.path.join(a.out, "gen", f"{kind}{seed}")
             if a.force or not os.path.isdir(k_dir) or len(inputs_of(k_dir)) != a.count:
                 shutil.rmtree(k_dir, ignore_errors=True)
                 subprocess.run([sys.executable, "-I", os.path.join(HERE, "sanitize_for_java.py"), s_dir, k_dir]
                                + extra, check=True, stdout=subprocess.DEVNULL)
+        if "p" in sets:
+            # layered crossing minimisation / layering option variants of the layered roots of v<seed>
+            # (gen_p3_graphs.py); the count depends on v<seed>, so completion is marked by a file
+            p_dir = os.path.join(a.out, "gen", f"p{seed}")
+            done = os.path.join(a.out, "gen", f".p{seed}.done")
+            if a.force or not os.path.exists(done):
+                shutil.rmtree(p_dir, ignore_errors=True)
+                subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_p3_graphs.py"), p_dir, str(seed),
+                                os.path.join(a.out, "gen", f"v{seed}")], check=True, stdout=subprocess.DEVNULL)
+                with open(done, "w", encoding="utf-8") as fh:
+                    fh.write(f"{len(inputs_of(p_dir))}\n")
 
 
 # ------------------------------------------------------------------------------------------ java
@@ -200,6 +214,10 @@ def run_lean_one(a, src, dst, f):
         return f, "ok", "", out
     if "Stack overflow" in err:
         return f, "overflow", "Stack overflow detected. Aborting.", ""
+    if err.startswith("java.lang.StackOverflowError"):
+        # Java's own stack overflow, detected and reported by elk-lean (e.g. a recursion of ELK Java
+        # that cannot terminate, mrtree `NodePlacer.secondWalk`)
+        return f, "overflow", err.splitlines()[0], ""
     if r.returncode < 0:
         return f, "crash", f"signal {-r.returncode}: {err[:200]}", ""
     return f, "exception", err.splitlines()[0] if err else f"exit {r.returncode}", ""
@@ -381,7 +399,9 @@ def write_report(a, rows, set_names):
       f"{', elk-rs oracle' if a.with_oracle else ''}). `s` = `gen_nodesize_graphs.py` output as generated, "
       "`v` = the same graphs sanitised for ELK Java's node size validation (`sanitize_for_java.py`), "
       "`d` (experiment) = `v` plus ELK Java's algorithm specific option defaults written explicitly "
-      "(`sanitize_for_java.py --explicit-defaults`).")
+      "(`sanitize_for_java.py --explicit-defaults`), `o` = flat graphs of the non-layered algorithms with "
+      "random values of their own options (`gen_option_graphs.py`), `p` = the layered roots of `v` with "
+      "random crossing minimisation / layering options (`gen_p3_graphs.py`, seed = set seed).")
     w("")
     w("## Per set")
     w("")

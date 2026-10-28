@@ -98,16 +98,21 @@ def addIncoming (a : TArena) (n : TNodeId) (e : TEdgeId) : TArena :=
   a.modifyNode n fun x =>
     if x.incomingEdges.contains e then x else { x with incomingEdges := x.incomingEdges.push e }
 
-/-- `TNode::remove_outgoing(edge)`: removes the edge and the first occurrence of its target in the
-`direct_children` cache. -/
+/-- `TNode::remove_outgoing(edge)` / Java `getOutgoingEdges().remove(edge)`: removes the (first
+occurrence of the) edge and its entry of the `direct_children` cache. Java's `getChildren()` are the
+targets of the current outgoing edges, so the cache entry at the edge's own index goes (elk-rs
+removes the first occurrence of the target, which reorders the children of a node with parallel
+edges when a later one is removed, e.g. by the `DFSTreeifyer`); a cache that is not parallel to the
+edges (an edge without target) falls back to the first occurrence. -/
 def removeOutgoing (a : TArena) (n : TNodeId) (e : TEdgeId) : TArena :=
   match (a.node n).outgoingEdges.idxOf? e with
   | none => a
   | some i =>
     let target := (a.edge e).target
     a.modifyNode n fun x =>
+      let aligned := x.directChildren.size == x.outgoingEdges.size
       let out := x.outgoingEdges.eraseIdx! i
-      let dc := match target with
+      let dc := if aligned then x.directChildren.eraseIdx! i else match target with
         | some t => match x.directChildren.idxOf? t with
           | some ci => x.directChildren.eraseIdx! ci
           | none => x.directChildren

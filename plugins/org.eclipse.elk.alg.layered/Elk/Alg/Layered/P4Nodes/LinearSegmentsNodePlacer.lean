@@ -14,26 +14,34 @@ Port notes (Rust is the oracle):
 
 * node ids: like Rust, `LNode.id` of every layer node is overwritten (`-1`, then the
   segment index, finally the segment's rank); it is the segment index used by all steps;
-* `layerIndex(node)` is the node's **layer id** (`Layer.id`, Rust
-  `layer.graph_element().id as usize`, normally set to the layer index by the crossing
-  minimizer), not `Layer.getIndex()` as in Java; a node without layer has index `0`, a
-  negative id is out of range;
+* layers follow Java (elk-rs differs): `fillSegment` compares the layers of two nodes by
+  identity and `createUnbalancedPlacement` indexes its per-layer arrays by `Layer.getIndex()`
+  (the position in the graph's layer list; elk-rs uses `Layer.id`); the uppermost place is a
+  Java `Math.max`;
 * the input/output priorities (Rust node properties `linearSegments.inputPrio` /
   `linearSegments.outputPrio`, only read by this placer) are kept in a local map from node
   to `(inputPrio, outputPrio)`; nodes without entry read `Integer.MIN_VALUE`;
 * the Rust `ArenaSync` snapshot (sizes, margins, port positions/anchors) is replaced by
   live arena reads: the placer only writes node y positions and layer heights, which Rust
   reads live as well (`PORTING.md` §15.1);
-* `createDependencyGraphEdges` follows Rust: `retain` removes every occurrence of the split
-  segment from the predecessor's outgoing list (Java removes the first) and the incoming
-  count is only decremented when positive;
-* the unused `nodeCount` array of `createUnbalancedPlacement` is not ported.
+* `createDependencyGraphEdges` and the topological sort follow Java (elk-rs differs): the split
+  segment leaves the predecessor's outgoing list once (`List.remove(Object)`, the first
+  occurrence; elk-rs `retain` removes every occurrence) and the incoming counts are decremented
+  unconditionally (elk-rs only when positive, which kept segments out of the ordering);
+* the unused `nodeCount` array of `createUnbalancedPlacement` is not ported;
+* Java constants and checks (elk-rs differs): the initial total deflection, rooms and displacement
+  are `Integer.MAX_VALUE` (not `f64::MAX`), the rooms are minimised with `Math.min`, `mergeRegions`
+  throws `NoSuchElementException` on an empty layer and merges two weightless regions (a NaN
+  deflection; Java only asserts a positive weight sum).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
 private def fl0p0 : Float := 0.0
 private def fl20p0 : Float := 20.0
+/-- `Integer.MAX_VALUE` as a `double` (Java's initial "infinite" deflection, room and displacement;
+elk-rs uses `f64::MAX`). -/
+private def flIntMax : Float := 2147483647.0
 
 namespace Elk.Alg.Layered.P4Nodes
 
@@ -107,12 +115,6 @@ abbrev PrioMap := Std.HashMap LNodeId (Int × Int)
 @[inline] private def segIndexOf (n : LNodeId) : LayeredM Nat := do
   return (← getNode n).id.toNat
 
-/-- Rust `layer_index(node)`: the id of the node's layer (`0` without layer). -/
-private def layerIndexOf (n : LNodeId) : LayeredM Int := do
-  match (← getNode n).layer with
-  | some l => return (← getLayer l).id
-  | none => return 0
-
 /-- `Spacings.getVerticalSpacing(n1, n2)` for two arena nodes. -/
 private def verticalSpacing (spacings : Spacings) (n1 n2 : LNodeId) : LayeredM Float := do
   let a ← getNode n1
@@ -142,13 +144,13 @@ def fillSegment (start : LNodeId) (segment : LinearSegment) : LayeredM LinearSeg
     seg := { seg with nodeType := nd.type }
     if !isSegmentDummy nd.type then
       break
-    let currentLayer ← layerIndexOf current
     let mut next : Option LNodeId := none
     for sourcePort in nd.ports do
       for targetPort in (← withArena (·.portSuccessorPorts sourcePort)) do
         let some targetNode := (← getPort targetPort).owner | continue
         let tnd ← getNode targetNode
-        if currentLayer != (← layerIndexOf targetNode) && isSegmentDummy tnd.type && tnd.id < 0 then
+        -- `node.getLayer() != targetNode.getLayer()` (identity)
+        if nd.layer != tnd.layer && isSegmentDummy tnd.type && tnd.id < 0 then
           next := some targetNode
           break
       if next.isSome then
@@ -213,10 +215,11 @@ private def createDependencyGraphEdges (layers : Array LayerId) (dg : Dependency
       if cycleFound then
         if let some prev := previousNode then
           let prevId ← segIndexOf prev
-          if incomingCount[currentSegmentId]! > 0 then
-            incomingCount := incomingCount.modify currentSegmentId (· - 1)
+          incomingCount := incomingCount.modify currentSegmentId (· - 1)
           let cur := currentSegmentId
-          outgoing := outgoing.modify prevId (·.filter (· != cur))
+          outgoing := outgoing.modify prevId fun l => match l.idxOf? cur with
+            | some i => l.eraseIdx! i
+            | none => l
         let (shortened, newSegment) ← segments[currentSegmentId]!.split node nextId
         segments := segments.set! currentSegmentId shortened
         segments := segments.push newSegment
@@ -276,10 +279,9 @@ def sortLinearSegments (graph : LGraphId) : LayeredM (Array LinearSegment × Pri
     let targets := outgoing[segId]!
     outgoing := outgoing.set! segId #[]
     for target in targets do
-      if incomingCount[target]! > 0 then
-        incomingCount := incomingCount.modify target (· - 1)
-        if incomingCount[target]! == 0 then
-          noIncoming := noIncoming.push target
+      incomingCount := incomingCount.modify target (· - 1)
+      if incomingCount[target]! == 0 then
+        noIncoming := noIncoming.push target
   let mut linearSegments : Array LinearSegment := Array.replicate segmentList.size {}
   for segment in segmentList do
     let rank := newRanks[segment.id]!
@@ -298,6 +300,16 @@ def createUnbalancedPlacement (graph : LGraphId) (segments : Array LinearSegment
   let layerCount := layers.size
   let spacingEdgeEdge := gr.props.get LayeredOptions.SPACING_EDGE_EDGE |>.getD fl0p0
   let mut recentNode : Array (Option LNodeId) := Array.replicate layerCount none
+  -- `Layer.getIndex()`: the position in the graph's layer list
+  let mut layerPos : Std.HashMap LayerId Nat := {}
+  for h : i in [0:layers.size] do
+    if !layerPos.contains layers[i] then layerPos := layerPos.insert layers[i] i
+  let layerIndexOf (n : LNodeId) : LayeredM Int := do
+    match (← getNode n).layer with
+    | some l => return match layerPos.get? l with
+      | some i => (i : Int)
+      | none => -1
+    | none => return -1
   for segment in segments do
     let mut uppermostPlace : Float := fl0p0
     for node in segment.nodes do
@@ -309,7 +321,7 @@ def createUnbalancedPlacement (graph : LGraphId) (segments : Array LinearSegment
         | some prev => verticalSpacing spacings prev node
         | none => pure spacingEdgeEdge
       let layerSize := (← getLayer layers[i]!).size.y
-      uppermostPlace := fmax uppermostPlace (layerSize + spacing)
+      uppermostPlace := javaMax uppermostPlace (layerSize + spacing)
     for node in segment.nodes do
       let li ← layerIndexOf node
       let nd ← getNode node
@@ -393,8 +405,8 @@ def mergeRegions (graph : LGraphId) (segments : Array LinearSegment) (spacings :
   let mut changed := false
   for layer in gr.layers do
     let nodes := (← getLayer layer).nodes
-    if nodes.isEmpty then
-      continue
+    -- `layer.getNodes().iterator().next()` on an empty layer
+    if nodes.isEmpty then throw (IO.userError "java.util.NoSuchElementException")
     let mut node1 := nodes[0]!
     let mut region1 := regionIndex segments (← segIndexOf node1)
     for node2 in nodes.extract 1 nodes.size do
@@ -408,14 +420,14 @@ def mergeRegions (graph : LGraphId) (segments : Array LinearSegment) (spacings :
         let node1Extent := n1.position.y + n1.size.y + n1.margin.bottom + s1.deflection + spacing
         let node2Extent := n2.position.y - n2.margin.top + s2.deflection
         if node1Extent > node2Extent + threshold then
+          -- Java only `assert`s `weightSum > 0` (disabled): two weightless regions merge with a NaN
           let weightSum := s1.weight + s2.weight
-          if weightSum > 0 then
-            let newDeflection := (Float.ofInt s2.weight * s2.deflection + Float.ofInt s1.weight * s1.deflection) /
-              Float.ofInt weightSum
-            segments := segments.modify region2 fun s => { s with deflection := newDeflection, weight := weightSum }
-            let r2 := region2
-            segments := segments.modify region1 fun s => { s with refSegment := some r2 }
-            changed := true
+          let newDeflection := (Float.ofInt s2.weight * s2.deflection + Float.ofInt s1.weight * s1.deflection) /
+            Float.ofInt weightSum
+          segments := segments.modify region2 fun s => { s with deflection := newDeflection, weight := weightSum }
+          let r2 := region2
+          segments := segments.modify region1 fun s => { s with refSegment := some r2 }
+          changed := true
       node1 := node2
       region1 := region2
   return (changed, segments)
@@ -435,7 +447,7 @@ def balancePlacement (graph : LGraphId) (segments : Array LinearSegment) (prios 
   let threshold := fl20p0 / Float.ofInt thoroughness
   let mut ready := false
   let mut mode := Mode.forwPendulum
-  let mut lastTotalDeflection := Float.maxValue
+  let mut lastTotalDeflection := flIntMax
   while true do
     let incoming := mode != .backwPendulum
     let outgoing := mode != .forwPendulum
@@ -460,7 +472,7 @@ def balancePlacement (graph : LGraphId) (segments : Array LinearSegment) (prios 
       pendulumIters := pendulumIters - 1
       if pendulumIters <= 0 && (totalDeflection < lastTotalDeflection || -pendulumIters > thoroughness) then
         mode := .rubber
-        lastTotalDeflection := Float.maxValue
+        lastTotalDeflection := flIntMax
       else if mode == .forwPendulum then
         mode := .backwPendulum
         lastTotalDeflection := totalDeflection
@@ -523,12 +535,12 @@ private def searchDisplacement (node : LNodeId) (incoming : Bool) (minRoomAbove 
 edges of its first node, outgoing edges of its last node) if there is room. -/
 def postProcess (segments : Array LinearSegment) (spacings : Spacings) : LayeredM Unit := do
   for segment in segments do
-    let mut minRoomAbove := Float.maxValue
-    let mut minRoomBelow := Float.maxValue
+    let mut minRoomAbove := flIntMax
+    let mut minRoomBelow := flIntMax
     for node in segment.nodes do
-      minRoomAbove := fmin minRoomAbove (← roomAround spacings node true)
-      minRoomBelow := fmin minRoomBelow (← roomAround spacings node false)
-    let mut result : Float × Bool := (Float.maxValue, false)
+      minRoomAbove := javaMin (← roomAround spacings node true) minRoomAbove
+      minRoomBelow := javaMin (← roomAround spacings node false) minRoomBelow
+    let mut result : Float × Bool := (flIntMax, false)
     if let some first := segment.nodes[0]? then
       result ← searchDisplacement first true minRoomAbove minRoomBelow result
     if let some last := segment.nodes.back? then

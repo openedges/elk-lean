@@ -119,6 +119,85 @@ def Float.compareTotal (a b : Float) : Ordering :=
 def Float.equalsJava (a b : Float) : Bool :=
   (a.isNaN && b.isNaN) || a.toBits == b.toBits
 
+/-- Order key of Java `Double.compare`: `compare a.javaOrderKey b.javaOrderKey = Float.compareJava a b`
+(`-0.0 < 0.0`, every NaN equal and above `+∞`). Sorting by these keys with any stable sort gives
+the result of a Java `List.sort`/`Collections.sort` with a `Double.compare` comparator on the same
+keys (a consistent total order, so TimSort's result is the unique stable order). -/
+@[inline] def Float.javaOrderKey (x : Float) : UInt64 :=
+  let b := if x.isNaN then 0x7ff8000000000000 else x.toBits
+  if b ≥ 0x8000000000000000 then ~~~b else b ^^^ 0x8000000000000000
+
+/-- Whether the keys are in non-decreasing order. -/
+private def javaKeysSorted (keys : Array UInt64) (i : Nat) : Bool :=
+  if h : i + 1 < keys.size then
+    if keys[i] <= keys[i + 1] then javaKeysSorted keys (i + 1) else false
+  else true
+  termination_by keys.size - i
+
+/-- Merges the sorted index runs `src[i..iEnd)` and `src[j..jEnd)` into `dst` from `k` on; an
+element of the right run goes first only if its key is strictly smaller (stable). -/
+private partial def javaKeyMergeRuns (keys : Array UInt64) (src dst : Array Nat) (i iEnd j jEnd k : Nat) :
+    Array Nat :=
+  if i < iEnd then
+    if j < jEnd then
+      let a := src[i]!
+      let b := src[j]!
+      if keys[b]! < keys[a]! then
+        javaKeyMergeRuns keys src (dst.set! k b) i iEnd (j + 1) jEnd (k + 1)
+      else
+        javaKeyMergeRuns keys src (dst.set! k a) (i + 1) iEnd j jEnd (k + 1)
+    else javaKeyMergeRuns keys src (dst.set! k src[i]!) (i + 1) iEnd j jEnd (k + 1)
+  else if j < jEnd then javaKeyMergeRuns keys src (dst.set! k src[j]!) i iEnd (j + 1) jEnd (k + 1)
+  else dst
+
+/-- One bottom-up merge pass with run width `w`, from `lo` on. -/
+private partial def javaKeyMergePass (keys : Array UInt64) (src dst : Array Nat) (w lo : Nat) : Array Nat :=
+  let n := src.size
+  if lo < n then
+    let mid := min (lo + w) n
+    let hi := min (lo + 2 * w) n
+    javaKeyMergePass keys src (javaKeyMergeRuns keys src dst lo mid mid hi lo) w (lo + 2 * w)
+  else dst
+
+/-- Bottom-up merge passes until one run covers everything. -/
+private partial def javaKeyMergeAll (keys : Array UInt64) (src dst : Array Nat) (w : Nat) : Array Nat :=
+  if w < src.size then
+    let merged := javaKeyMergePass keys src dst w 0
+    javaKeyMergeAll keys merged src (2 * w)
+  else src
+
+/-- The elements stably sorted by the Java order of their keys (`List.sort` with
+`Double.compare(key x, key y)`: a consistent comparator, so the unique stable order). Returns the
+input when it is already sorted (no comparison for fewer than two elements). -/
+def javaSortByDoubleKeys {α : Type} [Inhabited α] (xs : Array α) (keys : Array Float) : Array α :=
+  if xs.size < 2 then xs else
+  let ks := keys.map Float.javaOrderKey
+  if javaKeysSorted ks 0 then xs
+  else (javaKeyMergeAll ks (Array.range ks.size) (Array.replicate ks.size 0) 1).map fun i => xs[i]!
+
+/-- `javaSortByDoubleKeys` with a key function. -/
+@[inline] def javaSortByDouble {α : Type} [Inhabited α] (xs : Array α) (key : α → Float) : Array α :=
+  if xs.size < 2 then xs else javaSortByDoubleKeys xs (xs.map key)
+
+/-- Java `DoubleStream.average()` of a sequential stream (JDK 21 `DoublePipeline.average`): Kahan
+summation (`Collectors.sumWithCompensation`) plus the simple sum, final value
+`Collectors.computeFinalSum` (`sum - compensation`, or the simple sum when that is NaN and the simple
+sum infinite) divided by the count; `none` for no element (`OptionalDouble.empty()`). -/
+def javaDoubleAverage (xs : Array Float) : Option Float := Id.run do
+  if xs.isEmpty then return none
+  let mut sum := fl0p0
+  let mut comp := fl0p0
+  let mut simple := fl0p0
+  for v in xs do
+    let tmp := v - comp
+    let velvel := sum + tmp
+    comp := (velvel - sum) - tmp
+    sum := velvel
+    simple := simple + v
+  let total := sum - comp
+  let total := if total.isNaN && simple.isInf then simple else total
+  return some (total / Float.ofNat xs.size)
+
 /-- Java `Math.signum` for doubles as an `Int`. -/
 def Float.signumInt (x : Float) : Int := if x < 0.0 then -1 else if x > 0.0 then 1 else 0
 
@@ -207,6 +286,323 @@ def javaLog (x : Float) : Float := Id.run do
   else
     if k == 0 then return f - s * (f - r)
     return dk * logLn2Hi - ((s * (f - r) - dk * logLn2Lo) - f)
+
+/-! ### `Math.sin`/`Math.cos`/`Math.atan2`/`Math.acos` of the reference JVM
+
+The ELK Java baselines run on HotSpot (Temurin 21, aarch64). There `Math.atan2`, `Math.atan`,
+`Math.acos` and `Math.asin` are not intrinsified and equal `StrictMath` (fdlibm, JDK `FdLibm`), while
+`Math.sin`/`Math.cos` are the HotSpot stubs of `macroAssembler_aarch64_trig.cpp`: fdlibm's algorithm
+with fused multiply-adds (`fmadd`/`fmsub`/`fnmsub`) in the polynomials and the medium argument
+reduction, and `__kernel_cos` reading the high word of the *unreduced* argument (so a reduced
+argument always takes the `qx = 0.28125` branch). They differ from `StrictMath` for about 5% and
+from the C library (`Float.sin`/`Float.cos`) for about 7% of the arguments; `atan2`/`acos` of the C
+library differ from fdlibm for about 16%. The ports below were checked bit for bit against the JVM
+(1,000,000 random arguments each for typical, near-`k·π/2` and up to `2^19·π/2` magnitudes: 0
+differences); the large-argument reduction of the stubs (`|x| > 2^19·π/2`, vectorised
+`__kernel_rem_pio2` with fused operations) is not ported — such arguments use the C library. -/
+
+private def trigS1 : Float := Float.ofBits 0xBFC5555555555549
+private def trigS2 : Float := Float.ofBits 0x3F8111111110F8A6
+private def trigS3 : Float := Float.ofBits 0xBF2A01A019C161D5
+private def trigS4 : Float := Float.ofBits 0x3EC71DE357B1FE7D
+private def trigS5 : Float := Float.ofBits 0xBE5AE5E68A2B9CEB
+private def trigS6 : Float := Float.ofBits 0x3DE5D93A5ACFD57C
+private def trigC1 : Float := Float.ofBits 0x3FA555555555554C
+private def trigC2 : Float := Float.ofBits 0xBF56C16C16C15177
+private def trigC3 : Float := Float.ofBits 0x3EFA01A019CB1590
+private def trigC4 : Float := Float.ofBits 0xBE927E4F809C52AD
+private def trigC5 : Float := Float.ofBits 0x3E21EE9EBDB4B1C4
+private def trigC6 : Float := Float.ofBits 0xBDA8FAE9BE8838D4
+private def trigHalf : Float := 0.5
+private def trigOne : Float := 1.0
+private def trigQx : Float := 0.28125
+private def trigInvPio2 : Float := Float.ofBits 0x3FE45F306DC9C883
+private def trigPio2_1 : Float := Float.ofBits 0x3FF921FB54400000
+private def trigPio2_1t : Float := Float.ofBits 0x3DD0B4611A626331
+private def trigPio2_2 : Float := Float.ofBits 0x3DD0B4611A600000
+private def trigPio2_2t : Float := Float.ofBits 0x3BA3198A2E037073
+private def trigPio2_3 : Float := Float.ofBits 0x3BA3198A2E000000
+private def trigPio2_3t : Float := Float.ofBits 0x397B839A252049C1
+
+/-- fdlibm `npio2_hw` (the high words of `n·π/2`, `n = 1 .. 32`). -/
+private def trigNpio2Hw : Array UInt32 := #[
+  0x3FF921FB, 0x400921FB, 0x4012D97C, 0x401921FB, 0x401F6A7A, 0x4022D97C,
+  0x4025FDBB, 0x402921FB, 0x402C463A, 0x402F6A7A, 0x4031475C, 0x4032D97C,
+  0x40346B9C, 0x4035FDBB, 0x40378FDB, 0x403921FB, 0x403AB41B, 0x403C463A,
+  0x403DD85A, 0x403F6A7A, 0x40407E4C, 0x4041475C, 0x4042106C, 0x4042D97C,
+  0x4043A28C, 0x40446B9C, 0x404534AC, 0x4045FDBB, 0x4046C6CB, 0x40478FDB,
+  0x404858EB, 0x404921FB]
+
+/-- HotSpot aarch64 `generate_kernel_sin` (`iyIsOne`: with the tail `y`). -/
+private def hsKernelSin (x y : Float) (iyIsOne : Bool) : Float :=
+  let z := x * x
+  let v := z * x
+  let r := Float.fma z trigS6 trigS5
+  let r := Float.fma z r trigS4
+  let r := Float.fma z r trigS3
+  let r := Float.fma z r trigS2
+  if !iyIsOne then
+    Float.fma v (Float.fma z r trigS1) x
+  else
+    let t := trigHalf * y
+    let t := Float.fma (-v) r t
+    let t := Float.fma (-z) t y
+    let t := Float.fma v trigS1 t
+    x + t
+
+/-- HotSpot aarch64 `generate_kernel_cos`; `ix` is the high word of `|x|` of the *original* argument
+(the register of `generate_dsin_dcos`, not recomputed after the reduction). -/
+private def hsKernelCos (x y : Float) (ix : UInt32) : Float :=
+  let z := x * x
+  let r := Float.fma z trigC6 trigC5
+  let r := Float.fma z r trigC4
+  let xy := x * y
+  let r := Float.fma z r trigC3
+  let r := Float.fma z r trigC2
+  let zz := z * z
+  let r := Float.fma z r trigC1
+  if ix ≤ 0x3FD33333 then
+    trigOne - Float.fma trigHalf z (Float.fma (-zz) r xy)
+  else
+    let qx := if ix > 0x3fe90000 then trigQx else Float.ofBits ((ix - 0x00200000).toUInt64 <<< 32)
+    let c := Float.fma zz r (-xy)
+    let h := Float.fma trigHalf z (-qx)
+    (trigOne - qx) - (h - c)
+
+/-- The biased exponent of a double. -/
+@[inline] private def trigExp (x : Float) : UInt32 := ((x.toBits >>> 52) &&& 0x7ff).toUInt32
+
+/-- HotSpot aarch64 `generate__ieee754_rem_pio2` for `|x| ≤ 2^19·π/2` (`ix ≤ 0x413921fb`):
+`(n, y0, y1)`; `none` for larger arguments. -/
+private def hsRemPio2 (x : Float) (ix : UInt32) : Option (Int × Float × Float) := Id.run do
+  let negative := x.toBits ≥ 0x8000000000000000
+  if ix < 0x4002d97c then
+    if !negative then
+      let z := x - trigPio2_1
+      if ix == 0x3ff921fb then
+        let z := z - trigPio2_2
+        let y0 := z - trigPio2_2t
+        return some (1, y0, (z - y0) - trigPio2_2t)
+      let y0 := z - trigPio2_1t
+      return some (1, y0, (z - y0) - trigPio2_1t)
+    else
+      let z := x + trigPio2_1
+      if ix == 0x3ff921fb then
+        let z := z + trigPio2_2
+        let y0 := z + trigPio2_2t
+        return some (-1, y0, (z - y0) + trigPio2_2t)
+      let y0 := z + trigPio2_1t
+      return some (-1, y0, (z - y0) + trigPio2_1t)
+  if ix > 0x413921fb then return none
+  let t := x.abs
+  let v2 := Float.fma t trigInvPio2 trigHalf
+  -- `fcvtzdw`: `t < 2^20`, so the truncation fits an `int`
+  let n : Nat := v2.toUInt64.toNat
+  let fn := v2.floor
+  let mut r := Float.fma (-fn) trigPio2_1 t
+  let mut w := fn * trigPio2_1t
+  let mut y0 := r - w
+  let quick := n ≤ 32 && ix != trigNpio2Hw[n - 1]!
+  if !quick then
+    let j := ix >>> 20
+    let i : Int := (j.toNat : Int) - (trigExp y0).toNat
+    if i > 16 then
+      let tt := r
+      let ww := fn * trigPio2_2
+      r := tt - ww
+      w := Float.fma fn trigPio2_2t (ww - (tt - r))
+      y0 := r - w
+      let i : Int := (j.toNat : Int) - (trigExp y0).toNat
+      if i > 49 then
+        let tt := r
+        let ww := fn * trigPio2_3
+        r := tt - ww
+        w := Float.fma fn trigPio2_3t (ww - (tt - r))
+        y0 := r - w
+  let y1 := (r - y0) - w
+  -- `cmp(X, zr); br(GT, done)`: a non-positive `X` (as `long`) negates
+  if !negative then return some ((n : Int), y0, y1)
+  return some (-(n : Int), -y0, -y1)
+
+/-- HotSpot aarch64 `generate_dsin_dcos(isCos)`. -/
+private def hsSinCos (x : Float) (isCos : Bool) : Float :=
+  let absX := x.toBits &&& 0x7fffffffffffffff
+  let ix : UInt32 := (absX >>> 32).toUInt32
+  if ix < 0x3e400000 then (if isCos then trigOne else x)
+  else if ix ≤ 0x3fe921fb then (if isCos then hsKernelCos x 0.0 ix else hsKernelSin x 0.0 false)
+  else if absX ≥ 0x7ff0000000000000 then Float.nan
+  else match hsRemPio2 x ix with
+    | none => if isCos then x.cos else x.sin
+    | some (n, y0, y1) =>
+      -- `n & 3` of the two's complement `int` (`Int.emod`)
+      let low := n % 4
+      let odd := low % 2 == 1
+      if isCos then
+        -- negated iff bit 0 of `n ^ (n >>> 1)` is set
+        let v := if odd then hsKernelSin y0 y1 true else hsKernelCos y0 y1 ix
+        if low == 1 || low == 2 then -v else v
+      else
+        let v := if odd then hsKernelCos y0 y1 ix else hsKernelSin y0 y1 true
+        if low ≥ 2 then -v else v
+
+/-- Java `Math.sin` on the reference JVM (HotSpot aarch64 intrinsic, see above). -/
+def javaSin (x : Float) : Float := hsSinCos x false
+
+/-- Java `Math.cos` on the reference JVM (HotSpot aarch64 intrinsic, see above). -/
+def javaCos (x : Float) : Float := hsSinCos x true
+
+private def atanHi : Array Float := #[Float.ofBits 0x3FDDAC670561BB4F, Float.ofBits 0x3FE921FB54442D18,
+  Float.ofBits 0x3FEF730BD281F69B, Float.ofBits 0x3FF921FB54442D18]
+private def atanLo : Array Float := #[Float.ofBits 0x3C7A2B7F222F65E2, Float.ofBits 0x3C81A62633145C07,
+  Float.ofBits 0x3C7007887AF0CBBD, Float.ofBits 0x3C91A62633145C07]
+private def atanT : Array Float := #[Float.ofBits 0x3FD555555555550D, Float.ofBits 0xBFC999999998EBC4,
+  Float.ofBits 0x3FC24924920083FF, Float.ofBits 0xBFBC71C6FE231671, Float.ofBits 0x3FB745CDC54C206E,
+  Float.ofBits 0xBFB3B0F2AF749A6D, Float.ofBits 0x3FB10D66A0D03D51, Float.ofBits 0xBFADDE2D52DEFD9A,
+  Float.ofBits 0x3FA97B4B24760DEB, Float.ofBits 0xBFA2B4442C6A6C2F, Float.ofBits 0x3F90AD3AE322DA11]
+private def atanHuge : Float := 1.0e300
+private def trigTwo : Float := 2.0
+private def trigOneHalf : Float := 1.5
+
+/-- Java `StrictMath.atan` (= `Math.atan` on HotSpot; JDK `FdLibm.Atan`). -/
+def javaAtan (x : Float) : Float := Id.run do
+  let hx : Int32 := (x.toBits >>> 32).toUInt32.toInt32
+  let ix : UInt32 := hx.toUInt32 &&& 0x7fffffff
+  let mut x := x
+  if ix ≥ 0x44100000 then
+    -- |x| ≥ 2^66
+    if ix > 0x7ff00000 || (ix == 0x7ff00000 && (x.toBits &&& 0xffffffff) != 0) then return x + x
+    if hx > 0 then return atanHi[3]! + atanLo[3]! else return -atanHi[3]! - atanLo[3]!
+  let mut id : Int := -1
+  if ix < 0x3fdc0000 then
+    -- |x| < 0.4375
+    if ix < 0x3e200000 then
+      if atanHuge + x > trigOne then return x
+    id := -1
+  else
+    x := x.abs
+    if ix < 0x3ff30000 then
+      if ix < 0x3fe60000 then
+        id := 0
+        x := (trigTwo * x - trigOne) / (trigTwo + x)
+      else
+        id := 1
+        x := (x - trigOne) / (x + trigOne)
+    else
+      if ix < 0x40038000 then
+        id := 2
+        x := (x - trigOneHalf) / (trigOne + trigOneHalf * x)
+      else
+        id := 3
+        x := -trigOne / x
+  let z := x * x
+  let w := z * z
+  let s1 := z * (atanT[0]! + w * (atanT[2]! + w * (atanT[4]! + w * (atanT[6]! + w * (atanT[8]! + w * atanT[10]!)))))
+  let s2 := w * (atanT[1]! + w * (atanT[3]! + w * (atanT[5]! + w * (atanT[7]! + w * atanT[9]!))))
+  if id < 0 then return x - x * (s1 + s2)
+  let i := id.toNat
+  let z := atanHi[i]! - ((x * (s1 + s2) - atanLo[i]!) - x)
+  return if hx < 0 then -z else z
+
+private def atan2Tiny : Float := 1.0e-300
+private def atan2PiO4 : Float := Float.ofBits 0x3FE921FB54442D18
+private def atan2PiO2 : Float := Float.ofBits 0x3FF921FB54442D18
+private def atan2PiLo : Float := Float.ofBits 0x3CA1A62633145C07
+private def atan2Three : Float := 3.0
+private def atan2Zero : Float := 0.0
+
+/-- Java `StrictMath.atan2(y, x)` (= `Math.atan2` on HotSpot; JDK `FdLibm.Atan2`). -/
+def javaAtan2 (y x : Float) : Float := Id.run do
+  let hx : Int32 := (x.toBits >>> 32).toUInt32.toInt32
+  let ix : UInt32 := hx.toUInt32 &&& 0x7fffffff
+  let lx : UInt32 := (x.toBits &&& 0xffffffff).toUInt32
+  let hy : Int32 := (y.toBits >>> 32).toUInt32.toInt32
+  let iy : UInt32 := hy.toUInt32 &&& 0x7fffffff
+  let ly : UInt32 := (y.toBits &&& 0xffffffff).toUInt32
+  if x.isNaN || y.isNaN then return x + y
+  if ix == 0x3ff00000 && lx == 0 && hx ≥ 0 then return javaAtan y
+  -- `m = ((hy >> 31) & 1) | ((hx >> 30) & 2)`: 2·sign(x) + sign(y)
+  let m : Nat := (if hy < 0 then 1 else 0) + (if hx < 0 then 2 else 0)
+  if iy == 0 && ly == 0 then
+    match m with
+    | 0 | 1 => return y
+    | 2 => return Float.pi + atan2Tiny
+    | _ => return -Float.pi - atan2Tiny
+  if ix == 0 && lx == 0 then
+    return if hy < 0 then -atan2PiO2 - atan2Tiny else atan2PiO2 + atan2Tiny
+  if ix == 0x7ff00000 then
+    if iy == 0x7ff00000 then
+      match m with
+      | 0 => return atan2PiO4 + atan2Tiny
+      | 1 => return -atan2PiO4 - atan2Tiny
+      | 2 => return atan2Three * atan2PiO4 + atan2Tiny
+      | _ => return -atan2Three * atan2PiO4 - atan2Tiny
+    else
+      match m with
+      | 0 => return atan2Zero
+      | 1 => return -atan2Zero
+      | 2 => return Float.pi + atan2Tiny
+      | _ => return -Float.pi - atan2Tiny
+  if iy == 0x7ff00000 then
+    return if hy < 0 then -atan2PiO2 - atan2Tiny else atan2PiO2 + atan2Tiny
+  -- `k = (iy - ix) >> 20` on `int`s
+  let k : Int := Int.fdiv ((iy.toNat : Int) - ix.toNat) 1048576
+  let z : Float :=
+    if k > 60 then atan2PiO2 + trigHalf * atan2PiLo
+    else if hx < 0 && k < -60 then atan2Zero
+    else javaAtan (y / x).abs
+  match m with
+  | 0 => return z
+  | 1 => return -z
+  | 2 => return Float.pi - (z - atan2PiLo)
+  | _ => return (z - atan2PiLo) - Float.pi
+
+private def acosPio2Hi : Float := Float.ofBits 0x3FF921FB54442D18
+private def acosPio2Lo : Float := Float.ofBits 0x3C91A62633145C07
+private def acosPS0 : Float := Float.ofBits 0x3FC5555555555555
+private def acosPS1 : Float := Float.ofBits 0xBFD4D61203EB6F7D
+private def acosPS2 : Float := Float.ofBits 0x3FC9C1550E884455
+private def acosPS3 : Float := Float.ofBits 0xBFA48228B5688F3B
+private def acosPS4 : Float := Float.ofBits 0x3F49EFE07501B288
+private def acosPS5 : Float := Float.ofBits 0x3F023DE10DFDF709
+private def acosQS1 : Float := Float.ofBits 0xC0033A271C8A2D4B
+private def acosQS2 : Float := Float.ofBits 0x40002AE59C598AC8
+private def acosQS3 : Float := Float.ofBits 0xBFE6066C1B8D0159
+private def acosQS4 : Float := Float.ofBits 0x3FB3B8C5B12E9282
+
+/-- Java `StrictMath.acos` (= `Math.acos` on HotSpot; JDK `FdLibm.Acos`). -/
+def javaAcos (x : Float) : Float := Id.run do
+  let hx : Int32 := (x.toBits >>> 32).toUInt32.toInt32
+  let ix : UInt32 := hx.toUInt32 &&& 0x7fffffff
+  let lx : UInt32 := (x.toBits &&& 0xffffffff).toUInt32
+  let poly (z : Float) : Float × Float :=
+    (z * (acosPS0 + z * (acosPS1 + z * (acosPS2 + z * (acosPS3 + z * (acosPS4 + z * acosPS5))))),
+     trigOne + z * (acosQS1 + z * (acosQS2 + z * (acosQS3 + z * acosQS4))))
+  if ix ≥ 0x3ff00000 then
+    if ix == 0x3ff00000 && lx == 0 then
+      return if hx > 0 then 0.0 else Float.pi + trigTwo * acosPio2Lo
+    return (x - x) / (x - x)
+  if ix < 0x3fe00000 then
+    if ix ≤ 0x3c600000 then return acosPio2Hi + acosPio2Lo
+    let z := x * x
+    let (p, q) := poly z
+    let r := p / q
+    return acosPio2Hi - (x - (acosPio2Lo - x * r))
+  else if hx < 0 then
+    let z := (trigOne + x) * trigHalf
+    let (p, q) := poly z
+    let s := z.sqrt
+    let r := p / q
+    let w := r * s - acosPio2Lo
+    return Float.pi - trigTwo * (s + w)
+  else
+    let z := (trigOne - x) * trigHalf
+    let s := z.sqrt
+    let df := Float.ofBits (s.toBits &&& 0xffffffff00000000)
+    let c := (z - df * df) / (s + df)
+    let (p, q) := poly z
+    let r := p / q
+    let w := r * s + c
+    return trigTwo * (df + w)
 
 /-- Java integer division (truncates toward zero). -/
 @[inline] def Int.jdiv (a b : Int) : Int := Int.tdiv a b

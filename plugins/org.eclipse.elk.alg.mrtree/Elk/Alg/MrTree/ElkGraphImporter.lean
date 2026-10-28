@@ -1,5 +1,4 @@
 import Std.Data.HashMap
-import Std.Data.HashSet
 import Elk.Graph
 import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Math.KVector
@@ -11,20 +10,23 @@ import Elk.Alg.MrTree.Options.MrTreeOptions
 /-!
 # `org.eclipse.elk.alg.mrtree.ElkGraphImporter`
 
-Port of `elk_graph_importer.rs` (elk-rs), the only implementation of `IGraphImporter<ElkNode>`
+ELK Java's mrtree `ElkGraphImporter` (elk-rs `elk_graph_importer.rs` was the code reference), the only
+implementation of `IGraphImporter<ElkNode>`
 (`i_graph_importer.rs`; the interface is folded into this module: `importGraph` and `applyLayout`).
 
 `importGraph` runs in `ElkM` (it only reads the `ElkGraph`) and returns a new `TArena` holding the
 imported `TGraph` (the arena is a value, see `Elk.Alg.MrTree.Graph.TArena`). The graph copies the
 properties of the layout node; every child becomes a `TNode` (id = child index, label = text of the
 first label or `""`, properties copied, position = centre of the child, size = child size but at least
-1x1); then, for the children in order and their `allOutgoingEdges`, every edge that is neither
-hierarchical, a self loop nor a hyperedge (Rust skips hyperedges, Java does not) and was not seen yet
-becomes a `TEdge` between the two tree nodes (properties copied), appended to the graph's edge list.
+1x1, Java `Math.max`); then, for the children in order and their `allOutgoingEdges`, every entry that
+is neither hierarchical nor a self loop becomes a `TEdge` from the child to the node of the edge's
+first target (properties copied), appended to the graph's edge list — like Java, a hyperedge becomes
+one tree edge per source node and an edge listed by several ports of a node one per entry, all with the
+same `ORIGIN` (the last one routed writes the section; elk-rs skips hyperedges and repeated entries).
 No `TLabel`s are created.
 
 `applyLayout` writes the result of the (packed) graph back: the bounding box of the node boxes (centre
-± half size, `f64::min`/`f64::max`), every node's top-left position and its *public* properties (Rust
+± half size, Java `Math.min`/`Math.max` from `Integer.MAX_VALUE`/`MIN_VALUE`), every node's top-left position and its *public* properties (Rust
 copies the whole property map, which contains the internal properties too; those are typed fields in
 Lean and are not written back), every edge's bend points into its first section (Java
 `firstEdgeSection(edge, true, true)`: created if missing, reset, further sections removed; Rust
@@ -43,6 +45,8 @@ shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and the
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
 private def fl1p0 : Float := 1.0
 private def fl2p0 : Float := 2.0
+private def flIntMax : Float := 2147483647.0
+private def flIntMin : Float := -2147483648.0
 
 namespace Elk.Alg.MrTree
 
@@ -70,16 +74,17 @@ def importGraphPure (g : ElkGraph) (elkgraph : NodeId) : TArena × TGraphId := I
       { n with
         props := n.props.copyFrom elknode.props
         position := ⟨elknode.x + elknode.width / fl2p0, elknode.y + elknode.height / fl2p0⟩
-        size := ⟨fmax elknode.width fl1p0, fmax elknode.height fl1p0⟩
+        size := ⟨javaMax elknode.width fl1p0, javaMax elknode.height fl1p0⟩
         internal.origin := some (.elkNode child) }
     elemMap := elemMap.insert child tn
-  let mut seen : Std.HashSet EdgeId := {}
+  -- Java `transformEdges`: every entry of `allOutgoingEdges(child)` that is neither hierarchical nor a
+  -- self loop becomes an edge from the child to the node of the first target (a hyperedge once per
+  -- source node, an edge listed by several ports of the child once per port)
   for child in children do
     for e in ElkGraphUtil.allOutgoingEdges g child do
       let elkedge := g.edge e
-      if ElkGraphUtil.isHierarchicalEdge g e || ElkGraphUtil.isSelfloop g e || elkedge.isHyperedge then
+      if ElkGraphUtil.isHierarchicalEdge g e || ElkGraphUtil.isSelfloop g e then
         continue
-      if seen.contains e then continue
       let some targetShape := elkedge.targets[0]? | continue
       let some targetNode := ElkGraphUtil.connectableShapeToNode g targetShape | continue
       if let (some source, some target) := (elemMap[child]?, elemMap[targetNode]?) then
@@ -87,7 +92,6 @@ def importGraphPure (g : ElkGraph) (elkgraph : NodeId) : TArena × TGraphId := I
         a := a'.modifyEdge te fun x =>
           { x with props := x.props.copyFrom elkedge.props, internal.origin := some (.elkEdge e) }
         a := a.modifyGraph tg fun x => { x with edges := x.edges.push te }
-        seen := seen.insert e
   return (a, tg)
 
 /-- `IGraphImporter::import_graph(elkgraph)`: a new arena with the imported graph. -/
@@ -98,16 +102,17 @@ def importGraph (elkgraph : NodeId) : ElkM (TArena × TGraphId) := do
 def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
   let graph := a.graph tgraph
   let some (.elkNode root) := graph.internal.origin | return
-  let mut minX := Float.maxValue
-  let mut minY := Float.maxValue
-  let mut maxX := Float.minValue
-  let mut maxY := Float.minValue
+  -- Java starts at `Integer.MAX_VALUE`/`MIN_VALUE` and uses `Math.min`/`Math.max`
+  let mut minX := flIntMax
+  let mut minY := flIntMax
+  let mut maxX := flIntMin
+  let mut maxY := flIntMin
   for node in graph.nodes do
     let n := a.node node
-    minX := fmin minX (n.position.x - n.size.x / fl2p0)
-    minY := fmin minY (n.position.y - n.size.y / fl2p0)
-    maxX := fmax maxX (n.position.x + n.size.x / fl2p0)
-    maxY := fmax maxY (n.position.y + n.size.y / fl2p0)
+    minX := javaMin minX (n.position.x - n.size.x / fl2p0)
+    minY := javaMin minY (n.position.y - n.size.y / fl2p0)
+    maxX := javaMax maxX (n.position.x + n.size.x / fl2p0)
+    maxY := javaMax maxY (n.position.y + n.size.y / fl2p0)
   -- Java `elkgraph.getProperty(MrTreeOptions.PADDING)`: the mrtree default (20) is stored when unset
   let padding := (← ElkM.getNodePropSticky root MrTreeOptions.PADDING).getD {}
   for node in graph.nodes do

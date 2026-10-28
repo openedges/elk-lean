@@ -102,12 +102,12 @@ partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option
     (successorCache : Std.HashMap NodeId (Array NodeId)) (wedgeCache : Std.HashMap NodeId Float)
     (currentRadius minAlpha maxAlpha optimalOffset : Float) : RadialM Unit := do
   let alphaPoint := (minAlpha + maxAlpha) / fl2p0 + optimalOffset
-  let xPos := currentRadius * Float.cos alphaPoint
-  let yPos := currentRadius * Float.sin alphaPoint
+  let xPos := currentRadius * javaCos alphaPoint
+  let yPos := currentRadius * javaSin alphaPoint
   RadialUtil.centerNodesOnRadi node xPos yPos
   let numberOfLeafs := (wedgeCache.get? node).getD fl1p0
   -- Java `2 * Math.acos(currentRadius / currentRadius + radius)` (operator precedence kept)
-  let tau := fl2p0 * Float.acos (currentRadius / currentRadius + radius)
+  let tau := fl2p0 * javaAcos (currentRadius / currentRadius + radius)
   let (s, alpha0) :=
     if tau < maxAlpha - minAlpha then (tau / numberOfLeafs, (minAlpha + maxAlpha - tau) / fl2p0)
     else ((maxAlpha - minAlpha) / numberOfLeafs, minAlpha)

@@ -153,7 +153,7 @@ def polarArc (node : ElkNode) (radialOffset nodeOffsetY : Float) : Float :=
   let position := (node.props.get CoreOptions.POSITION).getD ⟨0.0, 0.0⟩
   let xPos := position.x
   let yPos := position.y + nodeOffsetY
-  let arc := Float.atan2 yPos xPos
+  let arc := javaAtan2 yPos xPos
   let arc := if arc < 0.0 then arc + TWO_PI else arc
   let arc := arc + radialOffset
   if arc > TWO_PI then arc - TWO_PI else arc

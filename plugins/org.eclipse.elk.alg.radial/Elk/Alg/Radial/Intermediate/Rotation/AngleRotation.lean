@@ -52,15 +52,19 @@ def rotate (graph : NodeId) : RadialM Unit := do
           let firstVector : KVector := ⟨f.x + f.width / fl2p0, f.y + f.height / fl2p0⟩
           let mut alpha := targetAngle
           if alpha <= fl0p0 then alpha := alpha + fl2p0 * Float.pi
-          let mut wedgeAngle := lastVector.angle firstVector
+          -- Java `KVector.angle`: `Math.acos(dot / (|a| * |b|))` (fdlibm)
+          let mut wedgeAngle := javaAcos (lastVector.dotProduct firstVector / (lastVector.length * firstVector.length))
           if wedgeAngle <= fl0p0 then wedgeAngle := wedgeAngle + fl2p0 * Float.pi
-          let mut alignmentAngle := Float.atan2 lastVector.y lastVector.x
+          let mut alignmentAngle := javaAtan2 lastVector.y lastVector.x
           if alignmentAngle <= fl0p0 then alignmentAngle := alignmentAngle + fl2p0 * Float.pi
           targetAngle := Float.pi - (alignmentAngle - alpha + wedgeAngle / fl2p0)
   let children := (← ElkM.getNode graph).children
   for node in children do
     let n ← ElkM.getNode node
-    let pos := (KVector.mk (n.x + n.width / fl2p0) (n.y + n.height / fl2p0)).rotate targetAngle
+    -- Java `KVector.rotate` with the reference JVM's `Math.cos`/`Math.sin`
+    let v := KVector.mk (n.x + n.width / fl2p0) (n.y + n.height / fl2p0)
+    let pos : KVector := ⟨v.x * javaCos targetAngle - v.y * javaSin targetAngle,
+      v.x * javaSin targetAngle + v.y * javaCos targetAngle⟩
     ElkM.modifyNode node fun m => { m with x := pos.x - n.width / fl2p0, y := pos.y - n.height / fl2p0 }
 
 /-- The `IRadialRotator` of this class. -/

@@ -27,7 +27,7 @@ def process (graph : NodeId) (_monitor : ProgressMonitor) : RadialM Unit := do
     let some sectionId := e.sections[0]? | continue
     let sec ← ElkM.getSection sectionId
     let edgeVector := KVector.fromPoints ⟨sec.startX, sec.startY⟩ ⟨sec.endX, sec.endY⟩
-    let angle := Float.atan2 edgeVector.y edgeVector.x
+    let angle := javaAtan2 edgeVector.y edgeVector.x
     let some targetShape := e.targets[0]? | continue
     match targetShape with
     | .node node => ElkM.setNodeProp node RadialOptions.ROTATION_TARGET_ANGLE angle
