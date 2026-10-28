@@ -198,8 +198,9 @@ def coffmanGrahamTests : Suite := suite "layered.p2layers.CoffmanGraham" do
     return b
   let (b, a) ← runPhase CoffmanGrahamLayerer.phase star
   check "star bound 2: width bound" (maxWidth a b <= 2)
-  -- hand: topo t0..t3 = 1..4; sinks t3, t2 | t1, t0 | s
-  checkEq "star bound 2 layering" (layering a b) #[#[0], #[2, 1], #[4, 3]]
+  -- Java (checked with the unmodified `CoffmanGrahamLayerer`): the leaves' `inTopo` lists `[0]` all compare
+  -- `1`, so the `PriorityQueue` heap yields 1, 3, 2, 4 (topo 1..4; elk-rs: 1, 2, 3, 4); sinks by topo 4, 2 | 3, 1 | 0
+  checkEq "star bound 2 layering (Java heap order)" (layering a b) #[#[0], #[3, 1], #[4, 2]]
   check "star bound 2: edges forward" (edgesForward a b)
   let diamondBound1 : LayeredM Built := do
     let b ← diamond
@@ -216,10 +217,20 @@ def coffmanGrahamTests : Suite := suite "layered.p2layers.CoffmanGraham" do
   checkEq "transitive reduction layering" (layering a b) #[#[0], #[1], #[2]]
   checkEq "edge ids re-assigned" (b.edges.map fun e => (a.edge e).id) #[0, 2, 1]
   -- the topological priority
-  checkEqR "compareNodesInTopo by largest differing number" (CoffmanGrahamLayerer.compareNodesInTopo #[#[0, 3], #[1, 3]] 0 1) .lt
-  checkEqR "compareNodesInTopo tie → ids" (CoffmanGrahamLayerer.compareNodesInTopo #[#[2], #[1, 2]] 1 0) .gt
-  checkEq "popBestBy takes the first minimum (swap_remove)"
-    (CoffmanGrahamLayerer.popBestBy #[3, 1, 2, 1] (· < ·)) (some (1, #[3, 1, 2]))
+  checkEq "compareNodesInTopo by largest differing number" (CoffmanGrahamLayerer.compareNodesInTopo #[#[0, 3], #[1, 3]] 0 1) (-1)
+  -- Java: both lists non-empty and the common suffix equal → `1` whatever the ids (elk-rs: the ids)
+  checkEq "Java compareNodesInTopo: exhausted common suffix → 1" (CoffmanGrahamLayerer.compareNodesInTopo #[#[2], #[1, 2]] 1 0) 1
+  checkEq "Java compareNodesInTopo: exhausted common suffix → 1 (smaller id)"
+    (CoffmanGrahamLayerer.compareNodesInTopo #[#[2], #[1, 2]] 0 1) 1
+  -- Java: `Integer` identity: equal numbers outside the `Integer` cache differ → `Integer.compare` = 0
+  checkEq "Java compareNodesInTopo: equal uncached numbers → 0" (CoffmanGrahamLayerer.compareNodesInTopo #[#[200], #[200]] 0 1) 0
+  checkEq "Java compareNodesInTopo: an empty list → the ids" (CoffmanGrahamLayerer.compareNodesInTopo #[#[], #[5]] 1 0) 1
+  -- `java.util.PriorityQueue` heap (JDK 21 siftUp / siftDown)
+  let cmpInt : Nat → Nat → Int := fun x y => if x < y then -1 else if x > y then 1 else 0
+  let heap := (#[3, 1, 2, 1] : Array Nat).foldl (fun q x => CoffmanGrahamLayerer.JavaPriorityQueue.offer q cmpInt x) #[]
+  checkEq "PriorityQueue.offer heap array" heap #[1, 1, 2, 3]
+  checkEq "PriorityQueue.poll sifts the last element down" (CoffmanGrahamLayerer.JavaPriorityQueue.poll heap cmpInt)
+    (some (1, #[1, 3, 2]))
 
 def minWidthTests : Suite := suite "layered.p2layers.MinWidth" do
   -- `min_width_keeps_input_order_of_out_degree_ties`: sinks t0..t4, source s with an edge to each sink

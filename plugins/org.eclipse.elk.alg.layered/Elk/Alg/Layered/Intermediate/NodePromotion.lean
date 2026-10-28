@@ -7,12 +7,19 @@ import Elk.Core.Util.JavaSort
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.NodePromotion`
 
-Port of elk-rs `intermediate/node_promotion.rs`. elk-rs implements only the model order strategies
-`MODEL_ORDER_LEFT_TO_RIGHT` and `MODEL_ORDER_RIGHT_TO_LEFT`; for every other `NodePromotionStrategy`
-(`NIKOLOV`, `NIKOLOV_PIXEL`, `NIKOLOV_IMPROVED`, `NIKOLOV_IMPROVED_PIXEL`, `DUMMYNODE_PERCENTAGE`,
-`NODECOUNT_PERCENTAGE`, `NO_BOUNDARY`, `NONE`) the processor does nothing. **Java differs**: it runs the
-Nikolov et al. promotion (`promotionMagic`, dummy-count bookkeeping) for those strategies. The Lean port
-follows the oracle (elk-rs), so those strategies are no-ops here too.
+Port of ELK Java's `NodePromotion` (elk-rs `intermediate/node_promotion.rs` implements only the model
+order strategies and leaves the layering unchanged for every other strategy — an elk-rs difference that
+elk-lean followed until the Java port).
+
+Nikolov et al. (`NIKOLOV`, `NIKOLOV_PIXEL`, `NIKOLOV_IMPROVED`, `NIKOLOV_IMPROVED_PIXEL`,
+`DUMMYNODE_PERCENTAGE`, `NODECOUNT_PERCENTAGE`, `NO_BOUNDARY`, and the switch's default case): Java's
+`precalculateAndSetInformation()` (reversed layer ids, node ids, degrees, width estimates),
+`promotionMagic` with `promoteNode` (see there, including Java's aliased width backups and its
+`dummyBackup` arithmetic), the strategy switch (`nikolovStrategies`) and `setNewLayering`, line by line.
+The Java arithmetic is kept: `int` widths and dummy counts, `double` pixel widths in Java's evaluation
+order, `Math.max` for the pixel maxima, `(int) Math.ceil(n * promoteUntil / 100.0)` with the `int`
+product for the percentage strategies, Java's array exceptions. Checked against the unmodified Java
+processor on random layered graphs (`tests/fixtures/promotion/processor_cases.jsonl`).
 
 Model order promotion (Java `modelOrderNodePromotion`; elk-rs `model_order_node_promotion` differs, see
 below): every layer of the graph is sorted by `MODEL_ORDER` (descending for left-to-right, ascending
@@ -123,6 +130,16 @@ def modelOrderCompare (left right : Option Int) (leftToRight : Bool) : Ordering 
 the map under its index. -/
 def fromGraph (graph : LGraphId) (leftToRight : Bool) : LayeredM LayerNodeMap := do
   let layers := (← getGraph graph).layers
+  -- Java sets `layer.id` (index) and `node.id` (running, layer by layer); the later processors read
+  -- stale layer ids (`ModelOrderNodeComparator`), see `applyModelOrderLayers`
+  let mut nodeId : Int := 0
+  for h : layerId in [0:layers.size] do
+    let lid : Int := layerId
+    modifyLayer layers[layerId] fun l => { l with id := lid }
+    for node in (← getLayer layers[layerId]).nodes do
+      let nid := nodeId
+      modifyNode node fun n => { n with id := nid }
+      nodeId := nodeId + 1
   let mut m : LayerNodeMap := {}
   for h : layerId in [0:layers.size] do
     let mut withOrder : Array (LNodeId × Option Int) := #[]
@@ -294,8 +311,11 @@ def promoteInLayer (layerMap : LayerNodeMap) (currentLayerId : Int) (leftToRight
       nodeIndex := nodeIndex + 1
   return (layerMap, somethingChanged)
 
-/-- `applyModelOrderLayers(graph, layerMap)`: writes the map back (existing layers by index, new layers
-for new keys; all cleared, then filled in key order; empty keys dropped). -/
+/-- `applyModelOrderLayers(graph, layerMap)` (Java `setNewLayeringModelOrder`): writes the map back
+(existing layers by index, new layers for new keys; all cleared, then filled in key order; empty keys
+dropped). Every non-empty layer gets Java's `newLayer.id = layerIndex`, the **key** (not the position:
+keys of emptied layers are skipped) — `ModelOrderNodeComparator` (`SortByInputModelProcessor`) compares
+the ids of layers it has not renumbered yet. -/
 def applyModelOrderLayers (graph : LGraphId) (layerMap : LayerNodeMap) : LayeredM Unit := do
   let existingLayers := (← getGraph graph).layers
   let graphRef ← (do
@@ -317,6 +337,7 @@ def applyModelOrderLayers (graph : LGraphId) (layerMap : LayerNodeMap) : Layered
   for (key, nodes) in layerMap.layers do
     if nodes.isEmpty then continue
     let some (_, targetLayer) := layerRefsByKey.find? (·.1 == key) | continue
+    modifyLayer targetLayer fun l => { l with id := key }
     for h : idx in [0:nodes.size] do
       setNodeLayerAtIndex nodes[idx] idx (some targetLayer)
     orderedNonEmptyLayers := orderedNonEmptyLayers.push targetLayer
@@ -338,12 +359,297 @@ def modelOrderNodePromotion (graph : LGraphId) (leftToRight : Bool) : LayeredM U
     if !somethingChanged then break
   applyModelOrderLayers graph layerMap
 
-/-- `process(graph, monitor)` body: only the model order strategies do something (see the module doc). -/
+/-! ## Nikolov et al. (`promotionMagic`) -/
+
+/-- The read-only data `precalculateAndSetInformation()` computes, indexed by the node id it assigns
+(`node.id`, layer by layer in node order). -/
+structure NikolovData where
+  /-- `nodes` (index = id). -/
+  nodes : Array LNodeId
+  /-- `node.getSize().y + nodeSizeAffix`. -/
+  nodeSize : Array Float
+  /-- `degreeDiff[id][0]`: outgoing minus incoming edges. -/
+  degreeDiff : Array Int
+  /-- `degreeDiff[id][1]`: incoming edges. -/
+  inDegree : Array Int
+  /-- `degreeDiff[id][2]`: outgoing edges. -/
+  outDegree : Array Int
+  /-- `masterNode.id` of the source of every incoming edge (`node.getIncomingEdges()` order). -/
+  incomingSources : Array (Array Int)
+  /-- `nodesWithIncomingEdges` (ids, in `nodes` order). -/
+  nodesWithIncomingEdges : Array Nat
+  /-- `dummySize` (`SPACING_EDGE_NODE_BETWEEN_LAYERS`). -/
+  dummySize : Float
+  /-- `maxWidth`: the largest `currentWidth` before the promotion. -/
+  maxWidth : Int
+  /-- `maxWidthPixel`: the largest `currentWidthPixel` before the promotion (`Math.max`). -/
+  maxWidthPixel : Float
+  deriving Inhabited
+
+/-- The mutable fields of `NodePromotion` the heuristic works on. -/
+structure NikolovState where
+  /-- `layers`: the reversed layer id of every node. -/
+  layers : Array Int
+  /-- `currentWidth` (`List<Integer>`; `promoteNode` appends a layer at the end of the list, which
+  can be longer than `maxHeight`, see `promotionMagic`). -/
+  currentWidth : Array Int
+  /-- `currentWidthPixel` (`List<Double>`, like `currentWidth`). -/
+  currentWidthPixel : Array Float
+  /-- `maxHeight`: the number of layers. -/
+  maxHeight : Nat
+  /-- `dummyNodeCount`. -/
+  dummyNodeCount : Int
+  deriving Inhabited
+
+/-- The heuristic's monad: the `NikolovState` fields (Java's exceptions as `IO.userError`). -/
+abbrev NikolovM := StateRefT NikolovState IO
+
+/-- Java `array[index]` (`ArrayIndexOutOfBoundsException`). -/
+@[inline] def arrayGet {α : Type} [Inhabited α] (a : Array α) (index : Int) : NikolovM α :=
+  if 0 <= index && index < a.size then pure a[index.toNat]!
+  else throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {index} out of bounds for length {a.size}")
+
+/-- `layers[id]`. -/
+@[inline] def layerOf (id : Int) : NikolovM Int := do arrayGet (← get).layers id
+
+/-- `promoteNode(node)`: moves the node (id `node`) one layer up (reversed ids grow towards the first
+layer), updating the widths of its old and new layer (`int`/`double` arithmetic in Java's order; a new
+layer is appended to the width lists), checks the widths of both layers against `maxWidth`
+(`NIKOLOV`) or `maxWidthPixel` (`NIKOLOV_PIXEL`), recursively promotes every source of an incoming
+edge that is now in the node's layer (`layers[node]` is written only after the recursion, so a source
+reached twice can be promoted twice) and returns the estimated dummy difference and whether the
+maximal width was kept. -/
+partial def promoteNode (d : NikolovData) (strategy : NodePromotionStrategy) (node : Nat) :
+    NikolovM (Int × Bool) := do
+  let mut maxWidthNotExceeded := true
+  let mut dummydiff : Int := 0
+  let mut nodeLayerPos ← layerOf node
+  let nodeSize := d.nodeSize[node]!
+  let dummiesBuilt := d.outDegree[node]!
+  -- `currentWidth.set(nodeLayerPos, currentWidth.get(nodeLayerPos) - 1 + dummiesBuilt)`
+  let pos := nodeLayerPos.toNat
+  modify fun s => { s with
+    currentWidth := s.currentWidth.modify pos (· - 1 + dummiesBuilt)
+    currentWidthPixel := s.currentWidthPixel.modify pos (· - nodeSize + dummiesBuilt.toFloat * d.dummySize) }
+  nodeLayerPos := nodeLayerPos + 1
+  let pos := nodeLayerPos.toNat
+  if pos >= (← get).maxHeight then
+    modify fun s => { s with
+      maxHeight := s.maxHeight + 1
+      currentWidth := s.currentWidth.push 1
+      currentWidthPixel := s.currentWidthPixel.push nodeSize }
+  else
+    let dummiesReduced := d.inDegree[node]!
+    modify fun s => { s with
+      currentWidth := s.currentWidth.modify pos (· + 1 - dummiesReduced)
+      currentWidthPixel := s.currentWidthPixel.modify pos (· + nodeSize - dummiesReduced.toFloat * d.dummySize) }
+  let exceeded ← match strategy with
+    | .nikolov => do
+      let w := (← get).currentWidth
+      pure (w[pos]! > d.maxWidth || w[pos - 1]! > d.maxWidth)
+    | .nikolovPixel => do
+      let w := (← get).currentWidthPixel
+      pure (w[pos]! > d.maxWidthPixel || w[pos - 1]! > d.maxWidthPixel)
+    | _ => pure false
+  if exceeded then maxWidthNotExceeded := false
+  for masterNode in d.incomingSources[node]! do
+    if (← layerOf masterNode) == nodeLayerPos then
+      let (diff, kept) ← promoteNode d strategy masterNode.toNat
+      dummydiff := dummydiff + diff
+      maxWidthNotExceeded := maxWidthNotExceeded && kept
+  modify fun s => { s with layers := s.layers.set! node nodeLayerPos }
+  dummydiff := dummydiff + d.degreeDiff[node]!
+  return (dummydiff, maxWidthNotExceeded)
+
+/-- `promotionMagic(funky)`: Nikolov et al.'s outer loop. Every node with incoming edges is promoted;
+the promotion is kept when it reduces the dummy count (and, for `NIKOLOV`/`NIKOLOV_PIXEL`, keeps the
+width), otherwise the last kept state is restored. Iterations repeat while something was promoted and
+`funky reducedDummies iterationCounter` holds.
+
+Java's bookkeeping is reproduced exactly:
+* `currentWidthBackup = currentWidth` (and the pixel list) starts as the **same list**, so until the
+  first kept promotion or restore the "backup" follows every change; the first restore therefore keeps
+  the widths of the rejected promotion (and the list stays longer than `maxHeight` if it appended a
+  layer) and from then on the old list is the backup (`widthBackup`: `none` while aliased).
+* A kept promotion sets `dummyBackup = dummyNodeCount + promotionPair.getFirst()` (the difference is
+  counted twice) and adds `dummyBackup - dummyNodeCount` to `reducedDummies`. -/
+def promotionMagic (d : NikolovData) (strategy : NodePromotionStrategy) (funky : Int → Int → Bool) :
+    NikolovM Unit := do
+  let mut iterationCounter : Int := 0
+  let mut reducedDummies : Int := 0
+  let mut layeringBackup := (← get).layers
+  let mut dummyBackup := (← get).dummyNodeCount
+  let mut heightBackup := (← get).maxHeight
+  let mut widthBackup : Option (Array Int × Array Float) := none
+  repeat
+    let mut promotions : Int := 0
+    for node in d.nodesWithIncomingEdges do
+      let (first, second) ← promoteNode d strategy node
+      let apply := if strategy == .nikolov || strategy == .nikolovPixel then second else true
+      if first < 0 && apply then
+        promotions := promotions + 1
+        layeringBackup := (← get).layers
+        let dummyNodeCount := (← get).dummyNodeCount + first
+        modify fun s => { s with dummyNodeCount := dummyNodeCount }
+        reducedDummies := reducedDummies + (dummyBackup - dummyNodeCount)
+        dummyBackup := dummyNodeCount + first
+        heightBackup := (← get).maxHeight
+        widthBackup := some ((← get).currentWidth, (← get).currentWidthPixel)
+      else
+        match widthBackup with
+        | some (w, wp) =>
+          set ({ layers := layeringBackup, currentWidth := w, currentWidthPixel := wp, maxHeight := heightBackup
+                 dummyNodeCount := dummyBackup } : NikolovState)
+        | none =>
+          -- the backup is the live list: the copy keeps the current widths, the old list becomes the backup
+          widthBackup := some ((← get).currentWidth, (← get).currentWidthPixel)
+          modify fun s => { s with layers := layeringBackup, dummyNodeCount := dummyBackup, maxHeight := heightBackup }
+    iterationCounter := iterationCounter + 1
+    if !(promotions != 0 && funky reducedDummies iterationCounter) then break
+
+/-- `precalculateAndSetInformation()`: sets the layer ids (reversed: the first layer gets
+`layerCount - 1`) and the node ids (layer by layer), and computes per node the degrees, the
+approximated size (`size.y + SPACING_NODE_NODE`), and per layer the width in nodes plus dummies and
+in pixels (dummies `SPACING_EDGE_NODE_BETWEEN_LAYERS` each), their maxima and the dummy count. -/
+def precalculateAndSetInformation (graph : LGraphId) : LayeredM (NikolovData × NikolovState) := do
+  let gr ← getGraph graph
+  let nodeSizeAffix := gr.props.getD LayeredOptions.SPACING_NODE_NODE 20.0
+  let dummySize := gr.props.getD LayeredOptions.SPACING_EDGE_NODE_BETWEEN_LAYERS 10.0
+  let graphLayers := gr.layers
+  let maxHeight := graphLayers.size
+  let mut layerID : Int := (maxHeight : Int) - 1
+  let mut nodeID : Int := 0
+  let mut nodes : Array LNodeId := #[]
+  for layer in graphLayers do
+    let id := layerID
+    modifyLayer layer fun l => { l with id := id }
+    for node in (← getLayer layer).nodes do
+      let nid := nodeID
+      modifyNode node fun n => { n with id := nid }
+      nodes := nodes.push node
+      nodeID := nodeID + 1
+    layerID := layerID - 1
+  let mut layers : Array Int := Array.replicate nodes.size 0
+  let mut nodeSize : Array Float := Array.replicate nodes.size 0.0
+  let mut degreeDiff : Array Int := Array.replicate nodes.size 0
+  let mut inDegrees : Array Int := Array.replicate nodes.size 0
+  let mut outDegrees : Array Int := Array.replicate nodes.size 0
+  let mut incomingSources : Array (Array Int) := Array.replicate nodes.size #[]
+  let mut nodesWithIncomingEdges : Array Nat := #[]
+  let mut currentWidth : Array Int := Array.replicate maxHeight 0
+  let mut currentWidthPixel : Array Float := Array.replicate maxHeight 0.0
+  let mut maxWidth : Int := 0
+  let mut maxWidthPixel : Float := 0.0
+  let mut dummyBaggage : Int := 0
+  let mut dummyNodeCount : Int := 0
+  for layer in graphLayers do
+    let l ← getLayer layer
+    let layerIdx := l.id.toNat
+    let mut incoming : Int := 0
+    let mut outcoming : Int := 0
+    let layerSize : Int := l.nodes.size
+    let mut layerSizePixel : Float := 0.0
+    for node in l.nodes do
+      let nd ← getNode node
+      let id := nd.id.toNat
+      layers := layers.set! id l.id
+      layerSizePixel := layerSizePixel + (nd.size.y + nodeSizeAffix)
+      nodeSize := nodeSize.set! id (nd.size.y + nodeSizeAffix)
+      let inEdges ← withArena (·.nodeIncomingEdges node)
+      let inDegree : Int := inEdges.size
+      let outDegree : Int := (← withArena (·.nodeOutgoingEdges node)).size
+      degreeDiff := degreeDiff.set! id (outDegree - inDegree)
+      inDegrees := inDegrees.set! id inDegree
+      outDegrees := outDegrees.set! id outDegree
+      let mut sources : Array Int := #[]
+      for edge in inEdges do
+        let some port := (← getEdge edge).source | throw (IO.userError "java.lang.NullPointerException")
+        let some source := (← getPort port).owner | throw (IO.userError "java.lang.NullPointerException")
+        sources := sources.push (← getNode source).id
+      incomingSources := incomingSources.set! id sources
+      incoming := incoming + inDegree
+      outcoming := outcoming + outDegree
+      if inDegree > 0 then nodesWithIncomingEdges := nodesWithIncomingEdges.push id
+    dummyBaggage := dummyBaggage - incoming
+    let nodesNdummies := layerSize + dummyBaggage
+    layerSizePixel := layerSizePixel + dummyBaggage.toFloat * dummySize
+    currentWidth := currentWidth.set! layerIdx nodesNdummies
+    currentWidthPixel := currentWidthPixel.set! layerIdx layerSizePixel
+    maxWidth := max maxWidth nodesNdummies
+    maxWidthPixel := javaMax maxWidthPixel layerSizePixel
+    dummyNodeCount := dummyNodeCount + dummyBaggage
+    dummyBaggage := dummyBaggage + outcoming
+  let data : NikolovData := {
+    nodes, nodeSize, degreeDiff, inDegree := inDegrees, outDegree := outDegrees, incomingSources
+    nodesWithIncomingEdges, dummySize, maxWidth, maxWidthPixel }
+  return (data, { layers, currentWidth, currentWidthPixel, maxHeight, dummyNodeCount })
+
+/-- The strategy switch of `process` for the Nikolov family (`MAX_ITERATIONS` = `promoteUntil`):
+`NIKOLOV`/`NIKOLOV_PIXEL` (and `NO_BOUNDARY`, the default case) run `promotionMagic` once without a
+stop criterion; `NIKOLOV_IMPROVED(_PIXEL)` first as `NO_BOUNDARY` and, when the largest width (in nodes
+or pixels, over the whole width list) then exceeds the initial maximum, once more as
+`NIKOLOV(_PIXEL)` on the result; `NODECOUNT_PERCENTAGE` stops after
+`(int) Math.ceil(nodeCount * promoteUntil / 100.0)` iterations and `DUMMYNODE_PERCENTAGE` once
+`(int) Math.ceil(dummyNodeCount * promoteUntil / 100.0)` dummies are reduced (`int` products). -/
+def nikolovStrategies (d : NikolovData) (strategy : NodePromotionStrategy) (promoteUntil : Int) : NikolovM Unit := do
+  let funFunction : Int → Int → Bool := fun _ _ => true
+  match strategy with
+  | .nikolov | .nikolovPixel => promotionMagic d strategy funFunction
+  | .nikolovImproved =>
+    promotionMagic d .noBoundary funFunction
+    let newMaxWidth := (← get).currentWidth.foldl (fun m w => max m w) 0
+    if newMaxWidth > d.maxWidth then promotionMagic d .nikolov funFunction
+  | .nikolovImprovedPixel =>
+    promotionMagic d .noBoundary funFunction
+    let newMaxWidthPixel := (← get).currentWidthPixel.foldl (fun m w => javaMax m w) 0.0
+    if newMaxWidthPixel > d.maxWidthPixel then promotionMagic d .nikolovPixel funFunction
+  | .nodecountPercentage =>
+    let promoteUntilN := (Int.wrap32 ((d.nodes.size : Int) * promoteUntil)).toFloat / 100.0 |>.ceilToInt
+    promotionMagic d strategy fun _ iterations => iterations < promoteUntilN
+  | .dummynodePercentage =>
+    let promoteUntilD := (Int.wrap32 ((← get).dummyNodeCount * promoteUntil)).toFloat / 100.0 |>.ceilToInt
+    promotionMagic d strategy fun reduced _ => reduced < promoteUntilD
+  | _ => promotionMagic d strategy funFunction
+
+/-- `setNewLayering(graph)`: `maxHeight + 1` new layers with the reversed ids `maxHeight - i`, every
+node (in `nodes` order) appended to layer `maxHeight - layers[id]`, empty layers dropped. -/
+def setNewLayering (graph : LGraphId) (d : NikolovData) (st : NikolovState) : LayeredM Unit := do
+  let maxHeight := st.maxHeight
+  -- every node leaves its old layer (Java `setLayer` removes it there; those layers are dropped): empty
+  -- them at once instead of one `remove` per node
+  for layer in (← getGraph graph).layers do
+    modifyLayer layer fun l => { l with nodes := #[] }
+  let mut layList : Array LayerId := #[]
+  for i in [0:maxHeight + 1] do
+    let layer ← createLayer graph
+    let id : Int := (maxHeight : Int) - i
+    modifyLayer layer fun l => { l with id := id }
+    layList := layList.push layer
+  for h : i in [0:d.nodes.size] do
+    let index := (maxHeight : Int) - st.layers[i]!
+    let some layer := (if index >= 0 then layList[index.toNat]? else none)
+      | throw (IO.userError s!"java.lang.IndexOutOfBoundsException: Index {index} out of bounds for length {layList.size}")
+    setNodeLayer d.nodes[i] (some layer)
+  let mut nonEmpty : Array LayerId := #[]
+  for layer in layList do
+    if !(← getLayer layer).nodes.isEmpty then nonEmpty := nonEmpty.push layer
+  let layers := nonEmpty
+  modifyGraph graph fun g => { g with layers := layers }
+
+/-- `process` for the strategies other than the model order ones:
+`precalculateAndSetInformation()`, the strategy switch, `setNewLayering(graph)`. -/
+def nikolovNodePromotion (graph : LGraphId) (strategy : NodePromotionStrategy) : LayeredM Unit := do
+  let (d, st) ← precalculateAndSetInformation graph
+  let promoteUntil := (← getGraph graph).props.getD LayeredOptions.LAYERING_NODE_PROMOTION_MAX_ITERATIONS 0
+  let ((), st) ← (nikolovStrategies d strategy promoteUntil).run st
+  setNewLayering graph d st
+
+/-- `process(graph, monitor)` body: the model order strategies or the Nikolov family. -/
 def run (graph : LGraphId) : LayeredM Unit := do
   match (← getGraph graph).props.getD LayeredOptions.LAYERING_NODE_PROMOTION_STRATEGY NodePromotionStrategy.none with
   | .modelOrderLeftToRight => modelOrderNodePromotion graph true
   | .modelOrderRightToLeft => modelOrderNodePromotion graph false
-  | _ => pure ()
+  | strategy => nikolovNodePromotion graph strategy
 
 /-- The `NodePromotion` processor. -/
 def processor : LayeredProcessor :=

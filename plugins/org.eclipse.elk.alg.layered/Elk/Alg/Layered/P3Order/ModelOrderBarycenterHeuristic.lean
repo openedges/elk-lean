@@ -14,32 +14,29 @@ comparison sequence of the sort matters.
 
 ## API (for `GraphInfoHolder`)
 * `ModelOrderBarycenterHeuristic.new constraintResolver portDistributor forceModelOrder
-  maxModelOrderNodes groupOrderStrategy (lockedGraph := none)` (Rust `new` with the same first five
-  arguments; `lockedGraph` see below). The elk-rs `GraphInfoHolder` creates it only when
-  `forceModelOrder` is `true`.
+  maxModelOrderNodes groupOrderStrategy` (Rust `new` with the same arguments). Java's (and elk-rs's)
+  `GraphInfoHolder` creates it only when `forceModelOrder` is `true`.
 * `initializable`, `setSnapshot`, the `IO.Ref Random` argument and `toHeuristic random` are those of
   the wrapped `BarycenterHeuristic` (`base`).
-
-## `ModelOrderGraphContext` choice (Rust `try_lock`)
-`CMGroupModelOrderCalculator` reads `GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY` and
-`GROUP_MODEL_ORDER_CM_ENFORCED_GROUP_ORDERS` from the node's graph with `try_lock()`. elk-rs runs
-every processor with the processed graph locked (`elk_layered.rs` `graph_guard`), so for nodes of
-that graph the lock fails and the defaults are used (`ModelOrderGraphContext.unavailable`); nested
-graphs swept by the same minimiser (`INCLUDE_CHILDREN`) are not locked and are read
-(`ModelOrderGraphContext.ofGraph`). `lockedGraph` is the graph Rust holds locked: the
-`LayerSweepCrossingMinimizer` passes the processed (root) graph, the elk-rs unit tests correspond to
-`none`.
 
 ## Java semantics (elk-rs differs)
 * `setFirstLayerOrder` randomises the barycenters and then, through Java's virtual
   `minimizeCrossings(layer, …)`, sorts the first layer with the model order insertion sort (clearing
   the relations, no constraint resolution); elk-rs uses the base barycenter sort and the resolver.
 * Barycenters compare with `Double.compareTo` (NaN largest, `-0.0 < 0.0`; elk-rs `partial_cmp`).
+* `CMGroupModelOrderCalculator` reads `GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY` and
+  `GROUP_MODEL_ORDER_CM_ENFORCED_GROUP_ORDERS` of the node's graph (`ModelOrderGraphContext.ofGraph`).
+  elk-rs reads them with `try_lock()` and, as it runs every processor with the processed graph locked,
+  used the defaults (`ModelOrderGraphContext.unavailable`) for the nodes of that graph — an `ENFORCED`
+  group order of the root graph was ignored.
+* With `ONLY_WITHIN_GROUP`, Java's `n1.getProperty(ID) != n2.getProperty(ID)` compares `Integer`
+  objects: two nodes with the same group id outside `[-128, 127]` are in "different" groups (elk-rs
+  compares the values).
+* `updateBiggerAndSmallerAssociations` works on the live sets (see the function; elk-rs copies two sets
+  first, which gives the same relations).
 
 ## Rust semantics kept where they differ from Java
-* The relation sets are copied before the update (`update_bigger_and_smaller_associations`); Java
-  iterates the live sets.
-* `minimizeCrossings` with `forceModelOrder = false` (never created by elk-rs) sorts with Rust's
+* `minimizeCrossings` with `forceModelOrder = false` (never created by Java or elk-rs) sorts with Rust's
   `slice::sort_by`, whose comparison sequence for up to 20 nodes is `insertion_sort_shift_left`
   (`is_less(tail, sift)`), reproduced here, and does not clear the relations afterwards (Rust and
   Java). For longer layers Rust switches to driftsort, which is not ported: the insertion sort is
@@ -93,22 +90,34 @@ def compareBasedOnTransitiveDependencies (rel : ModelOrderBarycenterRelations) (
   else if holds rel.smallerThan n2 n1 then 1
   else 0
 
-/-- `update_bigger_and_smaller_associations(bigger, smaller)`: records the pair and propagates it
-through the sets captured before the update. -/
+/-- Java `updateBiggerAndSmallerAssociations(bigger, smaller)` on the live sets (Java holds references
+to `biggerThan.get(bigger)`, `biggerThan.get(smaller)`, `smallerThan.get(bigger)` and
+`smallerThan.get(smaller)` and mutates them while it iterates): `bigger > smaller`, then every node
+below `smaller` is below `bigger` and above-`bigger` nodes are above it, then every node above `bigger`
+is above `smaller` and the nodes below `smaller`. Each read below is the set's state at that point of
+Java's code: the first loop iterates `biggerThan(smaller)` (no statement of the loop changes it, as
+`bigger ≠ smaller`) and adds the current `smallerThan(bigger)`, which the loop itself grows when
+`bigger` is one of the iterated nodes (a cyclic relation); the second loop iterates
+`smallerThan(bigger)` as the first loop left it and adds the current `biggerThan(smaller)`, which it
+grows when `smaller` is iterated. The result does not depend on the `HashSet` iteration order (every
+set that grows during a loop only gains elements the loop adds anyway); checked against the private
+Java method on arbitrary, also cyclic and self-related, states (`tests/fixtures/promotion/`). The
+elk-rs version (copies of the two sets taken before the update) gives the same sets. -/
 def updateBiggerAndSmallerAssociations (rel : ModelOrderBarycenterRelations) (bigger smaller : LNodeId) :
     ModelOrderBarycenterRelations := Id.run do
-  let smallerNodeBiggerThan := rel.biggerThan.getD smaller {}
-  let biggerNodeSmallerThan := rel.smallerThan.getD bigger {}
+  -- biggerNodeBiggerThan.add(smaller); smallerNodeSmallerThan.add(bigger)
   let mut biggerThan := insertInto rel.biggerThan bigger smaller
   let mut smallerThan := insertInto rel.smallerThan smaller bigger
-  for verySmall in smallerNodeBiggerThan do
+  -- for (LNode verySmall : smallerNodeBiggerThan)
+  for verySmall in biggerThan.getD smaller {} do
     biggerThan := insertInto biggerThan bigger verySmall
     smallerThan := insertInto smallerThan verySmall bigger
-    smallerThan := unionInto smallerThan verySmall biggerNodeSmallerThan
-  for veryBig in biggerNodeSmallerThan do
+    smallerThan := unionInto smallerThan verySmall (smallerThan.getD bigger {})
+  -- for (LNode veryBig : biggerNodeSmallerThan)
+  for veryBig in smallerThan.getD bigger {} do
     smallerThan := insertInto smallerThan smaller veryBig
     biggerThan := insertInto biggerThan veryBig smaller
-    biggerThan := unionInto biggerThan veryBig smallerNodeBiggerThan
+    biggerThan := unionInto biggerThan veryBig (biggerThan.getD smaller {})
   return { biggerThan, smallerThan }
 
 end ModelOrderBarycenterRelations
@@ -119,12 +128,9 @@ structure ModelOrderCompareEnv where
   base : BarycenterContext
   /-- The barycenter states after the computation. -/
   states : Array (Array (Option BarycenterState))
-  /-- The `ModelOrderGraphContext` of each graph of the sorted nodes (see the module doc). -/
+  /-- The `ModelOrderGraphContext` of each graph of the sorted nodes (Java reads `MAX_MODEL_ORDER_NODES`
+  and the group order options from `n1.getGraph()`). -/
   graphContexts : Std.HashMap LGraphId ModelOrderGraphContext := {}
-  /-- `max_model_order_nodes` (the offset of the group model order). -/
-  maxModelOrderNodes : Int := 0
-  /-- `group_order_strategy`. -/
-  groupOrderStrategy : GroupOrderStrategy := .onlyWithinGroup
 
 namespace ModelOrderBarycenterHeuristic
 
@@ -155,23 +161,28 @@ def compareBasedOnBarycenter (env : ModelOrderCompareEnv) (rel : ModelOrderBaryc
 @[inline] def isSeparate (c : LayerConstraint) : Bool := c == .firstSeparate || c == .lastSeparate
 
 /-- The model order part of `compare_nodes`: both nodes have a `MODEL_ORDER` and `n1` a graph; the
-(group) model orders are compared, ignored across groups with `ONLY_WITHIN_GROUP`; `none` when it
-does not decide. -/
+(group) model orders are compared, ignored across groups with `ONLY_WITHIN_GROUP` (all three options of
+`n1`'s graph); `none` when it does not decide. -/
 def compareByModelOrder (env : ModelOrderCompareEnv) (rel : ModelOrderBarycenterRelations) (n1 n2 : LNodeId) :
     Option (Int × ModelOrderBarycenterRelations) := do
   let a := env.base.arena
   let nd1 := a.node n1
   let nd2 := a.node n2
   if nd1.internal.modelOrder.isNone || nd2.internal.modelOrder.isNone then none
+  -- Java `lgraph = n1.getGraph()`: the offset `MAX_MODEL_ORDER_NODES`, the group order strategy and the
+  -- enforced group orders are all read from it
   let graph ← a.nodeGraph n1
-  let ctx := env.graphContexts[graph]?.getD ModelOrderGraphContext.unavailable
-  let v1 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf ctx nd1 nd2 env.maxModelOrderNodes
-  let v2 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf ctx nd2 nd1 env.maxModelOrderNodes
+  let ctx ← env.graphContexts[graph]?
+  let v1 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf ctx nd1 nd2 ctx.maxModelOrderNodes
+  let v2 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf ctx nd2 nd1 ctx.maxModelOrderNodes
   let mut value := orderingToInt (Ord.compare v1 v2)
-  if env.groupOrderStrategy == .onlyWithinGroup then
+  if ctx.groupOrderStrategy == .onlyWithinGroup then
+    -- Java `n1.getProperty(ID) != n2.getProperty(ID)` compares the `Integer` objects: equal values are
+    -- identical only inside the `Integer` cache `[-128, 127]` (the default `0` is cached; every node's
+    -- parsed value `Integer.valueOf(String)` is its own box outside it)
     let g1 := nd1.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
     let g2 := nd2.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
-    if g1 != g2 then value := 0
+    if !(g1 == g2 && -128 <= g1 && g1 <= 127) then value := 0
   if value < 0 then some (value, rel.updateBiggerAndSmallerAssociations n1 n2)
   else if value > 0 then some (value, rel.updateBiggerAndSmallerAssociations n2 n1)
   else none
@@ -249,20 +260,18 @@ structure ModelOrderBarycenterHeuristic where
   maxModelOrderNodes : Int
   /-- `group_order_strategy`. -/
   groupOrderStrategy : GroupOrderStrategy
-  /-- The graph elk-rs holds locked while the heuristic runs (see the module doc). -/
-  lockedGraph : Option LGraphId := none
 
 namespace ModelOrderBarycenterHeuristic
 
 /-- `ModelOrderBarycenterHeuristic::new(constraint_resolver, port_distributor, force_model_order,
-max_model_order_nodes, group_order_strategy)` plus the locked graph of the Rust run. -/
+max_model_order_nodes, group_order_strategy)`. -/
 def new (constraintResolver : ForsterConstraintResolver) (portDistributor : BarycenterPortDistributor)
-    (forceModelOrder : Bool) (maxModelOrderNodes : Int) (groupOrderStrategy : GroupOrderStrategy)
-    (lockedGraph : Option LGraphId := none) : BaseIO ModelOrderBarycenterHeuristic := do
+    (forceModelOrder : Bool) (maxModelOrderNodes : Int) (groupOrderStrategy : GroupOrderStrategy) :
+    BaseIO ModelOrderBarycenterHeuristic := do
   return {
     base := ← BarycenterHeuristic.new constraintResolver portDistributor
     relations := ← IO.mkRef {}
-    forceModelOrder, maxModelOrderNodes, groupOrderStrategy, lockedGraph }
+    forceModelOrder, maxModelOrderNodes, groupOrderStrategy }
 
 /-- `set_snapshot(snapshot)` (the base one). -/
 def setSnapshot (h : ModelOrderBarycenterHeuristic) (s : CrossMinSnapshot) : BaseIO Unit := h.base.setSnapshot s
@@ -270,19 +279,17 @@ def setSnapshot (h : ModelOrderBarycenterHeuristic) (s : CrossMinSnapshot) : Bas
 /-- `clear_transitive_ordering()`. -/
 def clearTransitiveOrdering (h : ModelOrderBarycenterHeuristic) : BaseIO Unit := h.relations.set {}
 
-/-- The comparator inputs for sorting `nodes`: the graph contexts of the nodes' graphs. -/
+/-- The comparator inputs for sorting `nodes`: the graph contexts of the nodes' graphs (Java
+`n1.getGraph().getProperty(..)`, read from the graph itself). -/
 def compareEnv (h : ModelOrderBarycenterHeuristic) (c : BarycenterContext) (nodes : Array LNodeId) :
     LayeredM ModelOrderCompareEnv := do
   let mut graphContexts : Std.HashMap LGraphId ModelOrderGraphContext := {}
   for n in nodes do
     if let some g := c.arena.nodeGraph n then
       if !graphContexts.contains g then
-        let ctx ← if h.lockedGraph == some g then pure ModelOrderGraphContext.unavailable
-          else ModelOrderGraphContext.ofGraph g
-        graphContexts := graphContexts.insert g ctx
+        graphContexts := graphContexts.insert g (← ModelOrderGraphContext.ofGraph g)
   return {
-    base := c, states := ← h.base.constraintResolver.barycenterStates.get, graphContexts
-    maxModelOrderNodes := h.maxModelOrderNodes, groupOrderStrategy := h.groupOrderStrategy }
+    base := c, states := ← h.base.constraintResolver.barycenterStates.get, graphContexts }
 
 /-- `compare_nodes(n1, n2)` on the current barycenter states and relations (updates the relations). -/
 def compareNodesM (h : ModelOrderBarycenterHeuristic) (n1 n2 : LNodeId) : LayeredM Int := do

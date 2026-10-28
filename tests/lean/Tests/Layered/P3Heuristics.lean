@@ -62,12 +62,12 @@ def createHeuristic (order : Array (Array LNodeId)) : LayeredM BarycenterHeurist
 
 /-- `create_heuristic` of `model_order_barycenter_heuristic_test.rs`. -/
 def createModelOrderHeuristic (order : Array (Array LNodeId)) (force : Bool := true) (maxNodes : Int := 0)
-    (strategy : GroupOrderStrategy := .onlyWithinGroup) (locked : Option LGraphId := none) :
+    (strategy : GroupOrderStrategy := .onlyWithinGroup) :
     LayeredM ModelOrderBarycenterHeuristic := do
   let d ← NodeRelativePortDistributor.new order.size
   let r ← ForsterConstraintResolver.new order false
   Initializable.init #[d.initializable, r.initializable] order
-  let h ← ModelOrderBarycenterHeuristic.new r d.toBarycenterPortDistributor force maxNodes strategy locked
+  let h ← ModelOrderBarycenterHeuristic.new r d.toBarycenterPortDistributor force maxNodes strategy
   Initializable.init #[h.initializable] order
   return h
 
@@ -491,7 +491,9 @@ def moGraph (setup : LNodeId → LNodeId → LayeredM Unit := fun _ _ => pure ()
 def moRun (force : Bool := true) (strategy : GroupOrderStrategy := .onlyWithinGroup)
     (setup : LNodeId → LNodeId → LayeredM Unit := fun _ _ => pure ()) :
     LayeredM (Array LNodeId × LNodeId × LNodeId × Array (Option Float) × Int) := do
-  let (_, order, x, z) ← moGraph setup
+  let (g, order, x, z) ← moGraph setup
+  -- Java reads the group order strategy of the nodes' graph (the holder reads the same property)
+  setGraphProp g LayeredOptions.GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY strategy
   let h ← createModelOrderHeuristic order force (strategy := strategy)
   let (order', _) ← h.minimizeCrossings order 1 true true (← IO.mkRef (Random.ofInt 0))
   -- a comparison after the sort sees the relations left by the sort (cleared with `force`)
@@ -508,10 +510,13 @@ def moPlainBarycenter : LayeredM (Array LNodeId × LNodeId × LNodeId) := do
 /-- `compare_nodes` decisions on `moGraph` after the barycenters were computed; `prepare` can set
 the barycenter states. -/
 def moCompare (force : Bool := true) (strategy : GroupOrderStrategy := .onlyWithinGroup) (maxNodes : Int := 0)
-    (locked : Bool := false) (setup : LNodeId → LNodeId → LayeredM Unit := fun _ _ => pure ())
+    (setup : LNodeId → LNodeId → LayeredM Unit := fun _ _ => pure ())
     (equalBarycenters : Bool := false) : LayeredM (Int × Int) := do
   let (g, order, x, z) ← moGraph setup
-  let h ← createModelOrderHeuristic order force maxNodes strategy (if locked then some g else none)
+  -- Java reads `MAX_MODEL_ORDER_NODES` and the group order strategy of the nodes' graph
+  modifyGraph g fun x => { x with internal := { x.internal with maxModelOrderNodes := maxNodes } }
+  setGraphProp g LayeredOptions.GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY strategy
+  let h ← createModelOrderHeuristic order force maxNodes strategy
   let random ← IO.mkRef (Random.ofInt 0)
   h.base.updatePortRanks order 1 true
   h.base.calculateBarycentersM order[1]! true random
@@ -584,10 +589,15 @@ def modelOrderTests : Suite := suite "layered.p3order.model_order_barycenter_heu
   let (first, _) ← runL (moCompare (equalBarycenters := true) (setup := fun x _ => modifyNode x fun n =>
     { n with internal := { n.internal with modelOrder := none } }))
   checkEq "equal barycenters without model order compare equal" first 0
+  -- Java reads the group order options of the node's graph, also of the processed graph (elk-rs: its
+  -- `try_lock` fails there and the defaults give the plain model order, -1)
   let (first, _) ← runL (moCompare (strategy := .enforced) (maxNodes := 10) (setup := setEnforced))
-  checkEq "graph readable: enforced group model order (hand: 10*1+0 vs 10*0+1 → 1)" first 1
-  let (first, _) ← runL (moCompare (strategy := .enforced) (maxNodes := 10) (locked := true) (setup := setEnforced))
-  checkEq "graph locked (Rust try_lock fails): plain model order (hand: 0 vs 1 → -1)" first (-1)
+  checkEq "Java: enforced group model order of the node's graph (hand: 10*1+0 vs 10*0+1 → 1)" first 1
+  -- Java `Integer !=` on the group ids: equal ids outside the `Integer` cache are different groups
+  let (result, x, z, _, _) ← runL (moRun (setup := setGroups 200 200))
+  check "Java: equal group ids 200 are different Integer objects → barycenters (hand: [z, x])" (result == #[z, x])
+  let (result, x, z, _, _) ← runL (moRun (setup := setGroups 127 127))
+  check "Java: equal cached group ids 127 are one group → model order (hand: [x, z])" (result == #[x, z])
   let (rn, result) ← runL moDummyGraph
   check "insertion sort places the dummy by barycenter (hand: [y, d, z, x])"
     (result == #[rn[1]!, rn[2]!, rn[3]!, rn[0]!])
