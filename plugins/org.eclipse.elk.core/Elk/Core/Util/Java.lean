@@ -127,22 +127,25 @@ keys (a consistent total order, so TimSort's result is the unique stable order).
   let b := if x.isNaN then 0x7ff8000000000000 else x.toBits
   if b ≥ 0x8000000000000000 then ~~~b else b ^^^ 0x8000000000000000
 
-/-- Whether the keys are in non-decreasing order. -/
-private def javaKeysSorted (keys : Array UInt64) (i : Nat) : Bool :=
+/-- `a` before `b` in `Double.compare` order (the keys of an unboxed `FloatArray`). -/
+@[inline] private def javaKeyLt (a b : Float) : Bool := Float.javaOrderKey a < Float.javaOrderKey b
+
+/-- Whether the keys are in non-decreasing `Double.compare` order. -/
+private def javaKeysSorted (keys : FloatArray) (i : Nat) : Bool :=
   if h : i + 1 < keys.size then
-    if keys[i] <= keys[i + 1] then javaKeysSorted keys (i + 1) else false
+    if javaKeyLt keys[i + 1] keys[i] then false else javaKeysSorted keys (i + 1)
   else true
   termination_by keys.size - i
 
 /-- Merges the sorted index runs `src[i..iEnd)` and `src[j..jEnd)` into `dst` from `k` on; an
 element of the right run goes first only if its key is strictly smaller (stable). -/
-private partial def javaKeyMergeRuns (keys : Array UInt64) (src dst : Array Nat) (i iEnd j jEnd k : Nat) :
+private partial def javaKeyMergeRuns (keys : FloatArray) (src dst : Array Nat) (i iEnd j jEnd k : Nat) :
     Array Nat :=
   if i < iEnd then
     if j < jEnd then
       let a := src[i]!
       let b := src[j]!
-      if keys[b]! < keys[a]! then
+      if javaKeyLt (keys.get! b) (keys.get! a) then
         javaKeyMergeRuns keys src (dst.set! k b) i iEnd (j + 1) jEnd (k + 1)
       else
         javaKeyMergeRuns keys src (dst.set! k a) (i + 1) iEnd j jEnd (k + 1)
@@ -151,7 +154,7 @@ private partial def javaKeyMergeRuns (keys : Array UInt64) (src dst : Array Nat)
   else dst
 
 /-- One bottom-up merge pass with run width `w`, from `lo` on. -/
-private partial def javaKeyMergePass (keys : Array UInt64) (src dst : Array Nat) (w lo : Nat) : Array Nat :=
+private partial def javaKeyMergePass (keys : FloatArray) (src dst : Array Nat) (w lo : Nat) : Array Nat :=
   let n := src.size
   if lo < n then
     let mid := min (lo + w) n
@@ -160,7 +163,7 @@ private partial def javaKeyMergePass (keys : Array UInt64) (src dst : Array Nat)
   else dst
 
 /-- Bottom-up merge passes until one run covers everything. -/
-private partial def javaKeyMergeAll (keys : Array UInt64) (src dst : Array Nat) (w : Nat) : Array Nat :=
+private partial def javaKeyMergeAll (keys : FloatArray) (src dst : Array Nat) (w : Nat) : Array Nat :=
   if w < src.size then
     let merged := javaKeyMergePass keys src dst w 0
     javaKeyMergeAll keys merged src (2 * w)
@@ -169,15 +172,15 @@ private partial def javaKeyMergeAll (keys : Array UInt64) (src dst : Array Nat) 
 /-- The elements stably sorted by the Java order of their keys (`List.sort` with
 `Double.compare(key x, key y)`: a consistent comparator, so the unique stable order). Returns the
 input when it is already sorted (no comparison for fewer than two elements). -/
-def javaSortByDoubleKeys {α : Type} [Inhabited α] (xs : Array α) (keys : Array Float) : Array α :=
+def javaSortByDoubleKeys {α : Type} [Inhabited α] (xs : Array α) (keys : FloatArray) : Array α :=
   if xs.size < 2 then xs else
-  let ks := keys.map Float.javaOrderKey
-  if javaKeysSorted ks 0 then xs
-  else (javaKeyMergeAll ks (Array.range ks.size) (Array.replicate ks.size 0) 1).map fun i => xs[i]!
+  if javaKeysSorted keys 0 then xs
+  else (javaKeyMergeAll keys (Array.range keys.size) (Array.replicate keys.size 0) 1).map fun i => xs[i]!
 
 /-- `javaSortByDoubleKeys` with a key function. -/
 @[inline] def javaSortByDouble {α : Type} [Inhabited α] (xs : Array α) (key : α → Float) : Array α :=
-  if xs.size < 2 then xs else javaSortByDoubleKeys xs (xs.map key)
+  if xs.size < 2 then xs else
+  javaSortByDoubleKeys xs (xs.foldl (init := FloatArray.emptyWithCapacity xs.size) fun ks x => ks.push (key x))
 
 /-- Java `DoubleStream.average()` of a sequential stream (JDK 21 `DoublePipeline.average`): Kahan
 summation (`Collectors.sumWithCompensation`) plus the simple sum, final value

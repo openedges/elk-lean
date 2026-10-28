@@ -25,11 +25,14 @@ reached once (elk-lean followed it before agent RJ3); ELK Java walks the trees a
 The walker properties (`PRELIM`, `MODIFIER`, `LEVELHEIGHT`, `LEFTSIBLING`, `RIGHTSIBLING`,
 `LEFTNEIGHBOR`, `XCOOR`, `YCOOR`) are not read by later phases, so they live in arrays indexed by a
 dense node index (`Walker`) instead of the nodes. Java behaviour that cannot terminate is cut off: a
-node that is its own right sibling makes `secondWalk` recurse forever (Java's
-`java.lang.StackOverflowError`, thrown here after as many steps as there are level entries plus one),
-a left sibling chain that is a cycle makes `apportion` loop forever (Java hangs; Lean throws
+cycle of the first child and right sibling steps (e.g. a node that is its own right sibling) makes
+`secondWalk` recurse forever (Java's `java.lang.StackOverflowError`; Lean finds the cycle before the
+walk, `secondWalkLoops`, and throws the same error without writing any coordinate), a left sibling
+chain that is a cycle makes `apportion` loop forever (Java hangs; Lean throws
 `java.lang.StackOverflowError` too after as many steps as there are nodes), and a missing ancestor in
-`apportion` is Java's `NullPointerException`.
+`apportion` is Java's `NullPointerException`. The recursions of `firstWalk`/`secondWalk` themselves
+are not bounded: on trees deep enough to overflow Java's thread stack (a JVM setting) Lean still
+lays the tree out.
 
 `DIRECTION` `UNDEFINED` becomes `DOWN` and is written back to the graph (Java `NodePlacer.process`;
 the `LevelHeightProcessor` runs before and still sees `UNDEFINED`, which is vertical).

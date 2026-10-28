@@ -92,7 +92,7 @@ partial def wedgeSpaces (g : ElkGraph) (criteria : AnnulusWedgeCriteria)
       let (childSpace, cache) := successors.foldl (fun (acc, c) child =>
         let (v, c) := wedgeSpaces g criteria successorCache leafCache child c
         (acc + v, c)) (fl0p0, cache)
-      let v := fmax childSpace nodeSize
+      let v := javaMax childSpace nodeSize
       (v, cache.insert node v)
 
 /-- `positionNodes(node, currentRadius, minAlpha, maxAlpha, optimalOffset)`: places `node` on the

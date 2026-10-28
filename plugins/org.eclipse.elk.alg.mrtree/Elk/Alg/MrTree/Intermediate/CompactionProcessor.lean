@@ -1,5 +1,6 @@
 import Std.Data.HashMap
 import Elk.Core.Util.Java
+import Elk.Core.Util.Sort
 import Elk.Alg.MrTree.Graph.TArena
 import Elk.Alg.MrTree.Options.MrTreeOptions
 import Elk.Alg.MrTree.TreeUtil
@@ -179,7 +180,7 @@ the graph's node list (`g.getNodes().stream().filter(sources::contains)`), the f
 the largest projection on the direction vector (`max(Comparator.naturalOrder())`, then the first
 with `==`); `none` without incoming edges; `java.util.NoSuchElementException` if no source is in the
 node list. -/
-def getLowestParent (a : TArena) (nodes : Array TNodeId) (node : TNodeId) (direction : Direction) :
+def getLowestParent (a : TArena) (listPos : Std.HashMap TNodeId Nat) (node : TNodeId) (direction : Direction) :
     Except String (Option TNodeId) := Id.run do
   let incoming := (a.node node).incomingEdges
   if incoming.isEmpty then return .ok none
@@ -188,7 +189,13 @@ def getLowestParent (a : TArena) (nodes : Array TNodeId) (node : TNodeId) (direc
   let score (p : TNodeId) : Float :=
     let pn := a.node p
     (KVector.mk (pn.position.x + pn.size.x / fl2p0) (pn.position.y + pn.size.y / fl2p0)).dotProduct dirVec
-  let parents := nodes.filter fun x => sources.contains x
+  -- the sources in node list order (`listPos`: first position of every listed node; a node listed
+  -- twice appears twice in Java's filter, which changes neither the maximum nor the first match)
+  let mut keyed : Array (Nat × TNodeId) := #[]
+  for src in sources do
+    if let some i := listPos.get? src then
+      if !keyed.any (·.2 == src) then keyed := keyed.push (i, src)
+  let parents := (stableSort keyed fun x y => compare x.1 y.1).map (·.2)
   let some first := parents[0]? | return .error "java.util.NoSuchElementException"
   let mut best := score first
   for p in parents do
@@ -217,13 +224,16 @@ def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
   -- `nodes.sort(...)` sorts the graph's own node list
   let nodes := javaSortByDouble (a.graph graph).nodes fun n => dirVec.dotProduct (a.node n).position
   MrTreeM.modifyGraph graph fun x => { x with nodes }
+  let mut listPos : Std.HashMap TNodeId Nat := {}
+  for h : i in [0:nodes.size] do
+    if !listPos.contains nodes[i] then listPos := listPos.insert nodes[i] i
   for node in nodes do
     let a ← get
     let n := a.node node
     if n.internal.root then continue
     let size := n.size
     let dependent := getLowestDependentNode a node direction
-    let parent ← match getLowestParent a nodes node direction with
+    let parent ← match getLowestParent a listPos node direction with
       | .ok p => pure p
       | .error e => throw (IO.userError e)
     let mut newPos := fl0p0

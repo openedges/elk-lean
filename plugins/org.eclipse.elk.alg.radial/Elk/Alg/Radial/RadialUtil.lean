@@ -169,8 +169,8 @@ partial def largestNodePure (g : ElkGraph) (graph : NodeId) : Float :=
   (g.node graph).children.foldl (fun largest child =>
     let n := g.node child
     let diameter := Float.sqrt (n.width * n.width + n.height * n.height)
-    let largest := fmax largest diameter
-    fmax largest (largestNodePure g child)) 0.0
+    let largest := javaMax diameter largest
+    javaMax (largestNodePure g child) largest) 0.0
 
 /-- `RadialUtil::find_largest_node_in_graph(graph)`. -/
 def findLargestNodeInGraph (graph : NodeId) : ElkM Float :=

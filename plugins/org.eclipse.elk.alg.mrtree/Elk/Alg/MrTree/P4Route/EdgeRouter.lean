@@ -155,38 +155,36 @@ end Slots
 /-- The node table by slot. -/
 abbrev NodeTable := Array NodeData
 
-/-- The data of the node list (one entry per list entry, duplicates included) and the aggregates. -/
-def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeTable × GraphStats := Id.run do
-  let mut data : NodeTable := Array.mkEmpty nodes.size
-  let mut centersH : Array Float := Array.mkEmpty nodes.size
-  let mut centersV : Array Float := Array.mkEmpty nodes.size
+/-- The data of the node list (one entry per list entry, duplicates included). -/
+def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeTable :=
+  nodes.map fun node => NodeData.ofNode (a.node node)
+
+/-- The aggregates of the first `count` entries (the node list) of the table, computed when the first
+cycle inducing edge needs them (Java recomputes them for every such edge; the nodes do not move). -/
+def buildStats (nd : NodeTable) (count : Nat) : GraphStats := Id.run do
+  let mut centersH : Array Float := Array.mkEmpty count
+  let mut centersV : Array Float := Array.mkEmpty count
   let mut maxH := fl0p0
   let mut maxV := fl0p0
   let mut minH := fl0p0
   let mut minV := fl0p0
-  let mut first := true
-  for node in nodes do
-    let n := a.node node
-    let d := NodeData.ofNode n
+  for i in [0:min count nd.size] do
+    let d := nd[i]!
     let pos := d.pos
     let size := d.size
     centersH := centersH.push (pos.y + size.y / fl2p0)
     centersV := centersV.push (pos.x + size.x / fl2p0)
     let extH := pos.y + size.y
     let extV := pos.x + size.x
-    if first then
+    if i == 0 then
       maxH := extH; maxV := extV; minH := pos.y; minV := pos.x
-      first := false
     else
       maxH := maxByJava maxH extH
       maxV := maxByJava maxV extV
       minH := minByJava minH pos.y
       minV := minByJava minV pos.x
-    data := data.push d
-  let stats : GraphStats :=
-    { avgCenterH := (javaDoubleAverage centersH).getD fl0p0, avgCenterV := (javaDoubleAverage centersV).getD fl0p0,
-      maxExtentH := maxH, maxExtentV := maxV, minExtentH := minH, minExtentV := minV }
-  return (data, stats)
+  return { avgCenterH := (javaDoubleAverage centersH).getD fl0p0, avgCenterV := (javaDoubleAverage centersV).getD fl0p0,
+           maxExtentH := maxH, maxExtentV := maxV, minExtentH := minH, minExtentV := minV }
 
 /-- `nd_pos` etc. of a slot. -/
 @[inline] def ndLevel (nd : NodeTable) (s : Nat) : Int := (nd[s]?.map (·.level)).getD 0
@@ -380,8 +378,9 @@ def handleCycleInducingEdges (edge : TEdgeId) (source target : Nat) (direction :
 
 /-- `avoidOverlapSpecialEdges(...)`. -/
 def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : Slots) (nd : NodeTable)
-    (stats : GraphStats) (graphBounds : Float × Float × Float × Float) (em : EdgeTable)
+    (nodeCount : Nat) (graphBounds : Float × Float × Float × Float) (em : EdgeTable)
     (levelNodes : Array (Array Nat)) : MrTreeM Unit := do
+  let mut stats : Option GraphStats := none
   let (graphXmin, graphXmax, graphYmin, graphYmax) := graphBounds
   let horizontal := direction.isHorizontal
   let mut sideOneEdges : Int := 0
@@ -462,15 +461,20 @@ def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : 
     else if levelDiff == 0 then
       middleToMiddleEdgeRoute edge
     else if levelDiff < 0 then
-      let sourceLevelN := (max sourceLevel 0).toNat
-      let targetLevelN := (max targetLevel 0).toNat
-      if sourceLevelN < outsPerLevel.size then
-        outsPerLevel := outsPerLevel.modify sourceLevelN (· + 1)
-      if targetLevelN < insPerLevel.size then
-        insPerLevel := insPerLevel.modify targetLevelN (· + 1)
-      let inOuts := (insPerLevel[targetLevelN]?.getD 0, outsPerLevel[sourceLevelN]?.getD 0)
+      -- `outsPerLevel[sourceLevel]++; insPerLevel[targetLevel]++` (arrays of the maximal level + 1)
+      if sourceLevel < 0 || sourceLevel >= (maxLevel : Int) then
+        throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {sourceLevel} out of bounds for length {maxLevel}")
+      if targetLevel < 0 || targetLevel >= (maxLevel : Int) then
+        throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {targetLevel} out of bounds for length {maxLevel}")
+      let sourceLevelN := sourceLevel.toNat
+      let targetLevelN := targetLevel.toNat
+      outsPerLevel := outsPerLevel.modify sourceLevelN (· + 1)
+      insPerLevel := insPerLevel.modify targetLevelN (· + 1)
+      let inOuts := (insPerLevel[targetLevelN]!, outsPerLevel[sourceLevelN]!)
+      let st := stats.getD (buildStats nd nodeCount)
+      stats := some st
       let (s1, s2) ← handleCycleInducingEdges edge source target direction (sideOneEdges, sideTwoEdges)
-        pad tex inOuts nd stats
+        pad tex inOuts nd st
       sideOneEdges := s1
       sideTwoEdges := s2
 
@@ -484,7 +488,7 @@ def avoidOverlapSetStartPoints (direction : Direction) (pad : Float) (nd : NodeT
     let outs := javaEdgeList nd em (ndId nd slot) false
     -- `outs.sort` by `TreeUtil.getFirstPoint` (the first bend point, else the target position)
     let outs ← if outs.size < 2 then pure outs else do
-      let mut keys : Array Float := Array.mkEmpty outs.size
+      let mut keys : FloatArray := FloatArray.emptyWithCapacity outs.size
       for k in outs do
         let p := match (← bendsOf em.edges[k]!)[0]? with
           | some p => p
@@ -551,7 +555,7 @@ def avoidOverlapSetEndPoints (direction : Direction) (pad tex : Float) (nd : Nod
     let ins := javaEdgeList nd em (ndId nd slot) true
     -- `ins.sort` by `TreeUtil.getLastPoint` (the last bend point, else the source position)
     let ins ← if ins.size < 2 then pure ins else do
-      let mut keys : Array Float := Array.mkEmpty ins.size
+      let mut keys : FloatArray := FloatArray.emptyWithCapacity ins.size
       for k in ins do
         let p := match (← bendsOf em.edges[k]!).back? with
           | some p => p
@@ -607,16 +611,16 @@ def avoidOverlapSetEndPoints (direction : Direction) (pad tex : Float) (nd : Nod
         addBend edge (pos.x + size.x * interpolation) pos.y
 
 /-- The slots (extended by end points outside the node list), the slot of every listed node, the node
-data, the statistics and the edge table of `avoidOverlap` (a pure function of the arena, which is
+data and the edge table of `avoidOverlap` (a pure function of the arena, which is
 released before the routing writes). -/
 def prepare (a : TArena) (nodes : Array TNodeId) (edges : Array TEdgeId) (direction : Direction) :
-    Slots × Array Nat × NodeTable × GraphStats × EdgeTable :=
+    Slots × Array Nat × NodeTable × EdgeTable :=
   let slots := Slots.build a nodes
   -- every listed node has a slot (`Slots.get?` finds `nodes[i]` at its `id` or in `extra`)
   let nodeSlots := nodes.map fun n => (slots.get? a n).getD 0
-  let (nd, stats) := buildNodeData a nodes
+  let nd := buildNodeData a nodes
   let (slots, nd, em) := buildEdgeMaps a slots edges nd direction
-  (slots, nodeSlots, nd, stats, em)
+  (slots, nodeSlots, nd, em)
 
 /-- `avoidOverlap(tGraph)`. -/
 def avoidOverlap (graph : TGraphId) : MrTreeM Unit := do
@@ -627,10 +631,10 @@ def avoidOverlap (graph : TGraphId) : MrTreeM Unit := do
   let tex := (g.props.get MrTreeOptions.EDGE_END_TEXTURE_LENGTH).getD 0.0
   let direction := (g.props.get MrTreeOptions.DIRECTION).getD .down
   let graphBounds := (g.internal.graphXmin, g.internal.graphXmax, g.internal.graphYmin, g.internal.graphYmax)
-  let (slots, nodeSlots, nd, stats, em) := prepare (← get) nodes edges direction
+  let (slots, nodeSlots, nd, em) := prepare (← get) nodes edges direction
   let levelNodes := buildLevelNodes nodeSlots nd direction
   avoidOverlapSetStartPoints direction pad nd em nodes nodeSlots
-  avoidOverlapSpecialEdges direction pad tex slots nd stats graphBounds em levelNodes
+  avoidOverlapSpecialEdges direction pad tex slots nd nodes.size graphBounds em levelNodes
   avoidOverlapSetEndPoints direction pad tex nd em nodeSlots
 
 /-- `EdgeRouter.process`. -/

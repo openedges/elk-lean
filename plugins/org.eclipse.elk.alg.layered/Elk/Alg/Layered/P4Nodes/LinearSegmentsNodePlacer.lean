@@ -282,6 +282,10 @@ def sortLinearSegments (graph : LGraphId) : LayeredM (Array LinearSegment × Pri
       incomingCount := incomingCount.modify target (· - 1)
       if incomingCount[target]! == 0 then
         noIncoming := noIncoming.push target
+  -- Java: a segment the topological sort never reached keeps rank 0, so a slot of the new array
+  -- stays `null` and `createUnbalancedPlacement` fails at `segment.nodes`
+  if nextRank < segmentList.size then
+    throw (IO.userError "java.lang.NullPointerException: Cannot read field \"nodes\" because \"segment\" is null")
   let mut linearSegments : Array LinearSegment := Array.replicate segmentList.size {}
   for segment in segmentList do
     let rank := newRanks[segment.id]!
