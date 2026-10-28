@@ -50,8 +50,10 @@ private def processEdge (e : EdgeId) : ElkM KVector := do
         if sections.isEmpty then
           ElkM.createSection (some e)
         else
-          if sections.size > 1 then modify (·.retainLastEdgeSection e)
-          pure ((← ElkM.getEdge e).sections[0]!))
+          -- Java "throw[s] away all except for the last one" with `ListIterator.remove()` before
+          -- any `next()`: `java.lang.IllegalStateException` (elk-rs keeps the last section)
+          if sections.size > 1 then throw (IO.userError "java.lang.IllegalStateException")
+          pure sections[0]!)
       ElkUtil.applyVectorChain bendPoints sec
   if sameHierarchy then
     let edge ← ElkM.getEdge e

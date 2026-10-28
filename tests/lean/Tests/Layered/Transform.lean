@@ -284,13 +284,8 @@ def mainScenario : Suite := suite "layered.transform.transferrer" do
   checkEq "hand: eYo section kept" (g.edge e.eYo).sections #[e.sYo]
   checkVec "hand: eYo start untouched" (g.edgeSection e.sYo).startPoint ⟨1, 1⟩
   check "hand: eYo junction points untouched" (!(g.edge e.eYo).props.has CoreOptions.JUNCTION_POINTS)
-  -- fallback section for eF (no layered edge): A center → pB west anchor
-  checkEq "hand: eF fallback section created" (g.edge e.eF).sections.size 1
-  let sF := g.edgeSection ((g.edge e.eF).sections[0]?.getD default)
-  checkVec "hand: eF start = A (30, 38) + (40/2, 25/2)" sF.startPoint ⟨50, 50.5⟩
-  checkVec "hand: eF end = B (130, 48) + pB (-4, 7 + 6/2)" sF.endPoint ⟨126, 58⟩
-  checkEq "hand: eF no bend points" sF.bendPoints.size 0
-  checkEq "hand: eF incoming shape" sF.incomingShape (some (.node e.a))
+  -- eF has no layered edge: Java `ElkGraphLayoutTransferrer` writes no section (no fallback)
+  checkEq "hand: eF without layered edge gets no section" (g.edge e.eF).sections.size 0
   -- descendant edge eHI from H's port into its nested graph (processed with offset (5, 5))
   let sHI := g.edgeSection ((g.edge e.eHI).sections[0]?.getD default)
   checkVec "hand: eHI start = pH (-5, 15) + anchor (0, 2.5) - (5, 5) + (5, 5)" sHI.startPoint ⟨-5, 17.5⟩
@@ -298,14 +293,12 @@ def mainScenario : Suite := suite "layered.transform.transferrer" do
   checkVec "hand: eHI end = I (10, 5) + (0, 5) + (5, 5)" sHI.endPoint ⟨15, 15⟩
   check "hand: eHI SPLINES from H" ((g.edge e.eHI).props.get? CoreOptions.EDGE_ROUTING == some EdgeRouting.splines)
   -- hierarchical offset: (5, 5) + LH (60, 70) + G0 offset (2, 3) + padding (8, 5) = (75, 83)
-  checkEq "hand: eIB reuses its earlier fallback section" (g.edge e.eIB).sections.size 1
+  checkEq "hand: eIB got one section" (g.edge e.eIB).sections.size 1
   let sIB := g.edgeSection ((g.edge e.eIB).sections[0]?.getD default)
   checkVec "hand: eIB start = (10 + 15, 5 + 5) + (75, 83)" sIB.startPoint ⟨100, 93⟩
   checkVec "hand: eIB end = (116 - 70, 50 - 78) + (75, 83)" sIB.endPoint ⟨121, 55⟩
-  -- recursive fallback inside H: I center → container port pH (inner border)
-  let sIF := g.edgeSection ((g.edge e.eIF).sections[0]?.getD default)
-  checkVec "hand: eIF start = I (85, 88) + (7.5, 5) - H (70, 78)" sIF.startPoint ⟨22.5, 15⟩
-  checkVec "hand: eIF end = pH (-5 + 5, 15 + 2.5) on container" sIF.endPoint ⟨0, 17.5⟩
+  -- eIF inside H has no layered edge either: no section (Java has no recursive fallback)
+  checkEq "hand: eIF without layered edge gets no section" (g.edge e.eIF).sections.size 0
 
 /-- Content alignment with an explicit minimum size, fixed graph size, network simplex sizes. -/
 def contentAlignmentScenario : Suite := suite "layered.transform.contentAlignment" do

@@ -1,0 +1,171 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 20.0,
+          "id": "b1",
+          "ports": [
+            {
+              "height": 4.0,
+              "id": "b1p",
+              "layoutOptions": {
+                "elk.port.side": "SOUTH"
+              },
+              "width": 4.0,
+              "x": 8.0,
+              "y": 20.0
+            }
+          ],
+          "width": 20.0,
+          "x": 142.10758243459253,
+          "y": 94.22492936935339
+        },
+        {
+          "height": 20.0,
+          "id": "b2",
+          "width": 20.0,
+          "x": 50.0,
+          "y": 133.19892758130825
+        },
+        {
+          "height": 20.0,
+          "id": "b3",
+          "width": 20.0,
+          "x": 231.81228845934203,
+          "y": 50.0
+        }
+      ],
+      "edges": [
+        {
+          "container": "b",
+          "id": "be1",
+          "sections": [
+            {
+              "endPoint": {
+                "x": 70.0,
+                "y": 138.96757146688293
+              },
+              "id": "be1_s0",
+              "startPoint": {
+                "x": 142.10758243459253,
+                "y": 108.45628548377871
+              }
+            }
+          ],
+          "sources": [
+            "b1"
+          ],
+          "targets": [
+            "b2"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be2",
+          "sections": [
+            {
+              "endPoint": {
+                "x": 231.81228845934203,
+                "y": 64.9300567750762
+              },
+              "id": "be2_s0",
+              "startPoint": {
+                "x": 162.10758243459253,
+                "y": 99.2948725942772
+              }
+            }
+          ],
+          "sources": [
+            "b1p"
+          ],
+          "targets": [
+            "b3"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be3",
+          "sources": [
+            "b2"
+          ],
+          "targets": [
+            "bp"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be4",
+          "sources": [
+            "b3"
+          ],
+          "targets": [
+            "b3"
+          ]
+        }
+      ],
+      "height": 203.19892758130825,
+      "id": "b",
+      "layoutOptions": {
+        "elk.algorithm": "stress"
+      },
+      "ports": [
+        {
+          "height": 4.0,
+          "id": "bp",
+          "layoutOptions": {
+            "elk.port.side": "EAST"
+          },
+          "width": 4.0,
+          "x": 301.812288459342,
+          "y": 99.59946379065413
+        }
+      ],
+      "width": 301.812288459342,
+      "x": 12.0,
+      "y": 12.0
+    },
+    {
+      "height": 10.0,
+      "id": "x",
+      "width": 10.0,
+      "x": 337.8122863769531,
+      "y": 108.59946379065413
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "re1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 337.8122863769531,
+            "y": 113.59946379065413
+          },
+          "id": "re1_s0",
+          "incomingShape": "bp",
+          "outgoingShape": "x",
+          "startPoint": {
+            "x": 317.812288459342,
+            "y": 113.59946379065413
+          }
+        }
+      ],
+      "sources": [
+        "bp"
+      ],
+      "targets": [
+        "x"
+      ]
+    }
+  ],
+  "height": 227.19892758130825,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "layered"
+  },
+  "width": 359.8122863769531,
+  "x": 0.0,
+  "y": 0.0
+}

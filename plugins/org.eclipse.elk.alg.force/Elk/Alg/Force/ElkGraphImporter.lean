@@ -120,15 +120,11 @@ def importGraph (elkgraph : NodeId) : ElkM FGraph := do
         seen := seen.insert e
   return fgraph
 
-/-- `ensure_single_section`: the first section of the edge (creating one if needed, keeping only the
-last of several), reset to an empty section. -/
-private def ensureSingleSection (e : EdgeId) : ElkM SectionId := do
-  let sections := (← ElkM.getEdge e).sections
-  if sections.isEmpty then
-    ElkM.createSection (some e)
-  else
-    if sections.size > 1 then modify (·.retainLastEdgeSection e)
-    return (← ElkM.getEdge e).sections[0]!
+/-- Java `ElkGraphUtil.firstEdgeSection(kedge, true, true)`: the first section of the edge (created
+if missing), reset, the other sections removed. elk-rs `ensure_single_section` keeps the *last* of
+several sections (its identifier and `incomingShape`/`outgoingShape` then differ from Java's). -/
+private def ensureSingleSection (e : EdgeId) : ElkM SectionId :=
+  modifyGet fun g => let (g, s) := ElkGraphUtil.firstEdgeSection g e true true; (s, g)
 
 /-- Minimum and maximum corner of the node and bend point boxes of a force graph. -/
 private def boundingBox (fgraph : FGraph) : Float × Float × Float × Float := Id.run do

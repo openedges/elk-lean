@@ -1,0 +1,147 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 20,
+          "id": "b1",
+          "ports": [
+            {
+              "height": 4,
+              "id": "b1p",
+              "layoutOptions": {
+                "elk.port.side": "SOUTH"
+              },
+              "width": 4
+            }
+          ],
+          "width": 20
+        },
+        {
+          "height": 20,
+          "id": "b2",
+          "width": 20
+        },
+        {
+          "height": 20,
+          "id": "b3",
+          "width": 20
+        }
+      ],
+      "edges": [
+        {
+          "id": "be1",
+          "sources": [
+            "b1"
+          ],
+          "targets": [
+            "b2"
+          ]
+        },
+        {
+          "id": "be2",
+          "sources": [
+            "b1p"
+          ],
+          "targets": [
+            "b3"
+          ]
+        },
+        {
+          "id": "be3",
+          "sources": [
+            "b2"
+          ],
+          "targets": [
+            "bp"
+          ]
+        },
+        {
+          "id": "be4",
+          "sources": [
+            "b3"
+          ],
+          "targets": [
+            "b3"
+          ]
+        },
+        {
+          "id": "be5",
+          "layoutOptions": {
+            "elk.bendPoints": "(1,1),(2,2),(3,3)"
+          },
+          "sources": [
+            "b2"
+          ],
+          "targets": [
+            "b3"
+          ]
+        },
+        {
+          "id": "be6",
+          "sections": [
+            {
+              "bendPoints": [
+                {
+                  "x": 5,
+                  "y": 6
+                }
+              ],
+              "endPoint": {
+                "x": 3,
+                "y": 4
+              },
+              "id": "be6s",
+              "startPoint": {
+                "x": 1,
+                "y": 2
+              }
+            }
+          ],
+          "sources": [
+            "b3"
+          ],
+          "targets": [
+            "b1"
+          ]
+        }
+      ],
+      "height": 10,
+      "id": "b",
+      "layoutOptions": {
+        "elk.algorithm": "fixed"
+      },
+      "ports": [
+        {
+          "height": 4,
+          "id": "bp",
+          "layoutOptions": {
+            "elk.port.side": "EAST"
+          },
+          "width": 4
+        }
+      ],
+      "width": 10
+    },
+    {
+      "height": 10,
+      "id": "x",
+      "width": 10
+    }
+  ],
+  "edges": [
+    {
+      "id": "re1",
+      "sources": [
+        "bp"
+      ],
+      "targets": [
+        "x"
+      ]
+    }
+  ],
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "layered"
+  }
+}
