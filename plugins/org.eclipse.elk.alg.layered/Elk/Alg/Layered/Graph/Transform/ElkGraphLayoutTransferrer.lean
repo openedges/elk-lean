@@ -29,11 +29,15 @@ coordinates compared with the oracle):
 * `INSIDE_SELF_LOOPS_YO` edges that already have a geometry are left untouched;
 * the first edge section is reused (identifier/properties kept), its geometry reset and the
   other sections dropped;
-* edges of the container that did not get a section receive a straight fallback section
-  (`apply_fallback_sections`, also recursively for all descendants);
 * the parent node is resized only for root graphs (no representing `LNode`).
 
 Deviations from the Rust code:
+* The Rust `apply_fallback_sections`/`apply_fallback_sections_recursive` (a straight section for
+  every section-less contained edge of the layout node *and of all its descendants*) are not
+  ported: ELK Java has no such step, so edges that no layered `LEdge` represents (hierarchical
+  edges of a `SEPARATE_CHILDREN` run, edges of descendants laid out earlier by box, fixed,
+  rectpacking, radial, ... that route only some or none of their edges) keep exactly the sections
+  they had (random-graph parity class `SEC`, `docs/robustness-random-graphs.md` §8).
 * The Rust `ElkTrace::global()` debug prints (`debug_edges`, `edge_apply`, `compound_width`,
   `trace`, `edge_offsets`) are omitted; they do not change any state.
 * `LGraph` has no `ORIGIN` field in the Lean arena (`LGraphInternals`), so the ElkNode of a
@@ -327,97 +331,6 @@ private def applyEdgeLayout (a : LGraphArena) (ledge : LEdgeId) (originId : Edge
     { x with props := if edgeRouting == .splines then x.props.set CoreOptions.EDGE_ROUTING .splines
                       else x.props.remove CoreOptions.EDGE_ROUTING }
 
-/-! ## Fallback sections -/
-
-/-- Rust `find_port_by_identifier(graph, identifier)`: breadth-first search from `graph`
-(ports of a node before its children, children in order) for the first port with that
-identifier. -/
-private def findPortByIdentifier (g : ElkGraph) (graph : NodeId) (identifier : String) : Option PortId := Id.run do
-  let mut queue : Array NodeId := #[graph]
-  let mut head := 0
-  while head < queue.size do
-    let some n := queue[head]? | break
-    head := head + 1
-    let node := g.node n
-    for p in node.ports do
-      if (g.port p).identifier == some identifier then return some p
-    queue := queue ++ node.children
-  return none
-
-/-- Rust `resolve_port_for_fallback(container, port)`: the first port below `container` with the
-port's identifier, else the port itself. -/
-private def resolvePortForFallback (g : ElkGraph) (container : NodeId) (port : PortId) : PortId :=
-  match (g.port port).identifier with
-  | some identifier => (findPortByIdentifier g container identifier).getD port
-  | none => port
-
-/-- Rust `fallback_anchor_for_port(port, container, container_abs)`: the middle of the port's
-outer border (inner border for ports of the container itself) relative to the container; an
-undefined `PORT_SIDE` is derived from the port position. `none` for ports without parent. -/
-private def fallbackAnchorForPort (g : ElkGraph) (port : PortId) (container : NodeId) (containerAbs : KVector) :
-    Option KVector :=
-  let pt := g.port port
-  match pt.parent with
-  | none => none
-  | some parent =>
-    let side := pt.props.getD LayeredOptions.PORT_SIDE PortSide.undefined
-    let nodeWidth := (g.node parent).width
-    let side : PortSide :=
-      if side == .undefined then
-        if pt.x <= fl0p0 then .west
-        else if pt.x + pt.width >= nodeWidth then .east
-        else if pt.y <= fl0p0 then .north
-        else .south
-      else side
-    let onContainer := parent == container
-    let (anchorX, anchorY) : Float × Float := match side with
-      | .west => (if onContainer then pt.x + pt.width else pt.x, pt.y + pt.height / fl2p0)
-      | .east => (if onContainer then pt.x else pt.x + pt.width, pt.y + pt.height / fl2p0)
-      | .north => (pt.x + pt.width / fl2p0, if onContainer then pt.y + pt.height else pt.y)
-      | .south => (pt.x + pt.width / fl2p0, if onContainer then pt.y else pt.y + pt.height)
-      | .undefined => (pt.x + pt.width / fl2p0, pt.y + pt.height / fl2p0)
-    (ElkUtil.absolutePosition g (.node parent)).map fun parentAbs =>
-      ⟨parentAbs.x + anchorX - containerAbs.x, parentAbs.y + anchorY - containerAbs.y⟩
-
-/-- Rust `fallback_anchor_for_shape(shape, container, container_abs)`: ports via
-`resolvePortForFallback` + `fallbackAnchorForPort`, nodes at their center, relative to the
-container. -/
-private def fallbackAnchorForShape (g : ElkGraph) (shape : Option ConnectableId) (container : NodeId)
-    (containerAbs : KVector) : Option KVector :=
-  match shape with
-  | some (.port p) => fallbackAnchorForPort g (resolvePortForFallback g container p) container containerAbs
-  | some (.node n) =>
-    let node := g.node n
-    (ElkUtil.absolutePosition g (.node n)).map fun nodeAbs =>
-      ⟨nodeAbs.x + node.width / 2.0 - containerAbs.x, nodeAbs.y + node.height / 2.0 - containerAbs.y⟩
-  | none => none
-
-/-- Rust `apply_fallback_sections(elk_edges, container)`: every edge without a section that has
-anchors at both ends gets a straight section from the first source to the first target. -/
-private def applyFallbackSections (elkEdges : Array EdgeId) (container : NodeId) : ElkM Unit := do
-  let containerAbs := (← ElkM.withGraph fun g => ElkUtil.absolutePosition g (.node container)).getD KVector.zero
-  for e in elkEdges do
-    let edge ← ElkM.getEdge e
-    if !edge.sections.isEmpty then continue
-    let incomingShape := firstShape edge.sources
-    let outgoingShape := firstShape edge.targets
-    let start ← ElkM.withGraph fun g => fallbackAnchorForShape g incomingShape container containerAbs
-    let endPoint ← ElkM.withGraph fun g => fallbackAnchorForShape g outgoingShape container containerAbs
-    let (some start, some endPoint) := (start, endPoint) | continue
-    let sec ← ElkM.createSection (some e)
-    ElkM.modifySection sec fun s => { s with incomingShape := incomingShape, outgoingShape := outgoingShape }
-    ElkUtil.applyVectorChain #[start, endPoint] sec
-
-/-- Rust `apply_fallback_sections_recursive(container)`: fallback sections for the contained
-edges of `container`, then for each child (depth first). -/
-private partial def applyFallbackSectionsRecursive (container : NodeId) : ElkM Unit := do
-  let node ← ElkM.getNode container
-  let edges := node.containedEdges
-  let children := node.children
-  applyFallbackSections edges container
-  for child in children do
-    applyFallbackSectionsRecursive child
-
 /-! ## Graphs -/
 
 /-- Rust `apply_parent_node_layout(lgraph)` (Java `applyParentNodeLayout`): for root graphs the
@@ -480,7 +393,6 @@ private partial def applyLayoutImpl (a : LGraphArena) (elkGraph : NodeId) (lgrap
   -- nodes (layerless and layered) and the edges to process later
   let parentNode := gr.parentNode
   let allNodes := collectNodesFromGraph a lgraph
-  let elkEdges := (← ElkM.getNode elkNode).containedEdges
   let mut a := a
   let mut edgeList : Array LEdgeId := #[]
   for lnode in allNodes do
@@ -511,14 +423,11 @@ private partial def applyLayoutImpl (a : LGraphArena) (elkGraph : NodeId) (lgrap
   for edge in edgeList do
     let some (.elkEdge edgeId) := (a.edge edge).internal.origin | continue
     applyEdgeLayout a edge edgeId offset edgeRouting
-  applyFallbackSections elkEdges elkNode
   applyParentNodeLayout a elkGraph lgraph
   -- nested subgraphs
   for node in allNodes do
     if let some nested := (a.node node).nestedGraph then
       a ← applyLayoutImpl a elkGraph nested
-  -- every contained edge gets at least a fallback section
-  applyFallbackSectionsRecursive elkNode
   return a
 
 /-- `ElkGraphLayoutTransferrer.applyLayout(lgraph)` (Rust `apply_layout`): "Applies the layout

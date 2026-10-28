@@ -21,6 +21,9 @@ the converse) recurses forever in elk-rs and Java (the underlying option is read
 same graph again). 
 
 Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `co_under_box`, `ov_under_box` are elk-lean outputs since RJ1 (the underlying box layout uses Java's box defaults; both still differ from ELK Java).
+`co_edges`, `ov_edges_multi` are elk-lean outputs since SEC: an edge with two input sections keeps the
+*first* one (`s1`, Java `ElkGraphUtil.firstEdgeSection(e, true, true)`; elk-rs kept `s2`); its section
+ids and bend points equal ELK Java's, the node positions still differ from ELK Java.
 -/
 namespace Tests.Spore
 

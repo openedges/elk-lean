@@ -37,13 +37,17 @@ private def connectableCenter (g : ElkGraph) : ConnectableId → Float × Float 
     -- elk-rs adds the parent's x twice (and nothing to y); kept for parity
     (pt.x + parentX + parentX + pt.width / 2.0, pt.y + pt.height / 2.0, pt.width / 2.0, pt.height / 2.0)
 
+/-- "Ensure that the edge has a single edge section": a missing section is created. For several
+sections Java means to "throw away all except for the last one", but it calls
+`ListIterator.remove()` without `next()`, which throws `java.lang.IllegalStateException` (elk-rs keeps
+the last section). -/
 private def ensureSingleSection (e : EdgeId) : ElkM SectionId := do
   let sections := (← ElkM.getEdge e).sections
   if sections.isEmpty then
     ElkM.createSection (some e)
   else
-    if sections.size > 1 then modify (·.retainLastEdgeSection e)
-    return (← ElkM.getEdge e).sections[0]!
+    if sections.size > 1 then throw (IO.userError "java.lang.IllegalStateException")
+    return sections[0]!
 
 /-- `randomize_edge`. -/
 private def randomizeEdge (e : EdgeId) (random : Random) (drawWidth drawHeight : Float) : ElkM Random := do

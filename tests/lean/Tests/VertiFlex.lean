@@ -33,6 +33,8 @@ Agent OPT (Java option semantics): `elk.vertiflex.layoutStrategy` is parsed like
 is laid out with bends; `err_two_children` / `err_deep_two_children` are laid out like ELK Java
 (elk-rs panics). All of them are elk-lean outputs equal to ELK Java 0.12.0 at tolerance 0
 (`tests/fixtures/opt_java_status.tsv`).
+`sp_sections` is the ELK Java output since SEC (the routers keep the *first* of several sections,
+Java `ElkGraphUtil.firstEdgeSection(edge, true, true)`; elk-rs kept the last one).
 -/
 namespace Tests.VertiFlex
 

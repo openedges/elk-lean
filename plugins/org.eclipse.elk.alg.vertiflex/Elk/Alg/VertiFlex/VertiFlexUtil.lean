@@ -32,16 +32,11 @@ def outgoingChildren (n : NodeId) : ElkM (Array NodeId) := do
       children := children.push c
   return children
 
-/-- `ensure_single_section(edge)`: the single edge section of the edge. A missing section is
-created; of several sections only the last one is kept (`sections.retain_last()`). -/
-def ensureSingleSection (e : EdgeId) : ElkM SectionId := do
-  let edge ← ElkM.getEdge e
-  if edge.sections.isEmpty then
-    ElkM.createSection (some e)
-  else
-    if edge.sections.size > 1 then
-      modify fun g => g.retainLastEdgeSection e
-    return (← ElkM.getEdge e).sections[0]!
+/-- Java `ElkGraphUtil.firstEdgeSection(edge, true, true)` of the edge routers: the first section of
+the edge (created if missing), reset, the other sections removed. elk-rs `ensure_single_section`
+keeps the *last* of several sections (`sections.retain_last()`). -/
+def ensureSingleSection (e : EdgeId) : ElkM SectionId :=
+  modifyGet fun g => let (g, s) := ElkGraphUtil.firstEdgeSection g e true true; (s, g)
 
 end VertiFlexUtil
 
