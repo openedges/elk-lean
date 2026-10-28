@@ -244,8 +244,9 @@ def splitGroup (group : Array NodeId) (widthLeft widthRight : Float) : ElkM (Int
   let mut newLeftWidth := 0.0
   let w0 := widths[i]!
   if desiredLeft < newLeftWidth then
-    -- Java's loop without `i++`: it ends only when the first width is negative
-    if !(w0 < 0.0) then
+    -- Java's loop without `i++`: it ends only when the first width is negative (or NaN: the sum
+    -- becomes NaN and the test fails); a width `>= 0` keeps the sum above `desiredLeft` forever
+    if w0 >= 0.0 then
       throw (IO.userError
         "java.lang.IllegalStateException: VertiFlex RelativeXPlacer.splitGroup does not terminate (Java loops forever)")
     while desiredLeft < newLeftWidth do
