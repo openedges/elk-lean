@@ -1,0 +1,202 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "height": 20.0,
+          "id": "b1",
+          "ports": [
+            {
+              "height": 4.0,
+              "id": "b1p",
+              "layoutOptions": {
+                "elk.port.side": "SOUTH"
+              },
+              "width": 4.0,
+              "x": 8.0,
+              "y": 20.0
+            }
+          ],
+          "width": 20.0,
+          "x": 117.55513532967613,
+          "y": 93.91635755397847
+        },
+        {
+          "height": 20.0,
+          "id": "b2",
+          "width": 20.0,
+          "x": 50.0,
+          "y": 91.43129530563907
+        },
+        {
+          "height": 20.0,
+          "id": "b3",
+          "width": 20.0,
+          "x": 151.0673332427349,
+          "y": 50.0
+        }
+      ],
+      "edges": [
+        {
+          "container": "b",
+          "id": "be1",
+          "sections": [
+            {
+              "endPoint": {
+                "x": 70.0,
+                "y": 101.79915220300327
+              },
+              "id": "be1_s0",
+              "startPoint": {
+                "x": 117.55513532967613,
+                "y": 103.54850065661425
+              }
+            }
+          ],
+          "sources": [
+            "b1"
+          ],
+          "targets": [
+            "b2"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be2",
+          "sections": [
+            {
+              "endPoint": {
+                "x": 153.43641852676188,
+                "y": 70.0
+              },
+              "id": "be2_s0",
+              "startPoint": {
+                "x": 135.18605004564915,
+                "y": 93.91635755397847
+              }
+            }
+          ],
+          "sources": [
+            "b1p"
+          ],
+          "targets": [
+            "b3"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be3",
+          "sources": [
+            "b2"
+          ],
+          "targets": [
+            "bp"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be4",
+          "sources": [
+            "b3"
+          ],
+          "targets": [
+            "b3"
+          ]
+        },
+        {
+          "container": "b",
+          "id": "be6",
+          "sections": [
+            {
+              "bendPoints": [
+                {
+                  "x": 5,
+                  "y": 6
+                }
+              ],
+              "endPoint": {
+                "x": 135.18605004564915,
+                "y": 93.91635755397847
+              },
+              "id": "be6s",
+              "incomingShape": "b3",
+              "outgoingShape": "b1",
+              "startPoint": {
+                "x": 153.43641852676188,
+                "y": 70.0
+              }
+            }
+          ],
+          "sources": [
+            "b3"
+          ],
+          "targets": [
+            "b1"
+          ]
+        }
+      ],
+      "height": 163.91635755397846,
+      "id": "b",
+      "layoutOptions": {
+        "elk.algorithm": "force"
+      },
+      "ports": [
+        {
+          "height": 4.0,
+          "id": "bp",
+          "layoutOptions": {
+            "elk.port.side": "EAST"
+          },
+          "width": 4.0,
+          "x": 221.0673332427349,
+          "y": 79.95817877698923
+        }
+      ],
+      "width": 221.0673332427349,
+      "x": 12.0,
+      "y": 12.0
+    },
+    {
+      "height": 10.0,
+      "id": "x",
+      "width": 10.0,
+      "x": 257.0673370361328,
+      "y": 88.95817877698923
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "re1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 257.0673370361328,
+            "y": 93.95817877698923
+          },
+          "id": "re1_s0",
+          "incomingShape": "bp",
+          "outgoingShape": "x",
+          "startPoint": {
+            "x": 237.0673332427349,
+            "y": 93.95817877698923
+          }
+        }
+      ],
+      "sources": [
+        "bp"
+      ],
+      "targets": [
+        "x"
+      ]
+    }
+  ],
+  "height": 187.91635755397846,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "layered"
+  },
+  "width": 279.0673370361328,
+  "x": 0.0,
+  "y": 0.0
+}

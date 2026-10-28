@@ -33,6 +33,7 @@ import Tests.MrTree
 import Tests.RectPacking
 import Tests.Api.PerfBenchmark
 import Tests.Api.Robustness
+import Tests.Api.Sections
 import Tests.Api.NodeMicroLayout
 
 /-- Test driver (`lake test`). Add each plugin's `suites` here. `lake test -- --suite <prefix>` runs
@@ -57,6 +58,7 @@ def main (args : List String) : IO UInt32 := do
     Tests.RectPacking.suites ++
     Tests.Api.PerfBenchmark.suites ++
     Tests.Api.Robustness.suites ++
+    Tests.Api.Sections.suites ++
     Tests.Api.NodeMicroLayout.suites ++
     Tests.Core.Alg.suites ++
     -- keep `Tests.Core.Engine` last: it registers an extra test algorithm (`core.meta.counts` expects 4)
