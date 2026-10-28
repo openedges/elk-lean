@@ -1,0 +1,221 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeOverlap",
+  "elk.processingOrder.spanningTreeCostFunction": "RECTANGLE_UNDERLAP"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 51.1,
+   "height": 35.6
+  },
+  {
+   "id": "n1",
+   "width": 15.1,
+   "height": 17.1
+  },
+  {
+   "id": "n2",
+   "width": 32.3,
+   "height": 28.9,
+   "labels": [
+    {
+     "id": "n2l",
+     "text": "l",
+     "width": 26.3,
+     "height": 5.2
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "width": 52.2,
+   "height": 28.9
+  },
+  {
+   "id": "n4",
+   "width": 13.2,
+   "height": 23.8
+  },
+  {
+   "id": "n5",
+   "width": 26.9,
+   "height": 36.6
+  },
+  {
+   "id": "n6",
+   "width": 42.9,
+   "height": 15.9,
+   "labels": [
+    {
+     "id": "n6l",
+     "text": "l",
+     "width": 18.7,
+     "height": 13.3
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "width": 16.6,
+   "height": 34.5
+  },
+  {
+   "id": "n8",
+   "width": 59.4,
+   "height": 39.3
+  },
+  {
+   "id": "n9",
+   "width": 58.3,
+   "height": 30.9
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n9"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n7"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e8",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e9",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e10",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e11",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n9"
+   ]
+  },
+  {
+   "id": "e12",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e13",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e14",
+   "sources": [
+    "n2"
+   ],
+   "targets": [
+    "n8"
+   ]
+  },
+  {
+   "id": "e15",
+   "sources": [
+    "n8"
+   ],
+   "targets": [
+    "n9"
+   ]
+  }
+ ]
+}

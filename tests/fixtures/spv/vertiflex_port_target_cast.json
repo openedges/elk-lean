@@ -1,0 +1,39 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "vertiflex"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 20,
+   "height": 20
+  },
+  {
+   "id": "n1",
+   "width": 20,
+   "height": 20,
+   "ports": [
+    {
+     "id": "p",
+     "width": 4,
+     "height": 4,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "p"
+   ]
+  }
+ ]
+}

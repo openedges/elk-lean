@@ -1,0 +1,61 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeOverlap"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 11.6,
+   "height": 15.9
+  },
+  {
+   "id": "n1",
+   "width": 16.9,
+   "height": 21.2,
+   "labels": [
+    {
+     "id": "n1l",
+     "text": "l",
+     "width": 6.6,
+     "height": 13.4
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "width": 57.6,
+   "height": 24.1
+  },
+  {
+   "id": "n3",
+   "width": 41.3,
+   "height": 34.2
+  },
+  {
+   "id": "n4",
+   "width": 11.9,
+   "height": 25.2
+  },
+  {
+   "id": "n5",
+   "width": 35.0,
+   "height": 11.7
+  },
+  {
+   "id": "n6",
+   "width": 15.4,
+   "height": 21.5
+  },
+  {
+   "id": "n7",
+   "width": 54.5,
+   "height": 30.9
+  },
+  {
+   "id": "n8",
+   "width": 58.9,
+   "height": 34.5
+  }
+ ]
+}
