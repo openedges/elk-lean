@@ -39,5 +39,22 @@ describe('Exceptions', () => {
       );
     });
 
+    // elk-lean: the message is ELK Java 0.12.0's Throwable.toString() (node named by its identifier path)
+    it('should report the error text of ELK Java.', async () => {
+      await assert.rejects(elk.layout(graph), err => err.message ===
+        "org.eclipse.elk.core.UnsupportedConfigurationException: Node 'root.n3' has its layer constraint set to FIRST, " +
+        "but has at least one incoming edge that  does not come from a FIRST_SEPARATE node. That must not happen.");
+    });
+
+    it('should report java.lang exceptions with their own class.', async () => {
+      const notATree = {
+        id: "root", layoutOptions: { 'elk.algorithm': 'radial' },
+        children: [{ id: "a", width: 10, height: 10 }, { id: "b", width: 10, height: 10 }],
+        edges: [{ id: "e0", sources: ["a"], targets: ["b"] }, { id: "e1", sources: ["b"], targets: ["a"] }]
+      };
+      await assert.rejects(elk.layout(notATree),
+        err => err.message === "java.lang.IllegalArgumentException: The given graph is not a tree!");
+    });
+
   });
 });

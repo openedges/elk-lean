@@ -383,8 +383,8 @@ def errorTests : Suite := suite "radial.errors" do
   | .error e =>
     check "cycle: not a tree" (e.endsWith "The given graph is not a tree!")
     -- ELK Java throws IllegalArgumentException here (elk-rs: UnsupportedConfigurationException); the JSON
-    -- API wraps java.lang exceptions as UnsupportedConfigurationException
-    check "cycle: IllegalArgumentException" (e == "org.eclipse.elk.core.UnsupportedConfigurationException: java.lang.IllegalArgumentException: The given graph is not a tree!")
+    -- API reports it like Java's `Throwable.toString()`
+    check "cycle: IllegalArgumentException" (e == "java.lang.IllegalArgumentException: The given graph is not a tree!")
   | .ok _ => report "cycle: error expected" false
   let empty := "{\"id\":\"root\",\"layoutOptions\":{\"algorithm\":\"org.eclipse.elk.radial\"},\"children\":[]}"
   -- a graph without children is not laid out by the engine, so there is no error (elk-rs)

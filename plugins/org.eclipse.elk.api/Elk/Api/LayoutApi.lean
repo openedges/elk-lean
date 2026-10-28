@@ -4,8 +4,8 @@ import Elk.Json
 
 `layoutJson graph options` runs the full pipeline: parse → global option
 defaults → import → `RecursiveGraphLayoutEngine` → materialise defaults →
-transfer layout → serialise. Errors are reported with the Java exception
-class convention (`org.eclipse.elk.core.UnsupportedConfigurationException: …`).
+transfer layout → serialise. Errors are reported like ELK Java's `Throwable.toString()`
+(`<fully qualified exception class>: <message>`, `catchLayout`).
 -/
 namespace Elk.Api
 
@@ -15,14 +15,32 @@ open Elk Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Data Elk.Json
 def ensureInitialized : IO Unit := do
   LayoutMetaDataService.ensureInitialized
 
-/-- elk-rs `catch_layout`: errors carrying an ELK exception class pass through,
-anything else is wrapped as `UnsupportedConfigurationException`. -/
+/-- Whether `msg` is already in Java's `Throwable.toString()` form: it starts with a fully
+qualified exception class of the JDK or of ELK (`java.…`/`org.eclipse.…`, last segment ending in
+`Exception` or `Error`), followed by `": "` or the end of the text. -/
+def isJavaThrowableText (msg : String) : Bool :=
+  let head := match msg.splitOn ": " with
+    | h :: _ => h
+    | [] => ""
+  let simpleName := match (head.splitOn ".").reverse with
+    | n :: _ => n
+    | [] => ""
+  (head.startsWith "java." || head.startsWith "org.eclipse.") &&
+    head.all (fun c => c.isAlphanum || c == '.' || c == '_' || c == '$') &&
+    (simpleName.endsWith "Exception" || simpleName.endsWith "Error")
+
+/-- elk-rs `catch_layout` with ELK Java's error text: an error that already names its Java
+exception class (`isJavaThrowableText`, e.g. `java.lang.IllegalArgumentException: …` or
+`org.eclipse.elk.graph.json.JsonImportException: …`, which is what `Throwable.toString()` gives
+for the exception ELK Java throws) or mentions an `org.eclipse.elk.core.` class passes unchanged;
+anything else is wrapped as `UnsupportedConfigurationException`. (elk-rs also wraps
+`java.lang.*` errors, as `UnsupportedConfigurationException: java.lang.…`.) -/
 def catchLayout {α : Type} (act : IO α) : IO (Except String α) := do
   try
     return .ok (← act)
   catch e =>
     let msg := toString e
-    if (msg.splitOn "org.eclipse.elk.core.").length > 1 then return .error msg
+    if isJavaThrowableText msg || (msg.splitOn "org.eclipse.elk.core.").length > 1 then return .error msg
     else return .error s!"{unsupportedConfigurationExceptionClass}: {msg}"
 
 /-- `layout_value`: lays out a parsed document. Returns the laid-out document. -/
