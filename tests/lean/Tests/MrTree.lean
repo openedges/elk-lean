@@ -12,6 +12,8 @@ import Elk.Alg.MrTree
 * `mrtree.import`: `ElkGraphImporter.importGraph`/`applyLayout` on a JSON graph;
 * `mrtree.components`: `ComponentsProcessor.split`/`pack`;
 * `mrtree.intermediate`: every intermediate processor on hand-built tree graphs;
+* `mrtree.intermediate.fan`: `FanProcessor`'s array computation against Java's identifier strings
+  (`processStrings`) on random trees, forests and DAGs;
 * `mrtree.treeutil`: `TreeUtil` and `InteractiveMrTreeGraphVisitor`;
 * `mrtree.p1treeify`, `mrtree.p2order`, `mrtree.p3place`, `mrtree.p4route`: the phases on hand-built
   tree graphs;
@@ -422,9 +424,13 @@ def treeProcessorTests : Suite := suite "mrtree.intermediate.tree" do
   let e ← runProc RootProcessor.processor e ge
   check "dummy root" ((e.graph ge).nodes.size == 1 && ((e.node (e.graph ge).nodes[0]!).label == some "DUMMY_ROOT")
     && (e.node (e.graph ge).nodes[0]!).internal.dummy)
-  -- fan: hand-derived ids 0 / 00 01 / 000 001
+  -- fan: hand-derived ids 0 / 00 01 / 000 001 (the Java identifier strings, `processStrings`)
+  let ((), s) ← MrTreeM.run (FanProcessor.processStrings g) a
+  checkEq "fan: ids" (ns.map fun n => (s.node n).internal.idString) #["0", "00", "01", "000", "001"]
+  checkEq "fan: strings FAN" (ns.map fun n => (s.node n).internal.fan) #[2, 2, 0, 0, 0]
+  checkEq "fan: strings DESCENDANTS" (ns.map fun n => (s.node n).internal.descendants) #[5, 3, 1, 1, 1]
   let a ← runProc FanProcessor.processor a g
-  checkEq "fan: ids" (ns.map fun n => (a.node n).internal.idString) #["0", "00", "01", "000", "001"]
+  check "fan: tree computed without identifier strings" (ns.all fun n => (a.node n).internal.idString.isEmpty)
   checkEq "fan: FAN" (ns.map fun n => (a.node n).internal.fan) #[2, 2, 0, 0, 0]
   checkEq "fan: DESCENDANTS" (ns.map fun n => (a.node n).internal.descendants) #[5, 3, 1, 1, 1]
   checkEq "fan: formatRight" (FanProcessor.formatRight 7 3) "007"
@@ -463,6 +469,89 @@ def treeProcessorTests : Suite := suite "mrtree.intermediate.tree" do
   let a := a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.DIRECTION Direction.right }
   let a ← runProc LevelHeightProcessor.processor a g
   checkEq "level height: horizontal" (ns.map fun n => (a.node n).internal.levelHeight) #[10.0, 30.0, 30.0, 2.0, 2.0]
+
+/-- Next state of the 64-bit LCG of the differential tests. -/
+private def lcgNext (s : UInt64) : UInt64 := s * 6364136223846793005 + 1442695040888963407
+
+/-- A value in `0 ..< bound` and the next state (`bound > 0`). -/
+private def lcgBelow (s : UInt64) (bound : Nat) : Nat × UInt64 :=
+  let s := lcgNext s
+  ((s >>> 33).toNat % bound, s)
+
+/-- Random graph `k` of the fan differential test: `n` nodes in a shuffled list order; `kind` 0/1: a
+tree (edges to a random earlier node of a random visiting order), 2: a forest (some tree edges
+dropped), 3: a tree plus random extra edges (cycles, multi-edges, self loops; a BFS treeification
+keeps some of them as DAG edges), 4: a tree whose ids are shifted out of range after the
+treeification. -/
+private def fanGraph (k : Nat) : TArena × TGraphId := Id.run do
+  let mut s : UInt64 := (k.toUInt64 + 1) * 0x9E3779B97F4A7C15
+  let (n, s1) := lcgBelow s 40
+  s := s1
+  let n := n + 1
+  let kind := k % 5
+  let (a, g) := ({} : TArena).createGraph
+  let mut a := a
+  let mut ns : Array TNodeId := #[]
+  for i in [0:n] do
+    let (a', x) := mkNode a g i 0 0 10 10
+    a := a'
+    ns := ns.push x
+  -- random visiting order: a shuffled copy of the nodes
+  let mut perm := ns
+  for i in [0:n] do
+    let (j, s1) := lcgBelow s (n - i)
+    s := s1
+    perm := perm.swapIfInBounds i (i + j)
+  let mut edges : Array (TNodeId × TNodeId) := #[]
+  for i in [1:n] do
+    let (p, s1) := lcgBelow s i
+    s := s1
+    let (drop, s2) := lcgBelow s 4
+    s := s2
+    if !(kind == 2 && drop == 0) then edges := edges.push (perm[p]!, perm[i]!)
+  if kind == 3 then
+    let (extra, s1) := lcgBelow s 4
+    s := s1
+    for _ in [0:extra + 1] do
+      let (x, s1) := lcgBelow s n
+      let (y, s2) := lcgBelow s1 n
+      s := s2
+      edges := edges.push (ns[x]!, ns[y]!)
+  -- edges in a shuffled order (the child order of every node)
+  for i in [0:edges.size] do
+    let (j, s1) := lcgBelow s (edges.size - i)
+    s := s1
+    edges := edges.swapIfInBounds i (i + j)
+  for (x, y) in edges do
+    a := (mkEdge a g x y).1
+  if kind == 3 then
+    a := a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.SEARCH_ORDER .bfs }
+  return (a, g)
+
+/-- `FanProcessor`: the array computation against Java's identifier strings (`processStrings`) on
+random trees, forests, DAGs and out-of-range ids, after the treeification and `RootProcessor`
+(`SUPER_ROOT` for forests), like in the layout pipeline. -/
+def fanDifferentialTests : Suite := suite "mrtree.intermediate.fan" do
+  let mut same := 0
+  let mut fast := 0
+  let count := 400
+  for k in [0:count] do
+    let (a, g) := fanGraph k
+    let ((), a) ← MrTreeM.run (P1Treeify.DFSTreeifyer.process g ProgressMonitor.null) a
+    let a ← runProc RootProcessor.processor a g
+    let a := if k % 5 == 4 then
+        (a.graph g).nodes.foldl (fun a n => a.modifyNode n fun x => { x with id := x.id + 3 }) a
+      else a
+    let ((), s) ← MrTreeM.run (FanProcessor.processStrings g) a
+    let f ← runProc FanProcessor.processor a g
+    let nodes := (a.graph g).nodes
+    let values (x : TArena) := nodes.map fun n => ((x.node n).internal.fan, (x.node n).internal.descendants)
+    if values s == values f then same := same + 1
+    else report s!"fan differential: graph {k}" false
+    if nodes.all fun n => (f.node n).internal.idString.isEmpty then fast := fast + 1
+  checkEq "fan differential: FAN/DESCENDANTS equal on every graph" same count
+  -- kinds 0, 1, 2 (trees and forests) always take the array computation; 3 and 4 mostly do not
+  check s!"fan differential: array computation used ({fast} of {count})" (fast ≥ 3 * count / 5)
 
 /-- Direction, node position, graph bounds, level coordinates, untreeifyer and compaction. -/
 def placementProcessorTests : Suite := suite "mrtree.intermediate.placement" do
@@ -941,7 +1030,8 @@ def enumFixtureTests : Suite := suite "mrtree.fixtures.enum" do
   set st'
 
 def suites : Array Tests.Suite :=
-  #[metaTests, graphTests, importTests, componentsTests, treeProcessorTests, placementProcessorTests,
+  #[metaTests, graphTests, importTests, componentsTests, treeProcessorTests, fanDifferentialTests,
+    placementProcessorTests,
     treeUtilTests, treeifyTests, orderTests, placeTests, routeTests, graphSizeTests, driverTests,
     fixtureTests, enumFixtureTests]
 

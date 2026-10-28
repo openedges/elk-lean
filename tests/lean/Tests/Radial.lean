@@ -8,7 +8,10 @@ import Elk.Alg.Radial
 Ports of the elk-rs tests `plugins/org.eclipse.elk.alg.radial/tests/all`
 (`radial_metadata_test.rs`: `radial_algorithm_registered`, `wedge_criteria_metadata`,
 `order_id_targets_nodes`; `center_on_root_test.rs`: `test_simple_centering`,
-`test_larger_graph_centering`), unit tests of the helpers, and two fixture suites:
+`test_larger_graph_centering`), unit tests of the helpers, a differential test of the unboxed
+overlap removal loop (`radial.overlapRemoval.differential`: `expandLoop` and `overlapBoundsGrouped`
+against the reference `overlapLayerSoa`/`contractLayerSoa` loop on random layers), and two fixture
+suites:
 
 * `radial.fixtures` (`tests/fixtures/radial/<name>.json` against `<name>.expected.json`): produced
   by the stock elk-rs oracle (`model_parity_layout_runner`, commit eb586b6d). The stock oracle
@@ -296,6 +299,104 @@ def compactionHelperTests : Suite := suite "radial.compactionHelpers" do
   let (o, _) ← runRadial (RadialUtil.comparePolar a a 0.0 0.0) g
   check "compare_polar a == a" (o == .eq)
 
+/-- Next state of the 64-bit LCG of the differential tests. -/
+private def lcgNext (s : UInt64) : UInt64 := s * 6364136223846793005 + 1442695040888963407
+
+/-- A float in `[lo, hi)` and the next state. -/
+private def lcgFloat (s : UInt64) (lo hi : Float) : Float × UInt64 :=
+  let s := lcgNext s
+  (lo + (hi - lo) * (s >>> 11).toFloat / (2 ^ 53 : Nat).toFloat, s)
+
+/-- The overlap removal loop of a layer before the unboxed rewrite (`RadiusExtensionOverlapRemoval.extend`
+up to agent PR): `while overlapLayerSoa: contractLayerSoa(…, step, false)` with the pass guard and
+the no-change stop. -/
+private def referenceExpand (rootCx rootCy step spacing : Float) (maxIterations : Nat)
+    (xs ys ws hs : FloatArray) : FloatArray × FloatArray := Id.run do
+  let mut xs := xs
+  let mut ys := ys
+  let mut iterations := 0
+  while AbstractRadiusExtensionCompaction.overlapLayerSoa xs ys ws hs spacing do
+    if iterations >= maxIterations then break
+    let (nx, ny, changed) :=
+      AbstractRadiusExtensionCompaction.contractLayerSoa rootCx rootCy xs ys ws hs step false
+    xs := nx
+    ys := ny
+    iterations := iterations + 1
+    if !changed then break
+  return (xs, ys)
+
+/-- Bitwise equality of two float arrays. -/
+private def sameFloats (a b : FloatArray) : Bool :=
+  a.size == b.size && (List.range a.size).all fun i => (a.get! i).toBits == (b.get! i).toBits
+
+/-- `expandLoop` (unboxed layer loop of the overlap removal) and `overlapBoundsGrouped` against the
+reference functions on random layers: nodes around the root at random angles and radii (clusters
+that need many passes), random sizes and spacings, steps 0, 1 and 2.5, the pass guard, nodes on the
+root centre (`NaN`), equal coordinates and `±0`. -/
+def overlapRemovalDifferentialTests : Suite := suite "radial.overlapRemoval.differential" do
+  let mut s : UInt64 := 0x5DEECE66D
+  let mut same := 0
+  let mut sameOverlap := 0
+  let mut overlapCases := 0
+  let count := 300
+  for k in [0:count] do
+    let (nf, s1) := lcgFloat s 1.0 13.0
+    s := s1
+    let n := nf.toUInt64.toNat
+    let (cx, s1) := lcgFloat s (-50.0) 50.0
+    let (cy, s2) := lcgFloat s1 (-50.0) 50.0
+    let (spacing, s3) := lcgFloat s2 0.0 20.0
+    s := s3
+    let spacing := if k % 7 == 0 then 0.0 else spacing
+    let step : Float := if k % 11 == 0 then 0.0 else if k % 5 == 0 then 2.5 else 1.0
+    let maxIterations := if k % 3 == 0 then 50 else 3000
+    let mut xs : Array Float := #[]
+    let mut ys : Array Float := #[]
+    let mut ws : Array Float := #[]
+    let mut hs : Array Float := #[]
+    for i in [0:n] do
+      let (angle, s1) := lcgFloat s 0.0 (if k % 4 == 0 then 0.3 else 6.3)
+      let (radius, s2) := lcgFloat s1 0.0 60.0
+      let (w, s3) := lcgFloat s2 1.0 40.0
+      let (h, s4) := lcgFloat s3 1.0 30.0
+      s := s4
+      -- special cases: a node centred on the root, a copy of the previous node, a zero corner
+      let (x, y) :=
+        if k % 13 == 0 && i == 0 then (cx - w / 2.0, cy - h / 2.0)
+        else if k % 17 == 0 && i > 0 then (xs[i - 1]!, ys[i - 1]!)
+        else if k % 19 == 0 && i == 0 then (-0.0, 0.0)
+        else (cx + radius * Float.cos angle - w / 2.0, cy + radius * Float.sin angle - h / 2.0)
+      xs := xs.push x
+      ys := ys.push y
+      ws := ws.push w
+      hs := hs.push h
+    let (rx, ry) := referenceExpand cx cy step spacing maxIterations ⟨xs⟩ ⟨ys⟩ ⟨ws⟩ ⟨hs⟩
+    let layer := AbstractRadiusExtensionCompaction.LayerSoa.mk' ⟨xs⟩ ⟨ys⟩ ⟨ws⟩ ⟨hs⟩ spacing
+    let (fx, fy) := AbstractRadiusExtensionCompaction.expandLoop cx cy step maxIterations layer
+      n.toUSize 0 0
+    if sameFloats rx fx && sameFloats ry fy then same := same + 1
+    else report s!"overlap removal differential: layer {k}" false
+    -- the grouped overlap test on all ordered pairs of the input layer
+    for i in [0:n] do
+      for j in [0:n] do
+        overlapCases := overlapCases + 1
+        let h := spacing / 2.0
+        let a := AbstractRadiusExtensionCompaction.overlapBounds (xs[i]! - h) (ys[i]! - h)
+          (ws[i]! + spacing) (hs[i]! + spacing) (xs[j]! - h) (ys[j]! - h) (ws[j]! + spacing) (hs[j]! + spacing)
+        let b := AbstractRadiusExtensionCompaction.overlapBoundsGrouped (xs[i]! - h) (ys[i]! - h)
+          (ws[i]! + spacing) (hs[i]! + spacing) (xs[j]! - h) (ys[j]! - h) (ws[j]! + spacing) (hs[j]! + spacing)
+        if a == b then sameOverlap := sameOverlap + 1
+  checkEq "overlap removal differential: final layers bitwise equal" same count
+  checkEq "overlapBoundsGrouped equals overlapBounds" sameOverlap overlapCases
+  -- NaN bounds and touching edges
+  let nan : Float := 0.0 / 0.0
+  check "overlapBoundsGrouped: NaN never overlaps"
+    (!AbstractRadiusExtensionCompaction.overlapBoundsGrouped nan 0.0 10.0 10.0 5.0 5.0 10.0 10.0
+      && !AbstractRadiusExtensionCompaction.overlapBounds nan 0.0 10.0 10.0 5.0 5.0 10.0 10.0)
+  check "sameBits: ±0 differ, equal NaNs agree"
+    (!AbstractRadiusExtensionCompaction.sameBits 0.0 (-0.0) && AbstractRadiusExtensionCompaction.sameBits nan nan
+      && AbstractRadiusExtensionCompaction.sameBits 1.5 1.5 && !AbstractRadiusExtensionCompaction.sameBits 1.5 2.5)
+
 /-- The sorters. -/
 def sorterTests : Suite := suite "radial.sorters" do
   let (g, parent) := ElkGraphUtil.createGraph
@@ -448,7 +549,7 @@ def enumFixtureTests : Suite := suite "radial.fixtures.enum" do
   set st'
 
 def suites : Array Suite :=
-  #[metadataTests, centerOnRootTests, utilTests, compactionHelperTests, sorterTests, assemblyTests,
-    errorTests, fixtureTests, enumFixtureTests]
+  #[metadataTests, centerOnRootTests, utilTests, compactionHelperTests, overlapRemovalDifferentialTests,
+    sorterTests, assemblyTests, errorTests, fixtureTests, enumFixtureTests]
 
 end Tests.Radial

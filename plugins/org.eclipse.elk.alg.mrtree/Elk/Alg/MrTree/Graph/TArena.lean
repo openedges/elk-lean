@@ -82,10 +82,12 @@ def createNode (a : TArena) (id : Int) (graph : Option TGraphId) (label : Option
 /-- `TNode::add_outgoing(edge)`: ignored if the edge is already outgoing; otherwise the edge's current
 target is appended to the `direct_children` cache and the edge to the outgoing edges. -/
 def addOutgoing (a : TArena) (n : TNodeId) (e : TEdgeId) : TArena :=
-  if (a.node n).outgoingEdges.contains e then a
-  else
-    let target := (a.edge e).target
-    a.modifyNode n fun x =>
+  let target := (a.edge e).target
+  -- the membership test inside the update: a test on `a.node n` before it kept a second reference
+  -- to the node, so the update copied the node and its edge arrays (quadratic for a high degree)
+  a.modifyNode n fun x =>
+    if x.outgoingEdges.contains e then x
+    else
       let dc := match target with
         | some t => x.directChildren.push t
         | none => x.directChildren
@@ -93,8 +95,8 @@ def addOutgoing (a : TArena) (n : TNodeId) (e : TEdgeId) : TArena :=
 
 /-- `TNode::add_incoming(edge)`: ignored if the edge is already incoming. -/
 def addIncoming (a : TArena) (n : TNodeId) (e : TEdgeId) : TArena :=
-  if (a.node n).incomingEdges.contains e then a
-  else a.modifyNode n fun x => { x with incomingEdges := x.incomingEdges.push e }
+  a.modifyNode n fun x =>
+    if x.incomingEdges.contains e then x else { x with incomingEdges := x.incomingEdges.push e }
 
 /-- `TNode::remove_outgoing(edge)`: removes the edge and the first occurrence of its target in the
 `direct_children` cache. -/
@@ -162,9 +164,12 @@ where
 source (see the module doc). -/
 def createEdge (a : TArena) (source target : TNodeId) : TArena × TEdgeId :=
   let e : TEdgeId := ⟨a.edges.size⟩
-  let a := { a with edges := a.edges.push {} }
-  let a := a.setEdgeTarget e (some target)
-  let a := a.setEdgeSource e (some source)
+  -- `set_target` then `set_source` on a fresh edge: no incidence list holds the new id yet, so the
+  -- membership tests of `add_incoming`/`add_outgoing` are false and both reduce to appending
+  let a := { a with edges := a.edges.push { target := some target, source := some source } }
+  let a := a.modifyNode target fun x => { x with incomingEdges := x.incomingEdges.push e }
+  let a := a.modifyNode source fun x =>
+    { x with directChildren := x.directChildren.push target, outgoingEdges := x.outgoingEdges.push e }
   (a, e)
 
 /-- `TLabel::new(edge, text)`: a new label, appended to the labels of the edge. -/
