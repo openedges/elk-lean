@@ -825,67 +825,34 @@ partial def breakCyclesLoop (g : GapDeps) (st : CycleState) (random : Random) (d
 @[inline] def keepDependencies (deps : Array DependencyId) (keep : DependencyId → Bool) : Array DependencyId :=
   deps.foldl (fun acc d => if keep d then acc.push d else acc) (Array.emptyWithCapacity deps.size)
 
-/-- Reversal state of `breakCycles`' final step: the dependencies, which of them were removed with
-weight 0, and which incoming lists hold removed entries. -/
-structure ReversalState where
-  deps : GapDeps
-  dropped : Array Bool
-  incomingStale : Array Bool
+/-- The final step of `breakCycles`: every dependency pointing from a higher to a lower mark is
+removed (weight 0) or reversed (`source`/`target` swapped, appended to the new source's outgoing and
+the new target's incoming list).
 
-/-- The final step of `breakCycles` for the dependencies `deps[k:]` of one segment (its outgoing list
-when its turn came): a dependency pointing from a higher to a lower mark is removed (weight 0,
-`dropped`) or reversed (`source`/`target` swapped, appended to the new source's outgoing and the new
-target's incoming list). `removed` tells whether an entry of the segment's list was removed.
-
-Rust removes the dependency from its source's outgoing and its target's incoming list right away
-(`retain`); here the lists keep the entry: the segment's outgoing list is compacted after its turn
-(`reverseLeftwardDependencies`) and the incoming lists at the end, dropping the entries that were
-removed with weight 0 or no longer start (end) at the list's segment. This is the same: entries leave
-an outgoing list only during the turn of their source (which iterates a copy of the list), a reversed
-dependency is never reversed again (its marks are increasing) and is appended to lists of other
-segments only. -/
-partial def reverseLeftward (mark : Array Int) (deps : Array DependencyId) (k : Nat) (st : ReversalState)
-    (removed : Bool) : ReversalState × Bool :=
-  if h : k < deps.size then
-    let d := deps[k]
-    match st with
-    | ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩ =>
+Rust visits the segments in list order and each segment's outgoing list (a copy) in list order,
+removing a leftward dependency from its source's outgoing and its target's incoming list (`retain`)
+and appending a reversed one. A reversed dependency points rightwards and is never removed again, so
+the result is computed directly: every list keeps its entries that are not leftward (in order),
+followed by the reversed dependencies in visiting order (segment order, then outgoing list order —
+the creation order, before any reversal). -/
+def reverseLeftwardDependencies (g : GapDeps) (mark : Array Int) : GapDeps :=
+  match g with
+  | ⟨base, src, tgt, wgt, out, inc, _, _⟩ =>
+    let leftward : Array Bool := src.size.fold (init := Array.emptyWithCapacity src.size) fun p h acc =>
+      acc.push (mark[src[p]]! > mark[tgt[p]!]!)
+    let reversed := out.foldl (init := #[]) fun reversed list =>
+      list.foldl (init := reversed) fun reversed d =>
+        let p := d.idx - base
+        if leftward[p]! && wgt[p]! > 0 then reversed.push d else reversed
+    let out := out.map fun list => keepDependencies list fun d => !leftward[d.idx - base]!
+    let inc := inc.map fun list => keepDependencies list fun d => !leftward[d.idx - base]!
+    let (src, tgt, out, inc) := reversed.foldl (init := (src, tgt, out, inc)) fun (src, tgt, out, inc) d =>
       let p := d.idx - base
       let s := src[p]!
       let t := tgt[p]!
-      if mark[s]! > mark[t]! then
-        let incomingStale := incomingStale.set! t true
-        if wgt[p]! > 0 then
-          reverseLeftward mark deps (k + 1)
-            ⟨⟨base, src.set! p t, tgt.set! p s, wgt, out.modifyIn t (·.push d), inc.modifyIn s (·.push d),
-                wo, wi⟩, dropped, incomingStale⟩ true
-        else
-          reverseLeftward mark deps (k + 1)
-            ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped.set! p true, incomingStale⟩ true
-      else reverseLeftward mark deps (k + 1) ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩ removed
-  else (st, removed)
-
-/-- `reverseLeftward` for the segments `i, i + 1, …` (list order); a segment's outgoing list drops
-the removed entries right after its turn. -/
-partial def reverseLeftwardDependencies (mark : Array Int) (i : Nat) (st : ReversalState) : ReversalState :=
-  if h : i < st.deps.outgoing.size then
-    let deps := st.deps.outgoing[i]
-    match reverseLeftward mark deps 0 st false with
-    | (st, false) => reverseLeftwardDependencies mark (i + 1) st
-    | (⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩, true) =>
-      let out := out.modifyIn i fun list =>
-        keepDependencies list fun d => src[d.idx - base]! == i && !dropped[d.idx - base]!
-      reverseLeftwardDependencies mark (i + 1) ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩
-  else st
-
-/-- Drops the removed entries of the incoming lists marked `incomingStale` (see `reverseLeftward`). -/
-def compactIncomingLists (st : ReversalState) : GapDeps :=
-  match st with
-  | ⟨⟨base, src, tgt, wgt, out, inc, wo, wi⟩, dropped, incomingStale⟩ =>
-    let inc := inc.mapIdx fun x list =>
-      if incomingStale[x]! then keepDependencies list fun d => tgt[d.idx - base]! == x && !dropped[d.idx - base]!
-      else list
-    ⟨base, src, tgt, wgt, out, inc, wo, wi⟩
+      (src.set! p t, tgt.set! p s, out.modifyIn t (·.push d), inc.modifyIn s (·.push d))
+    -- the weighted lists are not maintained any more
+    ⟨base, src, tgt, wgt, out, inc, #[], #[]⟩
 
 /-- `breakCycles(edges, random)`: Eades–Lin–Smyth style marking (sinks get decreasing marks below
 the segment count `n`, sources and the random max-outflow segments increasing marks above it; the
@@ -900,11 +867,7 @@ def breakCycles (g : GapDeps) (random : Random) : GapDeps × CycleState × Rando
   | ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount, order,
       nextLeft, nextRight⟩ =>
     let mark := mark.map fun m => if m < markBase then m + shiftBase else m
-    let dependencyCount := g.source.size
-    -- the weighted lists are not needed (and not maintained) any more
-    let g := { g with weightedOutgoing := #[], weightedIncoming := #[] }
-    let g := compactIncomingLists
-      (reverseLeftwardDependencies mark 0 ⟨g, Array.replicate dependencyCount false, Array.replicate n false⟩)
+    let g := reverseLeftwardDependencies g mark
     (g, ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount, order,
         nextLeft, nextRight⟩, random, drawn)
 
