@@ -193,32 +193,9 @@ private partial def bytesEqAt (bs : String) (b : USize) (k : String) (i n : USiz
   else true
 
 /-- The member name of ELK JSON graphs (`Elk.Json.Key`) that the bytes `[b, b + n)` of `bs` can
-only be, chosen by length and first (or second) byte; `""` when there is none. -/
-private def keyCandidate (bs : String) (b n : Nat) : String :=
-  let c := byteAt bs b
-  match n with
-  | 1 => if c == 120 then Key.x else if c == 121 then Key.y else ""
-  | 2 => Key.id
-  | 4 => Key.text
-  | 5 => if c == 119 then Key.width else if c == 112 then Key.ports else if c == 101 then Key.edges else ""
-  | 6 =>
-    if c == 104 then Key.height else if c == 108 then Key.labels
-    else if c == 115 then Key.source else if c == 116 then Key.target else ""
-  | 7 => if c == 115 then Key.sources else if c == 116 then Key.targets else ""
-  | 8 => if c == 99 then Key.children else if c == 115 then Key.sections else if c == 101 then Key.endPoint else ""
-  | 9 => Key.container
-  | 10 =>
-    if c == 112 then Key.properties else if c == 116 then Key.targetPort
-    else if c == 98 then Key.bendPoints
-    else if c == 115 then (if byteAt bs (b + 1) == 111 then Key.sourcePort else Key.startPoint)
-    else ""
-  | 13 =>
-    if c == 108 then Key.layoutOptions else if c == 105 then Key.incomingShape
-    else if c == 111 then Key.outgoingShape else ""
-  | 14 => Key.junctionPoints
-  | 16 => if c == 105 then Key.incomingSections else if c == 111 then Key.outgoingSections else ""
-  | 18 => Key.individualSpacings
-  | _ => ""
+only be (`Key.candidateIndex`); `""` when there is none. -/
+@[inline] private def keyCandidate (bs : String) (b n : Nat) : String :=
+  Key.all.getD (Key.candidateIndex bs b n) ""
 
 /-- The bytes `[b, e)` of `bs` as a string, shared with the `Elk.Json.Key` constant when it is one
 of the ELK member names (later lookups then compare pointer-equal strings). -/

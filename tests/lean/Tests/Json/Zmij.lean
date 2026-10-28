@@ -89,6 +89,14 @@ def escapes : Suite := suite "json.printer.escape" do
   checkEq "unicode with escape" (Value.str "é\"→😀").render "\"é\\\"→😀\""
   checkEq "escaped key" (Value.obj #[("a\"b", .num (.int 1))]).render "{\"a\\\"b\":1}"
   checkEq "pretty escaped key" (Value.obj #[("k\n", .str "v\t")]).renderPretty "{\n  \"k\\n\": \"v\\t\"\n}"
+  -- ELK member names come from pre-rendered literals (also when the key is not the shared object),
+  -- other keys of the same length and first byte are quoted normally
+  let v := Value.obj #[("x", .num (.int 1)), (Key.width, .num (.int 2)), ("widtH", .num (.int 3)),
+    ("sourcePort", .str "p"), ("startPoint", .obj #[("y", .null)]), ("yy", .bool true)]
+  checkEq "member name literals (compact)" v.render
+    "{\"x\":1,\"width\":2,\"widtH\":3,\"sourcePort\":\"p\",\"startPoint\":{\"y\":null},\"yy\":true}"
+  checkEq "member name literals (pretty)" v.renderPretty
+    "{\n  \"x\": 1,\n  \"width\": 2,\n  \"widtH\": 3,\n  \"sourcePort\": \"p\",\n  \"startPoint\": {\n    \"y\": null\n  },\n  \"yy\": true\n}"
 
 def suites : Array Suite := #[zmijCases, shortest, escapes]
 

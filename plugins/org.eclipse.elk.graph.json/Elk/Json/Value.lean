@@ -136,6 +136,41 @@ namespace Key
 /-- `"individualSpacings"`. -/
 @[noinline] def individualSpacings : String := "individualSpacings"
 
+/-- The member names above (the very same string objects), indexed by `candidateIndex`. -/
+def all : Array String :=
+  #[id, x, y, width, height, labels, text, ports, layoutOptions, properties, children, edges, sources,
+    targets, source, target, sourcePort, targetPort, sections, startPoint, endPoint, bendPoints,
+    incomingShape, outgoingShape, incomingSections, outgoingSections, junctionPoints, container,
+    individualSpacings]
+
+/-- Byte `i` of `s` (`0` past the end). -/
+@[inline] private def byteAt (s : String) (i : Nat) : UInt8 :=
+  if h : i < s.utf8ByteSize then s.getUTF8Byte ⟨i⟩ h else 0
+
+/-- Index in `all` of the only member name that the `n` bytes of `s` from `b` can be, chosen by the
+length and the first (or second) byte; `all.size` when there is none. The bytes still have to be
+compared. -/
+def candidateIndex (s : String) (b n : Nat) : Nat :=
+  let c := byteAt s b
+  match n with
+  | 1 => if c == 120 then 1 else if c == 121 then 2 else 29
+  | 2 => 0
+  | 4 => 6
+  | 5 => if c == 119 then 3 else if c == 112 then 7 else if c == 101 then 11 else 29
+  | 6 => if c == 104 then 4 else if c == 108 then 5 else if c == 115 then 14 else if c == 116 then 15 else 29
+  | 7 => if c == 115 then 12 else if c == 116 then 13 else 29
+  | 8 => if c == 99 then 10 else if c == 115 then 18 else if c == 101 then 20 else 29
+  | 9 => 27
+  | 10 =>
+    if c == 112 then 9 else if c == 116 then 17 else if c == 98 then 21
+    else if c == 115 then (if byteAt s (b + 1) == 111 then 16 else 19)
+    else 29
+  | 13 => if c == 108 then 8 else if c == 105 then 22 else if c == 111 then 23 else 29
+  | 14 => 26
+  | 16 => if c == 105 then 24 else if c == 111 then 25 else 29
+  | 18 => 28
+  | _ => 29
+
 end Key
 
 /-! Unchecked byte reads with `USize` indices for the byte loops of the parser and printer (no

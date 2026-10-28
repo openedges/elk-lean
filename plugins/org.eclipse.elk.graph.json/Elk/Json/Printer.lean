@@ -49,6 +49,25 @@ and the punctuation around the literal, so a plain string costs three appends. -
 /-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
 def escapeInto (out s : String) : String := appendQuoted out "\"" s "\""
 
+/-! The ELK member names (`Key.all`) rendered with their quotes and punctuation, so writing such a
+key is one append (no escape scan). -/
+
+/-- `"key":` (first member, compact). -/
+private def compactKeysFirst : Array String := Key.all.map fun k => "\"" ++ k ++ "\":"
+/-- `,"key":` (later members, compact). -/
+private def compactKeysNext : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":"
+/-- `"key": ` (pretty). -/
+private def prettyKeys : Array String := Key.all.map fun k => "\"" ++ k ++ "\": "
+
+/-- Appends the key `k` between `pre` and `post` (`appendQuoted`), from `lits` (`pre ++ k ++ post`
+for each `Key.all` entry) when `k` is one of the ELK member names (the parser shares their objects,
+so the equality test is usually a pointer comparison). -/
+@[inline] private def appendKey (out : String) (lits : Array String) (pre k post : String) : String :=
+  let j := Key.candidateIndex k 0 k.utf8ByteSize
+  if h : j < lits.size then
+    if k == Key.all.getD j "" then out ++ lits[j] else appendQuoted out pre k post
+  else appendQuoted out pre k post
+
 /-- serde_json string escaping. -/
 def escapeString (s : String) : String := escapeInto "" s
 
@@ -95,7 +114,8 @@ partial def compactItems (sortKeys : Bool) (xs : Array Value) (i : Nat) (out : S
 partial def compactMembers (sortKeys : Bool) (kvs : Array (String × Value)) (i : Nat) (out : String) : String :=
   if h : i < kvs.size then
     let kv := kvs[i]
-    let out := appendQuoted out (if i == 0 then "\"" else ",\"") kv.1 "\":"
+    let out := if i == 0 then appendKey out compactKeysFirst "\"" kv.1 "\":"
+      else appendKey out compactKeysNext ",\"" kv.1 "\":"
     compactMembers sortKeys kvs (i + 1) (compact sortKeys kv.2 out)
   else out
 
@@ -137,7 +157,7 @@ partial def prettyMembers (sortKeys : Bool) (kvs : Array (String × Value)) (lev
   if h : i < kvs.size then
     let kv := kvs[i]
     let out := (if i != 0 then out ++ "," else out) ++ inner
-    let out := appendQuoted out "\"" kv.1 "\": "
+    let out := appendKey out prettyKeys "\"" kv.1 "\": "
     prettyMembers sortKeys kvs level inner (i + 1) (pretty sortKeys kv.2 level out)
   else out
 
