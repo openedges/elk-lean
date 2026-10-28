@@ -121,7 +121,10 @@ provider reads its five configuration options (`SPACING_NODE_NODE`, `PADDING`, `
 the rectangle packing defaults (padding 15, spacing 15) set by `apply_algorithm_defaults` are not
 seen there; everything else (aspect ratio, priorities, minimum size) is read from the live graph.
 `snapshot` is the property map of the graph before `apply_algorithm_defaults`. (Java and a direct
-provider call outside the engine read the live values.) -/
+provider call outside the engine read the live values.) Options missing from the snapshot take the
+box layouter defaults (`BoxLayouterOptions`: padding 15, spacing 15), which is what ELK Java ends up
+with as well (its rectangle packing reads padding 15 and box spacing defaults to 15; elk-rs falls
+back to the core defaults 12 / 20). -/
 def boxLayoutFallback (layoutGraph : NodeId) (snapshot : PropertyMap) : ElkM Unit := do
   let objSpacing := snapshot.getD BoxLayouterOptions.SPACING_NODE_NODE 0.0
   let padding := snapshot.getD BoxLayouterOptions.PADDING {}

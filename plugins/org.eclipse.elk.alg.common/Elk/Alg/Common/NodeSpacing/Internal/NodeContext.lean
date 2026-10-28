@@ -1,3 +1,4 @@
+import Elk.Core.Exceptions
 import Elk.Core.Util.Adapters.GraphAdapters
 import Elk.Alg.Common.NodeSpacing.CellSystem
 import Elk.Alg.Common.NodeSpacing.Internal.NodeLabelLocation
@@ -24,9 +25,11 @@ side NORTH/EAST contexts are in ascending and SOUTH/WEST contexts in descending 
 (elk-rs appends in port order and reverses SOUTH/WEST in `PortContextCreator`; `insertPortContext`
 inserts at the sorted position directly).
 
-Deviations from Java (following elk-rs): the constructor does not throw for invalid
-`PORT_LABELS_PLACEMENT` / `NODE_LABELS_PLACEMENT` values (elk-rs has no such check), and
-`portAlignment*` / `nodeSizeMinimum` are read once at construction.
+Like Java, the constructor throws `UnsupportedConfigurationException("Invalid port label placement:
+[..]")` / `("Invalid node label placement: [..]")` for an invalid `PORT_LABELS_PLACEMENT` /
+`NODE_LABELS_PLACEMENT` (`PortLabelPlacement.isValid` / `NodeLabelPlacement.isValid`; elk-rs has no
+such check and lays the node out). Deviation from Java (following elk-rs): `portAlignment*` /
+`nodeSizeMinimum` are read once at construction.
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -126,12 +129,27 @@ def comparePortContexts (pc1 pc2 : PortContext P L) : Ordering :=
     | .undefined => .eq
   | o => o
 
+/-- The placement checks of Java's `NodeContext` constructor: throws
+`UnsupportedConfigurationException("Invalid port label placement: " + portLabelsPlacement)` unless
+`PortLabelPlacement.isValid(portLabelsPlacement)`, then
+`UnsupportedConfigurationException("Invalid node label placement: " + nodeLabelPlacement)` unless
+`NodeLabelPlacement.isValid(nodeLabelPlacement)` (Java `EnumSet.toString()`, e.g.
+`[OUTSIDE, ALWAYS_SAME_SIDE, SPACE_EFFICIENT]`). -/
+def validatePlacements {m : Type → Type} [Monad m] [MonadExcept IO.Error m]
+    (portLabelsPlacement : EnumSet PortLabelPlacement) (nodeLabelPlacement : EnumSet NodeLabelPlacement) :
+    m Unit := do
+  if !PortLabelPlacement.isValid portLabelsPlacement then
+    Elk.Core.throwUnsupportedConfiguration s!"Invalid port label placement: {portLabelsPlacement.toJavaString}"
+  if !NodeLabelPlacement.isValid nodeLabelPlacement then
+    Elk.Core.throwUnsupportedConfiguration s!"Invalid node label placement: {nodeLabelPlacement.toJavaString}"
+
 /-- Creates a new context for the given node, fully initialized with the node's settings (Java
 `new NodeContext(parentGraph, node)`, elk-rs `NodeContext::new(node)`). Creates the node
 container (vertical strip) and its middle row (horizontal strip, in the container's center), both
-symmetrical unless `SizeOptions.ASYMMETRICAL` is set and without gap. -/
-def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L E) (node : N) :
-    m (NodeContext N P L) := do
+symmetrical unless `SizeOptions.ASYMMETRICAL` is set and without gap. Throws like Java for an
+invalid port or node label placement (`validatePlacements`; elk-rs does not check). -/
+def new {m : Type → Type} [Monad m] [MonadExcept IO.Error m] {G E : Type} (a : GraphAdapters m G N P L E)
+    (node : N) : m (NodeContext N P L) := do
   let nodeSize ← a.node.getSize node
   -- The node's options are read from its option map, read once (`ElementOps.getProps`)
   let props ← a.node.getProps node
@@ -149,6 +167,9 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
   let portLabelsPlacement := ops.getPropertyDFrom props CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
   let portLabelsTreatAsGroup := ops.getPropertyDFrom props CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
   let nodeLabelPlacement := ops.getPropertyDFrom props CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty
+  -- Java checks the port label placement right after reading it and the node label placement right
+  -- after reading that; the reads in between have no side effects
+  validatePlacements portLabelsPlacement nodeLabelPlacement
   -- Copy spacings for convenience (`getIndividualOrInherited`, the node's individual spacings and
   -- the graph's option map read once)
   let spacings ← a.spacingSourceFrom node props

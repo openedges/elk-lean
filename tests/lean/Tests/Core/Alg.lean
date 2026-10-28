@@ -370,16 +370,28 @@ def adapterTests : Suite := suite "core.util.adapters.ElkGraphAdapters" do
   let (g, south2) := mk g .south none 3.0 0.0
   let (g, west1) := mk g .west none 0.0 1.0
   let (g, west2) := mk g .west none 0.0 3.0
-  let cmp := PortComparator.compare g
-  check "PortComparator: side ordinal north < west" (cmp north west == .lt)
-  check "PortComparator: side ordinal west > north" (cmp west north == .gt)
-  check "PortComparator: PORT_INDEX wins over coordinate" (cmp east1 east2 == .lt)
-  check "PortComparator: PORT_INDEX only when both set" (cmp east3 east4 == .lt)
-  check "PortComparator: north by increasing x" (cmp north2 north == .lt)
-  check "PortComparator: east by increasing y" (cmp east3 east4 == .lt)
-  check "PortComparator: south by decreasing x" (cmp south2 south1 == .lt)
-  check "PortComparator: west by decreasing y" (cmp west2 west1 == .lt)
-  check "PortComparator: equal" (cmp north north == .eq)
+  let (g, undef1) := mk g .undefined none 0.0 0.0
+  let (g, undef2) := mk g .undefined none 1.0 0.0
+  let (g, undefIdx1) := mk g .undefined (some 1) 0.0 0.0
+  let (g, undefIdx2) := mk g .undefined (some 2) 0.0 0.0
+  let cmp (a b : PortId) : Option Ordering := match PortComparator.compare g a b with
+    | .ok o => some o
+    | .error _ => none
+  check "PortComparator: side ordinal north < west" (cmp north west == some .lt)
+  check "PortComparator: side ordinal west > north" (cmp west north == some .gt)
+  check "PortComparator: PORT_INDEX wins over coordinate" (cmp east1 east2 == some .lt)
+  check "PortComparator: PORT_INDEX only when both set" (cmp east3 east4 == some .lt)
+  check "PortComparator: north by increasing x" (cmp north2 north == some .lt)
+  check "PortComparator: east by increasing y" (cmp east3 east4 == some .lt)
+  check "PortComparator: south by decreasing x" (cmp south2 south1 == some .lt)
+  check "PortComparator: west by decreasing y" (cmp west2 west1 == some .lt)
+  check "PortComparator: equal" (cmp north north == some .eq)
+  -- Java: UNDEFINED has ordinal 0; two UNDEFINED ports without an index difference throw
+  check "PortComparator: UNDEFINED before NORTH" (cmp undef1 north == some .lt)
+  check "PortComparator: distinct PORT_INDEX of UNDEFINED ports" (cmp undefIdx2 undefIdx1 == some .gt)
+  checkEq "PortComparator: two UNDEFINED ports throw (Java IllegalStateException)"
+    (match PortComparator.compare g undef1 undef2 with | .error m => m | .ok _ => "")
+    "Port side is undefined"
 
 /-- All suites of this file. -/
 def suites : Array Tests.Suite := #[assemblerTests, configurationTests, adapterTests]

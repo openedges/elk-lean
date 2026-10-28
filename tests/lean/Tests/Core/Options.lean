@@ -130,7 +130,13 @@ def coreOptions : Suite := suite "core.options.coreoptions" do
   checkEq "Fixed ALGORITHM_ID" FixedLayouterOptions.ALGORITHM_ID "org.eclipse.elk.fixed"
   checkEq "Random ALGORITHM_ID" RandomLayouterOptions.ALGORITHM_ID "org.eclipse.elk.random"
   checkEq "Random RANDOM_SEED id" RandomLayouterOptions.RANDOM_SEED.id "org.eclipse.elk.randomSeed"
-  check "Box PADDING is core PADDING" (BoxLayouterOptions.PADDING == CoreOptions.PADDING)
+  check "Box PADDING has the core PADDING id" (BoxLayouterOptions.PADDING.id == CoreOptions.PADDING.id)
+  -- ELK Java 0.12.0 algorithm defaults (`Core.melk`; checked with `BoxLayouterOptions.X.getDefault()`)
+  check "Java: Box PADDING default 15" (BoxLayouterOptions.PADDING.default == some (ElkPadding.ofAny 15.0))
+  check "Java: Box SPACING_NODE_NODE default 15" (BoxLayouterOptions.SPACING_NODE_NODE.default == some 15.0)
+  check "Java: Box PRIORITY default 0" (BoxLayouterOptions.PRIORITY.default == some 0)
+  check "Java: Box ASPECT_RATIO default 1.3f" (BoxLayouterOptions.ASPECT_RATIO.default == some 1.2999999523162842)
+  check "Java: Fixed PADDING default 15" (FixedLayouterOptions.PADDING.default == some (ElkPadding.ofAny 15.0))
   check "Box BOX_PACKING_MODE default" (BoxLayouterOptions.BOX_PACKING_MODE.default == some PackingMode.simple)
 
 def propertyMaps : Suite := suite "core.options.properties" do

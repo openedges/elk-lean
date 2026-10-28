@@ -7,9 +7,12 @@ node sizes, places node and port labels and computes node margins for all childr
 Java and elk-rs put the class into `org.eclipse.elk.alg.common`; the Lean module lives next to
 `NodeDimensionCalculation` in `NodeSpacing`.
 
-Like elk-rs, `execute` uses the ELK path `NodeDimensionCalculation.calculateLabelAndNodeSizesForElk`
-(Java calls the generic `calculateLabelAndNodeSizes`, which elk-rs dispatches to the ELK path for
-an `ElkGraphAdapter`).
+`execute` follows ELK Java 0.12.0 (the result reference): `sortPortLists` (Java `TimSort` with the
+throwing `ElkGraphAdapters.PortComparator`), the full cell system pipeline of
+`NodeLabelAndSizeCalculator.process` for every child (`calculateLabelAndNodeSizesJava`, with Java's
+node size validation) and `calculateNodeMargins`. elk-rs dispatches the label and size step for an
+`ElkGraphAdapter` to its own simplified path (`calculateLabelAndNodeSizesForElk`: `processNode` plus
+a port label pass that never moves ports), which Java does not have.
 -/
 namespace Elk.Alg.Common.NodeSpacing
 
@@ -35,11 +38,15 @@ given adapters for the children of `graph`. -/
 def forAdapter (adapter : ElkAdapters) (graph : NodeId) : NodeMicroLayout :=
   { adapter, graph }
 
-/-- `NodeMicroLayout.execute()` (elk-rs `execute`): `sortPortLists`, then
-`calculateLabelAndNodeSizesForElk`, then `calculateNodeMargins`. -/
+/-- `NodeMicroLayout.execute()`: `sortPortLists`, then `calculateLabelAndNodeSizes` (Java's full
+pipeline, `calculateLabelAndNodeSizesJava`), then `calculateNodeMargins`. Throws Java's
+node size validation exceptions (`IllegalStateException: Port side is undefined` from the port sort,
+`UnsupportedConfigurationException: Invalid port/node label placement: [..]`,
+`IllegalArgumentException: Label and node size calculator can only be used with ports that have port
+sides assigned.`). -/
 def execute (l : NodeMicroLayout) : ElkM Unit := do
   NodeDimensionCalculation.sortPortLists l.adapter l.graph
-  NodeDimensionCalculation.calculateLabelAndNodeSizesForElk l.adapter l.graph
+  NodeDimensionCalculation.calculateLabelAndNodeSizesJava l.adapter l.graph
   NodeDimensionCalculation.calculateNodeMargins l.adapter l.graph
 
 end NodeMicroLayout

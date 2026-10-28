@@ -17,9 +17,11 @@
   2. radial `The given graph is not a tree!`의 예외 클래스(`UnsupportedConfigurationException` → Java의 `IllegalArgumentException`).
   3. layered 계층 처리 검사의 예외 클래스·문구(`UnsupportedGraphException`, `LGraph.toString()` 포함).
   4. `fixed` + `ORTHOGONAL`에서 섹션 없는 간선의 누락된 예외(`IllegalArgumentException: The edge needs to have exactly one edge section. Found: 0`; Java·elk-rs는 던지고 Lean만 삼켰다).
-- **열린 항목**(수정하지 않음, 7절): 생성기 그대로의 입력 4,561건은 Java가 노드 크기 계산기 검증으로 거부하고
+- **열린 항목**(HX 시점, 7절): 생성기 그대로의 입력 4,561건은 Java가 노드 크기 계산기 검증으로 거부하고
   elk-lean·elk-rs는 레이아웃한다(검증 미이식). 또 Java가 성공하는 v 집합 5,761건 중 elk-lean 출력이 Java와
   정확히 같은 것은 약 10%뿐이다(코퍼스는 1878/1997) — 무작위 노드 크기·포트 구성에서 큰 결과 격차가 있다.
+  → **RJ1(8절)에서 해결**: 노드 마이크로 레이아웃을 Java의 전체 셀 시스템으로 바꾸고 Java 검증을 이식해 s 집합의 Java
+  예외 4,783건 중 4,777건(나머지 6건은 Java 자체 결함)이 클래스·메시지까지 같고, v 집합 정확 일치는 616 → 1,995/5,761(1e-6: 623 → 2,026).
 
 ## 2. 방법
 
@@ -156,7 +158,7 @@ API 규약(elk-rs·elkjs 호환) 결정이라 바꾸지 않았다(7.3절).
 
 ## 7. 열린 항목
 
-### 7.1 노드 크기 계산기 검증 미이식(s 집합 4,561건)
+### 7.1 노드 크기 계산기 검증 미이식(s 집합 4,561건) — RJ1에서 이식(8절)
 
 Java `NodeMicroLayout.execute()`는 `sortPortLists` → `NodeLabelAndSizeCalculator.process`(노드마다 `NodeContext` 생성 시
 `PortLabelPlacement.isValid`/`NodeLabelPlacement.isValid` → `UnsupportedConfigurationException("Invalid port label placement: [..]")`,
@@ -168,7 +170,7 @@ Java와 맞추려면 (a) 배치 유효성 검사, (b) 변 없는 포트 검사, 
 elkjs도 같은 Java 코드라 이 입력을 거부한다. 코퍼스는 Java가 모두 통과하므로 영향이 없을 것으로 보이나, 사용자 입력에
 대한 동작이 바뀌는 설계 결정이라 별도 작업으로 남긴다. 관련 상류 이슈: eclipse-elk/elk#296(종료).
 
-### 7.2 무작위 노드 크기 그래프의 Java 결과 격차
+### 7.2 무작위 노드 크기 그래프의 Java 결과 격차 — RJ1에서 노드 마이크로 레이아웃 몫 해결(8절)
 
 v 집합에서 Java·Lean이 모두 성공한 입력의 정확 일치(tol 0)는 집합당 56~71/567~584(약 10%)다(tol 1e-6도 57~72).
 차이는 좌표 70%·라벨 13%·섹션 13%이며, 예로 force의 포트 3개 노드(v1/g0019 `n0`, `PORTS` 크기 제약)는 Java가 46×0 크기에 포트를
@@ -234,3 +236,64 @@ ELK Java(집합마다 JVM 1개, 모델별 무진행 감시 60초·집합 경보 
 옵션 기능별 lift는 무작위 생성기가 대부분의 옵션을 그래프 어딘가에 넣기 때문에 1 근처라 정보가 적다(보고서의 layered 단독 표가 더 유용하다).
 다음 라운드 브리프 단위: (1) `NML`(RJ1), (2) `DEF` 알고리즘별 기본값, (3) `SEC` 경로 없는 간선의 섹션, (4) `LNODE` layered 노드/포트,
 (5) `LEDGE`/`LPOS` layered 라우팅·배치, (6) `POS:radial`.
+## 9. RJ1: 노드 마이크로 레이아웃의 Java 경로 전환과 노드 크기 검증 (2026-10-28)
+
+### 8.1 변경
+
+- `NodeMicroLayout.execute`(force/stress/mrtree/radial/rectpacking/vertiflex와 그 자식 그래프)가 Java처럼
+  `sortPortLists` → 노드마다 `NodeLabelAndSizeCalculator.process(graph, node, true, false)`(전체 셀 시스템,
+  `NodeDimensionCalculation.calculateLabelAndNodeSizesJava`) → `calculateNodeMargins`를 돈다. elk-rs의 ELK 경로
+  (`calculateLabelAndNodeSizesForElk`: `processNode` + 포트를 옮기지 않는 단순 포트 라벨 배치)는 더 이상 쓰지 않는다
+  (테스트에서만 호출, 4.1절의 hang 수정도 그 경로에만 남음).
+- Java 검증 이식(클래스·메시지 Java와 동일): `NodeContext` 생성 시 `UnsupportedConfigurationException: Invalid port label
+  placement: [..]` / `Invalid node label placement: [..]`(layered 임포터의 `computeInsideNodeLabelPadding`에서도),
+  `PortContextCreator`의 `IllegalArgumentException: Label and node size calculator can only be used with ports that have port
+  sides assigned.`, `ElkGraphAdapters.PortComparator`의 `IllegalStateException: Port side is undefined`(포트 정렬은
+  `javaSortByM` = JDK 21 `TimSort`, `Double.compare`·Java `int` 뺄셈).
+- elk-rs가 Java와 다르던 셀 시스템 세부(코퍼스 출력 바이트 동일):
+  `MINIMUM_SIZE` + `MINIMUM_SIZE_ACCOUNTS_FOR_PADDING`에서 가운데 행의 너비 기여를 켜지 않음(Java는 높이 플래그만 두 번
+  설정 — v 집합 node-size 차이의 대부분, Java 너비 0 대 elk-rs 30/50/110), 표 형식 그리드의 열 너비 배열 누적 갱신,
+  `COMPUTE_PADDING`의 패딩 적용(`setNodePadding`), `DoubleMath.fuzzyEquals`의 `<=` 허용오차.
+- rectpacking `MinSizePreProcessor`: 부모가 있는 그래프는 Java처럼 `process(parent, node, false, true)`의 라벨·포트 기반
+  최소 크기와 최댓값을 취한다(검증 예외도 여기서 난다; elk-rs는 최소 크기 제약만).
+- box/fixed 옵션 기본값을 Java(`Core.melk`)로: box 패딩 15·간격 15·우선순위 0·종횡비 `1.3f`(=1.2999999523162842),
+  fixed 패딩 15(elk-rs는 코어 기본값 12/20).
+- 성능: 포트·라벨이 없고 크기 제약이 고정(`areSizeConstraintsFixed`)이며 `COMPUTE_PADDING`이 없는 노드는 셀 시스템이 할
+  일이 없으므로 검증만 하고 크기를 그대로 둔다(`trivialNodeSize?`, Java와 같은 결과).
+
+### 8.2 결과(ELK Java 기준, HX의 Java 기준값 재사용)
+
+| 집합 | 정확 일치(tol 0) 전 → 후 | 1e-6 일치 전 → 후 | 비교 수(둘 다 성공) |
+|---|---:|---:|---:|
+| v1 | 62 → 183 | 63 → 187 | 566 |
+| v2 | 56 → 202 | 57 → 207 | 578 |
+| v3 | 57 → 189 | 57 → 192 | 576 |
+| v4 | 63 → 213 | 64 → 215 | 581 |
+| v5 | 57 → 188 | 57 → 189 | 574 |
+| v6 | 68 → 203 | 69 → 207 | 584 |
+| v7 | 60 → 212 | 60 → 216 | 574 |
+| v8 | 57 → 197 | 58 → 202 | 577 |
+| v9 | 65 → 210 | 66 → 211 | 576 |
+| v10 | 71 → 198 | 72 → 200 | 575 |
+| 합계 | 616 → 1,995 | 623 → 2,026 | 5,761 |
+
+루트 알고리즘별 정확 일치(v 집합): box 0 → 310/574, fixed 51 → 284/532, rectpacking 6 → 324/615, radial 1 → 248/584,
+stress 4 → 79/560, layered 554 → 750/1,715, force 0 → 0/614, mrtree 0 → 0/567(8.3절 1번).
+
+- s 집합(Java가 4,783건 거부): 클래스·메시지 일치 74 → 4,777. 나머지 6건은 Java가 노드 크기 검증보다 먼저 자체 결함
+  (`CrossingsCounter`의 `ArrayIndexOutOfBoundsException`, 5장)으로 실패하는 입력이다. Java·Lean 둘 다 성공한 s 입력의 정확
+  일치는 집합당 34~50 → 79~111(비교 107~137).
+- 코퍼스: Java 정확 1878/119(차이 집합 동일), elk-rs model 1447/1447, `lean/**` 1,447개·합성 26개 바이트 동일.
+
+### 8.3 남은 차이(v 집합, 가장 깊은 차이 그래프의 알고리즘별)
+
+1. **알고리즘별 옵션 기본값 미이식**(force 1,019·mrtree 896·stress 658 모델): Java는 `ForceOptions.PADDING = 50`,
+   `SPACING_NODE_NODE = 80`, mrtree 패딩 20·간격 20·`spacing.edgeNode` 3 등 알고리즘 메타데이터의 기본값을 쓰는데
+   elk-lean(=elk-rs)은 코어 기본값(12/20)을 쓴다. `tests/fixtures/nodemicro/force.json`에 패딩 50·간격 80을 명시하면
+   Lean 출력이 Java와 완전히 같다. stress는 비대화형일 때 force를 먼저 돌리므로 같은 원인을 공유한다. Java는 `Cloneable`
+   기본값(`ElkPadding` 등)을 읽을 때 요소에 저장하는 부작용도 있다(`EMapPropertyHolderImpl.getProperty`).
+2. layered 내부(간선 444·포트 110·노드 위치 63): 예 v1/g0225 — 크기 0×0 노드의 SOUTH 포트 순서.
+3. radial 노드 위치(139), mrtree 간선 경로(32): 알고리즘 몫.
+4. 노드 마이크로 레이아웃 잔여(10건 미만): 라벨 달린 NORTH/SOUTH 포트를 가진 복합 노드의 둘째 포트 위치(예 v5/g0260
+   `n2`만 남긴 그래프: Java 31.7, Lean 30 — 자식을 지우면 일치), 라벨 x의 1e-15 반올림 차이.
+5. Java만 던지는 예외: rectpacking `TARGET_WIDTH` 근사의 `A target width has to be set …`(Lean은 레이아웃).

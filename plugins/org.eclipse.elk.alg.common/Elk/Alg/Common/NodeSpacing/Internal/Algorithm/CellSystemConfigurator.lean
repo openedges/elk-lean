@@ -9,9 +9,12 @@ node size calculation, and updates the padding of the east/west inside port labe
 elk-rs sets every flag both on its `inside_port_label_cells` copies and on the corresponding cells
 of the cell tree; both are the same arena cell here, so each flag is set once.
 
+Like Java, `MINIMUM_SIZE` with `MINIMUM_SIZE_ACCOUNTS_FOR_PADDING` sets the middle row's
+`contributesToMinimumHeight` twice and never its `contributesToMinimumWidth` (elk-rs sets both, so a
+node without other width contributions got the minimum width; Java keeps the width of the other
+constraints, e.g. `0`).
+
 Deviations from Java (following elk-rs):
-* `MINIMUM_SIZE` with `MINIMUM_SIZE_ACCOUNTS_FOR_PADDING`: Java sets the middle row's
-  `contributesToMinimumHeight` twice (and never the width); elk-rs sets height and width.
 * `NODE_LABELS`: Java iterates `nodeContext.nodeLabelCells`; elk-rs visits the container slot of
   every defined `NodeLabelLocation` (inside: grid cell at row/column; outside: the side container's
   slot). Both find the same label cells (see `NodeLabelCellCreator`).
@@ -50,7 +53,8 @@ private def outsideArea (location : NodeLabelLocation) : Option ContainerArea :=
   with `PORT_LABELS` also NORTH/SOUTH heights, EAST/WEST widths and the middle row's width;
 * `NODE_LABELS`: the inside node label container and the middle row contribute both; inside label
   cells contribute both, outside label cells both unless `OUTSIDE_NODE_LABELS_OVERHANG`;
-* `MINIMUM_SIZE` + `MINIMUM_SIZE_ACCOUNTS_FOR_PADDING`: the middle row contributes both; if the
+* `MINIMUM_SIZE` + `MINIMUM_SIZE_ACCOUNTS_FOR_PADDING`: the middle row contributes its height (Java
+  never sets its width flag here); if the
   inside node label container does not contribute its height yet, it contributes both but only
   through its center cell. -/
 def configureCellSystemSizeContributions (ctx : NodeContext N P L) : NodeContext N P L := Id.run do
@@ -102,8 +106,9 @@ def configureCellSystemSizeContributions (ctx : NodeContext N P L) : NodeContext
         | _, _ => pure ()
   -- If the middle cell contributes to the node size, we need to set that up as well
   if ctx.sizeConstraints.contains .minimumSize && ctx.sizeOptions.contains .minimumSizeAccountsForPadding then
-    -- The middle row now needs to contribute width and height
-    cells := setContributions cells (some middleRow) true
+    -- "The middle row now needs to contribute width and height": Java sets the height flag twice
+    -- and never the width flag (elk-rs sets both); the width only comes from other constraints
+    cells := cells.setContributesToMinimumHeight middleRow true
     -- If the inside node label container is not contributing yet, node labels are not to be
     -- regarded: only its center cell contributes
     let alreadyContributing := match insideContainer with

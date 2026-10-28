@@ -4,53 +4,53 @@
       "height": 30,
       "id": "a",
       "width": 60,
-      "x": 12,
-      "y": 12
+      "x": 15,
+      "y": 15
     },
     {
       "height": 20,
       "id": "b",
       "width": 60,
-      "x": 12,
-      "y": 62
+      "x": 15,
+      "y": 60
     },
     {
       "height": 50,
       "id": "c",
       "width": 60,
-      "x": 12,
-      "y": 137
+      "x": 15,
+      "y": 125
     },
     {
-      "height": 120,
+      "height": 110,
       "id": "d",
       "width": 80,
-      "x": 92,
-      "y": 67
+      "x": 90,
+      "y": 65
     },
     {
       "height": 15,
       "id": "e",
       "width": 60,
-      "x": 12,
-      "y": 102
+      "x": 15,
+      "y": 95
     },
     {
       "height": 35,
       "id": "f",
       "width": 80,
-      "x": 92,
-      "y": 12
+      "x": 90,
+      "y": 15
     }
   ],
-  "height": 199,
+  "height": 190,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "box",
     "elk.box.packingMode": "GROUP_MIXED",
     "elk.expandNodes": "true"
   },
-  "width": 184,
+  "width": 185,
   "x": 0,
   "y": 0
 }
