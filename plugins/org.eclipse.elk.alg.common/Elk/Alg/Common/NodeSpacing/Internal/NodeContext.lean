@@ -127,47 +127,54 @@ symmetrical unless `SizeOptions.ASYMMETRICAL` is set and without gap. -/
 def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L E) (node : N) :
     m (NodeContext N P L) := do
   let nodeSize ← a.node.getSize node
+  -- The node's options are read from its option map, read once (`ElementOps.getProps`)
+  let props ← a.node.getProps node
+  let ops := a.node
   -- Top-down layout
-  let topdownLayout ← a.node.getPropertyD node CoreOptions.TOPDOWN_LAYOUT false
+  let topdownLayout := ops.getPropertyDFrom props CoreOptions.TOPDOWN_LAYOUT false
   -- Compound node
   let isCompound ← a.isCompoundNode node
-  let insideSelfLoops ← a.node.getPropertyD node CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
+  let insideSelfLoops := ops.getPropertyDFrom props CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
   let treatAsCompoundNode := isCompound || insideSelfLoops
   -- Core size settings
-  let sizeConstraints ← a.node.getPropertyD node CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
-  let sizeOptions ← a.node.getPropertyD node CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
-  let portConstraints ← a.node.getPropertyD node CoreOptions.PORT_CONSTRAINTS PortConstraints.undefined
-  let portLabelsPlacement ← a.node.getPropertyD node CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
-  let portLabelsTreatAsGroup ← a.node.getPropertyD node CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
-  let nodeLabelPlacement ← a.node.getPropertyD node CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty
+  let sizeConstraints := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
+  let sizeOptions := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
+  let portConstraints := ops.getPropertyDFrom props CoreOptions.PORT_CONSTRAINTS PortConstraints.undefined
+  let portLabelsPlacement := ops.getPropertyDFrom props CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
+  let portLabelsTreatAsGroup := ops.getPropertyDFrom props CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
+  let nodeLabelPlacement := ops.getPropertyDFrom props CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty
   -- Copy spacings for convenience (`getIndividualOrInherited`, the node's individual spacings and
-  -- graph read once)
-  let spacings ← a.spacingSource node
-  let nodeLabelsPadding := (← a.getIndividualOrInheritedFrom spacings CoreOptions.NODE_LABELS_PADDING).getD {}
-  let nodeLabelSpacing := (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_NODE).getD 0.0
-  let labelLabelSpacing := (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_LABEL).getD 0.0
-  let portPortSpacing := (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_PORT_PORT).getD 0.0
+  -- the graph's option map read once)
+  let spacings ← a.spacingSourceFrom node props
+  let graphProps ← match spacings.graph with
+    | some g => some <$> a.graph.getProps g
+    | none => pure none
+  let nodeLabelsPadding := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.NODE_LABELS_PADDING).getD {}
+  let nodeLabelSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_NODE).getD 0.0
+  let labelLabelSpacing :=
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_LABEL).getD 0.0
+  let portPortSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORT_PORT).getD 0.0
   let portLabelSpacingHorizontal :=
-    (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD 0.0
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD 0.0
   let portLabelSpacingVertical :=
-    (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD 0.0
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD 0.0
   let surroundingPortMargins :=
-    (← a.getIndividualOrInheritedFrom spacings CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
   let labelCellSpacing := 2.0 * labelLabelSpacing
   -- Port alignment per side
-  let portAlignmentDefault ← a.node.getPropertyD node CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
-  let sideAlignment (p : Property PortAlignment) : m (Option PortAlignment) := do
-    if ← a.node.hasProp node p then a.node.getProperty node p else return none
-  let portAlignmentNorth ← sideAlignment CoreOptions.PORT_ALIGNMENT_NORTH
-  let portAlignmentSouth ← sideAlignment CoreOptions.PORT_ALIGNMENT_SOUTH
-  let portAlignmentEast ← sideAlignment CoreOptions.PORT_ALIGNMENT_EAST
-  let portAlignmentWest ← sideAlignment CoreOptions.PORT_ALIGNMENT_WEST
+  let portAlignmentDefault := ops.getPropertyDFrom props CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
+  let sideAlignment (p : Property PortAlignment) : Option PortAlignment :=
+    if props.hasKey p.key then ops.getPropertyFrom props p else none
+  let portAlignmentNorth := sideAlignment CoreOptions.PORT_ALIGNMENT_NORTH
+  let portAlignmentSouth := sideAlignment CoreOptions.PORT_ALIGNMENT_SOUTH
+  let portAlignmentEast := sideAlignment CoreOptions.PORT_ALIGNMENT_EAST
+  let portAlignmentWest := sideAlignment CoreOptions.PORT_ALIGNMENT_WEST
   -- Node minimum size
-  let nodeSizeMinimum ← a.node.getPropertyD node CoreOptions.NODE_SIZE_MINIMUM KVector.zero
+  let nodeSizeMinimum := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_MINIMUM KVector.zero
   -- NODE_SIZE_FIXED_GRAPH_SIZE comes from the parent graph
-  let nodeSizeFixedGraphSize ← match spacings.graph with
-    | some g => a.graph.getPropertyD g CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
-    | none => pure false
+  let nodeSizeFixedGraphSize := match graphProps with
+    | some gp => a.graph.getPropertyDFrom gp CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
+    | none => false
   -- Create main cells (the others will be created later by the algorithm phases)
   let symmetry := !sizeOptions.contains .asymmetrical
   let (cells, nodeContainer) := (CellArena.empty : CellArena L).createStrip .vertical symmetry 0.0
@@ -195,6 +202,14 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
   let ctx : NodeContext N P L := { ctx with cells := {} }
   { ctx with cells := f cells }
 
+/-- `modifyCells` for an update that also returns a value (e.g. the id of a created cell). -/
+@[inline] def modifyCellsGet {α : Type} (ctx : NodeContext N P L) (f : CellArena L → CellArena L × α) :
+    NodeContext N P L × α :=
+  let cells := ctx.cells
+  let ctx : NodeContext N P L := { ctx with cells := {} }
+  let (cells, r) := f cells
+  ({ ctx with cells }, r)
+
 /-- elk-rs `NodeContext::inside_node_label_container()`: the center cell of the middle row if it
 is a grid (created by `NodeLabelCellCreator`), else `none`. -/
 def insideNodeLabelContainer (ctx : NodeContext N P L) : Option CellId :=
@@ -209,7 +224,10 @@ def insidePortLabelCell (ctx : NodeContext N P L) (side : PortSide) : Option Cel
 /-- `insidePortLabelCells.put(side, cell)`. -/
 def setInsidePortLabelCell (ctx : NodeContext N P L) (side : PortSide) (cell : Option CellId) :
     NodeContext N P L :=
-  { ctx with insidePortLabelCells := ctx.insidePortLabelCells.setIfInBounds (ElkEnum.ordinal side) cell }
+  -- the array is taken out of the context first so that it is updated in place
+  let arr := ctx.insidePortLabelCells
+  let ctx : NodeContext N P L := { ctx with insidePortLabelCells := #[] }
+  { ctx with insidePortLabelCells := arr.setIfInBounds (ElkEnum.ordinal side) cell }
 
 /-- `outsideNodeLabelContainers.get(side)`. -/
 def outsideNodeLabelContainer (ctx : NodeContext N P L) (side : PortSide) : Option CellId :=
@@ -218,7 +236,10 @@ def outsideNodeLabelContainer (ctx : NodeContext N P L) (side : PortSide) : Opti
 /-- `outsideNodeLabelContainers.put(side, cell)`. -/
 def setOutsideNodeLabelContainer (ctx : NodeContext N P L) (side : PortSide) (cell : Option CellId) :
     NodeContext N P L :=
-  { ctx with outsideNodeLabelContainers := ctx.outsideNodeLabelContainers.setIfInBounds (ElkEnum.ordinal side) cell }
+  -- the array is taken out of the context first so that it is updated in place
+  let arr := ctx.outsideNodeLabelContainers
+  let ctx : NodeContext N P L := { ctx with outsideNodeLabelContainers := #[] }
+  { ctx with outsideNodeLabelContainers := arr.setIfInBounds (ElkEnum.ordinal side) cell }
 
 /-- `nodeLabelCells.get(location)`. -/
 def nodeLabelCell (ctx : NodeContext N P L) (location : NodeLabelLocation) : Option CellId :=
@@ -227,7 +248,10 @@ def nodeLabelCell (ctx : NodeContext N P L) (location : NodeLabelLocation) : Opt
 /-- `nodeLabelCells.put(location, cell)`. -/
 def setNodeLabelCell (ctx : NodeContext N P L) (location : NodeLabelLocation) (cell : Option CellId) :
     NodeContext N P L :=
-  { ctx with nodeLabelCells := ctx.nodeLabelCells.setIfInBounds (ElkEnum.ordinal location) cell }
+  -- the array is taken out of the context first so that it is updated in place
+  let arr := ctx.nodeLabelCells
+  let ctx : NodeContext N P L := { ctx with nodeLabelCells := #[] }
+  { ctx with nodeLabelCells := arr.setIfInBounds (ElkEnum.ordinal location) cell }
 
 /-- elk-rs `NodeContext::sync_inside_port_label_cell_rectangles()`: a no-op. elk-rs needs it
 because its `inside_port_label_cells` map holds copies of the cells in the cell tree; here both
@@ -241,13 +265,21 @@ def portContextsOf (ctx : NodeContext N P L) (side : PortSide) : Array (PortCont
   (ctx.portContexts[ElkEnum.ordinal side]?).getD #[]
 
 /-- `portContexts.values()`: all contexts, sides by ordinal, each side in `TreeMultimap` order. -/
-def allPortContexts (ctx : NodeContext N P L) : Array (PortContext P L) :=
-  ctx.portContexts.foldl (· ++ ·) #[]
+def allPortContexts (ctx : NodeContext N P L) : Array (PortContext P L) := Id.run do
+  let total := ctx.portContexts.foldl (fun n pcs => n + pcs.size) 0
+  let mut all : Array (PortContext P L) := Array.mkEmpty total
+  for pcs in ctx.portContexts do
+    for pc in pcs do
+      all := all.push pc
+  return all
 
 /-- Replaces the contexts of one side. -/
 def setPortContextsOf (ctx : NodeContext N P L) (side : PortSide) (pcs : Array (PortContext P L)) :
     NodeContext N P L :=
-  { ctx with portContexts := ctx.portContexts.setIfInBounds (ElkEnum.ordinal side) pcs }
+  -- the array is taken out of the context first so that it is updated in place
+  let arr := ctx.portContexts
+  let ctx : NodeContext N P L := { ctx with portContexts := #[] }
+  { ctx with portContexts := arr.setIfInBounds (ElkEnum.ordinal side) pcs }
 
 /-- Updates the contexts of one side in place (elk-rs `port_contexts.get_mut(&side)`). -/
 def modifyPortContextsOf (ctx : NodeContext N P L) (side : PortSide)
@@ -255,7 +287,7 @@ def modifyPortContextsOf (ctx : NodeContext N P L) (side : PortSide)
   -- take the arrays out of the context so that `modify` and `f` update them in place
   let pcs := ctx.portContexts
   let ctx : NodeContext N P L := { ctx with portContexts := #[] }
-  { ctx with portContexts := pcs.modify (ElkEnum.ordinal side) f }
+  { ctx with portContexts := pcs.modifyIn (ElkEnum.ordinal side) f }
 
 /-- Updates the `i`-th context of one side (ignored if out of range). -/
 def modifyPortContext (ctx : NodeContext N P L) (side : PortSide) (i : Nat)
@@ -265,7 +297,9 @@ def modifyPortContext (ctx : NodeContext N P L) (side : PortSide) (i : Nat)
 /-- Updates every context of every side, in `portContexts.values()` order. -/
 def modifyAllPortContexts (ctx : NodeContext N P L) (f : PortContext P L → PortContext P L) :
     NodeContext N P L :=
-  { ctx with portContexts := ctx.portContexts.map (·.map f) }
+  let pcs := ctx.portContexts
+  let ctx : NodeContext N P L := { ctx with portContexts := #[] }
+  { ctx with portContexts := pcs.map (·.map f) }
 
 /-- elk-rs `port_contexts.entry(side).or_default().push(pc)`: appends to the context's side
 (`PortContextCreator` then reverses SOUTH/WEST, see the module doc). -/

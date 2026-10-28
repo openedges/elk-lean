@@ -24,9 +24,10 @@ variable {N P L : Type}
 a new atomic cell put into the given area of the container strip and registered for the side. -/
 def createInsidePortLabelCell (ctx : NodeContext N P L) (container : CellId) (containerArea : ContainerArea)
     (portSide : PortSide) : NodeContext N P L :=
-  let (cells, portLabelCell) := ctx.cells.createAtomic
-  let cells := cells.setCell container containerArea (some portLabelCell)
-  NodeContext.setInsidePortLabelCell { ctx with cells } portSide (some portLabelCell)
+  let (ctx, portLabelCell) := ctx.modifyCellsGet fun cells =>
+    let (cells, portLabelCell) := cells.createAtomic
+    (cells.setCell container containerArea (some portLabelCell), portLabelCell)
+  NodeContext.setInsidePortLabelCell ctx portSide (some portLabelCell)
 
 /-- `InsidePortLabelCellCreator.setupNorthOrSouthPortLabelCell(nodeContext, side)`: the top
 (NORTH) or bottom (SOUTH) padding becomes `portLabelSpacingVertical` unless that is negative; the
@@ -57,14 +58,14 @@ def calculateWidthDueToLabels (ctx : NodeContext N P L) (portSide : PortSide) : 
     | none => acc
   match portSide, ctx.insidePortLabelCell portSide with
   | .west, some cell | .east, some cell =>
-    let cells := ctx.cells.modifyMinimumContentAreaSize cell fun s => { s with x := fmax s.x maxLabelWidth }
-    let cells :=
+    let spacing := ctx.portLabelSpacingHorizontal
+    ctx.modifyCells fun cells =>
+      let cells := cells.modifyMinimumContentAreaSize cell fun s => { s with x := fmax s.x maxLabelWidth }
       if (cells.minimumContentAreaSize cell).x > 0.0 then
         cells.modifyPadding cell fun p =>
-          if portSide == .east then { p with right := ctx.portLabelSpacingHorizontal }
-          else { p with left := ctx.portLabelSpacingHorizontal }
+          if portSide == .east then { p with right := spacing }
+          else { p with left := spacing }
       else cells
-    { ctx with cells }
   | _, _ => ctx
 
 /-- `InsidePortLabelCellCreator.setupTopAndBottomPadding(nodeContext, side)`: the top and bottom

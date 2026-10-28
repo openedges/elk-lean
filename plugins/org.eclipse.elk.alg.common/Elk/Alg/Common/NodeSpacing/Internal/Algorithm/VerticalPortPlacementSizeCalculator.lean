@@ -34,7 +34,7 @@ open HorizontalPortPlacementSizeCalculator (minSizeRequiredToRespectSpacing)
 and to the atomic cell in the middle row's `BEGIN` (WEST) / `END` (EAST) area. elk-rs updates
 both of its copies; when both ids denote the same arena cell (the normal case) the update is
 applied once. Other sides are ignored. -/
-private def updateInsidePortLabelCells (ctx : NodeContext N P L) (portSide : PortSide)
+@[inline] private def updateInsidePortLabelCells (ctx : NodeContext N P L) (portSide : PortSide)
     (f : CellArena L → CellId → CellArena L) : NodeContext N P L :=
   let area? : Option ContainerArea := match portSide with
     | .east => some .«end»
@@ -45,13 +45,14 @@ private def updateInsidePortLabelCells (ctx : NodeContext N P L) (portSide : Por
   | some area =>
     let insideCell := ctx.insidePortLabelCell portSide
     let containerCell := (ctx.cells.getCell ctx.nodeContainerMiddleRow area).filter ctx.cells.isAtomic
-    let cells := match insideCell with
-      | some c => f ctx.cells c
-      | none => ctx.cells
-    let cells := match containerCell with
+    -- the arena is taken out of the context first so that it is updated in place
+    ctx.modifyCells fun cells =>
+      let cells := match insideCell with
+        | some c => f cells c
+        | none => cells
+      match containerCell with
       | some c => if insideCell == some c then cells else f cells c
       | none => cells
-    { ctx with cells }
 
 /-! ### Fixed position -/
 

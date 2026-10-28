@@ -30,6 +30,10 @@ structure ElementOps (m : Type → Type) (E : Type) where
   setPosition : E → KVector → m Unit
   /-- Raw stored property value (no default). -/
   getRaw : E → PropKey → m (Option PropValue)
+  /-- The element's whole option map: `getRaw e k` and `hasProperty e k` must agree with
+  `(← getProps e).getRaw? k` and `(← getProps e).hasKey k`. Lets a caller that reads many options
+  of one element read the map once (`getPropertyFrom`); no Java counterpart. -/
+  getProps : E → m PropertyMap
   /-- `hasProperty(prop)`. -/
   hasProperty : E → PropKey → m Bool
   /-- `getVolatileId()`. -/
@@ -60,6 +64,25 @@ def getProperty {α : Type} [PropCodec α] (ops : ElementOps m E) (e : E) (p : P
 /-- `getProperty` with an explicit fallback. -/
 def getPropertyD {α : Type} [PropCodec α] (ops : ElementOps m E) (e : E) (p : Property α) (d : α) : m α := do
   return (← ops.getProperty e p).getD d
+
+/-- `getProperty` on the element's option map read before with `getProps` (same result as
+`getProperty e p` for `props = ← getProps e`, see `ElementOps.getProps`). -/
+@[inline] def getPropertyFrom {α : Type} [PropCodec α] (ops : ElementOps m E) (props : PropertyMap) (p : Property α) :
+    Option α :=
+  match props.getRaw? p.key with
+  | some raw =>
+    match PropCodec.dec raw with
+    | some v => some v
+    | none => p.default
+  | none =>
+    match ops.defaultOverride p.key with
+    | some raw => (PropCodec.dec raw : Option α) <|> p.default
+    | none => p.default
+
+/-- `getPropertyFrom` with an explicit fallback (`getPropertyD`). -/
+@[inline] def getPropertyDFrom {α : Type} [PropCodec α] (ops : ElementOps m E) (props : PropertyMap) (p : Property α)
+    (d : α) : α :=
+  (ops.getPropertyFrom props p).getD d
 
 /-- `hasProperty(prop)` for a typed property. -/
 def hasProp {α : Type} (ops : ElementOps m E) (e : E) (p : Property α) : m Bool :=
@@ -146,6 +169,28 @@ def spacingSource (a : GraphAdapters m G N P L E) (n : N) : m (SpacingSource G) 
     if ← a.node.hasProp n CoreOptions.SPACING_INDIVIDUAL then a.node.getProperty n CoreOptions.SPACING_INDIVIDUAL
     else pure none
   return { individual, graph := ← a.getGraph n }
+
+/-- `spacingSource` with the node's option map read before (`node.getProps`). -/
+def spacingSourceFrom (a : GraphAdapters m G N P L E) (n : N) (props : PropertyMap) : m (SpacingSource G) := do
+  let individual :=
+    if props.hasKey CoreOptions.SPACING_INDIVIDUAL.key then a.node.getPropertyFrom props CoreOptions.SPACING_INDIVIDUAL
+    else none
+  return { individual, graph := ← a.getGraph n }
+
+/-- `getIndividualOrInheritedFrom` with the option map of the source's graph read before
+(`graph.getProps`; `none` exactly when `src.graph` is `none`). -/
+def getIndividualOrInheritedIn {α : Type} [PropCodec α] (a : GraphAdapters m G N P L E) (src : SpacingSource G)
+    (graphProps : Option PropertyMap) (p : Property α) : Option α := Id.run do
+  let mut result : Option α := none
+  if let some individual := src.individual then
+    if individual.props.has p then
+      result := individual.props.get p
+  if result.isNone then
+    if let some gp := graphProps then
+      result := a.graph.getPropertyFrom gp p
+  if result.isNone then
+    result := p.default
+  return result
 
 /-- `getIndividualOrInherited` on a `SpacingSource` read before: the individual spacing if set,
 else the graph's value, else the property default. -/

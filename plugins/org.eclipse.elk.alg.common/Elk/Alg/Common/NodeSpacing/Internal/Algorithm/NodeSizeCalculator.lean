@@ -43,6 +43,19 @@ def computeNodeWidth (ctx : NodeContext N P L) : Float := Id.run do
     w := fmax w minNodeSize.x
   return w
 
+/-- The node size with the width the size constraints ask for (never shrinking it if
+`NODE_SIZE_FIXED_GRAPH_SIZE` is set on the parent graph). Not inlined: its branches would
+otherwise precede the context update of `setNodeWidth`, which then could not reuse the context
+object (PLAN §7.1 item 13). -/
+@[noinline] def nodeSizeWithWidth (ctx : NodeContext N P L) (width : Float) : KVector :=
+  let nodeSize := ctx.nodeSize
+  { nodeSize with x := if ctx.nodeSizeFixedGraphSize then fmax nodeSize.x width else width }
+
+/-- The node size with the height the size constraints ask for (see `nodeSizeWithWidth`). -/
+@[noinline] def nodeSizeWithHeight (ctx : NodeContext N P L) (height : Float) : KVector :=
+  let nodeSize := ctx.nodeSize
+  { nodeSize with y := if ctx.nodeSizeFixedGraphSize then fmax nodeSize.y height else height }
+
 /-- `NodeSizeCalculator.setNodeWidth(nodeContext)` (elk-rs `set_node_width`): sets the node width
 to `computeNodeWidth` (never shrinking it if `NODE_SIZE_FIXED_GRAPH_SIZE` is set on the parent
 graph), gives the node container `x = 0` and that width and lays out the cell system
@@ -50,12 +63,14 @@ horizontally. -/
 def setNodeWidth (ctx : NodeContext N P L) : NodeContext N P L :=
   let width := computeNodeWidth ctx
   -- Set the node's width
-  let nodeSize := ctx.nodeSize
-  let nodeSize := { nodeSize with x := if ctx.nodeSizeFixedGraphSize then fmax nodeSize.x width else width }
-  -- Set the cell system's width and tell it to compute horizontal coordinates and widths
-  let cells := ctx.cells.modifyCellRectangle ctx.nodeContainer fun r => { r with x := 0.0, width := width }
-  let cells := cells.layoutChildrenHorizontally ctx.nodeContainer
-  NodeContext.syncInsidePortLabelCellRectangles { ctx with nodeSize, cells }
+  let nodeSize := nodeSizeWithWidth ctx width
+  let nodeContainer := ctx.nodeContainer
+  -- Set the cell system's width and tell it to compute horizontal coordinates and widths (the
+  -- arena is taken out of the context first, so both are updated in place)
+  let ctx := ctx.modifyCells fun cells =>
+    let cells := cells.modifyCellRectangle nodeContainer fun r => { r with x := cellZero, width := width }
+    cells.layoutChildrenHorizontally nodeContainer
+  NodeContext.syncInsidePortLabelCellRectangles { ctx with nodeSize }
 
 /-- The height the size constraints ask for (the first part of `setNodeHeight`): the current
 height for effectively fixed constraints, else the node container's minimum height (at least the
@@ -97,12 +112,14 @@ vertically. -/
 def setNodeHeight (ctx : NodeContext N P L) : NodeContext N P L :=
   let height := computeNodeHeight ctx
   -- Set the node's height
-  let nodeSize := ctx.nodeSize
-  let nodeSize := { nodeSize with y := if ctx.nodeSizeFixedGraphSize then fmax nodeSize.y height else height }
-  -- Set the cell system's height and tell it to compute vertical coordinates and heights
-  let cells := ctx.cells.modifyCellRectangle ctx.nodeContainer fun r => { r with y := 0.0, height := height }
-  let cells := cells.layoutChildrenVertically ctx.nodeContainer
-  NodeContext.syncInsidePortLabelCellRectangles { ctx with nodeSize, cells }
+  let nodeSize := nodeSizeWithHeight ctx height
+  let nodeContainer := ctx.nodeContainer
+  -- Set the cell system's height and tell it to compute vertical coordinates and heights (the
+  -- arena is taken out of the context first, so both are updated in place)
+  let ctx := ctx.modifyCells fun cells =>
+    let cells := cells.modifyCellRectangle nodeContainer fun r => { r with y := cellZero, height := height }
+    cells.layoutChildrenVertically nodeContainer
+  NodeContext.syncInsidePortLabelCellRectangles { ctx with nodeSize }
 
 end NodeSizeCalculator
 

@@ -62,6 +62,7 @@ private def nodeOps (vol : IO.Ref (Array Int)) : ElementOps ElkM NodeId where
     return ⟨nd.x, nd.y⟩
   setPosition n p := ElkM.modifyNode n fun nd => { nd with x := p.x, y := p.y }
   getRaw n k := do return (← ElkM.getNode n).props.getRaw? k
+  getProps n := do return (← ElkM.getNode n).props
   hasProperty n k := do return (← ElkM.getNode n).props.hasKey k
   getVolatileId n := getVol vol n.idx
   setVolatileId n v := setVol vol n.idx v
@@ -77,6 +78,7 @@ private def portOps (vol : IO.Ref (Array Int)) : ElementOps ElkM PortId where
     return ⟨pt.x, pt.y⟩
   setPosition p v := ElkM.modifyPort p fun pt => { pt with x := v.x, y := v.y }
   getRaw p k := do return (← ElkM.getPort p).props.getRaw? k
+  getProps p := do return (← ElkM.getPort p).props
   hasProperty p k := do return (← ElkM.getPort p).props.hasKey k
   getVolatileId p := getVol vol p.idx
   setVolatileId p v := setVol vol p.idx v
@@ -92,6 +94,7 @@ private def labelOps (vol : IO.Ref (Array Int)) : ElementOps ElkM LabelId where
     return ⟨lb.x, lb.y⟩
   setPosition l v := ElkM.modifyLabel l fun lb => { lb with x := v.x, y := v.y }
   getRaw l k := do return (← ElkM.getLabel l).props.getRaw? k
+  getProps l := do return (← ElkM.getLabel l).props
   hasProperty l k := do return (← ElkM.getLabel l).props.hasKey k
   getVolatileId l := getVol vol l.idx
   setVolatileId l v := setVol vol l.idx v

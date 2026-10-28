@@ -52,36 +52,40 @@ def computeLabelsNextToPort (a : GraphAdapters m G N P L E) (ctx : NodeContext N
   else
     return false
 
-/-- `createPortContext` for a port whose side the caller has read already. The port's labels and
-their sizes are read once (Java/elk-rs read them again for the label cell; adapter reads have no
-side effects). -/
+/-- `createPortContext` for a port whose side and volatile id the caller has read already. The
+port's options (`ElementOps.getProps`), labels and label sizes are read once (Java/elk-rs read
+them again for the label cell; adapter reads have no side effects). A port without labels gets no
+label cell: an empty label cell (zero padding) has minimum size `0` and no labels, which every
+consumer treats like a missing cell (port margins, inside port label widths, label placement); no
+Java counterpart. -/
 def createPortContextOnSide (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
-    (portSide : PortSide) (imPortLabels : Bool) : m (NodeContext N P L) := do
+    (portSide : PortSide) (volatileId : Int) (imPortLabels : Bool) : m (NodeContext N P L) := do
   let portSize ← a.port.getSize port
   let portPosition ← a.port.getPosition port
-  let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET 0.0
-  let hasPortBorderOffset ← a.port.hasProp port CoreOptions.PORT_BORDER_OFFSET
+  let props ← a.port.getProps port
+  let portBorderOffset := a.port.getPropertyDFrom props CoreOptions.PORT_BORDER_OFFSET 0.0
+  let hasPortBorderOffset := props.hasKey CoreOptions.PORT_BORDER_OFFSET.key
   let hasCompoundConnections ← a.hasCompoundConnections port
   -- Collect label sizes and positions
   let labels ← a.portLabels port
   let labelSizes ← labels.mapM a.label.getSize
   let labelPositions ← labels.mapM a.label.getPosition
   let labelsNextToPort ← computeLabelsNextToPort a ctx port hasCompoundConnections
-  let volatileId ← a.port.getVolatileId port
   let pc : PortContext P L := PortContext.new port portSize portSide volatileId portPosition
     portBorderOffset hasPortBorderOffset hasCompoundConnections
   let pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions }
   -- If the port has labels and if port labels are to be placed, we need to remember them
-  if imPortLabels && !PortLabelPlacement.isFixed ctx.portLabelsPlacement then
-    -- take the arena out of the context so that it is updated in place
-    let cells := ctx.cells
-    let ctx := { ctx with cells := {} }
-    let (cells, labelCell) := cells.createLabel ctx.labelLabelSpacing
-    let mut cells := cells
-    for i in [0:labels.size] do
-      if h : i < labels.size then
-        cells := cells.addLabel labelCell labels[i] (labelSizes.getD i {})
-    return { ctx with cells }.addPortContext { pc with portLabelCell := some labelCell }
+  if imPortLabels && !labels.isEmpty && !PortLabelPlacement.isFixed ctx.portLabelsPlacement then
+    let gap := ctx.labelLabelSpacing
+    -- the arena is taken out of the context so that it is updated in place
+    let (ctx, labelCell) := ctx.modifyCellsGet fun cells => Id.run do
+      let (cells, labelCell) := cells.createLabel gap
+      let mut cells := cells
+      for i in [0:labels.size] do
+        if h : i < labels.size then
+          cells := cells.addLabel labelCell labels[i] (labelSizes.getD i {})
+      return (cells, labelCell)
+    return ctx.addPortContext { pc with portLabelCell := some labelCell }
   return ctx.addPortContext pc
 
 /-- `PortContextCreator.createPortContext(nodeContext, port, imPortLabels)` (elk-rs
@@ -91,7 +95,7 @@ and port labels are not fixed, and appends the context to its side. The port's v
 already be set. -/
 def createPortContext (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
     (imPortLabels : Bool) : m (NodeContext N P L) := do
-  createPortContextOnSide a ctx port (← a.portSide port) imPortLabels
+  createPortContextOnSide a ctx port (← a.portSide port) (← a.port.getVolatileId port) imPortLabels
 
 /-- `PortContextCreator.createPortContexts(nodeContext, ignoreInsidePortLabels)` (elk-rs
 `create_port_contexts`): assigns volatile ids `0, 1, …` to the node's ports in port order, creates
@@ -110,7 +114,8 @@ def createPortContexts [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) 
       throwIllegalArgument
         "Label and node size calculator can only be used with ports that have port sides assigned."
     a.port.setVolatileId port volatileId
-    ctx ← createPortContextOnSide a ctx port portSide imPortLabels
+    -- the volatile id just set (`getVolatileId` returns it)
+    ctx ← createPortContextOnSide a ctx port portSide volatileId imPortLabels
     volatileId := volatileId + 1
   -- Java's TreeMultimap order: NORTH/EAST ascending, SOUTH/WEST descending by volatile id
   ctx := ctx.modifyPortContextsOf .south (·.reverse)

@@ -35,11 +35,13 @@ variable {N P L : Type}
 
 /-- Creates an outside node label container (a strip with gap `labelCellSpacing`) for the given
 side and registers it in `outsideNodeLabelContainers`. -/
-private def createOutsideContainer (ctx : NodeContext N P L) (side : PortSide) (mode : Strip)
+@[inline] private def createOutsideContainer (ctx : NodeContext N P L) (side : PortSide) (mode : Strip)
     (symmetry : Bool) (f : ElkPadding → ElkPadding) : NodeContext N P L :=
-  let (cells, container) := ctx.cells.createStrip mode symmetry ctx.labelCellSpacing
-  let cells := cells.modifyPadding container f
-  NodeContext.setOutsideNodeLabelContainer { ctx with cells } side (some container)
+  let gap := ctx.labelCellSpacing
+  let (ctx, container) := ctx.modifyCellsGet fun cells =>
+    let (cells, container) := cells.createStrip mode symmetry gap
+    (cells.modifyPadding container f, container)
+  NodeContext.setOutsideNodeLabelContainer ctx side (some container)
 
 /-- `NodeLabelCellCreator.createNodeLabelCellContainers(nodeContext, onlyInside)` (elk-rs
 `create_node_label_cell_containers`): creates the inside node label container (grid in the center
@@ -49,13 +51,15 @@ def createNodeLabelCellContainers (ctx : NodeContext N P L) (onlyInside : Bool) 
   let symmetry := !ctx.sizeOptions.contains .asymmetrical
   let tabularNodeLabels := ctx.sizeOptions.contains .forceTabularNodeLabels
   -- Inside container
-  let (cells, insideContainer) := ctx.cells.createGrid tabularNodeLabels symmetry ctx.labelCellSpacing
-  -- Apply node labels padding
+  let gap := ctx.labelCellSpacing
   let nlp := ctx.nodeLabelsPadding
-  let cells := cells.modifyPadding insideContainer fun p =>
-    { p with top := nlp.top, right := nlp.right, bottom := nlp.bottom, left := nlp.left }
-  let cells := cells.setCell ctx.nodeContainerMiddleRow .center (some insideContainer)
-  let mut ctx := { ctx with cells }
+  let middleRow := ctx.nodeContainerMiddleRow
+  let mut ctx := ctx.modifyCells fun cells =>
+    let (cells, insideContainer) := cells.createGrid tabularNodeLabels symmetry gap
+    -- Apply node labels padding
+    let cells := cells.modifyPadding insideContainer fun p =>
+      { p with top := nlp.top, right := nlp.right, bottom := nlp.bottom, left := nlp.left }
+    cells.setCell middleRow .center (some insideContainer)
   -- Outside containers, if requested
   if !onlyInside then
     let spacing := ctx.nodeLabelSpacing
