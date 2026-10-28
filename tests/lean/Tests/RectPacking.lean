@@ -335,11 +335,17 @@ def intermediateTests : Suite := suite "rectpacking.intermediate" do
   checkEqR "interactive reorderer order" (g2.node root).children #[kids[1]!, kids[3]!, kids[0]!, kids[2]!, kids[4]!]
   check "current position of n0" ((g2.node kids[0]!).props.get RectPackingOptions.CURRENT_POSITION == some 2)
   check "current position of n4" ((g2.node kids[4]!).props.get RectPackingOptions.CURRENT_POSITION == some 4)
-  -- a negative desired position is clamped to 0 (elk-rs)
+  -- a negative desired position: Java's EMF `add(-5, node)` fails in `System.arraycopy` (the children
+  -- array of 2 nodes has capacity 4; ELK Java on the same graph as JSON: the same text; elk-rs clamped)
   let (g, root, kids) := mkGraph #[(1.0, 1.0), (1.0, 1.0)]
   let g := g.setNodeProp kids[1]! RectPackingOptions.DESIRED_POSITION (-5)
-  let (_, _, g3) ← runRP g (InteractiveNodeReorderer.processor.process root ProgressMonitor.null)
-  checkEqR "negative desired position" (g3.node root).children #[kids[1]!, kids[0]!]
+  let negative ← (runRP g (InteractiveNodeReorderer.processor.process root ProgressMonitor.null)).toBaseIO
+  checkEq "negative desired position: Java AIOOBE" (match negative with
+    | .error e => toString e
+    | .ok _ => "ok")
+    "java.lang.ArrayIndexOutOfBoundsException: arraycopy: source index -5 out of bounds for object array[4]"
+  checkEq "EMF list capacities" ((#[0, 1, 4, 5, 10, 11, 19, 20, 32, 33] : Array Nat).map
+    InteractiveNodeReorderer.emfListCapacity) #[0, 4, 4, 10, 10, 19, 19, 32, 32, 52]
   -- MinSizePreProcessor: MINIMUM_SIZE with minimum (50, 0) and DEFAULT_MINIMUM_SIZE → (50, 20)
   let (g, root, _) := mkGraph #[]
   let g := g.setNodeProp root CoreOptions.NODE_SIZE_CONSTRAINTS (EnumSet.of #[SizeConstraint.minimumSize])
@@ -497,7 +503,8 @@ def stackTests : Suite := suite "rectpacking.stack" do
   -- blocks b1 and b2 share x 10 → one stack; b3 at x 50 → second stack
   checkEq "calculated stacks" stacksBefore.size 2
   check "b1 in the first new stack" (b1Stack == some stacksBefore[0]!)
-  check "reset stacks drops the stack (Weak)" b1StackAfterReset.isNone
+  -- Java keeps the block's stack reference after `resetStacks()` (elk-rs: `Weak`, dropped)
+  check "reset stacks keeps the block's stack (Java strong reference)" (b1StackAfterReset == b1Stack)
   -- set_y moves the stacks by 100: a from y 5 to 105, c from 35 to 135, e from 0 to 100
   checkPos "a after set y" g a 10.0 105.0
   checkPos "c after set y" g c 10.0 135.0
@@ -506,22 +513,33 @@ def stackTests : Suite := suite "rectpacking.stack" do
   checkFloat "row width after remove block" rowRemoved.width 60.0
   checkFloat "row height after remove block" rowRemoved.height 40.0
   checkEq "row children after remove block" rowRemoved.children.size 2
-  -- notify deferral: a second mutably borrowed child aborts the update
+  -- Java `notifyAboutNodeChange` counts a block listed twice twice (elk-rs deferred the update on
+  -- the second `RefCell` borrow); `removeBlock` removes the first occurrence and starts the height at
+  -- `Double.MIN_VALUE`
   let (g, _, kids) := mkGraph #[(30.0, 20.0), (20.0, 40.0)]
-  let ((before, after), _, _) ← runRP g do
+  let ((twice, afterRemove, emptied), _, _) ← runRP g do
     let row ← RectRow.create 0.0 10.0
     let b1 ← Block.create 0.0 0.0 row 10.0
     let b2 ← Block.create 40.0 0.0 row 10.0
     RectRow.addBlock row b1
     RectRow.addBlock row b2
+    RectRow.addBlock row b2
     Block.addChild b2 kids[1]!
-    let before ← RectPackingM.getRow row
-    RectPackingM.withBorrowed #[b2] (Block.addChild b1 kids[0]!)
-    let after ← RectPackingM.getRow row
-    return (before, after)
-  -- hand: b2 notifies with b1 (0 x 0) readable: width 0 + (20 + 10), height 40
-  checkFloat "row width before deferral" before.width 30.0
-  checkFloat "row width unchanged (deferred)" after.width 30.0
+    Block.addChild b1 kids[0]!
+    let twice ← RectPackingM.getRow row
+    RectRow.removeBlock row b2
+    let afterRemove ← RectPackingM.getRow row
+    RectRow.removeBlock row b2
+    RectRow.removeBlock row b1
+    let emptied ← RectPackingM.getRow row
+    return (twice, afterRemove, emptied)
+  -- hand: 30 + (20 + 10) + (20 + 10) = 90, height max(20, 40, 40)
+  checkFloat "notify: block listed twice counts twice" twice.width 90.0
+  checkFloat "notify height" twice.height 40.0
+  checkEq "remove block: first occurrence only" afterRemove.children.size 2
+  -- hand: 90 - (20 + 10) = 60
+  checkFloat "remove block width" afterRemove.width 60.0
+  check "empty row height is Double.MIN_VALUE" (emptied.height == Float.minPositive)
   -- rows storage and drawing dimensions of rows
   let (g, root, _) := mkGraph #[]
   let ((stored, taken, gone, dims), _, _) ← runRP g do
@@ -829,7 +847,17 @@ private def checkFixtures (dir : System.FilePath) (minimum : Nat) : TestM Unit :
   for name in names do
     let input ← IO.FS.readFile (dir / s!"{name}.json")
     let expectedFile := dir / s!"{name}.expected.json"
-    if ← expectedFile.pathExists then
+    let errorFile := dir / s!"{name}.error"
+    if ← errorFile.pathExists then
+      -- ELK Java throws for this input (re-pinned from the elk-rs output: the exception text)
+      let expectedError := (← IO.FS.readFile errorFile).trimAscii.toString
+      match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
+      | .error e =>
+        if expectedError.startsWith "java." || expectedError.startsWith "org.eclipse." then
+          checkEq s!"{name}: fails with the ELK Java exception" (javaExceptionText e) expectedError
+        else report s!"{name}: error like the oracle" true
+      | .ok _ => report s!"{name}: fails with the ELK Java exception" false "layout succeeded"
+    else if ← expectedFile.pathExists then
       let expected ← IO.FS.readFile expectedFile
       match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
       | .error e => report s!"{name}: layout" false e

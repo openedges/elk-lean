@@ -6,12 +6,9 @@ Port of `p2packing/compaction.rs` (elk-rs): compacts one row by moving blocks of
 first block of the next row into stacks (absorbing rectangles, placing a block below or beside
 another one, using the row height or width).
 
-The row list (`rows: &mut Vec<RectRowRef>`) is threaded through the functions and returned.
-Removing a row from the list drops it in Rust (the phase's row list holds the only strong
-reference while the compaction runs), so `removeRowAt` calls `RectRow.drop`: `Block.parent_row()`
-of blocks that still point to it returns `None` from then on. The `RefCell` borrows of the Rust
-code never overlap with a notifying block other than the notifier itself (the notifier's own
-`borrow_mut` is modelled by `notifyAboutNodeChange`), so no `withBorrowed` is needed.
+The row list (`List<RectRow> rows`) is threaded through the functions and returned. A row removed
+from the list stays the parent row of blocks that still reference it (Java strong references; a
+block from a removed next row then counts as `wasFromNextRow`, see the arena module).
 
 Rust deviation from Java kept: `something_was_changed |= absorb_blocks(..)` always runs the
 absorption (no short circuit), like Java's `|=`.
@@ -28,14 +25,9 @@ open RectPackingM
 
 namespace Compaction
 
-/-- `rows.remove(index)`: removes the row from the list and drops it (`RectRow.drop`, see the
-module doc). -/
-def removeRowAt (rows : Array RectRowId) (index : Nat) : RectPackingM (Array RectRowId) := do
-  match rows[index]? with
-  | some r =>
-    RectRow.drop r
-    return rows.eraseIdx! index
-  | none => return rows
+/-- `rows.remove(index)`: removes the row from the list. -/
+def removeRowAt (rows : Array RectRowId) (index : Nat) : RectPackingM (Array RectRowId) :=
+  return if index < rows.size then rows.eraseIdx! index else rows
 
 /-- `rows.len() > index && rows[index].children().is_empty()` (short-circuit). -/
 def rowIsEmptyAt (rows : Array RectRowId) (index : Nat) : RectPackingM Bool := do

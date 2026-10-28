@@ -12,10 +12,11 @@ The query methods that work on a clone in Rust (`height_for_target_width`,
 `place_rects_in_width_height`) are `placeRectsInInternal` on a `Block` value with
 `placeRects := false`, which neither moves rectangles nor notifies.
 
-Rust deviations from Java kept: `setLocation` moves the block rows by `row.x + (x - self.x)`
-(Java `row.x + x - self.x`); `adjust_size_add`/`adjust_size_after_remove` keep the old
-`averageHeight` when the block has no children (Java computes `NaN`); `add_child_in_new_row`
-starts at the block's y when the block has no rows (Java throws).
+Java semantics (elk-rs differed): `setLocation` moves the block rows by `row.x + x - this.x`
+(evaluation order; elk-rs `row.x + (x - self.x)`); `adjustSizeAfterRemove` (and `resetBlock`) of a
+block without children computes `averageHeight = 0/0 - …` (NaN; elk-rs kept the old value);
+`addChildInNewRow` reads the last block row (`IndexOutOfBoundsException` without rows; elk-rs
+started at the block's y); `Math.min`/`Math.max`.
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -50,12 +51,12 @@ private def adjustSizeAdd (b : BlockId) (rect : NodeId) : RectPackingM Unit := d
       | none => fl0p0
     let spacing := if blk.children.size == 1 then fl0p0 else blk.nodeNodeSpacing
     let mut blk := blk
-    blk := { blk with smallestRectWidth := fmin blk.smallestRectWidth rectWidth }
-    blk := { blk with width := fmax blk.width lastRowWidth }
-    blk := { blk with minWidth := fmax blk.minWidth (rectWidth + spacing) }
-    blk := { blk with smallestRectHeight := fmin blk.smallestRectHeight rectHeight }
+    blk := { blk with smallestRectWidth := javaMin blk.smallestRectWidth rectWidth }
+    blk := { blk with width := javaMax blk.width lastRowWidth }
+    blk := { blk with minWidth := javaMax blk.minWidth (rectWidth + spacing) }
+    blk := { blk with smallestRectHeight := javaMin blk.smallestRectHeight rectHeight }
     blk := { blk with maxHeight := blk.maxHeight + (rectHeight + spacing) }
-    blk := { blk with minHeight := fmax blk.minHeight rectHeight }
+    blk := { blk with minHeight := javaMax blk.minHeight rectHeight }
     let mut totalHeight : Float :=
       if !blk.rows.isEmpty then (blk.rows.size - 1).toFloat * blk.nodeNodeSpacing else fl0p0
     for row in blk.rows do
@@ -80,13 +81,13 @@ def addChild (b : BlockId) (rect : NodeId) : RectPackingM Unit := do
   setBlock b { blk with children := blk.children.push rect, rows }
   adjustSizeAdd b rect
 
-/-- `add_child_in_new_row(rect)`: starts a new block row below the last one (at the block y if
-there is no row). -/
+/-- `addChildInNewRow(rect)`: starts a new block row below the last one (`getLastRow()`: Java's
+`IndexOutOfBoundsException` if the block has no row). -/
 def addChildInNewRow (b : BlockId) (rect : NodeId) : RectPackingM Unit := do
   let blk ← getBlock b
-  let lastRowY := match blk.rows.back? with
-    | some r => r.y + r.height + blk.nodeNodeSpacing
-    | none => blk.y
+  let some lastRow := blk.rows.back?
+    | throw (IO.userError "java.lang.IndexOutOfBoundsException: Index -1 out of bounds for length 0")
+  let lastRowY := lastRow.y + lastRow.height + blk.nodeNodeSpacing
   let row ← BlockRow.addRectangle (BlockRow.new blk.x lastRowY blk.nodeNodeSpacing) rect
   setBlock b { blk with children := blk.children.push rect, rows := blk.rows.push row }
   adjustSizeAdd b rect
@@ -104,7 +105,7 @@ private def adjustSizeAfterRemove (b : BlockId) : RectPackingM Unit := do
     if row.rects.isEmpty then
       pure ()
     else
-      newWidth := fmax newWidth row.width
+      newWidth := javaMax newWidth row.width
       newHeight := newHeight + (row.height + (if index > 0 then blk.nodeNodeSpacing else fl0p0))
       kept := kept.push row
     index := index + 1
@@ -115,16 +116,15 @@ private def adjustSizeAfterRemove (b : BlockId) : RectPackingM Unit := do
   let mut smallestRectWidth := Float.posInf
   for rect in blk.children do
     let n ← ElkM.getNode rect
-    smallestRectWidth := fmin smallestRectWidth n.width
-    minWidth := fmax minWidth n.width
-    minHeight := fmax minHeight n.height
-    smallestRectHeight := fmin smallestRectHeight n.height
+    smallestRectWidth := javaMin smallestRectWidth n.width
+    minWidth := javaMax minWidth n.width
+    minHeight := javaMax minHeight n.height
+    smallestRectHeight := javaMin smallestRectHeight n.height
     maxHeight := maxHeight + (n.height + blk.nodeNodeSpacing)
   let childCount := blk.children.size.toFloat
+  -- Java computes it for an empty block too (`0 / 0`: NaN)
   let averageHeight :=
-    if childCount > fl0p0 then
-      maxHeight / childCount - blk.nodeNodeSpacing * ((childCount - fl1p0) / childCount)
-    else blk.averageHeight
+    maxHeight / childCount - blk.nodeNodeSpacing * ((childCount - fl1p0) / childCount)
   setBlock b { blk with rows := kept, height := newHeight, width := newWidth, minWidth, minHeight,
                         maxHeight, smallestRectHeight, smallestRectWidth, averageHeight }
   notifyParent b
@@ -152,7 +152,8 @@ def setLocation (b : BlockId) (x y : Float) : RectPackingM Unit := do
   let yChange := y - blk.y
   for rect in blk.children do
     ElkM.modifyNode rect fun n => { n with x := n.x + xChange, y := n.y + yChange }
-  let rows := blk.rows.map fun row => { row with x := row.x + xChange, y := row.y + yChange }
+  -- Java `row.getX() + xCoord - this.x` (left to right; elk-rs `row.x + (x - self.x)`)
+  let rows := blk.rows.map fun row => { row with x := row.x + x - blk.x, y := row.y + y - blk.y }
   setBlock b { blk with rows, x, y }
 
 /-- The size loop of `place_rects_in_internal` without placing (tail recursive, unboxed state):

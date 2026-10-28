@@ -2,9 +2,15 @@ import Elk.Alg.RectPacking.Util.BlockStack
 /-!
 # `org.eclipse.elk.alg.rectpacking.util.RectRow`
 
-Port of `util/rect_row.rs` (elk-rs): a row of blocks (and of the block stacks built from them).
-The row data lives in the `RectPackingArena`; the methods take a `RectRowId`.
-`RectRow.new`, `RectRow.notifyAboutNodeChange` and `RectRow.drop` are defined in the arena module.
+Port of `RectRow.java` (elk-rs `util/rect_row.rs`): a row of blocks (and of the block stacks built
+from them). The row data lives in the `RectPackingArena`; the methods take a `RectRowId`.
+`RectRow.new` and `RectRow.notifyAboutNodeChange` are defined in the arena module.
+
+Java semantics (elk-rs differed): `removeBlock` removes the **first** occurrence of the block
+(`List.remove(Object)`; a row can list a block twice, see the arena module) and starts the height at
+`Double.MIN_VALUE` (the smallest positive double, also the height of a row without blocks or with
+zero-height blocks only); `expand` does not update the row's own width and height;
+`calculateBlockStacks` appends to the existing stacks (it is never called by ELK).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -21,12 +27,11 @@ namespace RectRow
 /-- `Rc::new(RefCell::new(RectRow::new(y, node_node_spacing)))`. -/
 def create (y nodeNodeSpacing : Float) : RectPackingM RectRowId := addRow (new y nodeNodeSpacing)
 
-/-- `expand(width, additional_height)`: distributes the additional width evenly over the stacks
+/-- `expand(width, additionalHeight)`: distributes the additional width evenly over the stacks
 (shifting the i-th stack right by `i * w`) and expands every stack to the row height plus the
-additional height. No-op without stacks. -/
+additional height. The row's width and height stay as they are (Java). -/
 def expand (row : RectRowId) (width additionalHeight : Float) : RectPackingM Unit := do
   let r ← getRow row
-  if r.stacks.isEmpty then return
   let additionalWidth := width - r.width
   let additionalWidthPerStack := additionalWidth / r.stacks.size.toFloat
   let mut index := 0
@@ -36,20 +41,16 @@ def expand (row : RectRowId) (width additionalHeight : Float) : RectPackingM Uni
     BlockStack.setLocation s (st.x + index.toFloat * additionalWidthPerStack) st.y
     BlockStack.expand s additionalWidthPerStack additionalHeightForStack
     index := index + 1
-  modifyRow row fun x => { x with width, height := x.height + additionalHeight }
 
-/-- `calculate_block_stacks()`: rebuilds the stacks: consecutive blocks with the same x
-(difference ≤ `f64::EPSILON`) share a stack. The previous stacks are released
-(`BlockStack.releaseStacks`). -/
+/-- `calculateBlockStacks()`: appends stacks to the row's stacks: consecutive blocks with the same x
+(`!=` against the previous x, starting at `-1`) share a stack. -/
 def calculateBlockStacks (row : RectRowId) : RectPackingM Unit := do
   let r ← getRow row
-  modifyRow row fun x => { x with stacks := #[] }
-  BlockStack.releaseStacks row r.stacks
-  let mut stacks : Array BlockStackId := #[]
-  let mut currentX := Float.negInf
+  let mut stacks : Array BlockStackId := r.stacks
+  let mut currentX : Float := -1.0
   for b in r.children do
     let blockX := (← getBlock b).x
-    if (blockX - currentX).abs > Float.epsilon then
+    if blockX != currentX then
       let s ← BlockStack.create blockX r.y r.nodeNodeSpacing
       BlockStack.addBlock s b
       stacks := stacks.push s
@@ -76,22 +77,21 @@ spacing). -/
 def addBlock (row : RectRowId) (b : BlockId) : RectPackingM Unit := do
   let blk ← getBlock b
   modifyRow row fun r =>
-    { r with height := fmax r.height blk.height
+    { r with height := javaMax r.height blk.height
              width := r.width + (blk.width + (if r.children.isEmpty then fl0p0 else r.nodeNodeSpacing))
              children := r.children.push b }
 
-/-- `remove_block(block)`: removes every occurrence of the block, shrinks the width by the block
-width (plus spacing if blocks remain) and recomputes the height (`f64::MIN` start, `0` when
-empty). -/
+/-- `removeBlock(block)`: removes the first occurrence of the block, shrinks the width by the block
+width (plus spacing if blocks remain) and recomputes the height (`Math.max` from
+`Double.MIN_VALUE`). -/
 def removeBlock (row : RectRowId) (b : BlockId) : RectPackingM Unit := do
   let blockWidth := (← getBlock b).width
-  modifyRow row fun r => { r with children := r.children.filter (· != b) }
+  modifyRow row fun r => { r with children := r.children.erase b }
   let r ← getRow row
   let width := r.width - (blockWidth + (if r.children.isEmpty then fl0p0 else r.nodeNodeSpacing))
-  let mut newMaxHeight := Float.minValue
+  let mut newMaxHeight := Float.minPositive
   for c in r.children do
-    newMaxHeight := fmax newMaxHeight (← getBlock c).height
-  if newMaxHeight == Float.minValue then newMaxHeight := fl0p0
+    newMaxHeight := javaMax newMaxHeight (← getBlock c).height
   modifyRow row fun x => { x with width, height := newMaxHeight }
 
 /-- `set_y(y)`: moves every stack (not the blocks outside stacks) by the change of y. -/
@@ -107,11 +107,9 @@ def setY (row : RectRowId) (y : Float) : RectPackingM Unit := do
 def addStack (row : RectRowId) (s : BlockStackId) : RectPackingM Unit :=
   modifyRow row fun r => { r with stacks := r.stacks.push s }
 
-/-- `reset_stacks()`: clears the stacks (releasing them, see `BlockStack.releaseStacks`). -/
-def resetStacks (row : RectRowId) : RectPackingM Unit := do
-  let old := (← getRow row).stacks
+/-- `resetStacks()`: a new empty stack list (the blocks keep their stack references). -/
+def resetStacks (row : RectRowId) : RectPackingM Unit :=
   modifyRow row fun r => { r with stacks := #[] }
-  BlockStack.releaseStacks row old
 
 /-- `set_height(height)`. -/
 def setHeight (row : RectRowId) (height : Float) : RectPackingM Unit := modifyRow row fun x => { x with height }
