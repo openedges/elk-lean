@@ -86,9 +86,13 @@ def isExternalWestOrEastPort (node : LNode) : Bool :=
 
 end SplineEdgeRouter
 
-/-- `LPort.getAbsoluteAnchor().y`, `0.0` for an unowned port (Rust `.map(|a| a.y).unwrap_or(0.0)`). -/
+/-- `LPort.getAbsoluteAnchor().y`, `0.0` for an unowned port (Rust `.map(|a| a.y).unwrap_or(0.0)`):
+the y sum of `LGraphArena.portAbsoluteAnchor` without building the vector. -/
 def absoluteAnchorY (a : LGraphArena) (port : LPortId) : Float :=
-  ((a.portAbsoluteAnchor port).map (·.y)).getD 0.0
+  let pt := a.port port
+  match pt.owner with
+  | some owner => (a.node owner).position.y + pt.position.y + pt.anchor.y
+  | none => 0.0
 
 /-- `port.getProperty(InternalProperties.SPLINE_NS_PORT_Y_COORD)` (`LPortInternals.splineNsPortYCoord`). -/
 def splineNsPortYCoordOf (p : LPort) : Option Float := p.internal.splineNsPortYCoord
@@ -278,31 +282,9 @@ abbrev RouterM := StateT State LayeredM
 @[inline] def modifySegment (id : SplineSegmentId) (f : SplineSegment → SplineSegment) : RouterM Unit :=
   modify fun s => { s with segments := s.segments.modifyIn id.idx f }
 
-/-- The dependency `id`. -/
-@[inline] def getDependency (id : DependencyId) : RouterM Dependency := do
-  return (← get).dependencies[id.idx]!
-
 /-- Appends a segment to the table. -/
 def addSegment (segment : SplineSegment) : RouterM SplineSegmentId :=
   modifyGet fun s => (⟨s.segments.size⟩, { s with segments := s.segments.push segment })
-
-/-- `new Dependency(source, target, weight)`: registers it as outgoing of `source` and incoming
-of `target`. -/
-def newDependency (source target : SplineSegmentId) (weight : Int) : RouterM Unit :=
-  modify fun s =>
-    let id : DependencyId := ⟨s.dependencies.size⟩
-    let segments := s.segments.modify source.idx fun x => { x with outgoing := x.outgoing.push id }
-    let segments := segments.modify target.idx fun x => { x with incoming := x.incoming.push id }
-    { s with dependencies := s.dependencies.push { source := source, target := target, weight := weight },
-             segments := segments }
-
-/-- `random.next_int(bound)`, written back to the graph when the generator is the graph's. -/
-def nextInt (graph : LGraphId) (bound : Int) : RouterM Int := do
-  let (v, r) := (← get).random.nextInt bound
-  modify fun s => { s with random := r }
-  if (← get).sharedRandom then
-    LayeredM.setGraphRandom graph r
-  return v
 
 /-- `insert_unique_port(left_ports_layer, port)`. -/
 def insertLeftPort (port : LPortId) : RouterM Unit := modify fun s =>
@@ -462,212 +444,388 @@ def createSplineSegmentsForHyperEdges (leftPorts rightPorts : Array LPortId) (le
     if downEdges.size > 1 then
       createHyperEdgeSegment singlePort downEdges sideToProcess
 
-/-- The crossing counters of `createDependency`: for each segment, its right ports minus its left
-ports whose absolute anchor lies within the other segment's hyperedge y-range. -/
-def dependencyCounters (a : LGraphArena) (edge0 edge1 : SplineSegment) : Int × Int := Id.run do
-  let mut edge0Counter : Int := 0
-  let mut edge1Counter : Int := 0
-  for port in edge0.rightPorts do
-    if SplinesMath.isBetween (absoluteAnchorY a port) edge1.hyperEdgeTopYPos edge1.hyperEdgeBottomYPos then
-      edge0Counter := edge0Counter + 1
-  for port in edge0.leftPorts do
-    if SplinesMath.isBetween (absoluteAnchorY a port) edge1.hyperEdgeTopYPos edge1.hyperEdgeBottomYPos then
-      edge0Counter := edge0Counter - 1
-  for port in edge1.rightPorts do
-    if SplinesMath.isBetween (absoluteAnchorY a port) edge0.hyperEdgeTopYPos edge0.hyperEdgeBottomYPos then
-      edge1Counter := edge1Counter + 1
-  for port in edge1.leftPorts do
-    if SplinesMath.isBetween (absoluteAnchorY a port) edge0.hyperEdgeTopYPos edge0.hyperEdgeBottomYPos then
-      edge1Counter := edge1Counter - 1
-  return (edge0Counter, edge1Counter)
+/-! ### Dependency graph, cycle breaking and ranking of one layer gap
 
-/-- `createDependency(edge0, edge1)`: a weighted dependency between two vertically overlapping
-segments (two zero-weight dependencies if the order does not matter). -/
-def createDependency (edge0 edge1 : SplineSegmentId) : RouterM Unit := do
-  let s0 ← getSegment edge0
-  let s1 ← getSegment edge1
-  if s0.hyperEdgeTopYPos > s1.hyperEdgeBottomYPos || s1.hyperEdgeTopYPos > s0.hyperEdgeBottomYPos then return
-  let (edge0Counter, edge1Counter) ← withArena (dependencyCounters · s0 s1)
-  if edge0Counter < edge1Counter then
-    newDependency edge0 edge1 (edge1Counter - edge0Counter)
-  else if edge1Counter < edge0Counter then
-    newDependency edge1 edge0 (edge0Counter - edge1Counter)
+`createDependency`, `breakCycles` and `topologicalNumbering` run on arrays indexed by the position
+of a segment in `splineSegmentsLayer` (its *local index*) and by the creation position of a
+dependency in the gap (Rust keeps marks, weights and ranks in the `SplineSegment`s and
+`Dependency`s). The anchors and hyperedge ranges the dependencies need are read once per segment
+(`GapSegments`, the arena does not change while a gap is ranked), and the results are written back
+to the segment and dependency tables once per gap (`writeGapRanking`). Every loop visits segments and
+dependencies in Rust's order (segment list order, dependency list order); the queues are arrays
+with a head index (Rust `VecDeque`; a segment may be queued more than once), and Rust's
+order-preserving `unprocessed` list is a flag per segment (removing clears the flag, the max-outflow
+scan visits the segments in list order and skips cleared ones). -/
+
+/-- The segment data of one layer gap read by `createDependency` and `topologicalNumbering`, per
+local index. -/
+structure GapSegments where
+  /-- `hyperEdgeTopYPos`. -/
+  tops : FloatArray
+  /-- `hyperEdgeBottomYPos`. -/
+  bottoms : FloatArray
+  /-- `getAbsoluteAnchor().y` of the right ports (list order). -/
+  rightYs : Array FloatArray
+  /-- `getAbsoluteAnchor().y` of the left ports (list order). -/
+  leftYs : Array FloatArray
+  /-- `leftPorts.isEmpty()`. -/
+  leftEmpty : Array Bool
+
+/-- The absolute anchor y values of `ports` (list order). -/
+def anchorYs (a : LGraphArena) (ports : Array LPortId) : FloatArray :=
+  ports.foldl (fun ys p => ys.push (absoluteAnchorY a p)) (FloatArray.emptyWithCapacity ports.size)
+
+/-- Reads the `GapSegments` of the segments `ids` (local index = position in `ids`). -/
+def GapSegments.read (a : LGraphArena) (segments : Array SplineSegment) (ids : Array SplineSegmentId) :
+    GapSegments :=
+  let n := ids.size
+  ids.foldl (init := ⟨FloatArray.emptyWithCapacity n, FloatArray.emptyWithCapacity n,
+      Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n⟩) fun gs id =>
+    let s := segments[id.idx]!
+    match gs with
+    | ⟨tops, bottoms, rightYs, leftYs, leftEmpty⟩ =>
+      ⟨tops.push s.hyperEdgeTopYPos, bottoms.push s.hyperEdgeBottomYPos, rightYs.push (anchorYs a s.rightPorts),
+        leftYs.push (anchorYs a s.leftPorts), leftEmpty.push s.leftPorts.isEmpty⟩
+
+/-- The dependencies of one layer gap: `source`/`target`/`weight` per dependency (creation order;
+`source`/`target` are local segment indices) and the per-segment `outgoing`/`incoming` lists of
+dependency positions (list order). -/
+structure GapDeps where
+  /-- `Dependency.source`. -/
+  source : Array Nat
+  /-- `Dependency.target`. -/
+  target : Array Nat
+  /-- `Dependency.weight`. -/
+  weight : Array Int
+  /-- `SplineSegment.outgoing`. -/
+  outgoing : Array (Array Nat)
+  /-- `SplineSegment.incoming`. -/
+  incoming : Array (Array Nat)
+
+/-- `new Dependency(source, target, weight)`: registered as outgoing of `source` and incoming of
+`target`. -/
+@[inline] def GapDeps.add (g : GapDeps) (source target : Nat) (weight : Int) : GapDeps :=
+  match g with
+  | ⟨src, tgt, wgt, out, inc⟩ =>
+    let d := src.size
+    ⟨src.push source, tgt.push target, wgt.push weight, out.modifyIn source (·.push d),
+      inc.modifyIn target (·.push d)⟩
+
+/-- `n` plus the number of the values `ys[i:]` between `top` and `bottom` (`SplinesMath.isBetween`). -/
+partial def countBetween (ys : FloatArray) (top bottom : Float) (i n : Nat) : Nat :=
+  if h : i < ys.size then
+    countBetween ys top bottom (i + 1) (if SplinesMath.isBetween ys[i] top bottom then n + 1 else n)
+  else n
+
+/-- `createDependency(edge0, edge1)` on the local segments `i` (`edge0`) and `j` (`edge1`): a
+weighted dependency between two vertically overlapping segments (two zero-weight dependencies if the
+order does not matter). The crossing counter of a segment is the number of its right ports minus the
+number of its left ports whose anchor lies within the other segment's hyperedge y-range. -/
+def createDependency (gs : GapSegments) (g : GapDeps) (i j : Nat) : GapDeps :=
+  let top0 := gs.tops[i]!
+  let bottom0 := gs.bottoms[i]!
+  let top1 := gs.tops[j]!
+  let bottom1 := gs.bottoms[j]!
+  if top0 > bottom1 || top1 > bottom0 then g
   else
-    newDependency edge1 edge0 0
-    newDependency edge0 edge1 0
+    let edge0Counter : Int := (countBetween gs.rightYs[i]! top1 bottom1 0 0 : Int)
+      - (countBetween gs.leftYs[i]! top1 bottom1 0 0 : Int)
+    let edge1Counter : Int := (countBetween gs.rightYs[j]! top0 bottom0 0 0 : Int)
+      - (countBetween gs.leftYs[j]! top0 bottom0 0 0 : Int)
+    if edge0Counter < edge1Counter then g.add i j (edge1Counter - edge0Counter)
+    else if edge1Counter < edge0Counter then g.add j i (edge0Counter - edge1Counter)
+    else (g.add j i 0).add i j 0
 
-/-- `updateNeighbors(edge, sources, sinks)`: simulates removing `edge`; returns the new sources and
-sinks (in push order). -/
-def updateNeighbors (edge : SplineSegmentId) : RouterM (Array SplineSegmentId × Array SplineSegmentId) := do
-  let seg ← getSegment edge
-  let mut newSources : Array SplineSegmentId := #[]
-  let mut newSinks : Array SplineSegmentId := #[]
-  for d in seg.outgoing do
-    let dep ← getDependency d
-    if dep.weight > 0 then
-      let target ← getSegment dep.target
-      if target.mark < 0 then
-        let inweight := target.inweight - dep.weight
-        modifySegment dep.target fun x => { x with inweight := inweight }
-        if inweight <= 0 && target.outweight > 0 then
-          newSources := newSources.push dep.target
-  for d in seg.incoming do
-    let dep ← getDependency d
-    if dep.weight > 0 then
-      let source ← getSegment dep.source
-      if source.mark < 0 then
-        let outweight := source.outweight - dep.weight
-        modifySegment dep.source fun x => { x with outweight := outweight }
-        if outweight <= 0 && source.inweight > 0 then
-          newSinks := newSinks.push dep.source
-  return (newSources, newSinks)
+/-- `createDependency` for the pairs `(i, j), (i, j + 1), …` and then every later pair `i' < j'`
+(the pairs in list order). -/
+partial def createDependencies (gs : GapSegments) (i j : Nat) (g : GapDeps) : GapDeps :=
+  let n := gs.tops.size
+  if j < n then createDependencies gs i (j + 1) (createDependency gs g i j)
+  else if i + 2 < n then createDependencies gs (i + 1) (i + 2) g
+  else g
 
-/-- Initial marks (`-1, -2, …`) and in/out weights of `breakCycles`; returns the initial sources
-and sinks. -/
-def initCycleBreaking (edges : Array SplineSegmentId) : RouterM (Array SplineSegmentId × Array SplineSegmentId) := do
-  let mut sources : Array SplineSegmentId := #[]
-  let mut sinks : Array SplineSegmentId := #[]
-  let mut nextMark : Int := -1
-  for edge in edges do
-    let seg ← getSegment edge
-    let mut inweight : Int := 0
-    let mut outweight : Int := 0
-    for d in seg.outgoing do
-      outweight := outweight + (← getDependency d).weight
-    for d in seg.incoming do
-      inweight := inweight + (← getDependency d).weight
-    let mark := nextMark
-    let inw := inweight
-    let outw := outweight
-    modifySegment edge fun x => { x with mark := mark, inweight := inw, outweight := outw }
-    nextMark := nextMark - 1
-    if outweight == 0 then sinks := sinks.push edge
-    else if inweight == 0 then sources := sources.push edge
-  return (sources, sinks)
+/-- Working state of `breakCycles` (per local segment). -/
+structure CycleState where
+  /-- `SplineSegment.mark`. -/
+  mark : Array Int
+  /-- `SplineSegment.inweight`. -/
+  inweight : Array Int
+  /-- `SplineSegment.outweight`. -/
+  outweight : Array Int
+  /-- `sources` queue (`sourcesHead` = front). -/
+  sources : Array Nat
+  sourcesHead : Nat
+  /-- `sinks` queue (`sinksHead` = front). -/
+  sinks : Array Nat
+  sinksHead : Nat
+  /-- Membership in Rust's `unprocessed` list. -/
+  unprocessed : Array Bool
+  /-- Number of segments in `unprocessed`. -/
+  unprocessedCount : Nat
+  /-- `next_left` (marks of sources and max-outflow segments, counting up). -/
+  nextLeft : Int
+  /-- `next_right` (marks of sinks, counting down). -/
+  nextRight : Int
 
-/-- The final step of `breakCycles`: dependencies pointing from a higher to a lower mark are removed
-(weight 0) or reversed. -/
-def reverseLeftwardDependencies (edges : Array SplineSegmentId) : RouterM Unit := do
-  for source in edges do
-    let outgoing := (← getSegment source).outgoing
-    for d in outgoing do
-      let dep ← getDependency d
-      let sourceMark := (← getSegment dep.source).mark
-      let targetMark := (← getSegment dep.target).mark
-      if sourceMark > targetMark then
-        modifySegment dep.source fun x => { x with outgoing := x.outgoing.filter (· != d) }
-        modifySegment dep.target fun x => { x with incoming := x.incoming.filter (· != d) }
-        if dep.weight > 0 then
-          modify fun s => { s with dependencies := s.dependencies.modify d.idx fun x =>
-            { x with source := dep.target, target := dep.source } }
-          modifySegment dep.target fun x => { x with outgoing := x.outgoing.push d }
-          modifySegment dep.source fun x => { x with incoming := x.incoming.push d }
+/-- `acc` plus the weights of the dependencies `deps[k:]`. -/
+partial def sumWeights (weight : Array Int) (deps : Array Nat) (k : Nat) (acc : Int) : Int :=
+  if h : k < deps.size then sumWeights weight deps (k + 1) (acc + weight[deps[k]]!) else acc
+
+/-- The initial state of `breakCycles`: marks `-1, -2, …`, the in/out weights and the initial sinks
+(no outgoing weight) and sources (else no incoming weight), both in segment order. -/
+def initCycleBreaking (g : GapDeps) : CycleState :=
+  let n := g.outgoing.size
+  let inweight := g.incoming.map fun deps => sumWeights g.weight deps 0 0
+  let outweight := g.outgoing.map fun deps => sumWeights g.weight deps 0 0
+  { mark := (Array.range n).map fun (i : Nat) => -1 - (i : Int), inweight, outweight
+    sources := (Array.range n).filter fun i => outweight[i]! != 0 && inweight[i]! == 0, sourcesHead := 0
+    sinks := (Array.range n).filter fun i => outweight[i]! == 0, sinksHead := 0
+    unprocessed := Array.replicate n true, unprocessedCount := n
+    nextLeft := (n : Int) + 1, nextRight := (n : Int) - 1 }
+
+/-- Outgoing half of `updateNeighbors`: for the dependencies `deps[k:]` of the processed segment,
+removes the weight from the unmarked targets (`inweight`) and queues those that became sources. -/
+partial def updateTargets (g : GapDeps) (deps : Array Nat) (mark outweight : Array Int) (k : Nat)
+    (inweight : Array Int) (sources : Array Nat) : Array Int × Array Nat :=
+  if h : k < deps.size then
+    let d := deps[k]
+    let weight := g.weight[d]!
+    let target := g.target[d]!
+    if weight > 0 && mark[target]! < 0 then
+      let w := inweight[target]! - weight
+      let sources := if w <= 0 && outweight[target]! > 0 then sources.push target else sources
+      updateTargets g deps mark outweight (k + 1) (inweight.set! target w) sources
+    else updateTargets g deps mark outweight (k + 1) inweight sources
+  else (inweight, sources)
+
+/-- Incoming half of `updateNeighbors`: removes the weight from the unmarked sources of `deps[k:]`
+(`outweight`) and queues those that became sinks. -/
+partial def updateSources (g : GapDeps) (deps : Array Nat) (mark inweight : Array Int) (k : Nat)
+    (outweight : Array Int) (sinks : Array Nat) : Array Int × Array Nat :=
+  if h : k < deps.size then
+    let d := deps[k]
+    let weight := g.weight[d]!
+    let source := g.source[d]!
+    if weight > 0 && mark[source]! < 0 then
+      let w := outweight[source]! - weight
+      let sinks := if w <= 0 && inweight[source]! > 0 then sinks.push source else sinks
+      updateSources g deps mark inweight (k + 1) (outweight.set! source w) sinks
+    else updateSources g deps mark inweight (k + 1) outweight sinks
+  else (outweight, sinks)
+
+/-- Rust `remove_segment(unprocessed, edge)`, `edge.mark = m` and `updateNeighbors(edge, sources,
+sinks)` (the targets' half first; the sources' half sees the updated in-weights). -/
+def processSegment (g : GapDeps) (st : CycleState) (edge : Nat) (m : Int) : CycleState :=
+  match st with
+  | ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount,
+      nextLeft, nextRight⟩ =>
+    let wasUnprocessed := unprocessed[edge]!
+    let unprocessed := if wasUnprocessed then unprocessed.set! edge false else unprocessed
+    let unprocessedCount := if wasUnprocessed then unprocessedCount - 1 else unprocessedCount
+    let mark := mark.set! edge m
+    let (inweight, sources) := updateTargets g g.outgoing[edge]! mark outweight 0 inweight sources
+    let (outweight, sinks) := updateSources g g.incoming[edge]! mark inweight 0 outweight sinks
+    ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount,
+      nextLeft, nextRight⟩
+
+/-- `while let Some(sink) = sinks.pop_front()`: processes the queued sinks (marks counting down). -/
+partial def drainSinks (g : GapDeps) (st : CycleState) : CycleState :=
+  if h : st.sinksHead < st.sinks.size then
+    let sink := st.sinks[st.sinksHead]
+    let m := st.nextRight
+    drainSinks g (processSegment g { st with sinksHead := st.sinksHead + 1, nextRight := m - 1 } sink m)
+  else st
+
+/-- `while let Some(source) = sources.pop_front()`: processes the queued sources (marks counting up). -/
+partial def drainSources (g : GapDeps) (st : CycleState) : CycleState :=
+  if h : st.sourcesHead < st.sources.size then
+    let source := st.sources[st.sourcesHead]
+    let m := st.nextLeft
+    drainSources g (processSegment g { st with sourcesHead := st.sourcesHead + 1, nextLeft := m + 1 } source m)
+  else st
+
+/-- The unprocessed segments `i, i + 1, …` with the maximal `outweight - inweight` (list order). -/
+partial def maxOutflowSegments (st : CycleState) (i : Nat) (maxOutflow : Int) (maxEdges : Array Nat) :
+    Array Nat :=
+  if h : i < st.unprocessed.size then
+    if st.unprocessed[i] then
+      let outflow := st.outweight[i]! - st.inweight[i]!
+      if outflow > maxOutflow then maxOutflowSegments st (i + 1) outflow #[i]
+      else if outflow == maxOutflow then maxOutflowSegments st (i + 1) maxOutflow (maxEdges.push i)
+      else maxOutflowSegments st (i + 1) maxOutflow maxEdges
+    else maxOutflowSegments st (i + 1) maxOutflow maxEdges
+  else maxEdges
+
+/-- Rust `i32::MIN`, the initial maximal outflow. -/
+def I32_MIN : Int := -2147483648
+
+/-- The main loop of `breakCycles` (`while !unprocessed.is_empty()`): sinks, then sources, then a
+random segment of maximal outflow. Returns the state, the generator and whether it was drawn from. -/
+partial def breakCyclesLoop (g : GapDeps) (st : CycleState) (random : Random) (drawn : Bool) :
+    CycleState × Random × Bool :=
+  if st.unprocessedCount == 0 then (st, random, drawn)
+  else
+    let st := drainSources g (drainSinks g st)
+    let maxEdges := maxOutflowSegments st 0 I32_MIN #[]
+    if maxEdges.isEmpty then breakCyclesLoop g st random drawn
+    else
+      let (index, random) := random.nextInt (maxEdges.size : Int)
+      let maxEdge := maxEdges[index.toNat]!
+      let m := st.nextLeft
+      breakCyclesLoop g (processSegment g { st with nextLeft := m + 1 } maxEdge m) random true
+
+/-- The final step of `breakCycles` for the dependencies `deps[k:]` of one segment (its outgoing list
+when its turn came): a dependency pointing from a higher to a lower mark is removed (weight 0,
+`dropped`) or reversed (`source`/`target` swapped, appended to the new source's outgoing and the new
+target's incoming list).
+
+Rust removes the dependency from its source's outgoing and its target's incoming list right away
+(`retain`); here the lists keep the entry until `compactDependencyLists`, which drops the entries
+whose dependency was dropped or no longer starts (ends) at the list's segment. This is the same:
+a dependency leaves a list only during the turn of its (current) source, which iterates a copy of
+its list, a reversed dependency is never reversed again (its marks are now increasing) and is
+appended to lists of other segments only. -/
+partial def reverseLeftward (mark : Array Int) (deps : Array Nat) (k : Nat) (g : GapDeps) (dropped : Array Bool)
+    (removed : Bool) : GapDeps × Array Bool × Bool :=
+  if h : k < deps.size then
+    let d := deps[k]
+    match g with
+    | ⟨src, tgt, wgt, out, inc⟩ =>
+      let s := src[d]!
+      let t := tgt[d]!
+      if mark[s]! > mark[t]! then
+        if wgt[d]! > 0 then
+          reverseLeftward mark deps (k + 1)
+            ⟨src.set! d t, tgt.set! d s, wgt, out.modifyIn t (·.push d), inc.modifyIn s (·.push d)⟩ dropped true
+        else reverseLeftward mark deps (k + 1) ⟨src, tgt, wgt, out, inc⟩ (dropped.set! d true) true
+      else reverseLeftward mark deps (k + 1) ⟨src, tgt, wgt, out, inc⟩ dropped removed
+  else (g, dropped, removed)
+
+/-- `reverseLeftward` for the segments `i, i + 1, …` (list order). -/
+partial def reverseLeftwardDependencies (mark : Array Int) (i : Nat) (g : GapDeps) (dropped : Array Bool)
+    (removed : Bool) : GapDeps × Array Bool × Bool :=
+  if h : i < g.outgoing.size then
+    let deps := g.outgoing[i]
+    let (g, dropped, removed) := reverseLeftward mark deps 0 g dropped removed
+    reverseLeftwardDependencies mark (i + 1) g dropped removed
+  else (g, dropped, removed)
+
+/-- Drops the stale entries of the dependency lists left by `reverseLeftward` (see there): segment
+`x` keeps the outgoing (incoming) dependencies that are not `dropped` and start (end) at `x`, in
+list order. -/
+def compactDependencyLists (g : GapDeps) (dropped : Array Bool) : GapDeps :=
+  match g with
+  | ⟨src, tgt, wgt, out, inc⟩ =>
+    let out := out.mapIdx fun x deps => deps.filter fun d => src[d]! == x && !dropped[d]!
+    let inc := inc.mapIdx fun x deps => deps.filter fun d => tgt[d]! == x && !dropped[d]!
+    ⟨src, tgt, wgt, out, inc⟩
 
 /-- `breakCycles(edges, random)`: Eades–Lin–Smyth style marking (sinks get decreasing marks below
-`edges.size`, sources and the random max-outflow segments increasing marks above it), then the
-leftward dependencies are removed or reversed. -/
-def breakCycles (graph : LGraphId) (edges : Array SplineSegmentId) : RouterM Unit := do
-  let (sources0, sinks0) ← initCycleBreaking edges
-  let mut sources := sources0
-  let mut sourcesHead := 0
-  let mut sinks := sinks0
-  let mut sinksHead := 0
-  let mut unprocessed := edges
-  let markBase : Int := edges.size
-  let mut nextLeft := markBase + 1
-  let mut nextRight := markBase - 1
-  let mut maxEdges : Array SplineSegmentId := #[]
-  while !unprocessed.isEmpty do
-    while sinksHead < sinks.size do
-      let sink := sinks[sinksHead]!
-      sinksHead := sinksHead + 1
-      unprocessed := unprocessed.erase sink
-      let mark := nextRight
-      modifySegment sink fun x => { x with mark := mark }
-      nextRight := nextRight - 1
-      let (newSources, newSinks) ← updateNeighbors sink
-      sources := sources ++ newSources
-      sinks := sinks ++ newSinks
-    while sourcesHead < sources.size do
-      let source := sources[sourcesHead]!
-      sourcesHead := sourcesHead + 1
-      unprocessed := unprocessed.erase source
-      let mark := nextLeft
-      modifySegment source fun x => { x with mark := mark }
-      nextLeft := nextLeft + 1
-      let (newSources, newSinks) ← updateNeighbors source
-      sources := sources ++ newSources
-      sinks := sinks ++ newSinks
-    let mut maxOutflow : Int := -2147483648
-    for edge in unprocessed do
-      let seg ← getSegment edge
-      let outflow := seg.outweight - seg.inweight
-      if outflow >= maxOutflow then
-        if outflow > maxOutflow then
-          maxEdges := #[]
-          maxOutflow := outflow
-        maxEdges := maxEdges.push edge
-    if !maxEdges.isEmpty then
-      let index ← nextInt graph (maxEdges.size : Int)
-      let maxEdge := maxEdges[index.toNat]!
-      unprocessed := unprocessed.erase maxEdge
-      let mark := nextLeft
-      modifySegment maxEdge fun x => { x with mark := mark }
-      nextLeft := nextLeft + 1
-      let (newSources, newSinks) ← updateNeighbors maxEdge
-      sources := sources ++ newSources
-      sinks := sinks ++ newSinks
-      maxEdges := #[]
-  let shiftBase : Int := (edges.size : Int) + 1
-  for edge in edges do
-    modifySegment edge fun x => if x.mark < markBase then { x with mark := x.mark + shiftBase } else x
-  reverseLeftwardDependencies edges
+the segment count `n`, sources and the random max-outflow segments increasing marks above it; the
+marks below `n` are then shifted by `n + 1`), then the leftward dependencies are removed or
+reversed. Returns the dependencies, the cycle state, the generator and whether it was drawn from. -/
+def breakCycles (g : GapDeps) (random : Random) : GapDeps × CycleState × Random × Bool :=
+  let n := g.outgoing.size
+  let (st, random, drawn) := breakCyclesLoop g (initCycleBreaking g) random false
+  let markBase : Int := n
+  let shiftBase : Int := (n : Int) + 1
+  match st with
+  | ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount,
+      nextLeft, nextRight⟩ =>
+    let mark := mark.map fun m => if m < markBase then m + shiftBase else m
+    let (g, dropped, removed) := reverseLeftwardDependencies mark 0 g (Array.replicate g.source.size false) false
+    (if removed then compactDependencyLists g dropped else g,
+      ⟨mark, inweight, outweight, sources, sourcesHead, sinks, sinksHead, unprocessed, unprocessedCount,
+        nextLeft, nextRight⟩, random, drawn)
+
+/-- Working state of `topologicalNumbering` (per local segment). -/
+structure RankState where
+  /-- `SplineSegment.rank`. -/
+  rank : Array Int
+  /-- `SplineSegment.inweight` (unprocessed incoming dependencies). -/
+  inweight : Array Int
+  /-- `SplineSegment.outweight` (unprocessed outgoing dependencies). -/
+  outweight : Array Int
+  /-- The queue (`sources`, later `rightward_targets`). -/
+  queue : Array Nat
+  /-- `max_rank`. -/
+  maxRank : Int
+
+/-- Longest-path step for the outgoing dependencies `deps[k:]` of a source of rank `edgeRank`. -/
+partial def rankTargets (g : GapDeps) (deps : Array Nat) (edgeRank : Int) (k : Nat) (st : RankState) :
+    RankState :=
+  if h : k < deps.size then
+    let target := g.target[deps[k]]!
+    match st with
+    | ⟨rank, inweight, outweight, queue, maxRank⟩ =>
+      let r := max rank[target]! (edgeRank + 1)
+      let w := inweight[target]! - 1
+      rankTargets g deps edgeRank (k + 1)
+        ⟨rank.set! target r, inweight.set! target w, outweight, if w == 0 then queue.push target else queue,
+          max maxRank r⟩
+  else st
+
+/-- Processes the queued sources from `head` on (longest path from the sources). -/
+partial def rankSources (g : GapDeps) (head : Nat) (st : RankState) : RankState :=
+  if h : head < st.queue.size then
+    let edge := st.queue[head]
+    let edgeRank := st.rank[edge]!
+    rankSources g (head + 1) (rankTargets g g.outgoing[edge]! edgeRank 0 st)
+  else st
+
+/-- Moves the sources without left ports of the incoming dependencies `deps[k:]` of a rightward
+segment of rank `edgeRank` right (rank at most `edgeRank - 1`). -/
+partial def rankRightwardSources (g : GapDeps) (leftEmpty : Array Bool) (deps : Array Nat) (edgeRank : Int)
+    (k : Nat) (st : RankState) : RankState :=
+  if h : k < deps.size then
+    let source := g.source[deps[k]]!
+    if !leftEmpty[source]! then rankRightwardSources g leftEmpty deps edgeRank (k + 1) st
+    else
+      match st with
+      | ⟨rank, inweight, outweight, queue, maxRank⟩ =>
+        let r := min rank[source]! (edgeRank - 1)
+        let w := outweight[source]! - 1
+        rankRightwardSources g leftEmpty deps edgeRank (k + 1)
+          ⟨rank.set! source r, inweight, outweight.set! source w, if w == 0 then queue.push source else queue,
+            maxRank⟩
+  else st
+
+/-- Processes the queued rightward targets from `head` on. -/
+partial def rankRightward (g : GapDeps) (leftEmpty : Array Bool) (head : Nat) (st : RankState) : RankState :=
+  if h : head < st.queue.size then
+    let edge := st.queue[head]
+    let edgeRank := st.rank[edge]!
+    rankRightward g leftEmpty (head + 1) (rankRightwardSources g leftEmpty g.incoming[edge]! edgeRank 0 st)
+  else st
 
 /-- `topologicalNumbering(edges)`: longest-path ranks from the sources; afterwards segments whose
 horizontal parts all point right (no left ports) are moved as far right as possible. -/
-def topologicalNumbering (edges : Array SplineSegmentId) : RouterM Unit := do
-  let mut sources : Array SplineSegmentId := #[]
-  let mut sourcesHead := 0
-  let mut rightwardTargets : Array SplineSegmentId := #[]
-  let mut rightwardHead := 0
-  for edge in edges do
-    let seg ← getSegment edge
-    let inweight : Int := seg.incoming.size
-    let outweight : Int := seg.outgoing.size
-    modifySegment edge fun x => { x with rank := 0, inweight := inweight, outweight := outweight }
-    if inweight == 0 then sources := sources.push edge
-    if outweight == 0 && seg.leftPorts.isEmpty then rightwardTargets := rightwardTargets.push edge
-  let mut maxRank : Int := -1
-  while sourcesHead < sources.size do
-    let edge := sources[sourcesHead]!
-    sourcesHead := sourcesHead + 1
-    let seg ← getSegment edge
-    let edgeRank := seg.rank
-    for d in seg.outgoing do
-      let target := (← getDependency d).target
-      let t ← getSegment target
-      let rank := max t.rank (edgeRank + 1)
-      maxRank := max maxRank rank
-      let inweight := t.inweight - 1
-      modifySegment target fun x => { x with rank := rank, inweight := inweight }
-      if inweight == 0 then sources := sources.push target
-  if maxRank > -1 then
-    let finalMaxRank := maxRank
-    for edge in rightwardTargets do
-      modifySegment edge fun x => { x with rank := finalMaxRank }
-    while rightwardHead < rightwardTargets.size do
-      let edge := rightwardTargets[rightwardHead]!
-      rightwardHead := rightwardHead + 1
-      let seg ← getSegment edge
-      let edgeRank := seg.rank
-      for d in seg.incoming do
-        let source := (← getDependency d).source
-        let s ← getSegment source
-        if !s.leftPorts.isEmpty then continue
-        let rank := min s.rank (edgeRank - 1)
-        let outweight := s.outweight - 1
-        modifySegment source fun x => { x with rank := rank, outweight := outweight }
-        if outweight == 0 then rightwardTargets := rightwardTargets.push source
+def topologicalNumbering (g : GapDeps) (leftEmpty : Array Bool) : RankState :=
+  let n := g.outgoing.size
+  let inweight : Array Int := g.incoming.map fun deps => (deps.size : Int)
+  let outweight : Array Int := g.outgoing.map fun deps => (deps.size : Int)
+  let sources := (Array.range n).filter fun i => g.incoming[i]!.isEmpty
+  let rightwardTargets := (Array.range n).filter fun i => g.outgoing[i]!.isEmpty && leftEmpty[i]!
+  match rankSources g 0 ⟨Array.replicate n 0, inweight, outweight, sources, -1⟩ with
+  | ⟨rank, inweight, outweight, queue, maxRank⟩ =>
+    if maxRank > -1 then
+      let rank := rightwardTargets.foldl (fun rank edge => rank.set! edge maxRank) rank
+      rankRightward g leftEmpty 0 ⟨rank, inweight, outweight, rightwardTargets, maxRank⟩
+    else ⟨rank, inweight, outweight, queue, maxRank⟩
+
+/-- Writes the ranking of the gap's segments `ids` back: the dependencies are appended to the
+dependency table, each segment gets its dependency lists (table ids), mark, weights and rank. -/
+def writeGapRanking (ids : Array SplineSegmentId) (g : GapDeps) (mark : Array Int) (rs : RankState) :
+    RouterM Unit :=
+  modify fun s =>
+    let base := s.dependencies.size
+    let dependencies := g.source.size.fold (init := s.dependencies) fun d _ deps =>
+      deps.push { source := ids[g.source[d]!]!, target := ids[g.target[d]!]!, weight := g.weight[d]! }
+    let segments := ids.size.fold (init := s.segments) fun i h segments =>
+      segments.modifyIn ids[i].idx fun x => { x with
+        outgoing := g.outgoing[i]!.map (fun d => ⟨base + d⟩), incoming := g.incoming[i]!.map (fun d => ⟨base + d⟩),
+        mark := mark[i]!, inweight := rs.inweight[i]!, outweight := rs.outweight[i]!, rank := rs.rank[i]! }
+    { s with dependencies, segments }
 
 /-- `createSegmentsAndComputeRanking()`: hyperedge segments (left side reversed/non-reversed, then
 right side), single-edge segments, dependencies between every pair (in list order), cycle breaking
@@ -682,11 +840,17 @@ def createSegmentsAndComputeRanking (graph : LGraphId) : RouterM Unit := do
   createSplineSegmentsForHyperEdges leftPorts rightPorts leftSet .right false
   createSplineSegments
   let layerSegments := (← get).splineSegmentsLayer
-  for i in [0:layerSegments.size] do
-    for j in [i + 1:layerSegments.size] do
-      createDependency layerSegments[i]! layerSegments[j]!
-  breakCycles graph layerSegments
-  topologicalNumbering layerSegments
+  let n := layerSegments.size
+  let segments := (← get).segments
+  let gs ← withArena fun a => GapSegments.read a segments layerSegments
+  let deps := createDependencies gs 0 1
+    ⟨#[], #[], #[], Array.replicate n #[], Array.replicate n #[]⟩
+  let (deps, cycles, random, drawn) := breakCycles deps (← get).random
+  if drawn then
+    modify fun s => { s with random := random }
+    if (← get).sharedRandom then
+      LayeredM.setGraphRandom graph random
+  writeGapRanking layerSegments deps cycles.mark (topologicalNumbering deps gs.leftEmpty)
 
 /-- `getEdgeChain(start)`: the edge and its successors (long edge). Deviation: Rust/Java loop
 forever on a successor cycle (only possible for malformed dummy wiring); the walk stops at the
