@@ -11,14 +11,22 @@
  *
  * The backend is the emscripten CommonJS build of plugins/org.eclipse.elk.wasm
  * (scripts/build_wasm.sh copies it to dist/wasm-node/: elk_lean.cjs + elk_lean.wasm); it compiles
- * and instantiates the module synchronously on the first call.
+ * and instantiates the module synchronously on the first call. A backend whose instance has
+ * failed (`backend.failed`, set by the WASM build after a C exit such as Lean's out-of-memory
+ * panic) is replaced by a new instance on the next call.
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
 var backend;
 module.exports = function loadWasm() {
-  if (backend) return backend;
+  if (backend && !backend.failed) return backend;
   var factory;
+  if (backend) {
+    // the cached instance ended with exit() (`backend.failed`, e.g. out of memory): evaluate the
+    // emscripten module again for a fresh instance; the old one is released with its last user
+    delete require.cache[require.resolve('../dist/wasm-node/elk_lean.cjs')];
+    backend = undefined;
+  }
   try {
     factory = require('../dist/wasm-node/elk_lean.cjs');
   } catch (e) {

@@ -25,7 +25,14 @@ class ELKBrowser extends ELK {
             return loader.default();
           });
         }
-        return ready.then(function(wasm) { return wasm[method].apply(wasm, args); });
+        return ready.then(function(wasm) {
+          try {
+            return wasm[method].apply(wasm, args);
+          } finally {
+            // a failed instance (out of memory) is replaced on the next call (load-wasm.browser.mjs)
+            if (wasm.failed) ready = undefined;
+          }
+        });
       };
       optionsClone.backend = {
         layout_json: function(graph, layoutOptions) { return call('layout_json', [graph, layoutOptions]); },
