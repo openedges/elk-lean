@@ -149,8 +149,9 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
     monitor.done
     return
   let randomSeed := node.props.getD RandomLayouterOptions.RANDOM_SEED 0
-  let aspectRatio := node.props.getD RandomLayouterOptions.ASPECT_RATIO 1.0
-  let spacing := node.props.getD RandomLayouterOptions.SPACING_NODE_NODE 0.0
+  -- Java `getProperty(..).floatValue()` (random layouter defaults 1.6f and 15)
+  let aspectRatio := Float.toF32 (node.props.getD RandomLayouterOptions.ASPECT_RATIO 1.0)
+  let spacing := Float.toF32 (node.props.getD RandomLayouterOptions.SPACING_NODE_NODE 0.0)
   let padding := node.props.getD RandomLayouterOptions.PADDING {}
   let random ← if randomSeed != 0 then pure (Random.ofInt randomSeed)
     else do

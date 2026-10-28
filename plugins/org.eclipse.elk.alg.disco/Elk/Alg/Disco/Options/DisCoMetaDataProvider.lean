@@ -16,9 +16,11 @@ order of the Rust `apply`:
    algorithm, debug graph, debug polyominoes), all targeting parents;
 3. the option supports (algorithm-specific defaults), `register_supports`.
 
+The strategy option is registered with its choices and the enum parser like the Java provider
+(`register_option` of elk-rs only sets the value type, so elk-rs cannot set it from a string; it has
+a single constant, `POLYOMINO`, so this changes no layout).
+
 Rust semantics kept on purpose:
-* the strategy option is a plain ENUM option without choices and without a parser
-  (`register_option` only sets the value type), so it cannot be set from a string;
 * option supports for options nobody registered (the polyomino options, unless
   `PolyominoOptions.metaDataProvider` was applied) are dropped by
   `LayoutMetaDataService.applyRegistry`, like `Registry::apply_dependencies` does;
@@ -48,7 +50,7 @@ def registerAlgorithm (r : Registry) : Registry := r.registerAlgorithm algorithm
 
 /-- `register_options`. -/
 def registerOptions (r : Registry) : Registry :=
-  let r := registerOption r DisCoOptions.COMPONENT_COMPACTION_STRATEGY .enum
+  let r := registerEnumOption r DisCoOptions.COMPONENT_COMPACTION_STRATEGY
     ((OptionMeta.visible "Connected Components Compaction Strategy"
       "Strategy for packing different connected components in order to save space and enhance readability of a graph."
       targetParents).withGroup "componentCompaction")

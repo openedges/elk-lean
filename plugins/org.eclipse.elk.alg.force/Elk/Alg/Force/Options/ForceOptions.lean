@@ -4,16 +4,18 @@ import Elk.Alg.Force.Options.ForceModelStrategy
 /-!
 # `org.eclipse.elk.alg.force.options.ForceOptions`
 
-Port of `force_options.rs` (elk-rs), the counterpart of the Java `ForceOptions` generated from
-`Force.melk`. The re-exported core options are plain aliases of the `CoreOptions` constants (same id,
-same default); Java redeclares some of them with force specific defaults (for example
-`SPACING_NODE_NODE = 80`), elk-rs encodes those as algorithm specific defaults in
-`ForceMetaDataProvider` instead and the models fall back to their literals only when the property has
-no default.
+The counterpart of the Java `ForceOptions` generated from `Force.melk`. A `supports <option>` without
+a value re-exports the `CoreOptions` constant; a `supports <option> = <value>` makes the generator
+redeclare the constant as `new Property<>(CoreOptions.X, X_DEFAULT)` (same id, the algorithm's
+default), so every `getProperty(ForceOptions.X)` of an unset option yields the force default while
+`getProperty(CoreOptions.X)` of the same element still yields the core default. The redeclared
+constants here are `Property.ofProperty` copies with the Java values (`1.6f` widened to double for
+the aspect ratio). elk-rs aliases all of them to `CoreOptions` (core defaults: padding 12, node
+spacing 20, edge label spacing 2), which elk-lean followed before (agent OPT).
 -/
 namespace Elk.Alg.Force.Options
 
-open Elk Elk.Graph Elk.Core.Math Elk.Core.Options
+open Elk Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util
 
 namespace ForceOptions
 
@@ -36,20 +38,21 @@ def TEMPERATURE : Property Float := Property.withDefault "org.eclipse.elk.force.
 /-- `ForceOptions.REPULSION`: repulsion factor of Eades' model (default 5.0). -/
 def REPULSION : Property Float := Property.withDefault "org.eclipse.elk.force.repulsion" 5.0
 
-/-- `ForceOptions.PRIORITY`. -/
-def PRIORITY : Property Int := CoreOptions.PRIORITY
-/-- `ForceOptions.SPACING_NODE_NODE`. -/
-def SPACING_NODE_NODE : Property Float := CoreOptions.SPACING_NODE_NODE
-/-- `ForceOptions.SPACING_EDGE_LABEL`. -/
-def SPACING_EDGE_LABEL : Property Float := CoreOptions.SPACING_EDGE_LABEL
-/-- `ForceOptions.ASPECT_RATIO`. -/
-def ASPECT_RATIO : Property Float := CoreOptions.ASPECT_RATIO
-/-- `ForceOptions.RANDOM_SEED`. -/
-def RANDOM_SEED : Property Int := CoreOptions.RANDOM_SEED
-/-- `ForceOptions.SEPARATE_CONNECTED_COMPONENTS`. -/
-def SEPARATE_CONNECTED_COMPONENTS : Property Bool := CoreOptions.SEPARATE_CONNECTED_COMPONENTS
-/-- `ForceOptions.PADDING`. -/
-def PADDING : Property ElkPadding := CoreOptions.PADDING
+/-- `ForceOptions.PRIORITY` (force default `1`). -/
+def PRIORITY : Property Int := Property.ofProperty CoreOptions.PRIORITY 1
+/-- `ForceOptions.SPACING_NODE_NODE` (force default `80`). -/
+def SPACING_NODE_NODE : Property Float := Property.ofProperty CoreOptions.SPACING_NODE_NODE 80.0
+/-- `ForceOptions.SPACING_EDGE_LABEL` (force default `5`). -/
+def SPACING_EDGE_LABEL : Property Float := Property.ofProperty CoreOptions.SPACING_EDGE_LABEL 5.0
+/-- `ForceOptions.ASPECT_RATIO` (force default `1.6f`). -/
+def ASPECT_RATIO : Property Float := Property.ofProperty CoreOptions.ASPECT_RATIO (Float.toF32 1.6)
+/-- `ForceOptions.RANDOM_SEED` (force default `1`). -/
+def RANDOM_SEED : Property Int := Property.ofProperty CoreOptions.RANDOM_SEED 1
+/-- `ForceOptions.SEPARATE_CONNECTED_COMPONENTS` (force default `true`). -/
+def SEPARATE_CONNECTED_COMPONENTS : Property Bool :=
+  Property.ofProperty CoreOptions.SEPARATE_CONNECTED_COMPONENTS true
+/-- `ForceOptions.PADDING` (force default `50` on every side). -/
+def PADDING : Property ElkPadding := Property.ofProperty CoreOptions.PADDING (ElkPadding.ofAny 50.0)
 /-- `ForceOptions.INTERACTIVE`. -/
 def INTERACTIVE : Property Bool := CoreOptions.INTERACTIVE
 /-- `ForceOptions.PORT_CONSTRAINTS`. -/
@@ -77,8 +80,9 @@ def TOPDOWN_HIERARCHICAL_NODE_WIDTH : Property Float := CoreOptions.TOPDOWN_HIER
 /-- `ForceOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO`. -/
 def TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO : Property Float :=
   CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO
-/-- `ForceOptions.TOPDOWN_NODE_TYPE`. -/
-def TOPDOWN_NODE_TYPE : Property TopdownNodeTypes := CoreOptions.TOPDOWN_NODE_TYPE
+/-- `ForceOptions.TOPDOWN_NODE_TYPE` (force default `HIERARCHICAL_NODE`). -/
+def TOPDOWN_NODE_TYPE : Property TopdownNodeTypes :=
+  Property.ofProperty CoreOptions.TOPDOWN_NODE_TYPE TopdownNodeTypes.hierarchicalNode
 /-- `ForceOptions.NODE_SIZE_MINIMUM`. -/
 def NODE_SIZE_MINIMUM : Property KVector := CoreOptions.NODE_SIZE_MINIMUM
 

@@ -1,3 +1,4 @@
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Util
 import Elk.Core.Data
 import Elk.Core.Validation
@@ -121,9 +122,12 @@ def applyTopdownLayout (layoutNode : NodeId) (children : Array NodeId) (data : L
     | throwUnsupportedConfiguration "Top-down layout node type has not been assigned."
   if nodeType == .hierarchicalNode || nodeType == .rootNode then
     for child in children do
+      -- Java `childNode.getProperty(CoreOptions.PADDING)` for every child: the core default (12) is
+      -- stored on the child when unset (cloneable default), so the child's own algorithm later
+      -- reads 12 even if it redeclares the padding (e.g. `RectPackingOptions.PADDING` = 15)
+      let padding := (← ElkM.getNodePropSticky child CoreOptions.PADDING).getD {}
       let childNode ← ElkM.getNode child
       if childNode.children.isEmpty then continue
-      let padding := childNode.props.getD CoreOptions.PADDING {}
       let mut handled := false
       if let some localData ← getResolvedAlgorithm child then
         if let some provider ← LayoutProvider.create localData.id then
@@ -142,8 +146,10 @@ def applyTopdownLayout (layoutNode : NodeId) (children : Array NodeId) (data : L
         let width := childNode.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH fl150p0
         let aspectRatio := childNode.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO fl1p414
         setNodeDimensionsWithPadding child ⟨width, width / aspectRatio⟩ padding
+  -- Java `layoutNode.getProperty(CoreOptions.PADDING)` before the algorithm runs: stores the core
+  -- default (12) when unset, which the algorithm's own padding read then sees
+  let padding := (← ElkM.getNodePropSticky layoutNode CoreOptions.PADDING).getD {}
   let node ← ElkM.getNode layoutNode
-  let padding := node.props.getD CoreOptions.PADDING {}
   let childAreaAvailableWidth := node.width - (padding.left + padding.right)
   let childAreaAvailableHeight := node.height - (padding.top + padding.bottom)
   topdownMonitor.log s!"Available Child Area: ({Float.toRustDisplay childAreaAvailableWidth}|{Float.toRustDisplay childAreaAvailableHeight})"

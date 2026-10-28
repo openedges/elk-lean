@@ -10,9 +10,11 @@ import Elk.Alg.Force.Stress.StressMajorization
 
 Port of `stress_layout_provider.rs` (elk-rs): the `org.eclipse.elk.stress` layout provider.
 
-Unless `INTERACTIVE`, the initial coordinates come from a force layout (Java parity): the options
-`PADDING` (50) and `SPACING_NODE_NODE` (80) are stored on the layout node when unset and the
-`ForceLayoutProvider` runs with a sub monitor. With `INTERACTIVE` only the node micro layout runs
+Unless `INTERACTIVE`, the initial coordinates come from a force layout (`ForceLayoutProvider` with a
+sub monitor; it reads the force defaults padding 50 and node spacing 80 through the redeclared
+`ForceOptions` constants, and the stress importer's `ForceOptions.PADDING` read then sees the padding
+the force layout stored; elk-rs stores both values on the layout node beforehand, which elk-lean
+followed before agent OPT). With `INTERACTIVE` only the node micro layout runs
 (unless `OMIT_NODE_MICRO_LAYOUT`). Then the (already positioned) graph is imported again, split into
 components, every component with more than one node is optimised by `StressMajorization` and its labels
 are repositioned, and the components are packed and applied.
@@ -38,12 +40,8 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   let _ ← monitor.begin "ELK Stress" 1.0
   let interactive := ((← ElkM.getNode layoutGraph).props.get StressOptions.INTERACTIVE).getD false
   if !interactive then
-    -- Java parity: Stress delegates to Force for initial coordinates.
-    let props := (← ElkM.getNode layoutGraph).props
-    if !props.has ForceOptions.PADDING then
-      ElkM.setNodeProp layoutGraph ForceOptions.PADDING (ElkPadding.ofAny 50.0)
-    if !props.has ForceOptions.SPACING_NODE_NODE then
-      ElkM.setNodeProp layoutGraph ForceOptions.SPACING_NODE_NODE 80.0
+    -- Java: `new ForceLayoutProvider().layout(layoutGraph, ..)` gives the initial coordinates; it
+    -- reads the force defaults (padding 50, node spacing 80) through the `ForceOptions` constants
     ForceLayoutProvider.layout layoutGraph (← monitor.subTask 1.0)
   else
     let omitMicro := ((← ElkM.getNode layoutGraph).props.get StressOptions.OMIT_NODE_MICRO_LAYOUT).getD false

@@ -172,7 +172,8 @@ def pack (components : Array TGraphId) : MrTreeM TGraphId := do
     totalArea := totalArea + diff.x * diff.y
   let resultProps := (a.graph result).props
   let aspect := (resultProps.get MrTreeOptions.ASPECT_RATIO).getD fl1p0
-  maxRowWidth := fmax maxRowWidth (totalArea.sqrt * aspect)
+  -- Java `(float) Math.sqrt(totalArea) * result.getProperty(MrTreeOptions.ASPECT_RATIO)` (1.6f default)
+  maxRowWidth := fmax maxRowWidth (Float.toF32 totalArea.sqrt * aspect)
   let spacing := (resultProps.get MrTreeOptions.SPACING_NODE_NODE).getD fl0p0
   let mut xpos := fl0p0
   let mut ypos := fl0p0

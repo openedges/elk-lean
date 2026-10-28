@@ -62,11 +62,12 @@ def OVERLAP_REMOVAL_MAX_ITERATIONS : Property Int :=
 def OVERLAP_REMOVAL_RUN_SCANLINE : Property Bool :=
   Property.withDefault "org.eclipse.elk.overlapRemoval.runScanline" true
 
-/-- `PADDING` (alias of `CoreOptions.PADDING`). -/
-def PADDING : Property ElkPadding := CoreOptions.PADDING
+/-- `PADDING`: both Java classes redeclare `CoreOptions.PADDING` with the SPOrE default `8` on every
+side (`supports org.eclipse.elk.padding = new ElkPadding(8)`; elk-rs aliases the core constant). -/
+def PADDING : Property ElkPadding := Property.ofProperty CoreOptions.PADDING (ElkPadding.ofAny 8.0)
 
-/-- `SPACING_NODE_NODE` (alias of `CoreOptions.SPACING_NODE_NODE`). -/
-def SPACING_NODE_NODE : Property Float := CoreOptions.SPACING_NODE_NODE
+/-- `SPACING_NODE_NODE`: `CoreOptions.SPACING_NODE_NODE` redeclared with the SPOrE default `8`. -/
+def SPACING_NODE_NODE : Property Float := Property.ofProperty CoreOptions.SPACING_NODE_NODE 8.0
 
 /-- `DEBUG_MODE` (alias of `CoreOptions.DEBUG_MODE`). -/
 def DEBUG_MODE : Property Bool := CoreOptions.DEBUG_MODE

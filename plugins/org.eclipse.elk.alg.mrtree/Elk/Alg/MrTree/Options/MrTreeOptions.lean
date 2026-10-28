@@ -8,10 +8,13 @@ import Elk.Alg.MrTree.Options.TreeifyingOrder
 # `org.eclipse.elk.alg.mrtree.options.MrTreeOptions`
 
 Port of `options/mrtree_options.rs` (elk-rs), the counterpart of the Java `MrTreeOptions` generated
-from `Tree.melk`. The eight mrtree options carry the Rust ids and defaults; the re-exported core
-options are plain aliases of the `CoreOptions` constants (same id, same default). Java redeclares some
-of them with algorithm specific defaults (for example `PADDING = 20`); elk-rs encodes those as option
-supports of `MrTreeMetaDataProvider` instead.
+from `Tree.melk`. The eight mrtree options carry the Rust ids and defaults. A `supports <option>`
+without a value re-exports the `CoreOptions` constant; `supports <option> = <value>` makes the Java
+generator redeclare it as `new Property<>(CoreOptions.X, X_DEFAULT)` (same id, the mrtree default),
+so `getProperty(MrTreeOptions.X)` of an unset option yields the mrtree default: padding 20, edge/node
+spacing 3, aspect ratio `1.6f`, priority 1, separate components `true`, top-down node type
+`HIERARCHICAL_NODE` (`Property.ofProperty` copies here). elk-rs aliases all of them to
+`CoreOptions`, which elk-lean followed before (agent OPT).
 -/
 namespace Elk.Alg.MrTree.Options
 
@@ -52,20 +55,21 @@ def EDGE_ROUTING_MODE : Property EdgeRoutingMode :=
 def SEARCH_ORDER : Property TreeifyingOrder :=
   Property.withDefault "org.eclipse.elk.mrtree.searchOrder" TreeifyingOrder.dfs
 
-/-- `MrTreeOptions.PADDING`. -/
-def PADDING : Property ElkPadding := CoreOptions.PADDING
+/-- `MrTreeOptions.PADDING` (mrtree default `20` on every side). -/
+def PADDING : Property ElkPadding := Property.ofProperty CoreOptions.PADDING (ElkPadding.ofAny 20.0)
 /-- `MrTreeOptions.SPACING_NODE_NODE`. -/
 def SPACING_NODE_NODE : Property Float := CoreOptions.SPACING_NODE_NODE
-/-- `MrTreeOptions.SPACING_EDGE_NODE`. -/
-def SPACING_EDGE_NODE : Property Float := CoreOptions.SPACING_EDGE_NODE
+/-- `MrTreeOptions.SPACING_EDGE_NODE` (mrtree default `3`). -/
+def SPACING_EDGE_NODE : Property Float := Property.ofProperty CoreOptions.SPACING_EDGE_NODE 3.0
 /-- `MrTreeOptions.SPACING_INDIVIDUAL`. -/
 def SPACING_INDIVIDUAL : Property IndividualSpacings := CoreOptions.SPACING_INDIVIDUAL
-/-- `MrTreeOptions.ASPECT_RATIO`. -/
-def ASPECT_RATIO : Property Float := CoreOptions.ASPECT_RATIO
-/-- `MrTreeOptions.PRIORITY`. -/
-def PRIORITY : Property Int := CoreOptions.PRIORITY
-/-- `MrTreeOptions.SEPARATE_CONNECTED_COMPONENTS`. -/
-def SEPARATE_CONNECTED_COMPONENTS : Property Bool := CoreOptions.SEPARATE_CONNECTED_COMPONENTS
+/-- `MrTreeOptions.ASPECT_RATIO` (mrtree default `1.6f`). -/
+def ASPECT_RATIO : Property Float := Property.ofProperty CoreOptions.ASPECT_RATIO (Float.toF32 1.6)
+/-- `MrTreeOptions.PRIORITY` (mrtree default `1`). -/
+def PRIORITY : Property Int := Property.ofProperty CoreOptions.PRIORITY 1
+/-- `MrTreeOptions.SEPARATE_CONNECTED_COMPONENTS` (mrtree default `true`). -/
+def SEPARATE_CONNECTED_COMPONENTS : Property Bool :=
+  Property.ofProperty CoreOptions.SEPARATE_CONNECTED_COMPONENTS true
 /-- `MrTreeOptions.DEBUG_MODE`. -/
 def DEBUG_MODE : Property Bool := CoreOptions.DEBUG_MODE
 /-- `MrTreeOptions.DIRECTION`. -/
@@ -97,8 +101,9 @@ def TOPDOWN_HIERARCHICAL_NODE_WIDTH : Property Float := CoreOptions.TOPDOWN_HIER
 /-- `MrTreeOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO`. -/
 def TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO : Property Float :=
   CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO
-/-- `MrTreeOptions.TOPDOWN_NODE_TYPE`. -/
-def TOPDOWN_NODE_TYPE : Property TopdownNodeTypes := CoreOptions.TOPDOWN_NODE_TYPE
+/-- `MrTreeOptions.TOPDOWN_NODE_TYPE` (mrtree default `HIERARCHICAL_NODE`). -/
+def TOPDOWN_NODE_TYPE : Property TopdownNodeTypes :=
+  Property.ofProperty CoreOptions.TOPDOWN_NODE_TYPE TopdownNodeTypes.hierarchicalNode
 
 end MrTreeOptions
 

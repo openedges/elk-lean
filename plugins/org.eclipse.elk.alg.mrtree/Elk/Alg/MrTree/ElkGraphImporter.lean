@@ -1,6 +1,7 @@
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Elk.Graph
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Math.KVector
 import Elk.Core.Options
 import Elk.Core.Util.ElkUtil
@@ -106,7 +107,8 @@ def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
     minY := fmin minY (n.position.y - n.size.y / fl2p0)
     maxX := fmax maxX (n.position.x + n.size.x / fl2p0)
     maxY := fmax maxY (n.position.y + n.size.y / fl2p0)
-  let padding := ((← ElkM.getNode root).props.get MrTreeOptions.PADDING).getD {}
+  -- Java `elkgraph.getProperty(MrTreeOptions.PADDING)`: the mrtree default (20) is stored when unset
+  let padding := (← ElkM.getNodePropSticky root MrTreeOptions.PADDING).getD {}
   for node in graph.nodes do
     let n := a.node node
     let some (.elkNode elkNode) := n.internal.origin | continue

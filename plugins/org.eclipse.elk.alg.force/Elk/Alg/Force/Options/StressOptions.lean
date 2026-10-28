@@ -36,8 +36,9 @@ def ITERATION_LIMIT : Property Int :=
 
 /-- `StressOptions.INTERACTIVE`. -/
 def INTERACTIVE : Property Bool := CoreOptions.INTERACTIVE
-/-- `StressOptions.EDGE_LABELS_INLINE`. -/
-def EDGE_LABELS_INLINE : Property Bool := CoreOptions.EDGE_LABELS_INLINE
+/-- `StressOptions.EDGE_LABELS_INLINE`: redeclared with the stress default `true` (no Java read site
+uses it: the label placement of `FLabel` reads `ForceOptions.EDGE_LABELS_INLINE`, default `false`). -/
+def EDGE_LABELS_INLINE : Property Bool := Property.ofProperty CoreOptions.EDGE_LABELS_INLINE true
 /-- `StressOptions.OMIT_NODE_MICRO_LAYOUT`. -/
 def OMIT_NODE_MICRO_LAYOUT : Property Bool := CoreOptions.OMIT_NODE_MICRO_LAYOUT
 /-- `StressOptions.NODE_SIZE_CONSTRAINTS`. -/

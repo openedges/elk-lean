@@ -1,3 +1,4 @@
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Alg
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
@@ -14,9 +15,11 @@ import Elk.Alg.RectPacking.P3WhitespaceElimination
 # `org.eclipse.elk.alg.rectpacking.RectPackingLayoutProvider`
 
 Port of `rect_packing_layout_provider.rs` (elk-rs): lays out the children of a node as packed
-rectangles. Sets the algorithm defaults (padding 15, node spacing 15, aspect ratio 1.3) on the
-graph if absent, runs the node micro layout, falls back to the box layout if `TRYBOX` is set and
-no three consecutive rectangles are "stackable", and otherwise runs the three phases and the
+rectangles. Reads `RectPackingOptions.PADDING` (rectangle packing default 15, stored on the graph
+when unset like Java's cloneable default), `SPACING_NODE_NODE` (15) and the other options, runs the
+node micro layout, falls back to the box layout (`BoxLayoutProvider.layout` on the live graph, which
+then sees the stored padding, its own spacing default 15 and aspect ratio `1.3f`) if `TRYBOX` is set
+and no three consecutive rectangles are "stackable", and otherwise runs the three phases and the
 intermediate processors assembled by an `AlgorithmAssembler` (before phase 1:
 `NodeSizeReorderer` if `ORDER_BY_SIZE`, `InteractiveNodeReorderer` if `INTERACTIVE`,
 `MinSizePreProcessor`; before phase 2: `MinSizePostProcessor`). Finally the content is aligned
@@ -27,15 +30,11 @@ The whole layout runs in `RectPackingM` with a fresh arena; `RowsStorage.withRow
 Rust `RowsGuard`. Hierarchy is handled by `RecursiveGraphLayoutEngine` (the provider is not
 hierarchy aware).
 
-Strategy options are read with `get_property(..).unwrap_or_default()`; like elk-rs, the enum
-options cannot be parsed from JSON (no parser registered), so only typed values take effect.
+Java reads the options through the redeclared `RectPackingOptions` constants (padding 15, node
+spacing 15, aspect ratio 1.3); elk-rs instead stores those values on the graph before the layout
+(`apply_algorithm_defaults`) and runs its box fallback on the option snapshot taken before that,
+which elk-lean followed before agent OPT.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl15p0 : Float := 15.0
-private def fl1p3 : Float := 1.3
-
 namespace Elk.Alg.RectPacking
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -74,16 +73,6 @@ def assembleAlgorithm (layoutGraph : NodeId) : RectPackingM (Array RectPackingPr
   assembler.addProcessorConfiguration config
   assembler.build layoutGraph
 
-/-- `apply_algorithm_defaults(graph)`: padding 15, node spacing 15 and aspect ratio 1.3 unless set
-on the graph. -/
-def applyAlgorithmDefaults (graph : NodeId) : ElkM Unit := do
-  ElkM.modifyNode graph fun n => Id.run do
-    let mut props := n.props
-    if !props.has CoreOptions.PADDING then props := props.set CoreOptions.PADDING (ElkPadding.ofAny fl15p0)
-    if !props.has CoreOptions.SPACING_NODE_NODE then props := props.set CoreOptions.SPACING_NODE_NODE fl15p0
-    if !props.has CoreOptions.ASPECT_RATIO then props := props.set CoreOptions.ASPECT_RATIO fl1p3
-    return { n with props }
-
 /-- `apply_padding(rectangles, padding)`: moves every rectangle by the left/top padding. -/
 def applyPadding (rectangles : Array NodeId) (padding : ElkPadding) : ElkM Unit := do
   for rect in rectangles do
@@ -113,32 +102,13 @@ def isStackable (rectangles : Array NodeId) (tryBox : Bool) (nodeNodeSpacing : F
   else
     return true
 
-/-- The `TRYBOX` fallback: `BoxLayoutProvider::new().layout(layout_graph, &mut
-BasicProgressMonitor::new())` as elk-rs runs it inside `RecursiveGraphLayoutEngine`. The Rust box
-provider reads its five configuration options (`SPACING_NODE_NODE`, `PADDING`, `EXPAND_NODES`,
-`INTERACTIVE`, `BOX_PACKING_MODE`) from the layout-scoped arena snapshot
-(`layout_arena_context::with_layout_arena`), which the engine takes before any provider runs, so
-the rectangle packing defaults (padding 15, spacing 15) set by `apply_algorithm_defaults` are not
-seen there; everything else (aspect ratio, priorities, minimum size) is read from the live graph.
-`snapshot` is the property map of the graph before `apply_algorithm_defaults`. (Java and a direct
-provider call outside the engine read the live values.) -/
-def boxLayoutFallback (layoutGraph : NodeId) (snapshot : PropertyMap) : ElkM Unit := do
-  let objSpacing := snapshot.getD BoxLayouterOptions.SPACING_NODE_NODE 0.0
-  let padding := snapshot.getD BoxLayouterOptions.PADDING {}
-  let expandNodes := snapshot.getD BoxLayouterOptions.EXPAND_NODES false
-  let interactive := snapshot.getD BoxLayouterOptions.INTERACTIVE false
-  let packingMode := snapshot.getD BoxLayouterOptions.BOX_PACKING_MODE .simple
-  match packingMode with
-  | .simple => BoxLayoutProvider.placeBoxes layoutGraph objSpacing padding expandNodes interactive
-  | _ => BoxLayoutProvider.placeBoxesGrouping layoutGraph objSpacing padding expandNodes
-
 /-- The layout in `RectPackingM` (inside the `RowsGuard`). -/
 private def layoutM (layoutGraph : NodeId) (monitor : ProgressMonitor) : RectPackingM Unit := do
   let _ ← monitor.begin "Rectangle Packing" 1.0
-  let snapshot := (← ElkM.getNode layoutGraph).props
-  applyAlgorithmDefaults layoutGraph
+  -- Java `layoutGraph.getProperty(RectPackingOptions.PADDING)`: the rectangle packing default (15)
+  -- is stored on the graph when unset (`ElkPadding` is cloneable), so the box fallback sees it too
+  let padding := (← ElkM.getNodePropSticky layoutGraph RectPackingOptions.PADDING).getD {}
   let props := (← ElkM.getNode layoutGraph).props
-  let padding := props.getD RectPackingOptions.PADDING {}
   let fixedGraphSize := props.getD RectPackingOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
   let nodeNodeSpacing := props.getD RectPackingOptions.SPACING_NODE_NODE 0.0
   let tryBox := props.getD RectPackingOptions.TRYBOX false
@@ -151,7 +121,8 @@ private def layoutM (layoutGraph : NodeId) (monitor : ProgressMonitor) : RectPac
     for rect in rectangles do
       ElkM.setNodeProp rect CoreOptions.PRIORITY priority
       priority := priority - 1
-    boxLayoutFallback layoutGraph snapshot
+    -- Java `new BoxLayoutProvider().layout(layoutGraph, new BasicProgressMonitor())`
+    BoxLayoutProvider.layout layoutGraph ProgressMonitor.null
     monitor.done
     return
   let algorithm ← assembleAlgorithm layoutGraph

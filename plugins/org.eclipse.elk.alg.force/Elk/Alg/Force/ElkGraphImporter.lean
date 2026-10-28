@@ -1,6 +1,7 @@
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Elk.Graph
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Exceptions
 import Elk.Core.Math.KVector
 import Elk.Core.Options
@@ -156,7 +157,8 @@ private def boundingBox (fgraph : FGraph) : Float × Float × Float × Float := 
 def applyLayout (fgraph : FGraph) : ElkM Unit := do
   let some (Origin.elkNode root) := fgraph.origin | return
   let (minX, minY, maxX, maxY) := boundingBox fgraph
-  let padding := ((← ElkM.getNode root).props.get ForceOptions.PADDING).getD (ElkPadding.ofAny fl0p0)
+  -- Java `kgraph.getProperty(ForceOptions.PADDING)`: the force default (50) is stored when unset
+  let padding := (← ElkM.getNodePropSticky root ForceOptions.PADDING).getD (ElkPadding.ofAny fl0p0)
   let offset : KVector := ⟨padding.left - minX, padding.top - minY⟩
   for nid in fgraph.nodes do
     let some (Origin.elkNode node) := fgraph.arena.nodeOrigin[nid.idx]! | continue

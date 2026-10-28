@@ -11,12 +11,12 @@ entry `org.eclipse.elk.radial` ("ELK Radial", category `org.eclipse.elk.radial`,
 bound `0`, `SORTER`, `WEDGE_CRITERIA`, `OPTIMIZATION_CRITERIA`) and the twenty option supports.
 Like elk-rs, no legacy ids, no dependencies and no upper bounds are registered.
 
-Parity quirk (elk-rs is the oracle): the Rust provider registers the four enum options (`COMPACTOR`,
-`SORTER`, `WEDGE_CRITERIA`, `OPTIMIZATION_CRITERIA`) without enum choices and without a value
-parser (Java: derived from the enum class). Their string values from JSON / ELK Text are therefore
-ignored by elk-rs (`parse_value` returns `None`), and so by this port. The options remain usable
-through the typed API (`ElkM.setNodeProp`). `enumParserProvider` is the Java-like variant (with
-choices and the lenient enum parser) used by the tests that check the enum-driven code paths.
+The four enum options (`COMPACTOR`, `SORTER`, `WEDGE_CRITERIA`, `OPTIMIZATION_CRITERIA`) are
+registered with their enum choices and the enum parser, like the Java provider (whose
+`LayoutOptionData` derives both from the enum class), so their string values from JSON / ELK Text
+take effect. elk-rs registers them without choices and parser and ignores those strings
+(`parse_value` returns `None`); elk-lean followed that before agent OPT ("oracle 특이점" F6).
+`enumParserProvider` registers the same four entries again (kept for the tests that install it).
 -/
 namespace Elk.Alg.Radial.Options
 
@@ -43,14 +43,14 @@ private def registerPlain {α : Type} [PropCodec α] (r : Registry) (property : 
     { id := property.id, type, defaultValue := property.default.map PropCodec.enc, name, description,
       targets := EnumSet.of targets, visibility, group, lowerBound }
 
-/-- `register_option` for an ENUM option. Like elk-rs, no choices and no parser are registered
-(`LayoutOptionData.parse_value` of an ENUM option without parser yields `None`), so the string
-values of the four enum options cannot be set from JSON / ELK Text; see the module doc. -/
+/-- `register_option` for an ENUM option with the Java choices (constant names in ordinal order)
+and the enum parser (Java `LayoutOptionData.parseValue` of an `ENUM` option). -/
 private def registerEnum {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
     (name description : String) : Registry :=
   r.registerOption
     { id := property.id, type := .enum, defaultValue := property.default.map PropCodec.enc,
-      name, description, targets := EnumSet.of #[.parents], visibility := .visible }
+      name, description, targets := EnumSet.of #[.parents], visibility := .visible,
+      choices := LayoutOptionData.enumChoices α, parser := some (LayoutOptionData.enumParser α) }
 
 /-- `register_options`. -/
 def registerOptions (r : Registry) : Registry :=
@@ -102,9 +102,9 @@ def registerSupports (r : Registry) : Registry :=
     RadialOptions.WEDGE_CRITERIA.id, RadialOptions.CENTER_ON_ROOT.id]
   ids.foldl (fun r id => r.addOptionSupport algo id none) r
 
-/-- Java-like variant of the four enum options: same entries as `registerOptions`, plus the enum
-choices and the lenient enum parser. Registering it replaces the entries in place. Not part of
-the elk-rs provider; see the module doc. -/
+/-- The four enum options with choices and parser, as `registerOptions` registers them (before
+agent OPT the default registration had neither, like elk-rs). Registering it replaces the entries in
+place. -/
 def enumParserProvider : LayoutMetaDataProvider where
   apply r :=
     let withParser {α : Type} [ElkEnum α] (r : Registry) (property : Property α)
