@@ -39,7 +39,7 @@ private def EQUALITY_TOLERANCE : Float := 0.01
 and to the atomic cell in the node container's `BEGIN` (NORTH) / `END` (SOUTH) area. elk-rs
 updates both of its copies; when both ids denote the same arena cell (the normal case) the
 update is applied once. Other sides are ignored. -/
-private def updateInsidePortLabelCells (ctx : NodeContext N P L) (portSide : PortSide)
+@[inline] private def updateInsidePortLabelCells (ctx : NodeContext N P L) (portSide : PortSide)
     (f : CellArena L → CellId → CellArena L) : NodeContext N P L :=
   let area? : Option ContainerArea := match portSide with
     | .north => some .begin
@@ -50,13 +50,14 @@ private def updateInsidePortLabelCells (ctx : NodeContext N P L) (portSide : Por
   | some area =>
     let containerCell := (ctx.cells.getCell ctx.nodeContainer area).filter ctx.cells.isAtomic
     let insideCell := ctx.insidePortLabelCell portSide
-    let cells := match containerCell with
-      | some c => f ctx.cells c
-      | none => ctx.cells
-    let cells := match insideCell with
+    -- the arena is taken out of the context first so that it is updated in place
+    ctx.modifyCells fun cells =>
+      let cells := match containerCell with
+        | some c => f cells c
+        | none => cells
+      match insideCell with
       | some c => if containerCell == some c then cells else f cells c
       | none => cells
-    { ctx with cells }
 
 /-! ### Fixed position -/
 

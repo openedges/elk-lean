@@ -118,83 +118,94 @@ private def candidateCount (ctx : BKContext) (current : LNodeId) (currentId next
 
 /-- The first loop of `insideBlockShift` for one block: walks the block ring from the root and
 sets each node's inner shift such that the edge to the previous node is straight; returns the
-layout and the space required above and below the root's top border. -/
-private def shiftBlockNodes (ctx : BKContext) (hdir : HDirection) (rootId : Nat) (bal : BKAlignedLayout)
-    (spaceAbove spaceBelow : Float) : IO (BKAlignedLayout × Float × Float) := do
-  let traceInner := ElkTrace.global.bkInner
-  let mut bal := bal
-  let mut spaceAbove := spaceAbove
-  let mut spaceBelow := spaceBelow
-  let mut current := rootId
-  let maxSteps := max bal.size 1
-  let mut steps := 0
-  while true do
-    let next := bal.alignOf current
-    if next == rootId || steps ≥ maxSteps then
-      if steps ≥ maxSteps && ElkTrace.global.bkGuard then
-        IO.eprintln s!"bk-guard: inside_block_shift loop1 hit max_steps root_id={rootId} current={current} next={next} max_steps={maxSteps}"
-      break
-    let currentNode := ctx.nodeOf current
-    let nextNode := ctx.nodeOf next
-    let some edge := ctx.edgeBetween currentNode nextNode
-      | throw (IO.userError "java.lang.IllegalStateException: edge between block nodes is missing")
-    if traceInner then
-      let count := candidateCount ctx currentNode current next
-      if count > 1 then
-        IO.eprintln s!"bk-inner: root={rootId} multi-edge current={current} next={next} candidates={count}"
-    let ed := ctx.arena.edge edge
-    let (some sourcePort, some targetPort) := (ed.source, ed.target)
-      | throw (IO.userError "java.lang.IllegalStateException: block edge without source or target port")
-    let portPosDiff :=
-      if hdir == .left then ctx.portOffsetY targetPort - ctx.portOffsetY sourcePort
-      else ctx.portOffsetY sourcePort - ctx.portOffsetY targetPort
-    let nextInnerShift := bal.innerShiftOf current + portPosDiff
-    bal := bal.setInnerShift next nextInnerShift
-    if traceInner then
-      IO.eprintln s!"bk-inner: root={rootId} step current={current}({ctx.designation currentNode}) next={next}({ctx.designation nextNode}) port_diff={fmt3 portPosDiff} next_inner={fmt3 nextInnerShift}"
-    spaceAbove := fmax spaceAbove (ctx.marginTop nextNode - nextInnerShift)
-    spaceBelow := fmax spaceBelow (nextInnerShift + ctx.sizeY nextNode + ctx.marginBottom nextNode)
-    current := next
-    steps := steps + 1
-  return (bal, spaceAbove, spaceBelow)
+inner shifts and the space required above and below the root's top border. `bal` is read for the
+block ring only; its inner shifts are `innerShift` (taken out of the layout by the caller). The
+loop is tail recursive with unboxed accumulators (bounded by `maxSteps` like Rust). -/
+private partial def shiftBlockNodes (ctx : BKContext) (hdir : HDirection) (rootId maxSteps : Nat)
+    (bal : BKAlignedLayout) (innerShift : FloatArray) (current steps : Nat) (spaceAbove spaceBelow : Float) :
+    IO (FloatArray × Float × Float) := do
+  let next := bal.alignOf current
+  if next == rootId || steps ≥ maxSteps then
+    if steps ≥ maxSteps && ElkTrace.global.bkGuard then
+      IO.eprintln s!"bk-guard: inside_block_shift loop1 hit max_steps root_id={rootId} current={current} next={next} max_steps={maxSteps}"
+    return (innerShift, spaceAbove, spaceBelow)
+  let currentNode := ctx.nodeOf current
+  let nextNode := ctx.nodeOf next
+  let some edge := ctx.edgeBetween currentNode nextNode
+    | throw (IO.userError "java.lang.IllegalStateException: edge between block nodes is missing")
+  if ElkTrace.global.bkInner then
+    let count := candidateCount ctx currentNode current next
+    if count > 1 then
+      IO.eprintln s!"bk-inner: root={rootId} multi-edge current={current} next={next} candidates={count}"
+  let ed := ctx.arena.edge edge
+  let (some sourcePort, some targetPort) := (ed.source, ed.target)
+    | throw (IO.userError "java.lang.IllegalStateException: block edge without source or target port")
+  let portPosDiff :=
+    if hdir == .left then ctx.portOffsetY targetPort - ctx.portOffsetY sourcePort
+    else ctx.portOffsetY sourcePort - ctx.portOffsetY targetPort
+  let nextInnerShift := innerShift.get! current + portPosDiff
+  let innerShift := innerShift.set! next nextInnerShift
+  if ElkTrace.global.bkInner then
+    IO.eprintln s!"bk-inner: root={rootId} step current={current}({ctx.designation currentNode}) next={next}({ctx.designation nextNode}) port_diff={fmt3 portPosDiff} next_inner={fmt3 nextInnerShift}"
+  shiftBlockNodes ctx hdir rootId maxSteps bal innerShift next (steps + 1)
+    (fmax spaceAbove (ctx.marginTop nextNode - nextInnerShift))
+    (fmax spaceBelow (nextInnerShift + ctx.sizeY nextNode + ctx.marginBottom nextNode))
+
+/-- The second loop of `insideBlockShift` for one block: adds `spaceAbove` to the inner shift of
+every node of the block ring starting at the root (bounded by `maxSteps` like Rust). -/
+private partial def applySpaceAbove (ctx : BKContext) (rootId maxSteps : Nat) (bal : BKAlignedLayout)
+    (spaceAbove : Float) (innerShift : FloatArray) (current steps : Nat) : IO FloatArray := do
+  let innerShift := innerShift.set! current (innerShift.get! current + spaceAbove)
+  if ElkTrace.global.bkInner then
+    IO.eprintln s!"bk-inner: root={rootId} apply current={current}({ctx.designation (ctx.nodeOf current)}) inner={fmt3 (innerShift.get! current)}"
+  let current := bal.alignOf current
+  if current == rootId || steps ≥ maxSteps then
+    if steps ≥ maxSteps && ElkTrace.global.bkGuard then
+      IO.eprintln s!"bk-guard: inside_block_shift loop2 hit max_steps root_id={rootId} current={current} max_steps={maxSteps}"
+    return innerShift
+  applySpaceAbove ctx rootId maxSteps bal spaceAbove innerShift current (steps + 1)
+
+/-- The block roots of `getBlocks` (ascending root id, only roots of nodes in the layers),
+without collecting the blocks' nodes. -/
+private def blockRoots (ctx : BKContext) (bal : BKAlignedLayout) : Array Nat := Id.run do
+  let mut seen : Array Bool := Array.replicate bal.size false
+  for l in ctx.layers do
+    for n in (ctx.arena.layer l).nodes do
+      seen := seen.set! (bal.rootOf (ctx.nodeId n)) true
+  let mut result : Array Nat := #[]
+  for r in [0:bal.size] do
+    if seen[r]! then result := result.push r
+  return result
 
 /-- `insideBlockShift(bal)`: moves the nodes inside each block (in ascending root id order,
 Rust `BTreeMap`) such that all edges inside the block are straight, then shifts the whole
 block down by the space required above the root and records the block size
 (`spaceAbove + spaceBelow`). Not part of the original algorithm; adds port and node size
-handling. -/
+handling. The inner shifts and block sizes are taken out of the layout while the blocks are
+processed (updated in place) and written back at the end. -/
 def insideBlockShift (ctx : BKContext) (bal : BKAlignedLayout) : IO BKAlignedLayout := do
-  let blocks := bal.getBlocks ctx
+  let roots := blockRoots ctx bal
   let some hdir := bal.hdir
     | throw (IO.userError "java.lang.IllegalStateException: BK aligner requires a horizontal direction")
   let traceInner := ElkTrace.global.bkInner
-  let mut bal := bal
-  for (rootId, _) in blocks do
+  let maxSteps := max bal.size 1
+  let mut innerShift := bal.innerShift
+  let mut blockSize := bal.blockSize
+  let bal := { bal with innerShift := FloatArray.empty, blockSize := FloatArray.empty }
+  for rootId in roots do
     let rootNode := ctx.nodeOf rootId
     if traceInner then
       IO.eprintln s!"bk-inner: root={rootId}({ctx.designation rootNode}) start hdir={hdirDebug hdir}"
     let spaceAbove := ctx.marginTop rootNode
     let spaceBelow := ctx.sizeY rootNode + ctx.marginBottom rootNode
-    bal := bal.setInnerShift rootId 0.0
-    let (bal', spaceAbove, spaceBelow) ← shiftBlockNodes ctx hdir rootId bal spaceAbove spaceBelow
-    bal := bal'
-    let maxSteps := max bal.size 1
-    let mut current := rootId
-    let mut steps := 0
-    while true do
-      bal := bal.setInnerShift current (bal.innerShiftOf current + spaceAbove)
-      if traceInner then
-        IO.eprintln s!"bk-inner: root={rootId} apply current={current}({ctx.designation (ctx.nodeOf current)}) inner={fmt3 (bal.innerShiftOf current)}"
-      current := bal.alignOf current
-      if current == rootId || steps ≥ maxSteps then
-        if steps ≥ maxSteps && ElkTrace.global.bkGuard then
-          IO.eprintln s!"bk-guard: inside_block_shift loop2 hit max_steps root_id={rootId} current={current} max_steps={maxSteps}"
-        break
-      steps := steps + 1
-    bal := { bal with blockSize := bal.blockSize.set! rootId (spaceAbove + spaceBelow) }
+    innerShift := innerShift.set! rootId 0.0
+    let (innerShift', spaceAbove, spaceBelow) ←
+      shiftBlockNodes ctx hdir rootId maxSteps bal innerShift rootId 0 spaceAbove spaceBelow
+    innerShift ← applySpaceAbove ctx rootId maxSteps bal spaceAbove innerShift' rootId 0
+    blockSize := blockSize.set! rootId (spaceAbove + spaceBelow)
     if traceInner then
-      IO.eprintln s!"bk-inner: root={rootId} done space_above={fmt3 spaceAbove} space_below={fmt3 spaceBelow} block_size={fmt3 (bal.blockSizeOf rootId)}"
-  return bal
+      IO.eprintln s!"bk-inner: root={rootId} done space_above={fmt3 spaceAbove} space_below={fmt3 spaceBelow} block_size={fmt3 (blockSize.get! rootId)}"
+  return { bal with innerShift, blockSize }
 
 end BKAligner
 

@@ -175,6 +175,8 @@ private def placeOtherClass (ctx : BKContext) (vdir : VDirection) (rootId curren
     let dir := if vdir == .up then "up" else "down"
     IO.eprintln s!"bk-place-block: class-edge root={rootId} sink={sinkId} neighbor_root={neighborRoot} neighbor_sink={neighborSinkId} required={fmt3 requiredSpace} {dir}"
 
+mutual
+
 /-- `placeBlock(root)`: places the block of `root` (if not placed yet) by going through all its
 nodes (the `align` ring, bounded by `max(align.len(), 1)` steps like Rust); before each node's
 neighbor in the compaction direction is considered, the neighbor's block is placed
@@ -185,42 +187,56 @@ partial def placeBlock (ctx : BKContext) (ni : NeighborhoodInformation) (rootId 
   if (← getThe BKAlignedLayout).isYDefined rootId then return
   let some vdir := (← getThe BKAlignedLayout).vdir
     | throw (IO.userError "java.lang.IllegalStateException: BK compactor requires a vertical direction")
-  let mut isInitialAssignment := true
   modifyThe BKAlignedLayout (·.setY rootId 0.0)
   if tracePB then
     IO.eprintln s!"bk-place-block: start root={rootId} vdir={if vdir == .up then "Up" else "Down"}"
-  let mut current := rootId
-  let mut thresh := if vdir == .down then Float.negInf else Float.posInf
+  let thresh := if vdir == .down then Float.negInf else Float.posInf
   let maxSteps := max (← getThe BKAlignedLayout).size 1
-  let mut steps := 0
-  while true do
-    let currentNode := ctx.nodeOf current
-    match neighborInLayer ctx vdir currentNode (ni.nodeIndexOf current) with
-    | some neighbor =>
-      let neighborId := ctx.nodeId neighbor
-      let neighborRoot := (← getThe BKAlignedLayout).rootOf neighborId
-      placeBlock ctx ni neighborRoot
-      thresh ← ThresholdStrategy.calculateThreshold ctx thresh rootId current
-      if (← getThe BKAlignedLayout).sinkOf rootId == rootId then
-        modifyThe BKAlignedLayout fun b => { b with sink := b.sink.set! rootId (b.sinkOf neighborRoot) }
-        if tracePB then
-          IO.eprintln s!"bk-place-block: root={rootId} adopt-sink from neighbor_root={neighborRoot} sink={(← getThe BKAlignedLayout).sinkOf rootId}"
-      let sameClass := (← getThe BKAlignedLayout) |> fun b => b.sinkOf rootId == b.sinkOf neighborRoot
-      if sameClass then
-        isInitialAssignment ← placeSameClass ctx vdir rootId current neighbor neighborId neighborRoot thresh isInitialAssignment
-      else
-        placeOtherClass ctx vdir rootId current neighbor neighborId neighborRoot
-    | none =>
-      thresh ← ThresholdStrategy.calculateThreshold ctx thresh rootId current
-    current := (← getThe BKAlignedLayout).alignOf current
-    if current == rootId || steps ≥ maxSteps then
-      if steps ≥ maxSteps && ElkTrace.global.bkGuard then
-        IO.eprintln s!"bk-guard: place_block loop hit max_steps root_id={rootId} current={current} max_steps={maxSteps}"
-      break
-    steps := steps + 1
+  placeBlockSteps ctx ni vdir rootId maxSteps rootId thresh true 0
   if tracePB then
     IO.eprintln s!"bk-place-block: done root={rootId} final_y={fmt3 ((← getThe BKAlignedLayout).yOf rootId)}"
   ThresholdStrategy.finishBlock rootId
+
+/-- The loop of `placeBlock` over the block ring of `rootId` from `current` (`steps` taken so far,
+bounded by `maxSteps` like Rust), tail recursive so that the threshold and the flags stay
+unboxed. -/
+partial def placeBlockSteps (ctx : BKContext) (ni : NeighborhoodInformation) (vdir : VDirection) (rootId maxSteps : Nat)
+    (current : Nat) (thresh : Float) (isInitialAssignment : Bool) (steps : Nat) : CompactM Unit := do
+  let currentNode := ctx.nodeOf current
+  match neighborInLayer ctx vdir currentNode (ni.nodeIndexOf current) with
+  | some neighbor =>
+    let neighborId := ctx.nodeId neighbor
+    let neighborRoot := (← getThe BKAlignedLayout).rootOf neighborId
+    placeBlock ctx ni neighborRoot
+    let thresh ← ThresholdStrategy.calculateThreshold ctx thresh rootId current
+    if (← getThe BKAlignedLayout).sinkOf rootId == rootId then
+      modifyThe BKAlignedLayout fun b => { b with sink := b.sink.set! rootId (b.sinkOf neighborRoot) }
+      if ElkTrace.global.bkPlaceBlock then
+        IO.eprintln s!"bk-place-block: root={rootId} adopt-sink from neighbor_root={neighborRoot} sink={(← getThe BKAlignedLayout).sinkOf rootId}"
+    let sameClass := (← getThe BKAlignedLayout) |> fun b => b.sinkOf rootId == b.sinkOf neighborRoot
+    if sameClass then
+      let isInitialAssignment ←
+        placeSameClass ctx vdir rootId current neighbor neighborId neighborRoot thresh isInitialAssignment
+      placeBlockNext ctx ni vdir rootId maxSteps current thresh isInitialAssignment steps
+    else
+      placeOtherClass ctx vdir rootId current neighbor neighborId neighborRoot
+      placeBlockNext ctx ni vdir rootId maxSteps current thresh isInitialAssignment steps
+  | none =>
+    let thresh ← ThresholdStrategy.calculateThreshold ctx thresh rootId current
+    placeBlockNext ctx ni vdir rootId maxSteps current thresh isInitialAssignment steps
+
+/-- The end of one `placeBlockSteps` step: moves to the next node of the block ring and stops at
+the root (or after `maxSteps` steps). -/
+partial def placeBlockNext (ctx : BKContext) (ni : NeighborhoodInformation) (vdir : VDirection) (rootId maxSteps : Nat)
+    (current : Nat) (thresh : Float) (isInitialAssignment : Bool) (steps : Nat) : CompactM Unit := do
+  let current := (← getThe BKAlignedLayout).alignOf current
+  if current == rootId || steps ≥ maxSteps then
+    if steps ≥ maxSteps && ElkTrace.global.bkGuard then
+      IO.eprintln s!"bk-guard: place_block loop hit max_steps root_id={rootId} current={current} max_steps={maxSteps}"
+    return
+  placeBlockSteps ctx ni vdir rootId maxSteps current thresh isInitialAssignment (steps + 1)
+
+end
 
 /-- The topological sweep of `placeClasses` over the class graph: FIFO queue seeded with the
 class nodes of in-degree 0 in `sinkOrder`; each class gets the minimal (`DOWN`) / maximal (`UP`)
@@ -271,18 +287,32 @@ additionally moved by their class shift (if finite in the compaction direction).
 visited in layer order, so the root of a block (in the first visited layer of the block) is
 moved before its other nodes copy its position. -/
 private def applyFinalCoordinates (ctx : BKContext) (vdir : VDirection) (nodes : Array LNodeId)
-    (bal : BKAlignedLayout) : BKAlignedLayout := Id.run do
-  let mut bal := bal
-  for n in nodes do
-    let idx := ctx.nodeId n
-    let rootId := bal.rootOf idx
-    let rootY := bal.yOf rootId
-    bal := bal.setY idx rootY
-    if idx == rootId then
-      let sinkShift := bal.shiftOf (bal.sinkOf idx)
-      if (vdir == .up && sinkShift > Float.negInf) || (vdir == .down && sinkShift < Float.posInf) then
-        bal := bal.setY idx (rootY + sinkShift)
-  return bal
+    (bal : BKAlignedLayout) : BKAlignedLayout :=
+  -- the y arrays are taken out of the layout and updated in place by an unboxed loop
+  let y := bal.y
+  let yDefined := bal.yDefined
+  let bal := { bal with y := FloatArray.empty, yDefined := #[] }
+  let isUp := match vdir with | .up => true | .down => false
+  let (y, yDefined) := go bal isUp 0 y yDefined
+  { bal with y, yDefined }
+where
+  /-- Node `i` of `nodes`; `y`/`yDefined` are the layout's arrays (`yOf`/`setY` on them). -/
+  go (bal : BKAlignedLayout) (isUp : Bool) (i : Nat) (y : FloatArray) (yDefined : Array Bool) :
+      FloatArray × Array Bool :=
+    if h : i < nodes.size then
+      let idx := ctx.nodeId nodes[i]
+      let rootId := bal.rootOf idx
+      let rootY := if yDefined.getD rootId false then y.get! rootId else 0.0
+      let y := y.set! idx rootY
+      let yDefined := yDefined.set! idx true
+      if idx == rootId then
+        let sinkShift := bal.shiftOf (bal.sinkOf idx)
+        if (isUp && sinkShift > Float.negInf) || (!isUp && sinkShift < Float.posInf) then
+          go bal isUp (i + 1) (y.set! idx (rootY + sinkShift)) yDefined
+        else go bal isUp (i + 1) y yDefined
+      else go bal isUp (i + 1) y yDefined
+    else (y, yDefined)
+  termination_by nodes.size - i
 
 /-- `horizontalCompaction(bal)`: resets sinks and shifts, places all blocks (layers reversed
 for `LEFT`, nodes of a layer reversed for `UP`; only roots start a placement), places the

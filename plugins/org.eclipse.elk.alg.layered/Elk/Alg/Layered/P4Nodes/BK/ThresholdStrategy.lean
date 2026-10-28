@@ -102,18 +102,20 @@ private def pickEdge (ctx : BKContext) (pp : Postprocessable) : ThresholdM Postp
   let a := ctx.arena
   let freeNode := ctx.nodeOf pp.free
   let incoming := if pp.isRoot then bal.hdir == some .right else bal.hdir == some .left
-  let edges := if incoming then a.nodeIncomingEdges freeNode else a.nodeOutgoingEdges freeNode
+  -- the node's incoming (outgoing) edges, ports in order, visited without building the list
   let mut hasEdges := false
-  for e in edges do
-    if !onlyDummies bal pp.free && a.edgeIsInLayerEdge e then continue
-    if bal.su[bal.rootOf pp.free]! then continue
-    hasEdges := true
-    let some other := a.edgeOtherNode e freeNode
-      | throw (IO.userError "java.lang.IllegalArgumentException: node must either be the source node or target node of the edge")
-    let otherNodeId := ctx.nodeId other
-    if otherNodeId ≥ bal.root.size then continue
-    if finished.contains (bal.rootOf otherNodeId) then
-      return { pp with hasEdges := true, edge := some e }
+  for p in (a.node freeNode).ports do
+    let pt := a.port p
+    for e in (if incoming then pt.incomingEdges else pt.outgoingEdges) do
+      if !onlyDummies bal pp.free && a.edgeIsInLayerEdge e then continue
+      if bal.su[bal.rootOf pp.free]! then continue
+      hasEdges := true
+      let some other := a.edgeOtherNode e freeNode
+        | throw (IO.userError "java.lang.IllegalArgumentException: node must either be the source node or target node of the edge")
+      let otherNodeId := ctx.nodeId other
+      if otherNodeId ≥ bal.root.size then continue
+      if finished.contains (bal.rootOf otherNodeId) then
+        return { pp with hasEdges := true, edge := some e }
   return { pp with hasEdges := hasEdges, edge := none }
 
 /-- The threshold of `getBound` for the picked edge `left → right` (`none` = an id out of

@@ -105,7 +105,10 @@ def portContextCreatorTests : Suite := suite "alg.common.nodespacing.internal.al
   check "p6 has an explicit border offset -2" (p6.hasPortBorderOffset && close p6.portBorderOffset (-2.0))
   check "p4 has no border offset (0.0)" (!p4.hasPortBorderOffset && close p4.portBorderOffset 0.0)
   check "portRatioOrPosition stays 0" (ctx.allPortContexts.all fun pc => close pc.portRatioOrPosition 0.0)
-  check "every port gets a label cell (even without labels)" (ctx.allPortContexts.all (·.portLabelCell.isSome))
+  -- Java/elk-rs give every port a label cell; an empty one acts like none, so ports without labels
+  -- get none here (`PortContextCreator.createPortContextOnSide`)
+  check "ports with labels get a label cell, ports without labels none"
+    (ctx.allPortContexts.all fun pc => pc.portLabelCell.isSome == !pc.labels.isEmpty)
   checkEq "p2 label cell holds both labels" (labelsOf ctx p2.portLabelCell).size 2
   checkEq "p4 label cell is empty" (labelsOf ctx p4.portLabelCell).size 0
   checkFloat "hand: p2 label cell width = max(8, 6)" (ctx.cells.minimumWidthOpt p2.portLabelCell) 8.0

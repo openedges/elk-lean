@@ -57,7 +57,10 @@ def configureCellSystemSizeContributions (ctx : NodeContext N P L) : NodeContext
   let south := ctx.insidePortLabelCell .south
   let east := ctx.insidePortLabelCell .east
   let west := ctx.insidePortLabelCell .west
+  -- the arena is taken out of the context first so that it is updated in place (`ctx.cells` is
+  -- not read below)
   let mut cells := ctx.cells
+  let ctx : NodeContext N P L := { ctx with cells := {} }
   -- Go through the different size constraint components
   if ctx.sizeConstraints.contains .ports then
     -- The northern and southern inside port label cells have the correct width for the node
@@ -136,7 +139,8 @@ def updateVerticalInsidePortLabelCellPadding (ctx : NodeContext N P L) : NodeCon
       match cell with
       | some c => cells.modifyPadding c fun p => { p with top := topPadding, bottom := bottomPadding }
       | none => cells
-    { ctx with cells := update (update cells east) west }
+    -- the arena is taken out of the context first so that it is updated in place
+    ctx.modifyCells fun cells => update (update cells east) west
 
 end CellSystemConfigurator
 

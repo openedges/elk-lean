@@ -108,15 +108,28 @@ private def edgeMatches (c : BKContext) (e : LEdgeId) (sourceId targetId : Nat) 
     (sId == sourceId && tId == targetId) || (sId == targetId && tId == sourceId)
   | _, _ => false
 
+/-- The first edge of `nodeConnectedEdges n` (ports in order, each port's incoming then outgoing
+edges) between the nodes with local ids `sourceId` and `targetId`, found without building the
+edge list. -/
+private def firstConnectedEdgeBetween (c : BKContext) (n : LNodeId) (sourceId targetId : Nat) : Option LEdgeId :=
+  Id.run do
+    for p in (c.arena.node n).ports do
+      let pt := c.arena.port p
+      for e in pt.incomingEdges do
+        if c.edgeMatches e sourceId targetId then return some e
+      for e in pt.outgoingEdges do
+        if c.edgeMatches e sourceId targetId then return some e
+    return none
+
 /-- `util::edge_between(source, target)` (Java `BKNodePlacer.getEdge`): the first connected
 edge of `source` (ports in order, each port's incoming then outgoing edges) between the two
 nodes, else the first such edge of `target`. -/
 def edgeBetween (c : BKContext) (source target : LNodeId) : Option LEdgeId :=
   let sourceId := c.nodeId source
   let targetId := c.nodeId target
-  match (c.arena.nodeConnectedEdges source).find? (c.edgeMatches · sourceId targetId) with
+  match c.firstConnectedEdgeBetween source sourceId targetId with
   | some e => some e
-  | none => (c.arena.nodeConnectedEdges target).find? (c.edgeMatches · sourceId targetId)
+  | none => c.firstConnectedEdgeBetween target sourceId targetId
 
 end BKContext
 

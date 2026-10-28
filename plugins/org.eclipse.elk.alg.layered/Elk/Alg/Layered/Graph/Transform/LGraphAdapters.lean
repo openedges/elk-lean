@@ -73,6 +73,7 @@ private def graphOps (vol : IO.Ref Int) : ElementOps LayeredM LGraphId where
   getPosition _ := return {}
   setPosition _ _ := pure ()
   getRaw g k := do return (← getGraph g).props.getRaw? k
+  getProps g := do return (← getGraph g).props
   hasProperty g k := do return (← getGraph g).props.hasKey k
   getVolatileId _ := vol.get
   setVolatileId _ v := vol.set v
@@ -84,6 +85,7 @@ private def nodeOps (vol : IO.Ref (Array Int)) : ElementOps LayeredM LNodeId whe
   getPosition n := do return (← getNode n).position
   setPosition n p := modifyNode n fun nd => { nd with position := p }
   getRaw n k := do return (← getNode n).props.getRaw? k
+  getProps n := do return (← getNode n).props
   hasProperty n k := do return (← getNode n).props.hasKey k
   getVolatileId n := getVol vol n.idx
   setVolatileId n v := setVol vol n.idx v
@@ -95,6 +97,7 @@ private def portOps (vol : IO.Ref (Array Int)) : ElementOps LayeredM LPortId whe
   getPosition p := do return (← getPort p).position
   setPosition p v := modifyPort p fun pt => { pt with position := v }
   getRaw p k := do return (← getPort p).props.getRaw? k
+  getProps p := do return (← getPort p).props
   hasProperty p k := do return (← getPort p).props.hasKey k
   getVolatileId p := getVol vol p.idx
   setVolatileId p v := setVol vol p.idx v
@@ -106,6 +109,7 @@ private def labelOpsWith (vol : IO.Ref (Array Int)) : ElementOps LayeredM LLabel
   getPosition l := do return (← getLabel l).position
   setPosition l v := modifyLabel l fun lb => { lb with position := v }
   getRaw l k := do return (← getLabel l).props.getRaw? k
+  getProps l := do return (← getLabel l).props
   hasProperty l k := do return (← getLabel l).props.hasKey k
   getVolatileId l := getVol vol l.idx
   setVolatileId l v := setVol vol l.idx v
