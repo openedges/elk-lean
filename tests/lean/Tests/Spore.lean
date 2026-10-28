@@ -13,9 +13,9 @@ import Elk.Alg.Spore
 * `spore.fixtures`: `tests/fixtures/spore/<name>.json` laid out through `Elk.Api.layoutJson` against
   `<name>.expected.json` (byte-exact; elk-rs oracle outputs, re-pinned to ELK Java's output where they
   differ, see `tests/fixtures/opt_java_status.tsv`) or `<name>.error` (ELK Java's exception text).
-  Fixtures whose elk-rs result is nondeterministic (it iterates a `std` `HashSet<TEdge>`) carry the
-  other outcomes observed in 60 oracle runs as `<name>.alt<k>.json`; the Lean result (Java `HashSet`
-  order, `JavaHashSet`) must equal one of them. Set `SPORE_DUMP_DIR` to write the Lean outputs as
+  Fixtures whose elk-rs result is nondeterministic (it iterates a `std` `HashSet<TEdge>`) may carry
+  other outcomes as `<name>.alt<k>.json`, one of which the Lean result must equal; since SPV the Lean
+  result is Java's (`HashSet` order, `JavaHashSet`) and no fixture has alternatives any more. Set `SPORE_DUMP_DIR` to write the Lean outputs as
   `<name>.lean.json` there.
 
 Not testable against elk-rs: `sporeCompaction` with `underlyingLayoutAlgorithm = sporeOverlap` (and
