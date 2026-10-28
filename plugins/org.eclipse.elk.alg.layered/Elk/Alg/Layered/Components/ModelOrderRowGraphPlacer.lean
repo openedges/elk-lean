@@ -71,7 +71,8 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
     let size := (← getGraph component).size
     maxRowWidth := fmax maxRowWidth size.x
     totalArea := totalArea + size.x * size.y
-  maxRowWidth := fmax maxRowWidth (Float.sqrt totalArea * aspectRatio)
+  -- Java: Math.max(maxRowWidth, (float) Math.sqrt(totalArea) * aspectRatio)
+  maxRowWidth := fmax maxRowWidth (Float.toF32 (Float.sqrt totalArea) * aspectRatio)
   placeComponentsInRowsModelOrder components target maxRowWidth componentSpacing
   maybeCompactComponents components target false
   for component in components do

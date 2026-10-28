@@ -16,8 +16,11 @@ layers with a west-to-east `OrthogonalRoutingGenerator` starting `SPACING_EDGE_N
 right of the left layer, and advances `x` by the width the routing slots need (at least
 `SPACING_NODE_NODE_BETWEEN_LAYERS` between two non-external layers). The final `x` is the graph width.
 
-Java accumulates `xpos`, `startPos` and `routingWidth` in `float`; Rust rounds through `f32` after every
-step (`Float.toF32` here). The `ArenaSync` snapshot Rust takes at the start is the `ArenaScope` passed to
+ELK Java 0.12.0 keeps only `xpos` in `float` (`float xpos = 0.0f`; every `xpos += d` is
+`xpos = (float) (xpos + d)`, `Float.toF32` here); `startPos = xpos + edgeNodeSpacing` and
+`routingWidth = (slotsCount - 1) * edgeEdgeSpacing (+ edgeNodeSpacing)` are `double`. (elk-rs rounds
+`startPos` and `routingWidth` through `f32` too, which moves the routing slots of graphs with
+non-`float` coordinates off Java's.) The `ArenaSync` snapshot Rust takes at the start is the `ArenaScope` passed to
 every `routeEdges` call (the generator only reads `y` anchors from it, see
 `WestToEastRoutingStrategy`).
 -/
@@ -155,18 +158,17 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       LGraphUtil.placeNodesHorizontally l xpos
       let leftWidth := (← getLayer l).size.x
       xpos := Float.toF32 (xpos + leftWidth)
-    -- Java: float startPos = leftLayer == null ? xpos : xpos + edgeNodeSpacing
-    let startPos := if leftLayer.isNone then Float.toF32 xpos else Float.toF32 (xpos + edgeNodeSpacing)
+    -- Java: double startPos = leftLayer == null ? xpos : xpos + edgeNodeSpacing
+    let startPos := if leftLayer.isNone then xpos else xpos + edgeNodeSpacing
     let slotsCount ← routingGenerator.routeEdges graph (leftLayerNodes.getD #[]) leftLayerIndex
       (rightLayerNodes.getD #[]) startPos (some scope)
     let isLeftLayerExternal ← isLayerExternal leftLayerNodes
     let isRightLayerExternal ← isLayerExternal rightLayerNodes
     if slotsCount > 0 then
-      -- Java: float routingWidth
-      let mut routingWidth :=
-        Float.toF32 (Float.toF32 (Float.toF32 slotsCount.toFloat - fl1p0) * Float.toF32 edgeEdgeSpacing)
-      if leftLayer.isSome then routingWidth := Float.toF32 (routingWidth + Float.toF32 edgeNodeSpacing)
-      if rightLayer.isSome then routingWidth := Float.toF32 (routingWidth + Float.toF32 edgeNodeSpacing)
+      -- Java: double routingWidth = (slotsCount - 1) * edgeEdgeSpacing (int subtraction, slotsCount > 0)
+      let mut routingWidth := (slotsCount - 1).toFloat * edgeEdgeSpacing
+      if leftLayer.isSome then routingWidth := routingWidth + edgeNodeSpacing
+      if rightLayer.isSome then routingWidth := routingWidth + edgeNodeSpacing
       if routingWidth < nodeNodeSpacing && !isLeftLayerExternal && !isRightLayerExternal then
         routingWidth := nodeNodeSpacing
       xpos := Float.toF32 (xpos + routingWidth)
