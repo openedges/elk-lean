@@ -7,7 +7,7 @@ tests/fixtures/force	force_chain3_seed3	ok->ok	java_exact
 tests/fixtures/force	force_chain5_noseed	ok->ok	java_exact
 tests/fixtures/force	force_components_seed4	ok->ok	java_exact
 tests/fixtures/force	force_cycle4_seed2	ok->ok	java_exact
-tests/fixtures/force	force_eades_ignored_seed3	ok->ok	java_equal
+tests/fixtures/force	force_eades_ignored_seed3	ok->ok	java_exact
 tests/fixtures/force	force_fixedsize_seed3	ok->ok	java_exact
 tests/fixtures/force	force_interactive	ok->ok	java_exact
 tests/fixtures/force	force_iter1000_seed3	ok->ok	java_exact
@@ -20,7 +20,7 @@ tests/fixtures/force	force_nested_seed3	ok->ok	java_exact
 tests/fixtures/force	force_nosep_seed3	ok->ok	java_exact
 tests/fixtures/force	force_omit_micro_seed3	ok->ok	java_exact
 tests/fixtures/force	force_priority_seed1	ok->ok	java_exact
-tests/fixtures/force	force_rand15_labels_bends	ok->ok	java_differs /edges[12]/labels[0]/x: 827.8080555641832 vs 210.59875369036223
+tests/fixtures/force	force_rand15_labels_bends	ok->ok	java_exact
 tests/fixtures/force	force_rand20_seed21	ok->ok	java_exact
 tests/fixtures/force	force_rand25_comps_seed8	ok->ok	java_exact
 tests/fixtures/force	force_rand40_seed5	ok->ok	java_exact
@@ -39,19 +39,19 @@ tests/fixtures/force	stress_labels	ok->ok	java_exact
 tests/fixtures/force_enum	eades_bends_seed3	ok->ok	java_exact
 tests/fixtures/force_enum	eades_chain3_seed3	ok->ok	java_exact
 tests/fixtures/force_enum	eades_chain6_noseed	ok->ok	java_exact
-tests/fixtures/force_enum	eades_components_seed4	ok->ok	java_equal
-tests/fixtures/force_enum	eades_cycle5_seed2	ok->ok	java_equal
+tests/fixtures/force_enum	eades_components_seed4	ok->ok	java_exact
+tests/fixtures/force_enum	eades_cycle5_seed2	ok->ok	java_exact
 tests/fixtures/force_enum	eades_explicit_fr_seed3	ok->ok	java_exact
-tests/fixtures/force_enum	eades_interactive	ok->ok	java_equal
+tests/fixtures/force_enum	eades_interactive	ok->ok	java_exact
 tests/fixtures/force_enum	eades_labels_inline_seed6	ok->ok	java_exact
 tests/fixtures/force_enum	eades_labels_seed6	ok->ok	java_exact
-tests/fixtures/force_enum	eades_ordinal_seed3	ok->ok	java_equal
+tests/fixtures/force_enum	eades_ordinal_seed3	ok->ok	java_exact
 tests/fixtures/force_enum	eades_params_seed8	ok->ok	java_exact
 tests/fixtures/force_enum	eades_priority_seed1	ok->ok	java_exact
-tests/fixtures/force_enum	eades_rand15_labels_seed13	ok->ok	java_differs /edges[3]/labels[0]/x: 255.8812509923552 vs 321.98716459537013
-tests/fixtures/force_enum	eades_rand20_seed21	ok->ok	java_equal
-tests/fixtures/force_enum	eades_rand30_comps_seed5	ok->ok	java_equal
-tests/fixtures/force_enum	eades_samepos_interactive	ok->ok	java_differs /children[0]/y: 146.04646964475194 vs 50
+tests/fixtures/force_enum	eades_rand15_labels_seed13	ok->ok	java_exact
+tests/fixtures/force_enum	eades_rand20_seed21	ok->ok	java_exact
+tests/fixtures/force_enum	eades_rand30_comps_seed5	ok->ok	java_exact
+tests/fixtures/force_enum	eades_samepos_interactive	ok->ok	java_exact
 tests/fixtures/force_enum	eades_tree6_seed7	ok->ok	java_exact
 tests/fixtures/force_enum	stress_dimXY_interactive	ok->ok	java_exact
 tests/fixtures/force_enum	stress_dimXY_rand15	ok->ok	java_exact

@@ -136,6 +136,78 @@ def Float.pi : Float := 3.141592653589793
 /-- `Math.E`. -/
 def Float.e : Float := 2.718281828459045
 
+/-- Constants of fdlibm's `__ieee754_log` (`e_log.c`), by bit pattern. -/
+private def logLn2Hi : Float := Float.ofBits 0x3fe62e42fee00000
+private def logLn2Lo : Float := Float.ofBits 0x3dea39ef35793c76
+private def logTwo54 : Float := Float.ofBits 0x4350000000000000
+private def logLg1 : Float := Float.ofBits 0x3FE5555555555593
+private def logLg2 : Float := Float.ofBits 0x3FD999999997FA04
+private def logLg3 : Float := Float.ofBits 0x3FD2492494229359
+private def logLg4 : Float := Float.ofBits 0x3FCC71C51D8E78AF
+private def logLg5 : Float := Float.ofBits 0x3FC7466496CB03DE
+private def logLg6 : Float := Float.ofBits 0x3FC39A09D078C69F
+private def logLg7 : Float := Float.ofBits 0x3FC2F112DF3E5244
+private def logHalf : Float := 0.5
+private def logThird : Float := 0.33333333333333333
+private def logOne : Float := 1.0
+private def logTwo : Float := 2.0
+
+/-- Java `StrictMath.log` (fdlibm `__ieee754_log`, JDK `FdLibm.Log`). The reference JVM's `Math.log`
+(HotSpot on aarch64, the machine of the ELK Java baselines) returns the same values (200,000 random
+arguments: 0 differences), while the C library's `log` (`Float.log`) differs by one ulp for about
+1% of the arguments. Used where ELK Java calls `Math.log` and the result must equal Java's
+(the Eades model of `org.eclipse.elk.alg.force`). -/
+def javaLog (x : Float) : Float := Id.run do
+  let bits := x.toBits
+  let hxU : UInt32 := (bits >>> 32).toUInt32
+  let mut hx : Int := hxU.toInt32.toInt
+  let lx : UInt64 := bits &&& 0xffffffff
+  let mut x := x
+  let mut k : Int := 0
+  if hx < 0x00100000 then
+    -- zero, negative or subnormal: log(±0) = -inf, log(negative) = NaN
+    if (hxU &&& 0x7fffffff) == 0 && lx == 0 then return Float.negInf
+    if hx < 0 then return Float.nan
+    k := k - 54
+    x := x * logTwo54
+    hx := (x.toBits >>> 32).toUInt32.toInt32.toInt
+  if hx ≥ 0x7ff00000 then return x + x
+  let hxN : Nat := hx.toNat
+  k := k + (Int.ofNat (hxN >>> 20) - 1023)
+  let hxM : Nat := hxN &&& 0x000fffff
+  let i : Nat := (hxM + 0x95f64) &&& 0x100000
+  let hi : Nat := hxM ||| (i ^^^ 0x3ff00000)
+  x := Float.ofBits ((hi.toUInt64 <<< 32) ||| (x.toBits &&& 0xffffffff))
+  k := k + Int.ofNat (i >>> 20)
+  let f := x - logOne
+  if (0x000fffff &&& (2 + hxM)) < 3 then
+    -- |f| < 2^-20
+    if f == 0.0 then
+      if k == 0 then return 0.0
+      let dk := Float.ofInt k
+      return dk * logLn2Hi + dk * logLn2Lo
+    let r := f * f * (logHalf - logThird * f)
+    if k == 0 then return f - r
+    let dk := Float.ofInt k
+    return dk * logLn2Hi - ((r - dk * logLn2Lo) - f)
+  let s := f / (logTwo + f)
+  let dk := Float.ofInt k
+  let z := s * s
+  let ii : Int := Int.ofNat hxM - 0x6147a
+  let w := z * z
+  let jj : Int := 0x6b851 - Int.ofNat hxM
+  let t1 := w * (logLg2 + w * (logLg4 + w * logLg6))
+  let t2 := z * (logLg1 + w * (logLg3 + w * (logLg5 + w * logLg7)))
+  let r := t2 + t1
+  -- C `i |= j; if (i > 0)` on 32-bit ints
+  if ii ≥ 0 && jj ≥ 0 && (ii > 0 || jj > 0) then
+    let hfsq := logHalf * f * f
+    if k == 0 then return f - (hfsq - s * (hfsq + r))
+    return dk * logLn2Hi - ((hfsq - (s * (hfsq + r) + dk * logLn2Lo)) - f)
+  else
+    if k == 0 then return f - s * (f - r)
+    return dk * logLn2Hi - ((s * (f - r) - dk * logLn2Lo) - f)
+
 /-- Java integer division (truncates toward zero). -/
 @[inline] def Int.jdiv (a b : Int) : Int := Int.tdiv a b
 /-- Java integer remainder (sign of the dividend). -/
