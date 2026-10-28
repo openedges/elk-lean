@@ -15,6 +15,7 @@
 | `random_java_parity.py` | Driver of `run_random_java_parity.sh` (stages gen, java, lean, rs, report) |
 | `classify_random_parity.py` | Groups the random-graph mismatches by origin layout unit (algorithm, difference kinds) and option features with lift |
 | `gen_hashset_ops.py` + `java/HashSetOrder.java` | Random `HashSet` operation sequences (tree bins included) replayed on `java.util.HashSet`, printing every iteration order: the differential check of `Elk.Core.Util.JavaHashSet` (fixture `tests/fixtures/spv/hashset_ops*.txt`, suite `spv.javaHashSet`) |
+| `java/AsinDump.java` | `Math.asin` bit patterns of the reference JVM for `Elk.Core.Util.javaAsin` (`ELK_ASIN_CASES=<dump> lake test -- --suite spv.javaAsin`) |
 | `build_wasm.sh` | WebAssembly build (emscripten) into `plugins/org.eclipse.elk.wasm/dist/`; see that plugin's README |
 | `build_runtime_nogmp.sh` | Native Lean runtime rebuilt without GMP (`libleanrt_nogmp.a`), `--check` big-number differential test, `--relink elk` GMP-free CLI; used by `build_ffi.sh`/`build_napi.sh` with `ELK_NO_GMP=1` (see `docs/gmp-licensing.md`) |
 
