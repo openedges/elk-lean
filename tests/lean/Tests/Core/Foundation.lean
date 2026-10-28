@@ -241,6 +241,28 @@ def graph : Suite := suite "graph.model" do
   check "monad prop" ((g2.node n).props.hasId "org.eclipse.elk.test.k")
   checkEq "monad child count" (g2.node root).children.size 4
 
-def suites : Array Suite := #[javaSemantics, sorting, random, math, enums, properties, graph]
+/-- `LayoutOptionData.parseInt32Bytes?` (byte-wise INT option parsing) against the `List Char`
+reference `parseInt32?` on boundary cases and random strings over a digit-heavy alphabet. -/
+def int32Parsing : Suite := suite "core.data.parse_int32_bytes" do
+  let fixed := #["", "+", "-", "0", "-0", "+0", "007", "42", "-7", "+15", "2147483647", "2147483648",
+    "-2147483648", "-2147483649", "99999999999999999999999", "-00000000000000000000001", "1.0", " 1",
+    "1 ", "+-1", "--1", "1e3", "١٢", "12a", "a12"]
+  let mut bad : Array String := #[]
+  for s in fixed do
+    if Elk.Core.Data.LayoutOptionData.parseInt32Bytes? s != parseInt32? s then bad := bad.push s
+  let alphabet := "0123456789+- .x".toList.toArray
+  let mut r := Random.ofInt 5
+  for _ in [0:20000] do
+    let (len, r1) := r.nextInt 13
+    r := r1
+    let mut s := ""
+    for _ in [0:len.toNat] do
+      let (c, r2) := r.nextInt (alphabet.size : Int)
+      r := r2
+      s := s.push alphabet[c.toNat]!
+    if Elk.Core.Data.LayoutOptionData.parseInt32Bytes? s != parseInt32? s && bad.size < 20 then bad := bad.push s
+  checkEq "byte-wise int32 parsing agrees with parseInt32?" bad #[]
+
+def suites : Array Suite := #[javaSemantics, sorting, random, math, enums, properties, graph, int32Parsing]
 
 end Tests.Core.Foundation
