@@ -90,9 +90,11 @@ git status --short                         # 비어 있어야 함
 # 1. 빌드·테스트
 lake build 2>&1 | tee /tmp/build.log; grep -cE '(warning|error):' /tmp/build.log   # 0
 lake test                                   # failure 0
-# 2. FFI + NAPI (macOS arm64; 다른 플랫폼은 CI 산출물)
-sh scripts/build_ffi.sh --check
-sh scripts/build_napi.sh --copy-to-npm
+# 2. FFI + NAPI (macOS arm64; 다른 플랫폼은 CI 산출물) — 배포 산출물은 GMP 없는 런타임(docs/gmp-licensing.md)
+sh scripts/build_runtime_nogmp.sh --check --relink elk     # 큰 수 차분 테스트 + 배포용 CLI .lake/build/runtime-nogmp/bin/elk
+ELK_NO_GMP=1 sh scripts/build_ffi.sh --check
+ELK_NO_GMP=1 sh scripts/build_napi.sh --copy-to-npm         # GMP가 들어간 애드온은 --copy-to-npm이 거부
+for b in .lake/build/runtime-nogmp/bin/elk .lake/build/ffi/smoke plugins/org.eclipse.elk.js/dist/elk-lean.*.node; do nm "$b" | grep -c '__gmp'; done   # 전부 0
 # 3. WASM
 sh scripts/build_wasm.sh
 # 4. Java 기준 parity (결과 + 단계별) — JDK/Maven은 mise
@@ -125,8 +127,8 @@ for d in plugins/org.eclipse.elk.js/npm/*/; do (cd "$d" && npm pack --dry-run); 
 1. 비-macOS 빌드: Linux x64/arm64 glibc, musl, Windows 전부 미검증. `.gitlab-ci.yml`은 초안뿐이다. musl과 Windows는 현재 스크립트로 불가능
    (Lean 공식 릴리스에 musl 호스트 툴체인이 없고(확인하지 못함, 미검증 가정), `build_napi.sh`에 Windows 분기가 없으며
    Lean의 Windows 릴리스는 MinGW 계열이라 `msvc` 패키지명과 맞지 않음. 초안 주석 참조).
-2. GMP(LGPL) 정적 링크 검토 결과 미반영(라운드 3 G1).
-3. WASM 깊은 재귀용 Worker 모드(라운드 3 W2), `dist/` 포함 pack 재검증.
+2. GMP(LGPL) 정적 링크: 검토 완료(G1, `docs/gmp-licensing.md`) — 배포되는 네이티브 산출물은 모두 `ELK_NO_GMP=1`(GMP 없는 Lean 런타임)로 만들고 `nm | grep __gmp` 0건을 게이트로 둔다(위 4장 2단계). CI(`.gitlab-ci.yml`)는 `ELK_NO_GMP: "1"`을 전역 변수로 두었으나 Linux에서의 런타임 빌드는 미검증.
+3. WASM 깊은 재귀용 Worker 모드: 완료(W2, `workerStackSizeMb`, `npm test` 56/56). `dist/` 포함 pack 재검증은 남음.
 4. npm 게시 준비: `private` 제거, 패키지 이름 선점 여부(`elk-lean`, `elk-lean-*`) 확인, README 정리, 레지스트리/권한 결정.
 5. 컨텍스트 의존 119개 모델 목록을 릴리스 노트에 첨부할지 결정.
 6. 메타데이터 parity 최신 수치를 스냅샷에 명시.

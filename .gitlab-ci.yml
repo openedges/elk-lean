@@ -44,6 +44,11 @@ variables:
   CI_IMAGE_WASM: "$CI_REGISTRY_IMAGE/ci-wasm:emsdk-6.0.13"
   NODE_MAJOR: "24"
   EMSDK_VERSION: "6.0.13"
+  # distributed native artefacts link the Lean runtime rebuilt without GMP (docs/gmp-licensing.md):
+  # build_ffi.sh/build_napi.sh then run scripts/build_runtime_nogmp.sh (needs the Lean v4.35.0
+  # sources in .reference/ and clones mimalloc/libuv headers from GitHub) and refuse artefacts
+  # that still contain __gmp symbols. UNTESTED on Linux (macOS only so far).
+  ELK_NO_GMP: "1"
   # Lake keeps the package build under .lake/ (gitignored); cache it per job + toolchain
   ELAN_HOME: "$CI_PROJECT_DIR/.cache/elan"
 

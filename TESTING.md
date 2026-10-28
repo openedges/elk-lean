@@ -139,6 +139,11 @@ dependencies, supported features).
 - `sh scripts/build_ffi.sh --check`: builds `.lake/build/ffi/libelklean.a` (C API
   `plugins/org.eclipse.elk.ffi/include/elk_lean.h`) and a native smoke test whose layout must equal
   `elk layout --sort-keys`, plus the metadata and error paths.
+- GMP-free runtime (release artefacts, `docs/gmp-licensing.md`): `sh scripts/build_runtime_nogmp.sh
+  --check --relink elk` (big-number differential test GMP vs Lean's own implementation, relinked CLI
+  in `.lake/build/runtime-nogmp/bin/elk`), `ELK_NO_GMP=1 sh scripts/build_ffi.sh --check`,
+  `ELK_NO_GMP=1 sh scripts/build_napi.sh`; the relinked CLI must give byte-identical corpus layouts
+  and `nm <artefact> | grep -c __gmp` must print 0 for the CLI, the smoke binary and the addon.
 
 ## 3. Release checklist
 1. `lake build` and `lake test` clean.
@@ -147,5 +152,6 @@ dependencies, supported features).
    in `HISTORY.md` and the `AGENTS.md` snapshot.
 3. Metadata parity clean.
 4. Performance within 5% of the recorded baseline (`scripts/run_perf_benchmark.sh`), memory check
-   clean, FFI smoke test (`scripts/build_ffi.sh --check`) passing.
+   clean, FFI smoke test (`scripts/build_ffi.sh --check`) passing in both runtime modes, release
+   artefacts built with `ELK_NO_GMP=1` and free of `__gmp` symbols (section 2.E).
 5. `CHANGELOG.md` updated, tag `vX.Y.Z` (see `VERSIONING.md`).
