@@ -27,6 +27,8 @@ probe, see below) are checked byte-for-byte:
   the elk-rs panic (`UnsupportedConfigurationException` text or `index out of bounds`).
 
 Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `vf_ports_labels` is an elk-lean output since RJ1 (Java's node micro layout; every changed value equals ELK Java's).
+`sp_sections` is the ELK Java output since SEC (the routers keep the *first* of several sections,
+Java `ElkGraphUtil.firstEdgeSection(edge, true, true)`; elk-rs kept the last one).
 -/
 namespace Tests.VertiFlex
 
