@@ -175,6 +175,12 @@
 
 - **7차 라운드 마감(병합본 `5a72a3d` = FEL+PR+P3J, 2026-10-29)**: `lake test` 14795/0, Java 코퍼스 1878/119, elk-rs 1447/1447, 무작위 v 정확 **5,297/5,761(92.0%)**(6차 마감 5,090), s 1,182/1,205, npm 59/60, WASM 550/550. **벤치마크(조용한 상태, load 6, 20회/워밍업 3회)**: 합성 26개 lean/rust_api 기하평균 **0.82배**, 5% 게이트 통과(6차 마감 기준선 대비; mrtree·radial 회복), 코퍼스 1,447개 총합 **1.01배**(3,563 vs 3,513 ms)·모델별 기하평균 1.00배·중앙값 1.00배(최악 1.61배); 기준선 2종 갱신. 메모리: 4시나리오 50회 vs 500회 최대 RSS 20.15 MB 동일.
 
+### 8차 라운드 작업 할당표 (2026-10-29)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| NIK. elk-rs 의미론이 남은 layered 지점의 Java 이식: `NodePromotion`의 Nikolov 전략 4종(elk-rs는 no-op, Java는 실행), `ModelOrderBarycenterHeuristic`의 관계 집합(순환 관계에서 Java와 다름), `LayerConstraint`/promotion 관련 잔여 | Java `intermediate/NodePromotion.java`, `p3order/ModelOrderBarycenterHeuristic.java` | opus | xhigh | 서브에이전트 NIK(worktree) | 진행 중 |
+| RJ3. 남은 무작위 Java parity 차이의 다음 묶음: mrtree 자식·`AVOID_OVERLAP` 잔여·`CompactionProcessor`, radial 합성 3건, P4 `LinearSegmentsNodePlacer`(`v3/g0156`), self-loop 라우팅 변형 10건, 최종 간선만 다른 2건; `gen_p3.py`·`gen_option_graphs.py`를 파이프라인 기본 세트로 | Java `alg.mrtree`, `alg.radial`, `p4nodes/LinearSegmentsNodePlacer`, `intermediate/loops/**`, `scripts/` | opus | xhigh | 서브에이전트 RJ3(worktree) | 진행 중 |
+
 ### 7차 라운드 작업 할당표 (2026-10-28)
 | 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
