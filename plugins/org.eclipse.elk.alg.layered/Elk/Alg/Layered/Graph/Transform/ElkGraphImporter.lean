@@ -53,6 +53,13 @@ elk-rs behaviour reproduced where it differs from Java (Rust is the oracle):
 Not ported: the `ElkTrace` diagnostics (`compound_width`, `import_port_order`,
 `import_edge_selection`, `inside_yo`, `edge_origin_map`), which only print to stderr.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Graph.Transform
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Core.Util.Adapters
@@ -585,8 +592,8 @@ private def transformExternalPortLabels (imp : ElkGraphImporter) (labels : Array
       modifyPort dp fun p => { p with labels := p.labels.push llabel }
     if !insidePortLabels then
       let insidePart :=
-        if portLabelsFixed then ElkUtil.computeInsidePart ⟨lb.x, lb.y⟩ ⟨lb.width, lb.height⟩ portSize 0.0 portSide
-        else 0.0
+        if portLabelsFixed then ElkUtil.computeInsidePart ⟨lb.x, lb.y⟩ ⟨lb.width, lb.height⟩ portSize fl0p0 portSide
+        else fl0p0
       modifyLabel llabel fun l =>
         match portSide with
         | .east | .west => { l with size := { l.size with x := insidePart } }
@@ -602,7 +609,7 @@ def transformExternalPort (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph :
     LImportM Unit := do
   let port ← elkPort elkport
   let portSide := port.props.getD LayeredOptions.PORT_SIDE PortSide.undefined
-  let portPosition : KVector := ⟨port.x + port.width / 2.0, port.y + port.height / 2.0⟩
+  let portPosition : KVector := ⟨port.x + port.width / fl2p0, port.y + port.height / fl2p0⟩
   let portSize : KVector := ⟨port.width, port.height⟩
   let some netFlow ← withElk (calculateExternalPortNetFlow · elkport)
     | throwIllegalState "port must have a parent node"
@@ -612,7 +619,7 @@ def transformExternalPort (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph :
   let graphSize : KVector := ⟨graphNode.width, graphNode.height⟩
   if !port.props.has LayeredOptions.PORT_BORDER_OFFSET then
     -- port coordinates (0, 0) default to offset 0 to make the common case frustration-free
-    let portBorderOffset ← if port.x == 0.0 && port.y == 0.0 then pure 0.0
+    let portBorderOffset ← if port.x == fl0p0 && port.y == fl0p0 then pure fl0p0
       else withElk (ElkUtil.calcPortOffset · elkport portSide)
     liftElk (ElkM.modifyPort elkport fun p => { p with props := p.props.set LayeredOptions.PORT_BORDER_OFFSET portBorderOffset })
   let holder := (← elkPort elkport).props
@@ -633,9 +640,9 @@ def transformExternalPort (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph :
   -- the spacings that apply to the labels are those of the parent graph
   if let some parent := graphNode.parent then
     let parentProps := (← elkNode parent).props
-    let horizontal := parentProps.getD LayeredOptions.SPACING_LABEL_PORT_HORIZONTAL 1.0
-    let vertical := parentProps.getD LayeredOptions.SPACING_LABEL_PORT_VERTICAL 1.0
-    let labelLabel := parentProps.getD LayeredOptions.SPACING_LABEL_LABEL 0.0
+    let horizontal := parentProps.getD LayeredOptions.SPACING_LABEL_PORT_HORIZONTAL fl1p0
+    let vertical := parentProps.getD LayeredOptions.SPACING_LABEL_PORT_VERTICAL fl1p0
+    let labelLabel := parentProps.getD LayeredOptions.SPACING_LABEL_LABEL fl0p0
     modifyNode dummy fun n => { n with props :=
       ((n.props.set LayeredOptions.SPACING_LABEL_PORT_HORIZONTAL horizontal).set
         LayeredOptions.SPACING_LABEL_PORT_VERTICAL vertical).set LayeredOptions.SPACING_LABEL_LABEL labelLabel }

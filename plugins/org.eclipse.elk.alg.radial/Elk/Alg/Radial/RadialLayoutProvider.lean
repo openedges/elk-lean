@@ -30,6 +30,12 @@ A graph without a root (`RadialUtil.findRoot` is `none`) raises Java's
 `IllegalArgumentException("The given graph is not a tree!")`; elk-rs reports it as an
 `UnsupportedConfigurationException` (`docs/robustness-random-graphs.md`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Radial
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Alg.Common.NodeSpacing
@@ -83,15 +89,15 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
     let some root ← RadialUtil.findRoot layoutGraph
       | throwIllegalArgument "The given graph is not a tree!"
     InternalProperties.setRootNode layoutGraph root
-    let mut layoutRadius := ((← ElkM.getNode layoutGraph).props.get RadialOptions.RADIUS).getD 0.0
-    if layoutRadius == 0.0 then
+    let mut layoutRadius := ((← ElkM.getNode layoutGraph).props.get RadialOptions.RADIUS).getD fl0p0
+    if layoutRadius == fl0p0 then
       layoutRadius ← RadialUtil.findLargestNodeInGraph layoutGraph
     ElkM.setNodeProp layoutGraph RadialOptions.RADIUS layoutRadius
     let mut index := 0
     for processor in algorithm do
       if ← monitor.isCanceled then return
       if ← monitor.isLoggingEnabled then monitor.logGraph s!"{index}-Before processor"
-      let sub ← monitor.subTask 1.0
+      let sub ← monitor.subTask fl1p0
       processor.process layoutGraph sub
       index := index + 1
     if ← monitor.isLoggingEnabled then monitor.logGraph s!"{algorithm.size}-Finished"

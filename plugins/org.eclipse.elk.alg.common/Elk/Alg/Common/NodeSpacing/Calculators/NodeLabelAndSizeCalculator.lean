@@ -42,6 +42,15 @@ Deviations from elk-rs:
   reused `ContainerArea`/`HorizontalLabelAlignment`/`VerticalLabelAlignment` are the cell system
   enums (identical to the elk-rs file-private copies).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl10p0 : Float := 10.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+private def fl3p0 : Float := 3.0
+
 namespace Elk.Alg.Common.NodeSpacing
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -59,7 +68,7 @@ elk_enum OutsideSide := north south east west
 
 /-- `values[area.index()]` of an elk-rs `[f64; 3]` (`0.0` if out of range, which cannot happen). -/
 @[inline] def at3 (values : Array Float) (area : ContainerArea) : Float :=
-  values.getD area.index 0.0
+  values.getD area.index fl0p0
 
 /-- Gives BEGIN and END the larger of their two values (the `symmetrical` step of elk-rs'
 `min_column_widths` / `min_row_heights` / `min_cell_widths` / `min_cell_heights`). -/
@@ -70,10 +79,10 @@ def symmetrize (values : Array Float) : Array Float :=
 /-- elk-rs `sum_with_gaps_with_gap(values, gap)`: the sum of the positive values plus one gap
 between each two of them. -/
 def sumWithGapsWithGap (values : Array Float) (gap : Float) : Float := Id.run do
-  let mut sum := 0.0
+  let mut sum := fl0p0
   let mut activeCount : Nat := 0
   for value in values do
-    if value > 0.0 then
+    if value > fl0p0 then
       sum := sum + value
       activeCount := activeCount + 1
   if activeCount > 1 then
@@ -81,7 +90,7 @@ def sumWithGapsWithGap (values : Array Float) (gap : Float) : Float := Id.run do
   return sum
 
 /-- `values.into_iter().fold(0.0, f64::max)`. -/
-@[inline] def maxOf (values : Array Float) : Float := values.foldl fmax 0.0
+@[inline] def maxOf (values : Array Float) : Float := values.foldl fmax fl0p0
 
 /-- Rust `f64::max` (`fmax`) with the NaN tests written inline (`x != x`). -/
 @[inline] private def fmaxI (a b : Float) : Float :=
@@ -120,15 +129,15 @@ def toArray (v : Float3) : Array Float := #[v.b, v.c, v.e]
 /-- `sumWithGapsWithGap` (the same additions in the same order): the sum of the positive values
 plus one gap between each two of them. -/
 @[inline] def sumWithGaps (v : Float3) (gap : Float) : Float :=
-  let sum : Float := 0.0
-  let sum := if v.b > 0.0 then sum + v.b else sum
-  let sum := if v.c > 0.0 then sum + v.c else sum
-  let sum := if v.e > 0.0 then sum + v.e else sum
-  let activeCount : Nat := (if v.b > 0.0 then 1 else 0) + (if v.c > 0.0 then 1 else 0) + (if v.e > 0.0 then 1 else 0)
+  let sum : Float := fl0p0
+  let sum := if v.b > fl0p0 then sum + v.b else sum
+  let sum := if v.c > fl0p0 then sum + v.c else sum
+  let sum := if v.e > fl0p0 then sum + v.e else sum
+  let activeCount : Nat := (if v.b > fl0p0 then 1 else 0) + (if v.c > fl0p0 then 1 else 0) + (if v.e > fl0p0 then 1 else 0)
   if activeCount > 1 then sum + gap * (activeCount - 1).toFloat else sum
 
 /-- `maxOf`: `fmax (fmax (fmax 0 BEGIN) CENTER) END`. -/
-@[inline] def maxOf (v : Float3) : Float := fmaxI (fmaxI (fmaxI 0.0 v.b) v.c) v.e
+@[inline] def maxOf (v : Float3) : Float := fmaxI (fmaxI (fmaxI fl0p0 v.b) v.c) v.e
 
 end Float3
 
@@ -138,9 +147,9 @@ end Float3
 labels added so far. -/
 structure CellMinSize where
   /-- Minimum width. -/
-  width : Float := 0.0
+  width : Float := fl0p0
   /-- Minimum height. -/
-  height : Float := 0.0
+  height : Float := fl0p0
   /-- Number of labels added. -/
   labelCount : Nat := 0
   deriving Inhabited, Repr
@@ -208,7 +217,7 @@ in the rectangle. Label sizes are re-read through `ops.getSize`. -/
 def applyHorizontalLayout (ops : ElementOps m L) (c : LabelCellLayout L) (rect : ElkRectangle) : m Unit := do
   let mut yPos := rect.y
   if c.verticalAlignment == .center then
-    yPos := yPos + (rect.height - c.minimumContentAreaSize.height) / 2.0
+    yPos := yPos + (rect.height - c.minimumContentAreaSize.height) / fl2p0
   else if c.verticalAlignment == .bottom then
     yPos := yPos + (rect.height - c.minimumContentAreaSize.height)
   for label in c.labels do
@@ -217,7 +226,7 @@ def applyHorizontalLayout (ops : ElementOps m L) (c : LabelCellLayout L) (rect :
     yPos := yPos + (size.y + c.labelGap)
     let posX := match c.horizontalAlignment with
       | .left => rect.x
-      | .center => rect.x + (rect.width - size.x) / 2.0
+      | .center => rect.x + (rect.width - size.x) / fl2p0
       | .right => rect.x + rect.width - size.x
     ops.setPosition label ⟨posX, posY⟩
 
@@ -227,7 +236,7 @@ vertically in the rectangle. Label sizes are re-read through `ops.getSize`. -/
 def applyVerticalLayout (ops : ElementOps m L) (c : LabelCellLayout L) (rect : ElkRectangle) : m Unit := do
   let mut xPos := rect.x
   if c.horizontalAlignment == .center then
-    xPos := xPos + (rect.width - c.minimumContentAreaSize.width) / 2.0
+    xPos := xPos + (rect.width - c.minimumContentAreaSize.width) / fl2p0
   else if c.horizontalAlignment == .right then
     xPos := xPos + (rect.width - c.minimumContentAreaSize.width)
   for label in c.labels do
@@ -236,7 +245,7 @@ def applyVerticalLayout (ops : ElementOps m L) (c : LabelCellLayout L) (rect : E
     xPos := xPos + (size.x + c.labelGap)
     let posY := match c.verticalAlignment with
       | .top => rect.y
-      | .center => rect.y + (rect.height - size.y) / 2.0
+      | .center => rect.y + (rect.height - size.y) / fl2p0
       | .bottom => rect.y + rect.height - size.y
     ops.setPosition label ⟨posX, posY⟩
 
@@ -371,9 +380,9 @@ def configuredMinimumSize (a : GraphAdapters m G N P L E) (node : N) (sizeOption
     m KVector := do
   let mut minimumSize ← a.node.getPropertyD node CoreOptions.NODE_SIZE_MINIMUM KVector.zero
   if sizeOptions.contains .defaultMinimumSize then
-    if minimumSize.x <= 0.0 then
+    if minimumSize.x <= fl0p0 then
       minimumSize := { minimumSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
-    if minimumSize.y <= 0.0 then
+    if minimumSize.y <= fl0p0 then
       minimumSize := { minimumSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
   return minimumSize
 
@@ -425,8 +434,8 @@ individual or inherited) and adds the size of every node label with an inside pl
 configured minimum size if `MINIMUM_SIZE` and `MINIMUM_SIZE_ACCOUNTS_FOR_PADDING` are set. -/
 def new (a : GraphAdapters m G N P L E) (node : N) (layoutDirection : Direction) : m InsideNodeLabelGrid := do
   let sizeOptions ← a.node.getPropertyD node CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
-  let labelGap := (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_LABEL).getD 0.0
-  let containerGap := 2.0 * labelGap
+  let labelGap := (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_LABEL).getD fl0p0
+  let containerGap := fl2p0 * labelGap
   let padding := (← a.getIndividualOrInherited node CoreOptions.NODE_LABELS_PADDING).getD {}
   let mut grid : InsideNodeLabelGrid := {
     cells := Array.replicate 3 (Array.replicate 3 {})
@@ -474,11 +483,11 @@ def computeInsidePadding (g : InsideNodeLabelGrid) : ElkPadding := Id.run do
 the widest cell of the column (`none`); the center column is at least the center cell minimum
 width; BEGIN/END get the same width if symmetrical. -/
 def minColumnWidths (g : InsideNodeLabelGrid) (row : Option ContainerArea) : Array Float := Id.run do
-  let mut colWidths : Array Float := #[0.0, 0.0, 0.0]
+  let mut colWidths : Array Float := #[fl0p0, fl0p0, fl0p0]
   for col in ContainerArea.values do
     let maxWidth := match row with
       | some r => (g.cell r col).width
-      | none => ContainerArea.values.foldl (fun acc iterRow => fmax acc (g.cell iterRow col).width) 0.0
+      | none => ContainerArea.values.foldl (fun acc iterRow => fmax acc (g.cell iterRow col).width) fl0p0
     colWidths := colWidths.setIfInBounds col.index maxWidth
   if let some centerMinSize := g.centerCellMinSize then
     colWidths := colWidths.setIfInBounds ContainerArea.center.index (fmax (at3 colWidths .center) centerMinSize.x)
@@ -489,9 +498,9 @@ def minColumnWidths (g : InsideNodeLabelGrid) (row : Option ContainerArea) : Arr
 /-- elk-rs `InsideNodeLabelGrid::min_row_heights()`: per row the highest cell; the center row is
 at least the center cell minimum height; BEGIN/END get the same height if symmetrical. -/
 def minRowHeights (g : InsideNodeLabelGrid) : Array Float := Id.run do
-  let mut rowHeights : Array Float := #[0.0, 0.0, 0.0]
+  let mut rowHeights : Array Float := #[fl0p0, fl0p0, fl0p0]
   for row in ContainerArea.values do
-    let maxHeight := ContainerArea.values.foldl (fun acc col => fmax acc (g.cell row col).height) 0.0
+    let maxHeight := ContainerArea.values.foldl (fun acc col => fmax acc (g.cell row col).height) fl0p0
     rowHeights := rowHeights.setIfInBounds row.index maxHeight
   if let some centerMinSize := g.centerCellMinSize then
     rowHeights := rowHeights.setIfInBounds ContainerArea.center.index (fmax (at3 rowHeights .center) centerMinSize.y)
@@ -657,12 +666,12 @@ def hasLabels (s : StripContainerLayout L) : Bool := s.cells.any (!·.labels.isE
 /-- Minimum width of one cell (`0` if missing). -/
 @[inline] private def cellMinWidth (s : StripContainerLayout L) (area : ContainerArea) : Float :=
   let i := area.index
-  if h : i < s.cells.size then s.cells[i].minWidth else 0.0
+  if h : i < s.cells.size then s.cells[i].minWidth else fl0p0
 
 /-- Minimum height of one cell (`0` if missing). -/
 @[inline] private def cellMinHeight (s : StripContainerLayout L) (area : ContainerArea) : Float :=
   let i := area.index
-  if h : i < s.cells.size then s.cells[i].minHeight else 0.0
+  if h : i < s.cells.size then s.cells[i].minHeight else fl0p0
 
 /-- elk-rs `StripContainerLayout::min_cell_widths()`. -/
 def minCellWidths3 (s : StripContainerLayout L) : Float3 :=
@@ -684,13 +693,13 @@ def minCellHeights (s : StripContainerLayout L) : Array Float := s.minCellHeight
 (horizontal strip), plus left and right padding; `0` without labels. -/
 def minWidth (s : StripContainerLayout L) : Float :=
   let width := if s.verticalStrip then s.minCellWidths3.maxOf else s.minCellWidths3.sumWithGaps s.gap
-  if s.hasLabels then width + s.padding.left + s.padding.right else 0.0
+  if s.hasLabels then width + s.padding.left + s.padding.right else fl0p0
 
 /-- elk-rs `StripContainerLayout::min_height()`: sum with gaps (vertical strip) or highest cell
 (horizontal strip), plus top and bottom padding; `0` without labels. -/
 def minHeight (s : StripContainerLayout L) : Float :=
   let height := if s.verticalStrip then s.minCellHeights3.sumWithGaps s.gap else s.minCellHeights3.maxOf
-  if s.hasLabels then height + s.padding.top + s.padding.bottom else 0.0
+  if s.hasLabels then height + s.padding.top + s.padding.bottom else fl0p0
 
 /-- elk-rs `apply_horizontal_strip_layout(rect)`: cells laid out along x by `layoutAxisThree`,
 each spanning the padded height. -/
@@ -762,12 +771,12 @@ def getCell (g : InsideLabelLayoutGrid L) (row col : ContainerArea) : Option (La
 /-- Minimum width of `cells[row][col]` (`0` if missing). -/
 @[inline] def cellMinWidth (g : InsideLabelLayoutGrid L) (row col : ContainerArea) : Float :=
   let i := cellIndex row col
-  if h : i < g.cells.size then g.cells[i].minWidth else 0.0
+  if h : i < g.cells.size then g.cells[i].minWidth else fl0p0
 
 /-- Minimum height of `cells[row][col]` (`0` if missing). -/
 @[inline] def cellMinHeight (g : InsideLabelLayoutGrid L) (row col : ContainerArea) : Float :=
   let i := cellIndex row col
-  if h : i < g.cells.size then g.cells[i].minHeight else 0.0
+  if h : i < g.cells.size then g.cells[i].minHeight else fl0p0
 
 /-- Creates the nine empty cells (elk-rs `InsideLabelLayoutGrid::new`: alignment LEFT/CENTER/RIGHT
 by column and TOP/CENTER/BOTTOM by row) unless they exist. -/
@@ -841,7 +850,7 @@ def contentWidth (g : InsideLabelLayoutGrid L) : Float :=
   if g.tabular then (g.minColumnWidths3 none).sumWithGaps g.containerGap
   else
     let rowWidth (row : ContainerArea) : Float := (g.minColumnWidths3 (some row)).sumWithGaps g.containerGap
-    fmaxI (fmaxI (fmaxI 0.0 (rowWidth .begin)) (rowWidth .center)) (rowWidth .«end»)
+    fmaxI (fmaxI (fmaxI fl0p0 (rowWidth .begin)) (rowWidth .center)) (rowWidth .«end»)
 
 /-- elk-rs `InsideLabelLayoutGrid::compute_minimum_size(only_center_cell_contributes)`: like
 `InsideNodeLabelGrid.computeMinimumSize`, positive components get the node (port) padding and the
@@ -861,8 +870,8 @@ def computeMinimumSize (g : InsideLabelLayoutGrid L) (onlyCenterCellContributes 
     else g.minRowHeights3.sumWithGaps g.containerGap
   let np := g.nodePadding
   let nlp := g.nodeLabelPadding
-  let minWidth := if minWidth > 0.0 then minWidth + (np.left + np.right + nlp.left + nlp.right) else minWidth
-  let minHeight := if minHeight > 0.0 then minHeight + (np.top + np.bottom + nlp.top + nlp.bottom) else minHeight
+  let minWidth := if minWidth > fl0p0 then minWidth + (np.left + np.right + nlp.left + nlp.right) else minWidth
+  let minHeight := if minHeight > fl0p0 then minHeight + (np.top + np.bottom + nlp.top + nlp.bottom) else minHeight
   ⟨minWidth, minHeight⟩
 
 /-- elk-rs `InsideLabelLayoutGrid::new(node, horizontal_layout_mode, size_constraints, size_options,
@@ -910,8 +919,8 @@ def applyLayout (ops : ElementOps m L) (g : InsideLabelLayoutGrid L) (nodeSize :
   let np := g.nodePadding
   let gridX := np.left
   let gridY := np.top
-  let gridWidth := fmax (nodeSize.x - np.left - np.right) 0.0
-  let gridHeight := fmax (nodeSize.y - np.top - np.bottom) 0.0
+  let gridWidth := fmax (nodeSize.x - np.left - np.right) fl0p0
+  let gridHeight := fmax (nodeSize.y - np.top - np.bottom) fl0p0
   let verticalAxis := layoutAxis3 gridY gridHeight g.nodeLabelPadding.top g.nodeLabelPadding.bottom
     g.minRowHeights3 g.containerGap
   if !g.cells.isEmpty then
@@ -989,13 +998,13 @@ end OutsideLabelStrips
 @[inline] def stripMinWidth (strip : Option (StripContainerLayout L)) : Float :=
   match strip with
   | some s => s.minWidth
-  | none => 0.0
+  | none => fl0p0
 
 /-- `StripContainerLayout.minHeight` of an optional strip (`0` without one). -/
 @[inline] def stripMinHeight (strip : Option (StripContainerLayout L)) : Float :=
   match strip with
   | some s => s.minHeight
-  | none => 0.0
+  | none => fl0p0
 
 /-- elk-rs `place_outside_container(container, side, node_size, outside_overhang)`: nothing without
 labels; NORTH/SOUTH strips are at least as wide as the node (exactly as wide unless outside labels
@@ -1011,14 +1020,14 @@ def placeOutsideContainer (ops : ElementOps m L) (container : Option (StripConta
     containerRect := { containerRect with width := fmax containerRect.width nodeSize.x }
     if containerRect.width > nodeSize.x && !outsideOverhang then
       containerRect := { containerRect with width := nodeSize.x }
-    containerRect := { containerRect with x := -(containerRect.width - nodeSize.x) / 2.0 }
+    containerRect := { containerRect with x := -(containerRect.width - nodeSize.x) / fl2p0 }
     containerRect := { containerRect with
       y := if side == .north then -containerRect.height else nodeSize.y }
   | .west | .east =>
     containerRect := { containerRect with height := fmax containerRect.height nodeSize.y }
     if containerRect.height > nodeSize.y && !outsideOverhang then
       containerRect := { containerRect with height := nodeSize.y }
-    containerRect := { containerRect with y := -(containerRect.height - nodeSize.y) / 2.0 }
+    containerRect := { containerRect with y := -(containerRect.height - nodeSize.y) / fl2p0 }
     containerRect := { containerRect with
       x := if side == .west then -containerRect.width else nodeSize.x }
   container.applyLayout ops containerRect
@@ -1194,9 +1203,9 @@ def setupNodePaddingForPortsWithOffset (insideLayout : InsideLabelLayoutGrid L) 
   let mut nodeCellPadding := insideLayout.nodePadding
   let symmetrical := !sizeOptions.contains .asymmetrical
   for port in ← a.nodePorts node do
-    let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET 0.0
+    let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET fl0p0
     let side ← a.portSide port
-    if portBorderOffset < 0.0 then
+    if portBorderOffset < fl0p0 then
       nodeCellPadding := growPaddingForExtension nodeCellPadding side (-portBorderOffset)
     if !PortLabelPlacement.isFixed portLabelsPlacement then
       continue
@@ -1210,9 +1219,9 @@ def setupNodePaddingForPortsWithOffset (insideLayout : InsideLabelLayoutGrid L) 
 `PortMargin`). -/
 structure FreePortMargin where
   /-- Space above the port. -/
-  top : Float := 0.0
+  top : Float := fl0p0
   /-- Space below the port. -/
-  bottom : Float := 0.0
+  bottom : Float := fl0p0
   deriving Inhabited, Repr
 
 /-- The label-induced margin of one port (the `for port in &ports` body of elk-rs
@@ -1226,10 +1235,10 @@ private def freePortMargin (a : GraphAdapters m G N P L E) (port : P) (includePo
   if !includePortLabels then return margin
   let labels ← (← a.portLabels port).filterM fun label => do
     let size ← a.label.getSize label
-    return size.x > 0.0 || size.y > 0.0
+    return size.x > fl0p0 || size.y > fl0p0
   if fixedPortLabels then
-    let mut minY := 0.0
-    let mut maxY := 0.0
+    let mut minY := fl0p0
+    let mut maxY := fl0p0
     let mut hasFixedLabel := false
     for label in labels do
       let pos ← a.label.getPosition label
@@ -1245,26 +1254,26 @@ private def freePortMargin (a : GraphAdapters m G N P L E) (port : P) (includePo
         maxY := fmax maxY y2
     if hasFixedLabel then
       let portHeight := (← a.port.getSize port).y
-      margin := { top := fmax (-minY) 0.0, bottom := fmax (maxY - portHeight) 0.0 }
+      margin := { top := fmax (-minY) fl0p0, bottom := fmax (maxY - portHeight) fl0p0 }
     return margin
-  let labelHeight : Float ← if labels.isEmpty then pure 0.0 else do
-    let mut sum := 0.0
+  let labelHeight : Float ← if labels.isEmpty then pure fl0p0 else do
+    let mut sum := fl0p0
     for label in labels do
       sum := sum + (← a.label.getSize label).y
-    pure (sum + labelLabelSpacing * fmax (labels.size.toFloat - 1.0) 0.0)
-  if labelHeight > 0.0 then
+    pure (sum + labelLabelSpacing * fmax (labels.size.toFloat - fl1p0) fl0p0)
+  if labelHeight > fl0p0 then
     if labelsNextToPort then
       let portHeight := (← a.port.getSize port).y
       if labelHeight > portHeight then
         if treatAsGroup || labels.size == 1 then
-          let overhang := (labelHeight - portHeight) / 2.0
+          let overhang := (labelHeight - portHeight) / fl2p0
           margin := { top := overhang, bottom := overhang }
         else
           let firstLabelHeight ← match labels[0]? with
             | some first => (·.y) <$> a.label.getSize first
-            | none => pure 0.0
-          let firstLabelOverhang := (firstLabelHeight - portHeight) / 2.0
-          margin := { top := fmax firstLabelOverhang 0.0, bottom := labelHeight - firstLabelOverhang - portHeight }
+            | none => pure fl0p0
+          let firstLabelOverhang := (firstLabelHeight - portHeight) / fl2p0
+          margin := { top := fmax firstLabelOverhang fl0p0, bottom := labelHeight - firstLabelOverhang - portHeight }
     else
       -- Label placed below the port
       margin := { margin with bottom := portLabelSpacingV + labelHeight }
@@ -1279,11 +1288,11 @@ surrounding port margins and two more spacings for DISTRIBUTED alignment. `0` wi
 def verticalPortSizeForFreeSide (a : GraphAdapters m G N P L E) (node : N) (side : PortSide)
     (sizeConstraints : EnumSet SizeConstraint) (portLabelsPlacement : EnumSet PortLabelPlacement) : m Float := do
   let ports ← (← a.nodePorts node).filterM fun p => return (← a.portSide p) == side
-  if ports.isEmpty then return 0.0
-  let portPortSpacing := fmax ((← a.getIndividualOrInherited node CoreOptions.SPACING_PORT_PORT).getD 10.0) 0.0
+  if ports.isEmpty then return fl0p0
+  let portPortSpacing := fmax ((← a.getIndividualOrInherited node CoreOptions.SPACING_PORT_PORT).getD fl10p0) fl0p0
   let surrounding : ElkMargin := (← a.getIndividualOrInherited node CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
-  let portLabelSpacingV := (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD 1.0
-  let labelLabelSpacing := fmax ((← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_LABEL).getD 0.0) 0.0
+  let portLabelSpacingV := (← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD fl1p0
+  let labelLabelSpacing := fmax ((← a.getIndividualOrInherited node CoreOptions.SPACING_LABEL_LABEL).getD fl0p0) fl0p0
   let treatAsGroup ← a.node.getPropertyD node CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
   let portLabelsOutside := portLabelsPlacement.contains .outside
   let nextToPortIfPossible := portLabelsPlacement.contains .nextToPortIfPossible
@@ -1305,13 +1314,13 @@ def verticalPortSizeForFreeSide (a : GraphAdapters m G N P L E) (node : N) (side
       treatAsGroup labelLabelSpacing portLabelSpacingV)
   -- For outside placement: topmost port margin.top = 0, bottommost port margin.bottom = 0
   if portLabelsOutside && !margins.isEmpty then
-    margins := margins.modify 0 fun mg => { mg with top := 0.0 }
-    margins := margins.modify (margins.size - 1) fun mg => { mg with bottom := 0.0 }
+    margins := margins.modify 0 fun mg => { mg with top := fl0p0 }
+    margins := margins.modify (margins.size - 1) fun mg => { mg with bottom := fl0p0 }
     -- Space-efficient: if topmost port's labels are NOT next to port, clear its bottom margin
     if spaceEfficientPortLabels && !labelsNextToPort then
-      margins := margins.modify 0 fun mg => { mg with bottom := 0.0 }
+      margins := margins.modify 0 fun mg => { mg with bottom := fl0p0 }
   -- Sum port heights + margins + inter-port spacing
-  let mut height := 0.0
+  let mut height := fl0p0
   for i in [0:ports.size] do
     let some port := ports[i]? | continue
     let mg := margins.getD i {}
@@ -1319,7 +1328,7 @@ def verticalPortSizeForFreeSide (a : GraphAdapters m G N P L E) (node : N) (side
     if i + 1 < ports.size then
       height := height + portPortSpacing
   -- Add surrounding port margins (top/bottom for EAST/WEST)
-  let (surrTop, surrBottom) := if eastOrWest then (surrounding.top, surrounding.bottom) else (0.0, 0.0)
+  let (surrTop, surrBottom) := if eastOrWest then (surrounding.top, surrounding.bottom) else (fl0p0, fl0p0)
   height := height + (surrTop + surrBottom)
   -- For DISTRIBUTED alignment, add 2 * port_port_spacing
   let sideAlignment ← match side with
@@ -1330,7 +1339,7 @@ def verticalPortSizeForFreeSide (a : GraphAdapters m G N P L E) (node : N) (side
     | some alignment => pure alignment
     | none => a.node.getPropertyD node CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
   if portAlignment == .distributed then
-    height := height + 2.0 * portPortSpacing
+    height := height + fl2p0 * portPortSpacing
   return height
 
 /-- Widest label of a port (`0` without labels). -/
@@ -1348,21 +1357,21 @@ END/CENTER for SOUTH), plus the horizontal port label spacing. -/
 def setupInsidePortLabelCellMinimums (insideLayout : InsideLabelLayoutGrid L) (a : GraphAdapters m G N P L E)
     (node : N) (portLabelsPlacement : EnumSet PortLabelPlacement) : m (InsideLabelLayoutGrid L) := do
   if !portLabelsPlacement.contains .inside then return insideLayout
-  let labelSpacing ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_HORIZONTAL 0.0
+  let labelSpacing ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_HORIZONTAL fl0p0
   let sizeConstraints ← a.node.getPropertyD node CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
   let allowInsideSpacingCompensation := !sizeConstraints.contains .minimumSize
-  let portSpacing := fmax (← a.node.getPropertyD node CoreOptions.SPACING_PORT_PORT 0.0) 0.0
-  let nodeLabelSpacing := fmax (← a.node.getPropertyD node CoreOptions.SPACING_LABEL_NODE 0.0) 0.0
-  let mut eastWidth := 0.0
-  let mut westWidth := 0.0
-  let mut northWidth := 0.0
-  let mut southWidth := 0.0
-  let mut eastBorderExtension := 0.0
-  let mut westBorderExtension := 0.0
+  let portSpacing := fmax (← a.node.getPropertyD node CoreOptions.SPACING_PORT_PORT fl0p0) fl0p0
+  let nodeLabelSpacing := fmax (← a.node.getPropertyD node CoreOptions.SPACING_LABEL_NODE fl0p0) fl0p0
+  let mut eastWidth := fl0p0
+  let mut westWidth := fl0p0
+  let mut northWidth := fl0p0
+  let mut southWidth := fl0p0
+  let mut eastBorderExtension := fl0p0
+  let mut westBorderExtension := fl0p0
   for port in ← a.nodePorts node do
     let maxWidth ← maxLabelWidth a port
-    if maxWidth <= 0.0 then continue
-    let borderExtension := fmax (-(← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET 0.0)) 0.0
+    if maxWidth <= fl0p0 then continue
+    let borderExtension := fmax (-(← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET fl0p0)) fl0p0
     match ← a.portSide port with
     | .east =>
       eastWidth := fmax eastWidth maxWidth
@@ -1373,22 +1382,22 @@ def setupInsidePortLabelCellMinimums (insideLayout : InsideLabelLayoutGrid L) (a
       westWidth := fmax westWidth maxWidth
       westBorderExtension := fmax westBorderExtension borderExtension
   if allowInsideSpacingCompensation then
-    if northWidth > 0.0 then
-      northWidth := northWidth + (portSpacing + 2.0 * labelSpacing + 3.0)
-    if southWidth > 0.0 then
-      southWidth := southWidth + (portSpacing + 2.0 * labelSpacing + 3.0)
-    if eastWidth > 0.0 then
-      eastWidth := eastWidth + (portSpacing + nodeLabelSpacing + eastBorderExtension + 2.0)
-    if westWidth > 0.0 then
-      westWidth := westWidth + (portSpacing + nodeLabelSpacing + westBorderExtension + 2.0)
+    if northWidth > fl0p0 then
+      northWidth := northWidth + (portSpacing + fl2p0 * labelSpacing + fl3p0)
+    if southWidth > fl0p0 then
+      southWidth := southWidth + (portSpacing + fl2p0 * labelSpacing + fl3p0)
+    if eastWidth > fl0p0 then
+      eastWidth := eastWidth + (portSpacing + nodeLabelSpacing + eastBorderExtension + fl2p0)
+    if westWidth > fl0p0 then
+      westWidth := westWidth + (portSpacing + nodeLabelSpacing + westBorderExtension + fl2p0)
   let mut insideLayout := insideLayout
-  if eastWidth > 0.0 then
+  if eastWidth > fl0p0 then
     insideLayout := insideLayout.ensureCellMinWidth .center .«end» (eastWidth + labelSpacing)
-  if westWidth > 0.0 then
+  if westWidth > fl0p0 then
     insideLayout := insideLayout.ensureCellMinWidth .center .begin (westWidth + labelSpacing)
-  if northWidth > 0.0 then
+  if northWidth > fl0p0 then
     insideLayout := insideLayout.ensureCellMinWidth .begin .center (northWidth + labelSpacing)
-  if southWidth > 0.0 then
+  if southWidth > fl0p0 then
     insideLayout := insideLayout.ensureCellMinWidth .«end» .center (southWidth + labelSpacing)
   return insideLayout
 
@@ -1430,8 +1439,8 @@ private def requiredNodeSize (a : GraphAdapters m G N P L E) (node : N) (insideL
     sizeConstraints.contains .minimumSize && sizeOptions.contains .minimumSizeAccountsForPadding
   let includeNodeLabels := sizeConstraints.contains .nodeLabels
   let outsideOverhang := sizeOptions.contains .outsideNodeLabelsOverhang
-  let mut requiredWidth := 0.0
-  let mut requiredHeight := 0.0
+  let mut requiredWidth := fl0p0
+  let mut requiredHeight := fl0p0
   let mut widthRequested := false
   let mut heightRequested := false
   if includeNodeLabels || minimumSizeAccountsForPadding then
@@ -1505,7 +1514,7 @@ def processNodeWith (a : GraphAdapters m G N P L E) (node : N) (layoutDirection 
   let sizeConstraints ← a.node.getPropertyD node CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
   let sizeOptions ← a.node.getPropertyD node CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
   let labelLabelSpacing := spacings.labelLabelSpacing
-  let labelCellSpacing := 2.0 * labelLabelSpacing
+  let labelCellSpacing := fl2p0 * labelLabelSpacing
   let nodeLabelSpacing := spacings.nodeLabelSpacing
   let horizontalLayoutMode := !layoutDirection.isVertical
   let insideLayout ← InsideLabelLayoutGrid.new a node spacings.nodeLabelsPadding horizontalLayoutMode
@@ -1548,10 +1557,10 @@ def processNodeWith (a : GraphAdapters m G N P L E) (node : N) (layoutDirection 
   placeOutsideContainer a.label strips.east .east finalNodeSize outsideOverhang
   if computePadding then
     a.setPadding node {
-      left := fmax centerCellRect.x 0.0
-      top := fmax centerCellRect.y 0.0
-      right := fmax (finalNodeSize.x - (centerCellRect.x + centerCellRect.width)) 0.0
-      bottom := fmax (finalNodeSize.y - (centerCellRect.y + centerCellRect.height)) 0.0 }
+      left := fmax centerCellRect.x fl0p0
+      top := fmax centerCellRect.y fl0p0
+      right := fmax (finalNodeSize.x - (centerCellRect.x + centerCellRect.width)) fl0p0
+      bottom := fmax (finalNodeSize.y - (centerCellRect.y + centerCellRect.height)) fl0p0 }
 
 /-- elk-rs `NodeLabelAndSizeCalculator::process_node(node, layout_direction)`: `processNodeWith`
 on the node's own `ProcessNodeSpacings`. -/

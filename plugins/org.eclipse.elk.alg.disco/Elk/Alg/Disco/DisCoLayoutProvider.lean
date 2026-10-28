@@ -21,6 +21,11 @@ The debug properties `DEBUG_DISCO_GRAPH` and `DEBUG_DISCO_POLYS` are not stored 
 graph (see `DisCoOptions`). `ensureRegistered` installs the provider for `org.eclipse.elk.disco`;
 the module registers it at initialisation.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Disco
 
 open Elk.Graph Elk.Core Elk.Core.Data Elk.Core.Util
@@ -37,7 +42,7 @@ private def layoutComponents (layoutGraph : NodeId) (monitor : ProgressMonitor) 
       if !requested.trimAscii.toString.isEmpty then
         if let some algorithmData ← LayoutMetaDataService.getAlgorithmDataBySuffix requested then
           if let some provider ← LayoutProvider.create algorithmData.id then
-            let sub ← monitor.subTask 1.0
+            let sub ← monitor.subTask fl1p0
             provider.layout layoutGraph sub
 
 /-- `layout(layoutGraph, progressMonitor)`. -/

@@ -28,6 +28,13 @@ The end labels of a port are gathered with `EndLabelPreprocessor.gatherLabels` (
 `end_label_preprocessor::gather_labels`, with its side effects: `END_LABEL_EDGE` of the gathered
 labels and `MAX_EDGE_THICKNESS` of the port).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -58,13 +65,13 @@ def applyLabelSideToDummy (node : LNodeId) (side : LabelSide) (edgeLabelSpacing 
     modifyLabel label fun l => { l with internal := { l.internal with labelSide := effectiveSide } }
   if effectiveSide != .below then
     let thickness ← originEdgeThickness node
-    let mut portPos : Float := 0.0
+    let mut portPos : Float := fl0p0
     if effectiveSide == .above then
       let nodeHeight := (← getNode node).size.y
-      portPos := nodeHeight - Float.ceil (thickness / 2.0)
+      portPos := nodeHeight - Float.ceil (thickness / fl2p0)
     else if effectiveSide == .inline then
       let nodeHeight := (← getNode node).size.y
-      portPos := Float.ceil (nodeHeight - edgeLabelSpacing - thickness) / 2.0
+      portPos := Float.ceil (nodeHeight - edgeLabelSpacing - thickness) / fl2p0
       modifyNode node fun n => { n with size := { n.size with y := n.size.y - edgeLabelSpacing - thickness } }
     let pos := portPos
     for port in (← getNode node).ports do
@@ -254,8 +261,8 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   let gr ← getGraph graph
   let mode := gr.props.getD LayeredOptions.EDGE_LABELS_SIDE_SELECTION EdgeLabelSideSelection.smartDown
   let edgeLabelSpacing := if gr.props.has LayeredOptions.SPACING_EDGE_LABEL then
-    gr.props.getD LayeredOptions.SPACING_EDGE_LABEL 2.0 else 2.0
-  let _ ← monitor.begin "Label side selection" 1.0
+    gr.props.getD LayeredOptions.SPACING_EDGE_LABEL fl2p0 else fl2p0
+  let _ ← monitor.begin "Label side selection" fl1p0
   match mode with
   | .alwaysUp => sameSide graph .above edgeLabelSpacing
   | .alwaysDown => sameSide graph .below edgeLabelSpacing

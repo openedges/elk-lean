@@ -18,6 +18,12 @@ hot loops) and as `ElkM` wrappers. Edge order everywhere is `ElkGraphUtil.allOut
 Deliberate difference to Rust: `get_number_of_leaves` and the tree caches are plain recursions
 over `Std.HashMap` caches keyed by `NodeId` instead of node addresses; the values are identical.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util
@@ -201,19 +207,19 @@ def getLastLevelNodes (nodes : Array NodeId) : ElkM (Array NodeId) :=
 
 /-- `RadialUtil::center_nodes_on_radi(node, x_pos, y_pos)`. -/
 def centerNodesOnRadi (node : NodeId) (xPos yPos : Float) : ElkM Unit :=
-  ElkM.modifyNode node fun n => { n with x := xPos - n.width / 2.0, y := yPos - n.height / 2.0 }
+  ElkM.modifyNode node fun n => { n with x := xPos - n.width / fl2p0, y := yPos - n.height / fl2p0 }
 
 /-- `RadialUtil::shift_closest_edge_to_radi(node, x_pos, y_pos)`. -/
 def shiftClosestEdgeToRadi (node : NodeId) (xPos yPos : Float) : ElkM Unit :=
   ElkM.modifyNode node fun n =>
     let w := n.width
     let h := n.height
-    if fuzzyEquals xPos 0.0 EPSILON && fuzzyEquals yPos 0.0 EPSILON then
-      { n with x := xPos - w / 2.0, y := yPos - h / 2.0 }
-    else if xPos < 0.0 then
-      if yPos < 0.0 then { n with x := xPos - w, y := yPos }
+    if fuzzyEquals xPos fl0p0 EPSILON && fuzzyEquals yPos fl0p0 EPSILON then
+      { n with x := xPos - w / fl2p0, y := yPos - h / fl2p0 }
+    else if xPos < fl0p0 then
+      if yPos < fl0p0 then { n with x := xPos - w, y := yPos }
       else { n with x := xPos - w, y := yPos + h }
-    else if yPos < 0.0 then { n with x := xPos, y := yPos }
+    else if yPos < fl0p0 then { n with x := xPos, y := yPos }
     else { n with x := xPos, y := yPos + h }
 
 end RadialUtil

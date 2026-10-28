@@ -8,6 +8,13 @@ components in model order in rows; components connected to `WEST` (or following 
 to `EAST`) start a new row, `NORTH` components are appended to the right of the broadest row and
 `SOUTH` components push the start of the following rows to the right.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p6 : Float := 1.6
+private def fl20p0 : Float := 20.0
+
 namespace Elk.Alg.Layered.Components
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -19,12 +26,12 @@ namespace ModelOrderRowGraphPlacer
 component_spacing)`. -/
 def placeComponentsInRowsModelOrder (components : Array LGraphId) (target : LGraphId)
     (maxRowWidth componentSpacing : Float) : LayeredM Unit := do
-  let mut xpos := 0.0
-  let mut ypos := 0.0
-  let mut highestBox := 0.0
+  let mut xpos := fl0p0
+  let mut ypos := fl0p0
+  let mut highestBox := fl0p0
   let mut broadestRow := componentSpacing
   let mut lastComponent : Option LGraphId := none
-  let mut startXOfRow := 0.0
+  let mut startXOfRow := fl0p0
   for component in components do
     let g ← getGraph component
     let sizeX := g.size.x
@@ -36,11 +43,11 @@ def placeComponentsInRowsModelOrder (components : Array LGraphId) (target : LGra
     if (xpos + sizeX > maxRowWidth && !extPorts.contains .north) || lastHasEast || extPorts.contains .west then
       xpos := startXOfRow
       ypos := ypos + (highestBox + componentSpacing)
-      highestBox := 0.0
+      highestBox := fl0p0
     if extPorts.contains .north then
       xpos := broadestRow + componentSpacing
     offsetGraph component (xpos + g.offset.x) (ypos + g.offset.y)
-    modifyGraph component fun x => { x with offset := ⟨0.0, 0.0⟩ }
+    modifyGraph component fun x => { x with offset := ⟨fl0p0, fl0p0⟩ }
     broadestRow := fmax broadestRow (xpos + sizeX)
     if extPorts.contains .south then
       startXOfRow := fmax startXOfRow (xpos + sizeX + componentSpacing)
@@ -56,10 +63,10 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   if let some first := components[0]? then
     copyProperties target first
   let tg ← getGraph target
-  let aspectRatio := tg.props.getD LayeredOptions.ASPECT_RATIO 1.6
-  let componentSpacing := tg.props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT 20.0
-  let mut maxRowWidth := 0.0
-  let mut totalArea := 0.0
+  let aspectRatio := tg.props.getD LayeredOptions.ASPECT_RATIO fl1p6
+  let componentSpacing := tg.props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT fl20p0
+  let mut maxRowWidth := fl0p0
+  let mut totalArea := fl0p0
   for component in components do
     let size := (← getGraph component).size
     maxRowWidth := fmax maxRowWidth size.x
@@ -68,7 +75,7 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   placeComponentsInRowsModelOrder components target maxRowWidth componentSpacing
   maybeCompactComponents components target false
   for component in components do
-    moveGraph target component 0.0 0.0
+    moveGraph target component fl0p0 fl0p0
 
 end ModelOrderRowGraphPlacer
 

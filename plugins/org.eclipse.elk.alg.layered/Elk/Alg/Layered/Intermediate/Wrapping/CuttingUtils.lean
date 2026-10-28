@@ -24,6 +24,13 @@ indexes fall back to `0`/the source index; the insertion index of the first dumm
 Each dummy edge copies all properties of the current edge (Rust `copy_properties` into the empty
 map of the new edge = the public `props` and the typed `internal` values) except `JUNCTION_POINTS`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -69,8 +76,8 @@ inserted `offsetFirstInLayerDummy` positions before the end of its layer. -/
 def insertDummies (graph : LGraphId) (originalEdge : LEdgeId) (offsetFirstInLayerDummy : Nat) :
     LayeredM (Array LEdgeId) := do
   let gr ← getGraph graph
-  let edgeNodeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_NODE).getD 0.0
-  let additionalSpacing := (gr.props.get LayeredOptions.WRAPPING_ADDITIONAL_EDGE_SPACING).getD 0.0
+  let edgeNodeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_NODE).getD fl0p0
+  let additionalSpacing := (gr.props.get LayeredOptions.WRAPPING_ADDITIONAL_EDGE_SPACING).getD fl0p0
   let individualSpacings : IndividualSpacings :=
     { props := PropertyMap.empty.set LayeredOptions.SPACING_EDGE_NODE (edgeNodeSpacing + additionalSpacing) }
   let mut edge := originalEdge
@@ -102,13 +109,13 @@ def insertDummies (graph : LGraphId) (originalEdge : LEdgeId) (offsetFirstInLaye
       setNodeLayerAtIndex dummyNode insertionIndex (some nextLayer)
     else
       setNodeLayer dummyNode (some nextLayer)
-    let mut thickness := ((← getEdge edge).props.get CoreOptions.EDGE_THICKNESS).getD 1.0
-    if thickness < 0.0 then
-      thickness := 0.0
-      setEdgeProp edge CoreOptions.EDGE_THICKNESS 0.0
+    let mut thickness := ((← getEdge edge).props.get CoreOptions.EDGE_THICKNESS).getD fl1p0
+    if thickness < fl0p0 then
+      thickness := fl0p0
+      setEdgeProp edge CoreOptions.EDGE_THICKNESS fl0p0
     let height := thickness
     modifyNode dummyNode fun d => { d with size := { d.size with y := height } }
-    let portPos := Float.floor (thickness / 2.0)
+    let portPos := Float.floor (thickness / fl2p0)
     let (dummyInput, dummyOutput) ← createDummyPorts dummyNode portPos
     setEdgeTarget edge (some dummyInput)
     let old ← getEdge edge

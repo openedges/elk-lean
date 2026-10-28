@@ -8,6 +8,12 @@ Results use the elk-rs CSV format
 `timestamp,engine,scenario,iterations,warmup,elapsed_nanos,avg_ms,ops_per_sec`
 (engine `lean_api`), so `compare_perf_results.py` of elk-rs reads both files.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl10p0 : Float := 10.0
+
 namespace Elk.Api.PerfBenchmark
 
 open Elk.Core.Util
@@ -135,8 +141,8 @@ def syntheticScenarios : Array (String × String) := #[
 def fmtFixed (x : Float) (digits : Nat) : String :=
   if !x.isFinite then Float.toShortest x
   else
-    let neg := x < 0.0
-    let scale := (10.0 : Float) ^ digits.toFloat
+    let neg := x < fl0p0
+    let scale := (fl10p0 : Float) ^ digits.toFloat
     let n := (x.abs * scale).round.toUInt64.toNat
     let p := 10 ^ digits
     let frac := toString (n % p)

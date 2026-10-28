@@ -10,6 +10,12 @@ the **last** group) and the groups are placed in rows along the layout direction
 space blocked by components with southern (horizontal layouts) / eastern (vertical layouts)
 connections.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl20p0 : Float := 20.0
+
 namespace Elk.Alg.Layered.Components
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -31,17 +37,17 @@ def addComponentToModelOrderGroups (groups : Array ModelOrderComponentGroup) (co
 def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit := do
   clearLayerlessNodes target
   let some first := components[0]? | do
-    modifyGraph target fun g => { g with size := ⟨0.0, 0.0⟩ }
+    modifyGraph target fun g => { g with size := ⟨fl0p0, fl0p0⟩ }
   copyProperties target first
   let mut groups : Array ModelOrderComponentGroup := #[]
   for component in components do
     groups ← addComponentToModelOrderGroups groups component
-  let componentSpacing := (← getGraph first).props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT 20.0
+  let componentSpacing := (← getGraph first).props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT fl20p0
   let direction := (← getGraph target).props.getD CoreOptions.DIRECTION Direction.right
-  let mut spaceBlockedBySouthEdges : KVector := ⟨0.0, 0.0⟩
-  let mut spaceBlockedByComponents : KVector := ⟨0.0, 0.0⟩
-  let mut offset : KVector := ⟨0.0, 0.0⟩
-  let mut maxSize : KVector := ⟨0.0, 0.0⟩
+  let mut spaceBlockedBySouthEdges : KVector := ⟨fl0p0, fl0p0⟩
+  let mut spaceBlockedByComponents : KVector := ⟨fl0p0, fl0p0⟩
+  let mut offset : KVector := ⟨fl0p0, fl0p0⟩
+  let mut maxSize : KVector := ⟨fl0p0, fl0p0⟩
   for group in groups do
     let sides := group.portSides
     if direction.isHorizontal then
@@ -74,7 +80,7 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   modifyGraph target fun g => { g with size := finalSize }
   maybeCompactComponents components target true
   for group in groups do
-    moveGraphs target group.components 0.0 0.0
+    moveGraphs target group.components fl0p0 fl0p0
 
 end ComponentGroupModelOrderGraphPlacer
 

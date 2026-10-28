@@ -6,6 +6,11 @@ Builds the `ElkGraph` arena from an ELK JSON document, remembering for every
 element the JSON path it came from and its JSON id, so `transferLayout` can
 write the results back into the same document.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Json
 
 open Elk Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Core.Data
@@ -117,7 +122,7 @@ structure ShapeRead where
   ok : Bool
 
 /-- `double_value_valid` of a present value: non-finite coordinates become `0`. -/
-@[inline] private def validCoord (v : Float) : Float := if v.isFinite then v else 0.0
+@[inline] private def validCoord (v : Float) : Float := if v.isFinite then v else fl0p0
 
 /-- `optDouble` + `double_value_valid` of the member `key` (first occurrence), pure: `cur` when
 absent or `null`, `false` in the second component for an invalid value. -/

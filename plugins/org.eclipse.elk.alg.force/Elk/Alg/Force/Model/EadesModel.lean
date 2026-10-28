@@ -7,6 +7,13 @@ the distance (`ln(d / springLength)`) between connected particles, repulsive for
 square of the distance. Uses the generic `ForceModel.layout`; like in Rust `avoid_same_position` is not
 used, particles at the same position simply exert no force on each other.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl5p0 : Float := 5.0
+private def fl80p0 : Float := 80.0
+
 namespace Elk.Alg.Force.Model
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Force.Graph Elk.Alg.Force.Options
@@ -17,8 +24,8 @@ def EADES_ZERO_FACTOR : Float := 100.0
 /-- elk-rs `EadesModel`: the model state read in `initialize_model`. -/
 structure EadesModel where
   maxIterations : Int := 0
-  springLength : Float := 0.0
-  repulsionFactor : Float := 0.0
+  springLength : Float := fl0p0
+  repulsionFactor : Float := fl0p0
 
 namespace EadesModel
 
@@ -34,8 +41,8 @@ def attractive (d s : Float) : Float :=
 default) and repulsion factor (5.0) from the graph's options. -/
 def initializeModel (g : FGraph) : EadesModel :=
   { maxIterations := g.props.getD ForceOptions.ITERATIONS 300
-    springLength := g.props.getD ForceOptions.SPACING_NODE_NODE 80.0
-    repulsionFactor := g.props.getD ForceOptions.REPULSION 5.0 }
+    springLength := g.props.getD ForceOptions.SPACING_NODE_NODE fl80p0
+    repulsionFactor := g.props.getD ForceOptions.REPULSION fl5p0 }
 
 /-- `calc_displacement(graph, forcer, forcee)`. -/
 def calcDisplacement (m : EadesModel) (g : FGraph) (forcer forcee : FParticleId) : Option KVector :=

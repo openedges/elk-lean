@@ -21,6 +21,14 @@ The Rust Dijkstra uses `std::collections::BinaryHeap` ordered by (cost ascending
 the heap below pops entries in exactly that order, so ties between equally distant nodes are
 processed in the same sequence. The `ElkTrace.stress` diagnostics of Rust (stderr only) are not ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p001 : Float := 0.001
+private def fl100p0 : Float := 100.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Force.Stress
 
 open Elk.Graph Elk.Core.Util Elk.Alg.Force.Graph Elk.Alg.Force.Options
@@ -106,12 +114,12 @@ private partial def relax (row : Array (Nat × Float)) (visited : Array Bool) (p
 
 /-- `dijkstra_flat`: shortest path distances from `source` over the adjacency lists. -/
 private def dijkstra (adj : Array (Array (Nat × Float))) (n source : Nat) : FloatArray := Id.run do
-  let zero : Float := 0.0
+  let zero : Float := fl0p0
   let mut dist := FloatArray.emptyWithCapacity n
   let mut heap := FloatArray.emptyWithCapacity (4 * n)
   let mut cnt : USize := 0
   for i in [0:n] do
-    let d := if i == source then 0.0 else Float.posInf
+    let d := if i == source then fl0p0 else Float.posInf
     dist := dist.push d
     heap := heapPush heap cnt d i.toFloat zero
     cnt := cnt + 1
@@ -134,9 +142,9 @@ private def dijkstra (adj : Array (Array (Nat × Float))) (n source : Nat) : Flo
 structure StressMajorization where
   apsp : Array FloatArray := #[]
   w : Array FloatArray := #[]
-  desiredEdgeLength : Float := 0.0
+  desiredEdgeLength : Float := fl0p0
   dim : Dimension := .xy
-  epsilon : Float := 0.0
+  epsilon : Float := fl0p0
   iterationLimit : Int := 0
 
 namespace StressMajorization
@@ -148,8 +156,8 @@ def init (graph : FGraph) : StressMajorization := Id.run do
   if n <= 1 then return {}
   let dim := graph.props.getD StressOptions.DIMENSION Dimension.xy
   let iterationLimit := graph.props.getD StressOptions.ITERATION_LIMIT 2147483647
-  let epsilon := graph.props.getD StressOptions.EPSILON 0.001
-  let desiredEdgeLength := graph.props.getD StressOptions.DESIRED_EDGE_LENGTH 100.0
+  let epsilon := graph.props.getD StressOptions.EPSILON fl0p001
+  let desiredEdgeLength := graph.props.getD StressOptions.DESIRED_EDGE_LENGTH fl100p0
   let mut adj : Array (Array (Nat × Float)) := Array.replicate n #[]
   for eid in graph.edges do
     let sourceId := (graph.arena.edgeSource[eid.idx]!).map fun nid => graph.arena.nodeId[nid.idx]!
@@ -170,7 +178,7 @@ def init (graph : FGraph) : StressMajorization := Id.run do
     let mut row := FloatArray.emptyWithCapacity n
     for j in [0:n] do
       let dij := (apsp[i]!).get! j
-      row := row.push (if dij != 0.0 then 1.0 / (dij * dij) else 0.0)
+      row := row.push (if dij != fl0p0 then fl1p0 / (dij * dij) else fl0p0)
     w := w.push row
   return { apsp, w, desiredEdgeLength, dim, epsilon, iterationLimit }
 
@@ -291,7 +299,7 @@ def execute (m : StressMajorization) (graph : FGraph) : FGraph := Id.run do
   let mut curStress := Float.posInf
   while true do
     if count > 0 then prevStress := curStress
-    let (posX', posY') := sweep a w fixed m.dim nu 0.0 0 posX posY
+    let (posX', posY') := sweep a w fixed m.dim nu fl0p0 0 posX posY
     posX := posX'
     posY := posY'
     curStress := computeStress a w posX posY n

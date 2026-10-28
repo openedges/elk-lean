@@ -8,6 +8,14 @@ reference implementations rely on. The oracle for parity is elk-rs, so where
 Java and Rust differ (e.g. `f64::min` vs `Math.min` on NaN) the Rust behaviour
 is the default and the Java variant carries a `java` prefix.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1e16 : Float := 1e16
+private def fl180p0 : Float := 180.0
+private def fl3p141592653589793 : Float := 3.141592653589793
+
 namespace Elk.Core.Util
 
 /-- Positive infinity (`Double.POSITIVE_INFINITY`). -/
@@ -118,10 +126,10 @@ def Float.signumInt (x : Float) : Int := if x < 0.0 then -1 else if x > 0.0 then
 def Float.signum (x : Float) : Float := if x < 0.0 then -1.0 else if x > 0.0 then 1.0 else x
 
 /-- `Math.toRadians`. -/
-@[inline] def Float.toRadians (deg : Float) : Float := deg / 180.0 * 3.141592653589793
+@[inline] def Float.toRadians (deg : Float) : Float := deg / fl180p0 * fl3p141592653589793
 
 /-- `Math.toDegrees`. -/
-@[inline] def Float.toDegrees (rad : Float) : Float := rad * 180.0 / 3.141592653589793
+@[inline] def Float.toDegrees (rad : Float) : Float := rad * fl180p0 / fl3p141592653589793
 
 /-- `Math.PI`. -/
 def Float.pi : Float := 3.141592653589793
@@ -218,8 +226,8 @@ def parseInt64? (s : String) : Option Int := Id.run do
 /-- Rust `f64` `Display`: shortest digits, never exponent notation, `12` for `12.0`. -/
 def Float.toRustDisplay (x : Float) : String :=
   if x.isNaN then "NaN"
-  else if x.isInf then (if x > 0.0 then "inf" else "-inf")
-  else if x == x.floor && x.abs < 1e16 then
+  else if x.isInf then (if x > fl0p0 then "inf" else "-inf")
+  else if x == x.floor && x.abs < fl1e16 then
     -- integral: print without fraction
     let s := Float.toShortest x
     if s.endsWith ".0" then (s.dropEnd 2).toString else s

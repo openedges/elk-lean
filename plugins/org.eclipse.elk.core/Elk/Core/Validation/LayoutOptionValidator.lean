@@ -15,6 +15,13 @@ constructor; `ENUM`/`ENUMSET` require an enum ordinal / enum set; `OBJECT` accep
 every non-primitive value (elk-rs compares the `TypeId` registered for the option,
 which `PropValue` does not carry).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1e16 : Float := 1e16
+private def fl1em4 : Float := 1e-4
+
 namespace Elk.Core.Validation
 
 open Elk Elk.Graph Elk.Core.Data Elk.Core.Util
@@ -24,7 +31,7 @@ and exponent notation below `1e-4` and from `1e16` on. -/
 def floatToRustDebug (x : Float) : String := Id.run do
   if x.isNaN || x.isInf then return Float.toRustDisplay x
   let ax := x.abs
-  if ax == 0.0 || (ax >= 1e-4 && ax < 1e16) then
+  if ax == fl0p0 || (ax >= fl1em4 && ax < fl1e16) then
     let s := Float.toRustDisplay x
     return if s.contains '.' then s else s ++ ".0"
   -- exponent form from the shortest round-trip digits
@@ -47,7 +54,7 @@ def floatToRustDebug (x : Float) : String := Id.run do
   let rest := String.ofList sig.tail
   let sciExp := e10 + (sig.length : Int) - 1
   let m := if rest.isEmpty then String.singleton first else s!"{first}.{rest}"
-  return s!"{if x < 0.0 then "-" else ""}{m}e{sciExp}"
+  return s!"{if x < fl0p0 then "-" else ""}{m}e{sciExp}"
 
 /-- `LayoutOptionValidator.isValidType` (elk-rs `is_valid_type`). -/
 private def isValidType (optionData : LayoutOptionData) (value : PropValue) : Bool :=

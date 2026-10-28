@@ -19,6 +19,11 @@ of the NORTH, SOUTH, EAST and WEST containers in area order, then the port label
 
 Deviation from Java (following elk-rs): a missing outside container is skipped instead of failing.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -53,7 +58,7 @@ def placeHorizontalOuterNodeLabelContainer (ctx : NodeContext N P L) (outerNodeL
     -- If node labels are not allowed to overhang and would do so right now, make the container smaller
     let rect := if rect.width > nodeSize.x && !outerNodeLabelsOverhang then { rect with width := nodeSize.x } else rect
     -- Container's x coordinate
-    let rect := { rect with x := -(rect.width - nodeSize.x) / 2.0 }
+    let rect := { rect with x := -(rect.width - nodeSize.x) / fl2p0 }
     -- Container's y coordinate depends on the side
     let rect := match portSide with
       | .north => { rect with y := -rect.height }
@@ -79,7 +84,7 @@ def placeVerticalOuterNodeLabelContainer (ctx : NodeContext N P L) (outerNodeLab
     -- If node labels are not allowed to overhang and would do so right now, make the container smaller
     let rect := if rect.height > nodeSize.y && !outerNodeLabelsOverhang then { rect with height := nodeSize.y } else rect
     -- Container's y coordinate
-    let rect := { rect with y := -(rect.height - nodeSize.y) / 2.0 }
+    let rect := { rect with y := -(rect.height - nodeSize.y) / fl2p0 }
     -- Container's x coordinate depends on the side
     let rect := match portSide with
       | .west => { rect with x := -rect.width }

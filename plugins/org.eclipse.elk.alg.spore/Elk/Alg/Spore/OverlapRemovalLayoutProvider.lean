@@ -24,6 +24,11 @@ scanline check is not ported (TODO(debug)).
 Rust quirk kept: when the monitor is canceled between two processors, `layout` returns at once
 without applying the positions and without `done`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Spore
 
 open Elk Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Data Elk.Alg.Common
@@ -49,7 +54,7 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       if !requested.trimAscii.toString.isEmpty then
         if let some algorithmData ← LayoutMetaDataService.getAlgorithmDataBySuffix requested then
           if let some provider ← LayoutProvider.create algorithmData.id then
-            provider.layout layoutGraph (← monitor.subTask 1.0)
+            provider.layout layoutGraph (← monitor.subTask fl1p0)
   ElkM.setNodeProp layoutGraph SporeCompactionOptions.PROCESSING_ORDER_ROOT_SELECTION
     RootSelection.centerNode
   ElkM.setNodeProp layoutGraph SporeCompactionOptions.PROCESSING_ORDER_SPANNING_TREE_COST_FUNCTION
@@ -59,7 +64,7 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   let maxIterations : Nat :=
     (max ((← ElkM.getNode layoutGraph).props.get
       SporeOverlapRemovalOptions.OVERLAP_REMOVAL_MAX_ITERATIONS |>.getD 0) 0).toNat
-  let _ ← monitor.begin "Overlap removal" 1.0
+  let _ ← monitor.begin "Overlap removal" fl1p0
   let importer ← ElkGraphImporter.new
   let mut graph ← importer.importGraph layoutGraph
   let assembler ← SporeAssembler.create

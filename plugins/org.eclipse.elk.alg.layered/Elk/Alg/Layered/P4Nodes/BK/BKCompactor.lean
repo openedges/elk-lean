@@ -22,6 +22,11 @@ Not ported: the `ELK_BK_REVERSE_SINK_QUEUE` debug switch of elk-rs (reverses the
 The compactor state is the outermost `StateRefT` layer of `CompactM`, over the threshold strategy
 (`ThresholdM`) and the layout (`BalM`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P4Nodes.BK
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -187,7 +192,7 @@ partial def placeBlock (ctx : BKContext) (ni : NeighborhoodInformation) (rootId 
   if (← getThe BKAlignedLayout).isYDefined rootId then return
   let some vdir := (← getThe BKAlignedLayout).vdir
     | throw (IO.userError "java.lang.IllegalStateException: BK compactor requires a vertical direction")
-  modifyThe BKAlignedLayout (·.setY rootId 0.0)
+  modifyThe BKAlignedLayout (·.setY rootId fl0p0)
   if tracePB then
     IO.eprintln s!"bk-place-block: start root={rootId} vdir={if vdir == .up then "Up" else "Down"}"
   let thresh := if vdir == .down then Float.negInf else Float.posInf
@@ -250,9 +255,9 @@ private def sweepClasses (vdir : VDirection) (sinkNodes : Std.HashMap Nat ClassN
     let nodeId := queue[head]!
     head := head + 1
     let some node := nodes.get? nodeId | continue
-    let classShift := node.classShift.getD 0.0
+    let classShift := node.classShift.getD fl0p0
     if node.classShift.isNone then
-      nodes := nodes.insert nodeId { node with classShift := some 0.0 }
+      nodes := nodes.insert nodeId { node with classShift := some fl0p0 }
     for edge in node.outgoing do
       if let some target := nodes.get? edge.target then
         let candidate := classShift + edge.separation
@@ -302,7 +307,7 @@ where
     if h : i < nodes.size then
       let idx := ctx.nodeId nodes[i]
       let rootId := bal.rootOf idx
-      let rootY := if yDefined.getD rootId false then y.get! rootId else 0.0
+      let rootY := if yDefined.getD rootId false then y.get! rootId else fl0p0
       let y := y.set! idx rootY
       let yDefined := yDefined.set! idx true
       if idx == rootId then

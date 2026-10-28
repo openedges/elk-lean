@@ -21,6 +21,12 @@ step (`Float.toF32` here). The `ArenaSync` snapshot Rust takes at the start is t
 every `routeEdges` call (the generator only reads `y` anchors from it, see
 `WestToEastRoutingStrategy`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.P5Edges
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -125,16 +131,16 @@ private def traceLayers (layers : Array LayerId) : LayeredM Unit := do
 
 /-- `process(layeredGraph, monitor)`. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Orthogonal edge routing" 1.0
+  let _ ← monitor.begin "Orthogonal edge routing" fl1p0
   let gr ← getGraph graph
-  let nodeNodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD 0.0
-  let edgeEdgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS).getD 0.0
-  let edgeNodeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_NODE_BETWEEN_LAYERS).getD 0.0
+  let nodeNodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD fl0p0
+  let edgeEdgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS).getD fl0p0
+  let edgeNodeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_NODE_BETWEEN_LAYERS).getD fl0p0
   let routingGenerator := OrthogonalRoutingGenerator.new .westToEast edgeEdgeSpacing (some "phase5")
   let scope ← withArena (ArenaScope.ofGraph · graph)
   let layers := gr.layers
   traceLayers layers
-  let mut xpos : Float := 0.0
+  let mut xpos : Float := fl0p0
   let mut leftLayer : Option LayerId := none
   let mut leftLayerNodes : Option (Array LNodeId) := none
   let mut leftLayerIndex : Int := -1
@@ -158,7 +164,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
     if slotsCount > 0 then
       -- Java: float routingWidth
       let mut routingWidth :=
-        Float.toF32 (Float.toF32 (Float.toF32 slotsCount.toFloat - 1.0) * Float.toF32 edgeEdgeSpacing)
+        Float.toF32 (Float.toF32 (Float.toF32 slotsCount.toFloat - fl1p0) * Float.toF32 edgeEdgeSpacing)
       if leftLayer.isSome then routingWidth := Float.toF32 (routingWidth + Float.toF32 edgeNodeSpacing)
       if rightLayer.isSome then routingWidth := Float.toF32 (routingWidth + Float.toF32 edgeNodeSpacing)
       if routingWidth < nodeNodeSpacing && !isLeftLayerExternal && !isRightLayerExternal then

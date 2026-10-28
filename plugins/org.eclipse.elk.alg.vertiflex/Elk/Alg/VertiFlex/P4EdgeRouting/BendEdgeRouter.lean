@@ -12,6 +12,13 @@ Like the straight router, but an edge gets one bend point `(end_x, bend_height)`
 height computed by the relative x placer (`EDGE_BEND_HEIGHT` of the child) differs from the
 default of half the node spacing above the child.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p0001 : Float := 0.0001
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.VertiFlex.P4EdgeRouting
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Core.Options
@@ -26,19 +33,19 @@ partial def routeEdges (node : NodeId) : VertiFlexM Unit := do
     let sec ← VertiFlexUtil.ensureSingleSection edge
     let n ← ElkM.getNode node
     let t ← ElkM.getNode target
-    let startX := n.x + n.width / 2.0
+    let startX := n.x + n.width / fl2p0
     let startY := n.y + n.height
-    let endX := t.x + t.width / 2.0
+    let endX := t.x + t.width / fl2p0
     let endY := t.y
     ElkM.modifySection sec fun s =>
       { s with startX := startX, startY := startY, endX := endX, endY := endY, bendPoints := #[] }
     let bendHeight := ((← VertiFlexM.getProps target).edgeBendHeight).getD endY
-    let epsilon := 0.0001
+    let epsilon := fl0p0001
     let parentSpacing ← match t.parent with
       | some parent => do
-        pure (((← ElkM.getNode parent).props.get CoreOptions.SPACING_NODE_NODE).getD 0.0)
-      | none => pure 0.0
-    if Float.abs (bendHeight - (endY - parentSpacing / 2.0)) > epsilon then
+        pure (((← ElkM.getNode parent).props.get CoreOptions.SPACING_NODE_NODE).getD fl0p0)
+      | none => pure fl0p0
+    if Float.abs (bendHeight - (endY - parentSpacing / fl2p0)) > epsilon then
       ElkM.modifySection sec fun s => { s with bendPoints := s.bendPoints.push ⟨endX, bendHeight⟩ }
     routeEdges target
 

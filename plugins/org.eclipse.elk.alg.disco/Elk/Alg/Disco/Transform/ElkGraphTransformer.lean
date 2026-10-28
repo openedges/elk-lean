@@ -32,6 +32,12 @@ Deviations from Rust:
 * Rust panics with `Use import_elk_edge for ElkEdge instances.` for edges in `import_elk_shape`;
   Lean throws `IllegalArgumentException` with the Java message of `ElkGraphTransformer`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Disco.Transform
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -224,7 +230,7 @@ private def importEdgeLabels (edge : EdgeId) (newComponent : Array DCElementId) 
     TransformM (Array DCElementId) := do
   let mut comp := newComponent
   for label in (← ElkM.getEdge edge).labels do
-    comp := comp.push (← importElkShape (.label label) true 0.0 0.0)
+    comp := comp.push (← importElkShape (.label label) true fl0p0 fl0p0)
   return comp
 
 /-- `import_elk_edge(edge, new_component)`: the contour polygon of the edge (thickened by the
@@ -273,10 +279,10 @@ private def importExtension (edge : EdgeId) (newComponent : Array DCElementId)
   let mut middlePos : KVector := {}
   if dir.isHorizontal then
     extensionWidth := extensionWidth + (outerPoint.y - innerPoint.y).abs
-    middlePos := KVector.mk' innerPoint.x ((innerPoint.y + outerPoint.y) / 2.0)
+    middlePos := KVector.mk' innerPoint.x ((innerPoint.y + outerPoint.y) / fl2p0)
   else
     extensionWidth := extensionWidth + (outerPoint.x - innerPoint.x).abs
-    middlePos := KVector.mk' ((innerPoint.x + outerPoint.x) / 2.0) innerPoint.y
+    middlePos := KVector.mk' ((innerPoint.x + outerPoint.x) / fl2p0) innerPoint.y
   let bounds := (← getThe ElkGraphTransformer).elements[shape.idx]!.bounds
   let extension := DCExtension.new bounds dir middlePos extensionWidth
   modifyThe ElkGraphTransformer fun st =>
@@ -330,7 +336,7 @@ def importGraph (graph : NodeId) : TransformM DCGraph := do
     let mut edgeIds : Std.HashSet EdgeId := {}
     let mut edges : Array EdgeId := #[]
     for node in component do
-      let componentNode ← importElkShape (.node node) true 0.0 0.0
+      let componentNode ← importElkShape (.node node) true fl0p0 fl0p0
       subResult := subResult.push componentNode
       let nd ← ElkM.getNode node
       let nodeX := nd.x
@@ -356,7 +362,7 @@ def importGraph (graph : NodeId) : TransformM DCGraph := do
     result := result.push subResult
   let st ← getThe ElkGraphTransformer
   let props := (← ElkM.getNode graph).props
-  let transformed := DCGraph.new st.elements result (st.componentSpacing / 2.0)
+  let transformed := DCGraph.new st.elements result (st.componentSpacing / fl2p0)
   return transformed.copyProperties props
 
 /-! ### Apply layout -/
@@ -365,8 +371,8 @@ def importGraph (graph : NodeId) : TransformM DCGraph := do
 border. -/
 private def adjustRelatedPort (port : PortId) (edgePoint : KVector) (dir : DCDirection) : ElkM Unit :=
   ElkM.modifyPort port fun p =>
-    if dir.isHorizontal then { p with y := edgePoint.y - (p.height / 2.0) }
-    else { p with x := edgePoint.x - (p.width / 2.0) }
+    if dir.isHorizontal then { p with y := edgePoint.y - (p.height / fl2p0) }
+    else { p with x := edgePoint.x - (p.width / fl2p0) }
 
 /-- `adjust_first_segment(source, chain, dir)`: moves the first point of the chain onto the
 border of the node given by `dir`. -/
@@ -402,8 +408,8 @@ def applyLayout (graph : DCGraph) : TransformM Unit := do
     ElkM.modifyLabel label fun l => { l with x := l.x * xFactor, y := l.y * yFactor }
   for port in parentNode.ports do
     ElkM.modifyPort port fun p =>
-      let p := if p.x > 0.0 then { p with x := p.x * xFactor } else p
-      if p.y > 0.0 then { p with y := p.y * yFactor } else p
+      let p := if p.x > fl0p0 then { p with x := p.x * xFactor } else p
+      if p.y > fl0p0 then { p with y := p.y * yFactor } else p
   for key in st.mappingOrder do
     let some elemId := st.elementMapping.get? key | continue
     let offset := graph.elementOffset elemId

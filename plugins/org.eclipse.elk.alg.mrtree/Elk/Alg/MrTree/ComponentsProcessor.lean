@@ -33,6 +33,12 @@ to the destination. `apply_padding_and_normalize_positions` sets `BB_UPLEFT := (
 graph by `(padding.left - GRAPH_XMIN, padding.top - GRAPH_YMIN)` into a throw-away graph, which the
 Lean port omits (`moveGraph` with no destination); the moved graph keeps its node and edge lists.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.MrTree
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.MrTree.Graph Elk.Alg.MrTree.Options
@@ -112,7 +118,7 @@ def moveGraph (dest : Option TGraphId) (source : TGraphId) (offsetx offsety : Fl
 /-- `apply_padding_and_normalize_positions(graph)`. -/
 def applyPaddingAndNormalizePositions (graph : TGraphId) : MrTreeM Unit := do
   let padding := ((← MrTreeM.getGraph graph).props.get MrTreeOptions.PADDING).getD {}
-  MrTreeM.modifyGraph graph fun g => { g with internal.bbUpleft := some ⟨0.0, 0.0⟩ }
+  MrTreeM.modifyGraph graph fun g => { g with internal.bbUpleft := some ⟨fl0p0, fl0p0⟩ }
   let g ← MrTreeM.getGraph graph
   let offsetX := padding.left - g.internal.graphXmin
   let offsetY := padding.top - g.internal.graphYmin
@@ -157,29 +163,29 @@ def pack (components : Array TGraphId) : MrTreeM TGraphId := do
   let result ← MrTreeM.createGraph
   MrTreeM.modifyGraph result (·.copyProperties first)
   let a ← get
-  let mut maxRowWidth : Float := 0.0
-  let mut totalArea : Float := 0.0
+  let mut maxRowWidth : Float := fl0p0
+  let mut totalArea : Float := fl0p0
   for graph in sorted do
     let g := a.graph graph
     let diff := KVector.sub (g.internal.bbLowright.getD {}) (g.internal.bbUpleft.getD {})
     maxRowWidth := fmax maxRowWidth diff.x
     totalArea := totalArea + diff.x * diff.y
   let resultProps := (a.graph result).props
-  let aspect := (resultProps.get MrTreeOptions.ASPECT_RATIO).getD 1.0
+  let aspect := (resultProps.get MrTreeOptions.ASPECT_RATIO).getD fl1p0
   maxRowWidth := fmax maxRowWidth (totalArea.sqrt * aspect)
-  let spacing := (resultProps.get MrTreeOptions.SPACING_NODE_NODE).getD 0.0
-  let mut xpos := 0.0
-  let mut ypos := 0.0
-  let mut highestBox := 0.0
+  let spacing := (resultProps.get MrTreeOptions.SPACING_NODE_NODE).getD fl0p0
+  let mut xpos := fl0p0
+  let mut ypos := fl0p0
+  let mut highestBox := fl0p0
   for graph in sorted do
     let g ← MrTreeM.getGraph graph
     let min := g.internal.bbUpleft.getD {}
     let size := KVector.sub (g.internal.bbLowright.getD {}) min
     if xpos + size.x > maxRowWidth then
-      xpos := 0.0
+      xpos := fl0p0
       -- Rust `ypos += highest_box + spacing` (the sum first)
       ypos := ypos + (highestBox + spacing)
-      highestBox := 0.0
+      highestBox := fl0p0
     moveGraph (some result) graph (xpos - min.x) (ypos - min.y)
     highestBox := fmax highestBox size.y
     -- Rust `xpos += size.x + spacing`

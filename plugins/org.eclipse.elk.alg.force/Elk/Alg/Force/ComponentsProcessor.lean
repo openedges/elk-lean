@@ -25,6 +25,13 @@ bounding box, sorts the components by priority (descending) and bounding box are
 and places them row by row left to right in a square-ish layout (`ASPECT_RATIO`, default 1.0, spacing
 `SPACING_NODE_NODE`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Force
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Force.Graph Elk.Alg.Force.Options
@@ -244,10 +251,10 @@ private def annotateComponent (graph : FGraph) : FGraph := Id.run do
     priority := priority + (graph.arena.nodeProperties[nid.idx]!).getD ForceOptions.PRIORITY 1
     let pos := graph.arena.nodePosition[nid.idx]!
     let size := graph.arena.nodeSize[nid.idx]!
-    minX := fmin minX (pos.x - size.x / 2.0)
-    minY := fmin minY (pos.y - size.y / 2.0)
-    maxX := fmax maxX (pos.x + size.x / 2.0)
-    maxY := fmax maxY (pos.y + size.y / 2.0)
+    minX := fmin minX (pos.x - size.x / fl2p0)
+    minY := fmin minY (pos.y - size.y / fl2p0)
+    maxX := fmax maxX (pos.x + size.x / fl2p0)
+    maxY := fmax maxY (pos.y + size.y / fl2p0)
   return { graph with
     props := graph.props.set ForceOptions.PRIORITY priority
     bbUpleft := some ⟨minX, minY⟩
@@ -259,24 +266,24 @@ def recombine (components : Array FGraph) : FGraph := Id.run do
   if components.isEmpty then return {}
   let comps := stableSort (components.map annotateComponent) compareComponents
   let mut result : FGraph := ({} : FGraph).copyProperties comps[0]!
-  let mut maxRowWidth : Float := 0.0
-  let mut totalArea : Float := 0.0
+  let mut maxRowWidth : Float := fl0p0
+  let mut totalArea : Float := fl0p0
   for graph in comps do
     let size := boundingSize graph
     maxRowWidth := fmax maxRowWidth size.x
     totalArea := totalArea + size.x * size.y
-  let aspectRatio := result.props.getD ForceOptions.ASPECT_RATIO 1.0
+  let aspectRatio := result.props.getD ForceOptions.ASPECT_RATIO fl1p0
   maxRowWidth := fmax maxRowWidth (Float.sqrt totalArea * aspectRatio)
-  let spacing := result.props.getD ForceOptions.SPACING_NODE_NODE 0.0
-  let mut xpos : Float := 0.0
-  let mut ypos : Float := 0.0
-  let mut highestBox : Float := 0.0
+  let spacing := result.props.getD ForceOptions.SPACING_NODE_NODE fl0p0
+  let mut xpos : Float := fl0p0
+  let mut ypos : Float := fl0p0
+  let mut highestBox : Float := fl0p0
   for graph in comps do
     let size := boundingSize graph
     if xpos + size.x > maxRowWidth then
-      xpos := 0.0
+      xpos := fl0p0
       ypos := ypos + (highestBox + spacing)
-      highestBox := 0.0
+      highestBox := fl0p0
     result := moveGraph result graph xpos ypos
     highestBox := fmax highestBox size.y
     xpos := xpos + (size.x + spacing)

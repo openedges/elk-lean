@@ -29,6 +29,12 @@ Port notes (Rust is the oracle):
   count is only decremented when positive;
 * the unused `nodeCount` array of `createUnbalancedPlacement` is not ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl20p0 : Float := 20.0
+
 namespace Elk.Alg.Layered.P4Nodes
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -63,7 +69,7 @@ structure LinearSegment where
   /-- `lastLayer`: the last layer the segment was seen in (`-1`). -/
   lastLayer : Int := -1
   /-- `deflection`: the accumulated force of the edges. -/
-  deflection : Float := 0.0
+  deflection : Float := fl0p0
   /-- `weight`: number of nodes contributing to the deflection. -/
   weight : Int := 0
   /-- `refSegment`: the segment this one has been merged into (region). -/
@@ -290,10 +296,10 @@ def createUnbalancedPlacement (graph : LGraphId) (segments : Array LinearSegment
   let gr ← getGraph graph
   let layers := gr.layers
   let layerCount := layers.size
-  let spacingEdgeEdge := gr.props.get LayeredOptions.SPACING_EDGE_EDGE |>.getD 0.0
+  let spacingEdgeEdge := gr.props.get LayeredOptions.SPACING_EDGE_EDGE |>.getD fl0p0
   let mut recentNode : Array (Option LNodeId) := Array.replicate layerCount none
   for segment in segments do
-    let mut uppermostPlace : Float := 0.0
+    let mut uppermostPlace : Float := fl0p0
     for node in segment.nodes do
       let li ← layerIndexOf node
       if li < 0 || li >= (layerCount : Int) then
@@ -351,10 +357,10 @@ other segments, and the number of contributing nodes. Per port: outgoing edges, 
 incoming edges. -/
 def computeDeflection (segments : Array LinearSegment) (prios : PrioMap) (segmentIndex : Nat)
     (incoming outgoing : Bool) (deflectionDampening : Float) : LayeredM (Float × Int) := do
-  let mut segmentDeflection := 0.0
+  let mut segmentDeflection := fl0p0
   let mut nodeWeightSum : Int := 0
   for node in segments[segmentIndex]!.nodes do
-    let mut acc : Float × Int := (0.0, 0)
+    let mut acc : Float × Int := (fl0p0, 0)
     let (ip, op) := prioOf prios node
     let inputPrio := if incoming then ip else I32_MIN
     let outputPrio := if outgoing then op else I32_MIN
@@ -373,7 +379,7 @@ def computeDeflection (segments : Array LinearSegment) (prios : PrioMap) (segmen
   if nodeWeightSum > 0 then
     return (deflectionDampening * segmentDeflection / Float.ofInt nodeWeightSum, nodeWeightSum)
   else
-    return (0.0, 0)
+    return (fl0p0, 0)
 
 /-- `mergeRegions(graph)`: merges touching regions of each layer (overlapping after applying
 their deflections) into the lower one, averaging the deflections by weight. Returns whether
@@ -421,19 +427,19 @@ def balancePlacement (graph : LGraphId) (segments : Array LinearSegment) (prios 
     (spacings : Spacings) : LayeredM (Array LinearSegment) := do
   let gr ← getGraph graph
   let deflectionDampening :=
-    gr.props.get LayeredOptions.NODE_PLACEMENT_LINEAR_SEGMENTS_DEFLECTION_DAMPENING |>.getD 0.0
+    gr.props.get LayeredOptions.NODE_PLACEMENT_LINEAR_SEGMENTS_DEFLECTION_DAMPENING |>.getD fl0p0
   let thoroughness := gr.props.get LayeredOptions.THOROUGHNESS |>.getD 1
   let mut segments := segments
   let mut pendulumIters : Int := 4
   let mut finalIters : Int := 3
-  let threshold := 20.0 / Float.ofInt thoroughness
+  let threshold := fl20p0 / Float.ofInt thoroughness
   let mut ready := false
   let mut mode := Mode.forwPendulum
   let mut lastTotalDeflection := Float.maxValue
   while true do
     let incoming := mode != .backwPendulum
     let outgoing := mode != .forwPendulum
-    let mut totalDeflection := 0.0
+    let mut totalDeflection := fl0p0
     for index in [0:segments.size] do
       segments := segments.modify index fun s => { s with refSegment := none }
       let (deflection, weight) ← computeDeflection segments prios index incoming outgoing deflectionDampening
@@ -446,7 +452,7 @@ def balancePlacement (graph : LGraphId) (segments : Array LinearSegment) (prios 
         break
     for index in [0:segments.size] do
       let deflection := segments[regionIndex segments index]!.deflection
-      if deflection != 0.0 then
+      if deflection != fl0p0 then
         for node in segments[index]!.nodes do
           modifyNode node fun x => { x with position := { x.position with y := x.position.y + deflection } }
     match mode with
@@ -508,7 +514,7 @@ private def searchDisplacement (node : LNodeId) (incoming : Bool) (minRoomAbove 
       let some otherPort := (if incoming then ed.source else ed.target) | continue
       let some otherNode := (← getPort otherPort).owner | continue
       let d := (← portPositionY otherNode otherPort) - pos
-      if d.abs < minDisplacement.abs && d.abs < (if d < 0.0 then minRoomAbove else minRoomBelow) then
+      if d.abs < minDisplacement.abs && d.abs < (if d < fl0p0 then minRoomAbove else minRoomBelow) then
         minDisplacement := d
         foundPlace := true
   return (minDisplacement, foundPlace)
@@ -528,7 +534,7 @@ def postProcess (segments : Array LinearSegment) (spacings : Spacings) : Layered
     if let some last := segment.nodes.back? then
       result ← searchDisplacement last false minRoomAbove minRoomBelow result
     let (minDisplacement, foundPlace) := result
-    if foundPlace && minDisplacement != 0.0 then
+    if foundPlace && minDisplacement != fl0p0 then
       for node in segment.nodes do
         modifyNode node fun x => { x with position := { x.position with y := x.position.y + minDisplacement } }
 

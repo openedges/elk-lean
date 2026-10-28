@@ -5,6 +5,13 @@ import Elk.Alg.RectPacking.Util.Block
 Port of `util/block_stack.rs` (elk-rs): blocks stacked on top of each other. The stack data
 lives in the `RectPackingArena`; the methods take a `BlockStackId`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.RectPacking.Util
 
 open Elk.Graph Elk.Core.Util
@@ -26,19 +33,19 @@ def addBlock (s : BlockStackId) (b : BlockId) : RectPackingM Unit := do
   let blk ← getBlock b
   modifyStack s fun st =>
     { st with width := fmax st.width blk.width
-              height := st.height + (blk.height + (if st.blocks.isEmpty then 0.0 else st.nodeNodeSpacing))
+              height := st.height + (blk.height + (if st.blocks.isEmpty then fl0p0 else st.nodeNodeSpacing))
               blocks := st.blocks.push b }
 
 /-- `update_dimension()`: recomputes width and height from the blocks. -/
 def updateDimension (s : BlockStackId) : RectPackingM Unit := do
   let st ← getStack s
-  let mut height : Float := 0.0
-  let mut width : Float := 0.0
+  let mut height : Float := fl0p0
+  let mut width : Float := fl0p0
   let mut index := 0
   for b in st.blocks do
     let blk ← getBlock b
     width := fmax width blk.width
-    height := height + (blk.height + (if index > 0 then st.nodeNodeSpacing else 0.0))
+    height := height + (blk.height + (if index > 0 then st.nodeNodeSpacing else fl0p0))
     index := index + 1
   modifyStack s fun x => { x with height, width }
 
@@ -63,12 +70,12 @@ def minimumWidth (s : BlockStackId) : RectPackingM Float := do
 heights are those of layouts of copies, nothing moves). -/
 private partial def searchWidth (g : ElkGraph) (blocks : Array Block) (height upperBound lowerBound
     viableWidth newWidth : Float) : Float :=
-  if lowerBound + 1.0 < upperBound then
-    let totalHeight := blocks.foldl (init := 0.0) fun acc blk => acc + (Block.boundsIn g blk newWidth).2
+  if lowerBound + fl1p0 < upperBound then
+    let totalHeight := blocks.foldl (init := fl0p0) fun acc blk => acc + (Block.boundsIn g blk newWidth).2
     if totalHeight < height then
-      searchWidth g blocks height newWidth lowerBound newWidth ((newWidth - lowerBound) / 2.0 + lowerBound)
+      searchWidth g blocks height newWidth lowerBound newWidth ((newWidth - lowerBound) / fl2p0 + lowerBound)
     else
-      searchWidth g blocks height upperBound newWidth viableWidth ((upperBound - newWidth) / 2.0 + newWidth)
+      searchWidth g blocks height upperBound newWidth viableWidth ((upperBound - newWidth) / fl2p0 + newWidth)
   else viableWidth
 
 /-- `get_width_for_fixed_height(height)`: a single block answers `width_for_target_height`;
@@ -113,7 +120,7 @@ def expand (s : BlockStackId) (additionalWidth additionalHeight : Float) : RectP
   let blocks := st.blocks
   let stackWidth := st.width
   let additionalHeightPerBlock :=
-    if blocks.isEmpty then 0.0 else additionalHeight / blocks.size.toFloat
+    if blocks.isEmpty then fl0p0 else additionalHeight / blocks.size.toFloat
   let mut index := 0
   for b in blocks do
     let blk ← getBlock b

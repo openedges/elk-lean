@@ -14,6 +14,12 @@ node's layer **without** setting their `layer` (Java `layer.getNodes().addAll(..
 The comment spacing is the node's individual `SPACING_COMMENT_COMMENT`, else the graph's (`10.0` when the
 graph does not set it). Rust's compound assignments `x += a + b` are reproduced as `x + (a + b)`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Core.Math Elk.Alg.Layered
@@ -62,7 +68,7 @@ def placeRow (node : LNodeId) (boxes : Array LNodeId) (top : Bool) (spacing : Fl
   let nodeW := nd.size.x
   let nodeH := nd.size.y
   let (boxesWidth, maxHeight) ← rowExtent boxes spacing
-  let mut x := nodeX - (boxesWidth - nodeW) / 2.0
+  let mut x := nodeX - (boxesWidth - nodeW) / fl2p0
   let baseLine := if top then nodeY - nd.margin.top + maxHeight else nodeY + nodeH + nd.margin.bottom - maxHeight
   let anchorInc := nodeW / (boxes.size + 1).toFloat
   let mut anchorX := anchorInc
@@ -73,11 +79,11 @@ def placeRow (node : LNodeId) (boxes : Array LNodeId) (top : Bool) (spacing : Fl
     x := x + ((← getNode boxNode).size.x + spacing)
     if let some boxPort ← getBoxPort boxNode then
       let boxSize := (← getNode boxNode).size
-      modifyPort boxPort fun p => { p with position := ⟨boxSize.x / 2.0 - p.anchor.x, if top then boxSize.y else 0.0⟩ }
+      modifyPort boxPort fun p => { p with position := ⟨boxSize.x / fl2p0 - p.anchor.x, if top then boxSize.y else fl0p0⟩ }
     if let some nodePort := (← getNode boxNode).internal.commentConnPort then
       if (← getPort nodePort).degree == 1 then
         let ax := anchorX
-        modifyPort nodePort fun p => { p with position := ⟨ax - p.anchor.x, if top then 0.0 else nodeH⟩ }
+        modifyPort nodePort fun p => { p with position := ⟨ax - p.anchor.x, if top then fl0p0 else nodeH⟩ }
         setPortNode nodePort (some node)
     anchorX := anchorX + anchorInc
 

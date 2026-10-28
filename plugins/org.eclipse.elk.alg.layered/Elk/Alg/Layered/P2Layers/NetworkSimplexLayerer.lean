@@ -25,6 +25,11 @@ Deviations: the `NEdge` origin (the `LEdge` in Rust/Java) is not stored because 
 `NGraph LNodeId` payload type is the node id; nothing reads it. The sub monitor gets
 `1 / |components|` work like Rust (Java: `1`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.P2Layers
 
 open Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Alg Elk.Alg.Common.NetworkSimplex
@@ -136,7 +141,7 @@ def initializeGraph (nodes : Array LNodeId) : LayeredM (NGraph LNodeId) := do
 
 /-- `process(layeredGraph, monitor)`. -/
 def process (layeredGraph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Network simplex layering" 1.0
+  let _ ← monitor.begin "Network simplex layering" fl1p0
   let thoroughness := (← getGraphPropD layeredGraph LayeredOptions.THOROUGHNESS 7) * ITER_LIMIT_FACTOR
   let nodes := (← getGraph layeredGraph).layerlessNodes
   if nodes.isEmpty then
@@ -153,7 +158,7 @@ def process (layeredGraph : LGraphId) (monitor : ProgressMonitor) : LayeredM Uni
       |>.withIterationLimit iterLimit
       |>.withPreviousLayering previousLayeringNodeCounts
       |>.withBalancing true
-    let subMonitor ← monitor.subTask (1.0 / connectedComponents.size.toFloat)
+    let subMonitor ← monitor.subTask (fl1p0 / connectedComponents.size.toFloat)
     let graph ← simplex.execute subMonitor
     for nnode in graph.nodeList do
       let nd := graph.node nnode

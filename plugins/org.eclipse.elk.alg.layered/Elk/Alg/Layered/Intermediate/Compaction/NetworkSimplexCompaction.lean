@@ -30,6 +30,12 @@ Lean specifics:
   port positions in between;
 * `x as i32` saturates like Rust (`toI32`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Compaction
 
 open Elk.Core.Util Elk.Core.Options Elk.Alg.Common.NetworkSimplex Elk.Alg.Common.Compaction.OneD
@@ -169,14 +175,14 @@ def addSeparationConstraints (self : NetworkSimplexCompaction) (g : CompactionNG
         if (← direction).isHorizontal then horizontalSpacing cNode incNode else verticalSpacing cNode incNode
       let c ← getCNode cNode
       let inc ← getCNode incNode
-      let delta := toI32 (fmax (c.cGroupOffset.x + c.hitbox.width + spacing - inc.cGroupOffset.x).ceil 0.0)
+      let delta := toI32 (fmax (c.cGroupOffset.x + c.hitbox.width + spacing - inc.cGroupOffset.x).ceil fl0p0)
       if !md.segmentsShareEdge cNode incNode then
         let sourceIsSegment := md.isSegment cNode
         let targetIsSegment := md.isSegment incNode
         let sourceIsNode := (md.nodeOrigin cNode).isSome
         let targetIsNode := (md.nodeOrigin incNode).isSome
         let weight :=
-          if (sourceIsSegment && targetIsNode) || (targetIsSegment && sourceIsNode) then 2.0
+          if (sourceIsSegment && targetIsNode) || (targetIsSegment && sourceIsNode) then fl2p0
           else SEPARATION_WEIGHT
         g ← addGroupEdge g groupToNNode sourceGroup targetGroup delta weight
         continue
@@ -249,7 +255,7 @@ def addArtificialSourceNode (g : CompactionNGraph) (nextId : Int) : IO (Compacti
   let (g, dummySource) := ((NNode.of : NNodeBuilder Unit).id nextId).create g
   let mut g := g
   for source in sources do
-    g ← addNNodeEdge g dummySource source 1 0.0
+    g ← addNNodeEdge g dummySource source 1 fl0p0
   return (g, nextId + 1)
 
 /-- `compact(compactor)`: builds the network simplex graph, runs the network simplex and places

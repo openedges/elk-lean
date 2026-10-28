@@ -19,6 +19,13 @@ Deviations from the Rust port:
   only stored;
 * work amounts use single precision rounding (`Float.toF32`) like `f32`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0e9 : Float := 1.0e9
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Core.Util
 
 /-- `IElkProgressMonitor.UNKNOWN_WORK`. -/
@@ -52,16 +59,16 @@ structure MonitorState where
   maxLevels : Int := INFINITE_HIERARCHY_LEVELS
   taskName : Option String := none
   closed : Bool := false
-  totalWork : Float := 0.0
-  completedWork : Float := 0.0
-  currentChildWork : Float := -1.0
+  totalWork : Float := fl0p0
+  completedWork : Float := fl0p0
+  currentChildWork : Float := -fl1p0
   recordLogs : Bool := false
   persistLogs : Bool := false
   logMessages : Array String := #[]
   logGraphs : Array LoggedGraph := #[]
   recordExecutionTime : Bool := false
   startNanos : Option Nat := none
-  totalTime : Float := 0.0
+  totalTime : Float := fl0p0
   canceled : Bool := false
 
 /-- `IElkProgressMonitor`: `state = none` is the null monitor. -/
@@ -163,7 +170,7 @@ def done (m : ProgressMonitor) : IO Unit := do
     if s.recordExecutionTime then
       if let some start := s.startNanos then
         let now ← IO.monoNanosNow
-        r.modify fun s => { s with totalTime := (now - start).toFloat / 1.0e9 }
+        r.modify fun s => { s with totalTime := (now - start).toFloat / fl1p0e9 }
     if s.completedWork < s.totalWork then
       internalWorked m (s.totalWork - s.completedWork)
     r.modify fun s => { s with closed := true }

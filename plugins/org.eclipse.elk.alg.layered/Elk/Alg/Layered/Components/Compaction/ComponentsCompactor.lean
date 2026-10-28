@@ -18,6 +18,15 @@ the placers (Java repeats it in each placer).
 Rust `unreachable!`/`expect` cases (external edges at external ports without side, missing
 edge ends or owners) throw `java.lang.IllegalStateException`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p0001 : Float := 0.0001
+private def fl1p0 : Float := 1.0
+private def fl20p0 : Float := 20.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Components.Compaction
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Common
@@ -134,12 +143,12 @@ def createDummy (graph : LGraphId) (external : LNodeId) : LayeredM Unit := do
   let side := ext.internal.extPortSide
   let some port := ext.ports[0]? | illegalState "external port dummy has a port"
   match side with
-  | .west => position := { position with x := position.x + 2.0 }
-  | .east => position := { position with x := position.x - 2.0 }
-  | .north => position := { position with y := position.y + 2.0 }
-  | .south => position := { position with y := position.y - 2.0 }
+  | .west => position := { position with x := position.x + fl2p0 }
+  | .east => position := { position with x := position.x - fl2p0 }
+  | .north => position := { position with y := position.y + fl2p0 }
+  | .south => position := { position with y := position.y - fl2p0 }
   | .undefined => pure ()
-  let dummy ← createNode graph { position := position, size := ⟨fmax size.x 1.0, fmax size.y 1.0⟩ }
+  let dummy ← createNode graph { position := position, size := ⟨fmax size.x fl1p0, fmax size.y fl1p0⟩ }
   modifyGraph graph fun g => { g with layerlessNodes := g.layerlessNodes.push dummy }
   let dummyPort ← LayeredM.createPort
   setPortNode dummyPort (some dummy)
@@ -188,11 +197,11 @@ def transform (graph : LGraphId) (frame : Bounds) : LayeredM Component := do
       let last ← if sourceExternal then marginAnchor target
         else pure (frame.externalPosition (← absoluteAnchor target) side)
       let points := #[first] ++ bends ++ #[last]
-      let thickness := fmax ((← getEdge edge).props.getD CoreOptions.EDGE_THICKNESS 0.0) 1.0
+      let thickness := fmax ((← getEdge edge).props.getD CoreOptions.EDGE_THICKNESS fl0p0) fl1p0
       for index in [0:points.size - 1] do
         let a := points[index]!
         let b := points[index + 1]!
-        let rect : ElkRectangle := ⟨fmin a.x b.x - thickness / 2.0, fmin a.y b.y - thickness / 2.0,
+        let rect : ElkRectangle := ⟨fmin a.x b.x - thickness / fl2p0, fmin a.y b.y - thickness / fl2p0,
           Float.abs (a.x - b.x) + thickness, Float.abs (a.y - b.y) + thickness⟩
         let outer := if sourceExternal then index == 0 else index == points.size - 2
         if outer then
@@ -258,7 +267,7 @@ def compact (graphs : Array LGraphId) (spacing : Float) : LayeredM (KVector × K
         let position := frame.externalPosition nd.position nd.internal.extPortSide
         modifyNode node fun x => { x with position := position }
   -- Only the coordinate perpendicular to an external edge segment contributes.
-  let mut offset : KVector := ⟨0.0, 0.0⟩
+  let mut offset : KVector := ⟨fl0p0, fl0p0⟩
   for component in components do
     for edge in component.externalEdges do
       let (source, target, bends) ← edgePath edge
@@ -266,10 +275,10 @@ def compact (graphs : Array LGraphId) (spacing : Float) : LayeredM (KVector × K
       for index in [0:points.size - 1] do
         let s0 := points[index]!
         let s1 := points[index + 1]!
-        if Float.abs (s0.x - s1.x) <= 0.0001 then
+        if Float.abs (s0.x - s1.x) <= fl0p0001 then
           offset := { offset with x := fmin offset.x s0.x }
           size := { size with x := fmax size.x s0.x }
-        else if Float.abs (s0.y - s1.y) <= 0.0001 then
+        else if Float.abs (s0.y - s1.y) <= fl0p0001 then
           offset := { offset with y := fmin offset.y s0.y }
           size := { size with y := fmax size.y s0.y }
   offset := ⟨-offset.x, -offset.y⟩
@@ -294,10 +303,10 @@ def maybeCompactComponents (components : Array LGraphId) (target : LGraphId) (re
   -- Java parity: component compaction works in a shared absolute coordinate system.
   for component in components do
     let off := (← getGraph component).offset
-    if off.x != 0.0 || off.y != 0.0 then
+    if off.x != fl0p0 || off.y != fl0p0 then
       offsetGraph component off.x off.y
-    modifyGraph component fun g => { g with offset := ⟨0.0, 0.0⟩ }
-  let spacing := (← getGraph firstId).props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT 20.0
+    modifyGraph component fun g => { g with offset := ⟨fl0p0, fl0p0⟩ }
+  let spacing := (← getGraph firstId).props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT fl20p0
   let (size, offset) ← ComponentsCompactor.compact components spacing
   for component in components do
     modifyGraph component fun g => { g with offset := offset }

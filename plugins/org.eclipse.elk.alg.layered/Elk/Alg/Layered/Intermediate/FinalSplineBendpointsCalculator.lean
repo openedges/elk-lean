@@ -48,6 +48,12 @@ when the segment is first handled (with `handled := true`); the edge information
   non-qualified source node is an `IllegalArgumentException` like Java (Rust panics);
 - `segmentAllowsSloppyRouting` skips the node checks for a missing source/target node.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -66,9 +72,9 @@ def SLOPPY_CENTER_CP_MULTIPLIER : Float := 0.4
 /-- The fields of the Rust struct, read from the graph at the start of `process`. -/
 structure Config where
   /-- `edge_edge_spacing` (`SPACING_EDGE_EDGE_BETWEEN_LAYERS`). -/
-  edgeEdgeSpacing : Float := 0.0
+  edgeEdgeSpacing : Float := fl0p0
   /-- `edge_node_spacing` (`SPACING_EDGE_NODE_BETWEEN_LAYERS`). -/
-  edgeNodeSpacing : Float := 0.0
+  edgeNodeSpacing : Float := fl0p0
   /-- `spline_routing_mode` (`EDGE_ROUTING_SPLINES_MODE`). -/
   splineRoutingMode : SplineRoutingMode := .sloppy
   /-- `compaction_strategy` (`COMPACTION_POST_COMPACTION_STRATEGY`). -/
@@ -91,7 +97,7 @@ to the segment's first edge. -/
 def calculateControlPointsStraight (segment : SplineSegment) : LayeredM Unit := do
   let xStartPos := segment.boundingBox.x
   let xEndPos := segment.boundingBox.x + segment.boundingBox.width
-  let halfway : KVector := ⟨xStartPos + (xEndPos - xStartPos) / 2.0, segment.centerControlPointY⟩
+  let halfway : KVector := ⟨xStartPos + (xEndPos - xStartPos) / fl2p0, segment.centerControlPointY⟩
   if let some edge := segment.edges[0]? then
     addBendPoints edge #[halfway]
 

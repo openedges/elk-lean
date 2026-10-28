@@ -17,6 +17,11 @@ until a node would overlap a neighbour in the layer, its tree parent, or the pre
 The mutable `last_radius` field of Rust is only written once per level, right before the
 recursive call for the next level, so it is a parameter of the recursion here.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Radial.Intermediate.Compaction
 
 open Elk.Graph Elk.Core.Options Elk.Alg.Radial.Options Elk.Alg.Radial.Sorting
@@ -66,11 +71,11 @@ def compact (graph : NodeId) : RadialM Unit := do
   let mut base : AbstractRadiusExtensionCompaction := {}
   if let some stepSize := props.get RadialOptions.COMPACTION_STEP_SIZE then
     base := { base with compactionStep := stepSize }
-  base := { base with spacing := (props.get CoreOptions.SPACING_NODE_NODE).getD 0.0 }
+  base := { base with spacing := (props.get CoreOptions.SPACING_NODE_NODE).getD fl0p0 }
   let mut firstLevelNodes ← RadialUtil.getNextLevelNodes #[root]
   if let some sorter := sorter then
     firstLevelNodes ← sorter.sort firstLevelNodes
-  contract base sorter root firstLevelNodes 0.0
+  contract base sorter root firstLevelNodes fl0p0
 
 /-- The `IRadialCompactor` of this class. -/
 def compactor : IRadialCompactor := { compact := compact }

@@ -11,6 +11,11 @@ every processor: `<dir>/step_NNN_<Processor>.json`. The schema, the element id s
 format and the `NaN`/`Infinity` sentinels are those of elk-rs so that
 `scripts/compare_phase_traces.py` can compare both.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered
 
 open Elk.Graph Elk.Core.Math Elk.Json Elk.Alg.Layered.Graph
@@ -24,7 +29,7 @@ def NEG_INF_SENTINEL : String := "__ELK_TRACE_NEG_INF__"
 /-- `number_or_special`: finite numbers as JSON numbers, specials as sentinel strings. -/
 def numberOrSpecial (v : Float) : Value :=
   if v.isNaN then .str NAN_SENTINEL
-  else if v.isInf then (if v > 0.0 then .str POS_INF_SENTINEL else .str NEG_INF_SENTINEL)
+  else if v.isInf then (if v > fl0p0 then .str POS_INF_SENTINEL else .str NEG_INF_SENTINEL)
   else Value.ofFloat v
 
 /-- Snapshot-local ids (`TraceIds`): nodes in layer order, then layerless nodes, then the

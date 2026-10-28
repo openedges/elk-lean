@@ -15,6 +15,11 @@ the earlier span. The correction queue is a FIFO without duplicates (Java `Linke
 `LNode.id` is used as visited flag (`0` = not yet checked, `1` = checked) and `Layer.id` as layer
 index. A target without layer counts as layer `-1` (Rust; Java would throw).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.P2Layers
 
 open Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Alg
@@ -95,7 +100,7 @@ def checkNode (graph graphRef : LGraphId) (node : LNodeId) : LayeredM (Array LNo
 
 /-- `process(graph, monitor)`. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Interactive node layering" 1.0
+  let _ ← monitor.begin "Interactive node layering" fl1p0
   let nodes := (← getGraph graph).layerlessNodes
   if nodes.isEmpty then
     monitor.done
@@ -106,7 +111,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   for node in nodes do
     let nd ← getNode node
     let minx := nd.position.x
-    let maxx := fmax (nd.position.x + nd.size.x) (minx + 1.0)
+    let maxx := fmax (nd.position.x + nd.size.x) (minx + fl1p0)
     currentSpans := addToSpans currentSpans node minx maxx
   -- create real layers from the layer spans
   for h : nextIndex in [0:currentSpans.size] do

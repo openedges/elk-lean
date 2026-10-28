@@ -43,6 +43,13 @@ their iteration order is never observed.
 `get_layout_processor_configuration` slots `LEVEL_COORDS`, `COMPACTION_PROC` and
 `GRAPH_BOUNDS_PROC` before `P4_EDGE_ROUTING`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.MrTree.P4Route
 
 open Elk.Core.Alg Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Alg.MrTree Elk.Alg.MrTree.Graph
@@ -100,8 +107,8 @@ abbrev NodeDataMap := Std.HashMap TNodeId NodeData
 /-- `build_node_data(nodes)`. -/
 def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeDataMap × GraphStats := Id.run do
   let mut data : NodeDataMap := {}
-  let mut sumH := 0.0
-  let mut sumV := 0.0
+  let mut sumH := fl0p0
+  let mut sumV := fl0p0
   let mut maxH := Float.minValue
   let mut maxV := Float.minValue
   let mut minH := Float.maxValue
@@ -113,8 +120,8 @@ def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeDataMap × GraphSta
     let pos := n.position
     let size := n.size
     let isSuperRoot := n.label == some "SUPER_ROOT"
-    sumH := sumH + (pos.y + size.y / 2.0)
-    sumV := sumV + (pos.x + size.x / 2.0)
+    sumH := sumH + (pos.y + size.y / fl2p0)
+    sumV := sumV + (pos.x + size.x / fl2p0)
     let extH := pos.y + size.y
     let extV := pos.x + size.x
     if extH > maxH then maxH := extH
@@ -128,8 +135,8 @@ def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeDataMap × GraphSta
       { avgCenterH := sumH / Float.ofNat count, avgCenterV := sumV / Float.ofNat count,
         maxExtentH := maxH, maxExtentV := maxV, minExtentH := minH, minExtentV := minV }
     else
-      { avgCenterH := 0.0, avgCenterV := 0.0, maxExtentH := 0.0, maxExtentV := 0.0,
-        minExtentH := 0.0, minExtentV := 0.0 }
+      { avgCenterH := fl0p0, avgCenterV := fl0p0, maxExtentH := fl0p0, maxExtentV := fl0p0,
+        minExtentH := fl0p0, minExtentV := fl0p0 }
   return (data, stats)
 
 /-- `nd_level`. -/
@@ -139,9 +146,9 @@ def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeDataMap × GraphSta
 /-- `nd_size`. -/
 @[inline] def ndSize (nd : NodeDataMap) (n : TNodeId) : KVector := (nd.get? n).map (·.size) |>.getD {}
 /-- `nd_level_min`. -/
-@[inline] def ndLevelMin (nd : NodeDataMap) (n : TNodeId) : Float := (nd.get? n).map (·.levelMin) |>.getD 0.0
+@[inline] def ndLevelMin (nd : NodeDataMap) (n : TNodeId) : Float := (nd.get? n).map (·.levelMin) |>.getD fl0p0
 /-- `nd_level_max`. -/
-@[inline] def ndLevelMax (nd : NodeDataMap) (n : TNodeId) : Float := (nd.get? n).map (·.levelMax) |>.getD 0.0
+@[inline] def ndLevelMax (nd : NodeDataMap) (n : TNodeId) : Float := (nd.get? n).map (·.levelMax) |>.getD fl0p0
 /-- `nd_is_super_root`. -/
 @[inline] def ndIsSuperRoot (nd : NodeDataMap) (n : TNodeId) : Bool :=
   (nd.get? n).map (·.isSuperRoot) |>.getD false
@@ -173,7 +180,7 @@ def buildEdgeMaps (a : TArena) (edges : Array TEdgeId) (nd : NodeDataMap) (direc
     let sourcePos := ndPos nd source
     let targetPos := ndPos nd target
     let edgeVec : KVector := ⟨targetPos.x - sourcePos.x, targetPos.y - sourcePos.y⟩
-    if dirVec.dotProduct edgeVec <= 0.0 then
+    if dirVec.dotProduct edgeVec <= fl0p0 then
       em := { em with cycleInducing := em.cycleInducing.insert edge }
     em := { em with endpoints := em.endpoints.insert edge (source, target) }
     if sourceLevel != targetLevel then
@@ -317,10 +324,10 @@ def handleCycleInducingEdges (edge : TEdgeId) (direction : Direction) (sideEdges
   let sourceSize := ndSize nd source
   let targetPos := ndPos nd target
   let targetSize := ndSize nd target
-  let mut bendTmp := 0.0
+  let mut bendTmp := fl0p0
   if direction.isHorizontal then
     let middleTree := stats.averageCenter true
-    if sourcePos.y + sourceSize.y / 2.0 > middleTree then
+    if sourcePos.y + sourceSize.y / fl2p0 > middleTree then
       sideTwoEdges := sideTwoEdges + 1
       bendTmp := stats.maxNodeExtent true (pad * Float.ofInt sideTwoEdges)
     else
@@ -328,7 +335,7 @@ def handleCycleInducingEdges (edge : TEdgeId) (direction : Direction) (sideEdges
       bendTmp := stats.minNodeExtent true (pad * Float.ofInt sideOneEdges)
   else
     let middleTree := stats.averageCenter false
-    if sourcePos.x + sourceSize.x / 2.0 > middleTree then
+    if sourcePos.x + sourceSize.x / fl2p0 > middleTree then
       sideTwoEdges := sideTwoEdges + 1
       bendTmp := stats.maxNodeExtent false (pad * Float.ofInt sideTwoEdges)
     else
@@ -339,21 +346,21 @@ def handleCycleInducingEdges (edge : TEdgeId) (direction : Direction) (sideEdges
     let levelMin := ndLevelMin nd source
     addBend edge (levelMin - pad) bendTmp
     addBend edge (targetPos.x + targetSize.x + pad + tex) bendTmp
-    addBend edge (targetPos.x + targetSize.x + pad + tex) (targetPos.y + targetSize.y / 2.0)
-    addBend edge (targetPos.x + targetSize.x) (targetPos.y + targetSize.y / 2.0)
+    addBend edge (targetPos.x + targetSize.x + pad + tex) (targetPos.y + targetSize.y / fl2p0)
+    addBend edge (targetPos.x + targetSize.x) (targetPos.y + targetSize.y / fl2p0)
   | .right =>
     let levelMax := ndLevelMax nd source
-    addBend edge (levelMax + pad) (sourcePos.y + sourceSize.y / 2.0)
+    addBend edge (levelMax + pad) (sourcePos.y + sourceSize.y / fl2p0)
     addBend edge (sourcePos.x + sourceSize.x + pad) bendTmp
     addBend edge (targetPos.x - pad - tex) bendTmp
-    addBend edge (targetPos.x - pad - tex) (targetPos.y + targetSize.y / 2.0)
-    addBend edge targetPos.x (targetPos.y + targetSize.y / 2.0)
+    addBend edge (targetPos.x - pad - tex) (targetPos.y + targetSize.y / fl2p0)
+    addBend edge targetPos.x (targetPos.y + targetSize.y / fl2p0)
   | .up =>
     let levelMin := ndLevelMin nd source
     addBend edge bendTmp (levelMin - pad)
     addBend edge bendTmp (targetPos.y + targetSize.y + pad + tex)
-    addBend edge (targetPos.x + targetSize.x / 2.0) (targetPos.y + targetSize.y + pad + tex)
-    addBend edge (targetPos.x + targetSize.x / 2.0) (targetPos.y + targetSize.y + pad)
+    addBend edge (targetPos.x + targetSize.x / fl2p0) (targetPos.y + targetSize.y + pad + tex)
+    addBend edge (targetPos.x + targetSize.x / fl2p0) (targetPos.y + targetSize.y + pad)
   | _ =>
     let outs := Float.ofInt inOuts.2
     let ins := Float.ofInt inOuts.1
@@ -399,8 +406,8 @@ def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (nd : Nod
         while index < nextLevelNodes.size do
           let pos := ndPos nd nextLevelNodes[index]!
           let projection := if horizontal
-            then sourcePos.y * (1.0 - interpolation) + targetPos.y * interpolation
-            else sourcePos.x * (1.0 - interpolation) + targetPos.x * interpolation
+            then sourcePos.y * (fl1p0 - interpolation) + targetPos.y * interpolation
+            else sourcePos.x * (fl1p0 - interpolation) + targetPos.x * interpolation
           if (if horizontal then pos.y else pos.x) > projection then break
           index := index + 1
         if !nextLevelNodes.isEmpty then
@@ -470,7 +477,7 @@ def avoidOverlapSetStartPoints (direction : Direction) (pad : Float) (nd : NodeD
     let targetCoord (e : TEdgeId) : Float :=
       match em.endpoints.get? e with
       | some (_, t) => if direction.isHorizontal then (ndPos nd t).y else (ndPos nd t).x
-      | none => 0.0
+      | none => fl0p0
     let outs ← sortByFloat outs targetCoord
     let skip := (← MrTreeM.getNode node).internal.compactLevelAscension
     let num := outs.size

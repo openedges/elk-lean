@@ -21,6 +21,11 @@ Differences to Java (Rust is followed):
 
 Slot: before phase 1.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -38,7 +43,7 @@ def findYFromTargets (node : LNodeId) : LayeredM (Option Float) := do
     let some targetPort := (← getEdge edge).target | continue
     let some targetNode := (← getPort targetPort).owner | continue
     let nd ← getNode targetNode
-    return some (nd.position.y + nd.size.y / 2.0)
+    return some (nd.position.y + nd.size.y / fl2p0)
   return none
 
 /-- Rust `find_y_from_sources` (eastern ports): the y centre of the source node of the node's first
@@ -48,7 +53,7 @@ def findYFromSources (node : LNodeId) : LayeredM (Option Float) := do
     let some sourcePort := (← getEdge edge).source | continue
     let some sourceNode := (← getPort sourcePort).owner | continue
     let nd ← getNode sourceNode
-    return some (nd.position.y + nd.size.y / 2.0)
+    return some (nd.position.y + nd.size.y / fl2p0)
   return none
 
 /-- Rust `find_north_south_x` (`findNorthSouthPortXCoordinate`): on the dummy's first port, the

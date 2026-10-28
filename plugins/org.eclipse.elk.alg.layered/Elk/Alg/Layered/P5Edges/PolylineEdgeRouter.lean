@@ -28,6 +28,12 @@ starts at the layer border; in-layer edges get one bend point beside the layer.
 Everything else (port anchors, connected edges, in-layer and self-loop tests of `addBendPoint`) is read
 live, as in Rust.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.P5Edges
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -171,16 +177,16 @@ def processInLayerEdge (edge : LEdgeId) (layerXPos edgeSpacing : Float) : Layere
 west port of the layer. -/
 def calculateWestInLayerEdgeYDiff (layer : LayerId) : LayeredM Float := do
   let a ← get
-  let mut maxYDiff := 0.0
+  let mut maxYDiff := fl0p0
   for node in (a.layer layer).nodes do
     for edge in a.nodeOutgoingEdges node do
       let ed := a.edge edge
       let some sourcePort := ed.source | continue
       let some targetPort := ed.target | continue
       let sourceSide := (a.port sourcePort).side
-      let sourceAnchorY := ((a.portAbsoluteAnchor sourcePort).map (·.y)).getD 0.0
+      let sourceAnchorY := ((a.portAbsoluteAnchor sourcePort).map (·.y)).getD fl0p0
       let targetInSameLayer := ((a.port targetPort).owner.bind fun n => (a.node n).layer) == some layer
-      let targetAnchorY := ((a.portAbsoluteAnchor targetPort).map (·.y)).getD 0.0
+      let targetAnchorY := ((a.portAbsoluteAnchor targetPort).map (·.y)).getD fl0p0
       if targetInSameLayer && sourceSide == .west then
         maxYDiff := fmax maxYDiff (targetAnchorY - sourceAnchorY).abs
   return maxYDiff
@@ -192,46 +198,46 @@ private def arenaEdgeData (edge : LEdgeId) (nodeLayer : Option LayerId) : Layere
   let ed := a.edge edge
   match ed.source, ed.target with
   | some src, some tgt =>
-    if src == tgt then return (0.0, .undefined, 0.0, false, true)
+    if src == tgt then return (fl0p0, .undefined, fl0p0, false, true)
     let srcAnchor := (a.portAbsoluteAnchor src).getD {}
     let tgtAnchor := (a.portAbsoluteAnchor tgt).getD {}
     let tgtLayer := (a.port tgt).owner.bind fun n => (a.node n).layer
     let inSameLayer := nodeLayer.isSome && tgtLayer.isSome && nodeLayer == tgtLayer
     return (srcAnchor.y, (a.port src).side, tgtAnchor.y, inSameLayer, false)
-  | _, _ => return (0.0, .undefined, 0.0, false, true)
+  | _, _ => return (fl0p0, .undefined, fl0p0, false, true)
 
 /-- The outgoing-edge part of the per-node loop of `process`: in-layer edges get their bend point, and
 the largest vertical distance of the node's other outgoing edges is returned. -/
 private def processOutgoingEdges (node : LNodeId) (scope : ArenaScope) (xpos edgeSpaceFac : Float) : LayeredM Float := do
   let nd ← getNode node
   let outgoingEdges ← withArena fun a => nd.ports.foldl (fun acc p => acc ++ scope.portOutgoingEdges a p) #[]
-  let mut maxCurrOutputYDiff := 0.0
+  let mut maxCurrOutputYDiff := fl0p0
   for edge in outgoingEdges do
     let (sourcePos, sourceSide, targetPos, targetInSameLayer, isSelfLoop) ← arenaEdgeData edge nd.layer
     if targetInSameLayer && !isSelfLoop then
       let yDiff := (sourcePos - targetPos).abs
       processInLayerEdge edge xpos (LAYER_SPACE_FAC * edgeSpaceFac * yDiff)
       if sourceSide == .west then
-        maxCurrOutputYDiff := fmax maxCurrOutputYDiff 0.0
+        maxCurrOutputYDiff := fmax maxCurrOutputYDiff fl0p0
         continue
     maxCurrOutputYDiff := fmax maxCurrOutputYDiff (targetPos - sourcePos).abs
   return maxCurrOutputYDiff
 
 /-- `process(layeredGraph, monitor)`. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Polyline edge routing" 1.0
+  let _ ← monitor.begin "Polyline edge routing" fl1p0
   let gr ← getGraph graph
-  let slopedEdgeZoneWidth := (gr.props.get LayeredOptions.EDGE_ROUTING_POLYLINE_SLOPED_EDGE_ZONE_WIDTH).getD 0.0
-  let nodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD 0.0
-  let edgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS).getD 0.0
-  let edgeSpaceFac := if nodeSpacing.abs < Float.epsilon then 0.0 else fmin (edgeSpacing / nodeSpacing) 1.0
+  let slopedEdgeZoneWidth := (gr.props.get LayeredOptions.EDGE_ROUTING_POLYLINE_SLOPED_EDGE_ZONE_WIDTH).getD fl0p0
+  let nodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD fl0p0
+  let edgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS).getD fl0p0
+  let edgeSpaceFac := if nodeSpacing.abs < Float.epsilon then fl0p0 else fmin (edgeSpacing / nodeSpacing) fl1p0
   let scope ← withArena (ArenaScope.ofGraph · graph)
   let layers := gr.layers
   let mut layerSizeX : Std.HashMap LayerId Float := {}
   for l in layers do
     layerSizeX := layerSizeX.insert l (← getLayer l).size.x
   let mut created : Std.HashSet KVector := {}
-  let mut xpos := 0.0
+  let mut xpos := fl0p0
   if let some firstLayer := layers[0]? then
     let yDiff ← calculateWestInLayerEdgeYDiff firstLayer
     xpos := LAYER_SPACE_FAC * edgeSpaceFac * yDiff
@@ -240,9 +246,9 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
     let layer := layers[layerIndex]!
     let nodes := (← getLayer layer).nodes
     let externalLayer ← nodes.allM isExternalWestOrEastPort
-    if externalLayer && xpos > 0.0 then xpos := xpos - nodeSpacing
+    if externalLayer && xpos > fl0p0 then xpos := xpos - nodeSpacing
     LGraphUtil.placeNodesHorizontally layer xpos
-    let mut maxVertDiff := 0.0
+    let mut maxVertDiff := fl0p0
     for node in nodes do
       let maxCurrOutputYDiff ← processOutgoingEdges node scope xpos edgeSpaceFac
       match (← getNode node).type with

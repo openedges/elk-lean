@@ -9,6 +9,11 @@ nodes and edges (ids into the `TArena`). Several graphs share nodes: the compone
 `ComponentsProcessor.split` and the packed graph of `ComponentsProcessor.pack` list the nodes of the
 imported graph, like the shared `TNodeRef`s of Rust.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.MrTree.Graph
 
 open Elk.Graph Elk.Core.Math Elk.Alg.MrTree.Options
@@ -20,13 +25,13 @@ structure TGraphInternals where
   /-- `REMOVABLE_EDGES` (Rust `unwrap_or_default` = empty). -/
   removableEdges : Array TEdgeId := #[]
   /-- `GRAPH_XMIN`. -/
-  graphXmin : Float := 0.0
+  graphXmin : Float := fl0p0
   /-- `GRAPH_YMIN`. -/
-  graphYmin : Float := 0.0
+  graphYmin : Float := fl0p0
   /-- `GRAPH_XMAX`. -/
-  graphXmax : Float := 0.0
+  graphXmax : Float := fl0p0
   /-- `GRAPH_YMAX`. -/
-  graphYmax : Float := 0.0
+  graphYmax : Float := fl0p0
   /-- `BB_UPLEFT`. -/
   bbUpleft : Option KVector := none
   /-- `BB_LOWRIGHT`. -/

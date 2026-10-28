@@ -25,6 +25,13 @@ here; the label positions are computed by the router (`OrthogonalSelfLoopRouter.
 The side/alignment decisions are pure (`assignSidesAndAlignments` returns the new loops and the
 labels whose inline flag is cleared); `prepareLabels` applies them.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p75 : Float := 0.75
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -216,7 +223,7 @@ def computeLoopLabelPlacement (a : LGraphArena) (h : SelfLoopHolder) (l : SelfHy
   guard (side != .undefined)
   let slot := max (l.getRoutingSlot side) 0
   let localPos := localPosition a h nodeSize lb.size lb.alignment lb.alignmentReferenceSLPort
-  let slotOffset := baseOffset + slot.toFloat * (baseOffset * 0.75 + 2.0)
+  let slotOffset := baseOffset + slot.toFloat * (baseOffset * fl0p75 + fl2p0)
   let absolute : KVector ← match side with
     | .north => some ⟨nodePos.x + localPos.x, nodePos.y - slotOffset - lb.size.y⟩
     | .south => some ⟨nodePos.x + localPos.x, nodePos.y + nodeSize.y + slotOffset⟩
@@ -224,7 +231,7 @@ def computeLoopLabelPlacement (a : LGraphArena) (h : SelfLoopHolder) (l : SelfHy
     | .west => some ⟨nodePos.x - slotOffset - lb.size.x, nodePos.y + localPos.y⟩
     | .undefined => none
   -- Keep labels in graph-local positive coordinates for single-node graphs.
-  return ⟨fmax absolute.x 0.0, fmax absolute.y 0.0⟩
+  return ⟨fmax absolute.x fl0p0, fmax absolute.y fl0p0⟩
 
 /-- `update_margins_with_point(nodeSize, margins, point)`: grows the margins to include `point`
 (node-relative). -/

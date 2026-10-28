@@ -14,6 +14,12 @@ first corrected so that the wedge between the first and the last outgoing edge o
 centered on the target angle. Only the outgoing edges of the root node itself (not of its ports)
 are considered; port targets are mapped to their parent node.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial.Intermediate.Rotation
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Radial.Options
@@ -30,7 +36,7 @@ private def targetNodeOf (g : ElkGraph) (edge : EdgeId) : Option NodeId :=
 /-- `rotate(graph)`. -/
 def rotate (graph : NodeId) : RadialM Unit := do
   let props := (← ElkM.getNode graph).props
-  let mut targetAngle := (props.get RadialOptions.ROTATION_TARGET_ANGLE).getD 0.0
+  let mut targetAngle := (props.get RadialOptions.ROTATION_TARGET_ANGLE).getD fl0p0
   let computeAdditional := (props.get RadialOptions.ROTATION_COMPUTE_ADDITIONAL_WEDGE_SPACE).getD false
   if computeAdditional then
     if let some root ← RadialUtil.rootFromGraph graph then
@@ -42,20 +48,20 @@ def rotate (graph : NodeId) : RadialM Unit := do
         if let (some lastNode, some firstNode) := (targetNodeOf g lastEdge, targetNodeOf g firstEdge) then
           let l := g.node lastNode
           let f := g.node firstNode
-          let lastVector : KVector := ⟨l.x + l.width / 2.0, l.y + l.height / 2.0⟩
-          let firstVector : KVector := ⟨f.x + f.width / 2.0, f.y + f.height / 2.0⟩
+          let lastVector : KVector := ⟨l.x + l.width / fl2p0, l.y + l.height / fl2p0⟩
+          let firstVector : KVector := ⟨f.x + f.width / fl2p0, f.y + f.height / fl2p0⟩
           let mut alpha := targetAngle
-          if alpha <= 0.0 then alpha := alpha + 2.0 * Float.pi
+          if alpha <= fl0p0 then alpha := alpha + fl2p0 * Float.pi
           let mut wedgeAngle := lastVector.angle firstVector
-          if wedgeAngle <= 0.0 then wedgeAngle := wedgeAngle + 2.0 * Float.pi
+          if wedgeAngle <= fl0p0 then wedgeAngle := wedgeAngle + fl2p0 * Float.pi
           let mut alignmentAngle := Float.atan2 lastVector.y lastVector.x
-          if alignmentAngle <= 0.0 then alignmentAngle := alignmentAngle + 2.0 * Float.pi
-          targetAngle := Float.pi - (alignmentAngle - alpha + wedgeAngle / 2.0)
+          if alignmentAngle <= fl0p0 then alignmentAngle := alignmentAngle + fl2p0 * Float.pi
+          targetAngle := Float.pi - (alignmentAngle - alpha + wedgeAngle / fl2p0)
   let children := (← ElkM.getNode graph).children
   for node in children do
     let n ← ElkM.getNode node
-    let pos := (KVector.mk (n.x + n.width / 2.0) (n.y + n.height / 2.0)).rotate targetAngle
-    ElkM.modifyNode node fun m => { m with x := pos.x - n.width / 2.0, y := pos.y - n.height / 2.0 }
+    let pos := (KVector.mk (n.x + n.width / fl2p0) (n.y + n.height / fl2p0)).rotate targetAngle
+    ElkM.modifyNode node fun m => { m with x := pos.x - n.width / fl2p0, y := pos.y - n.height / fl2p0 }
 
 /-- The `IRadialRotator` of this class. -/
 def rotator : IRadialRotator := { rotate := rotate }

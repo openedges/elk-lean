@@ -5,6 +5,11 @@ import Elk.Core.Math.KVector
 A chain of vectors is an `Array KVector`; the `KVectorChain` namespace adds the
 Java API on top of the array operations.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Core.Math
 
 open Elk.Core.Util
@@ -68,13 +73,13 @@ def pointOnLine (c : KVectorChain) (dist : Float) : KVector := Id.run do
   if c.size == 0 then return default
   if c.size == 1 then return c[0]!
   let absDistance := dist.abs
-  let mut distanceSum := 0.0
-  if dist >= 0.0 then
+  let mut distanceSum := fl0p0
+  if dist >= fl0p0 then
     for i in [0:c.size - 1] do
       let current := c[i]!
       let next := c[i + 1]!
       let additional := current.distance next
-      if additional > 0.0 then
+      if additional > fl0p0 then
         let oldSum := distanceSum
         distanceSum := distanceSum + additional
         if distanceSum >= absDistance then
@@ -87,7 +92,7 @@ def pointOnLine (c : KVectorChain) (dist : Float) : KVector := Id.run do
       let current := c[i]!
       let next := c[i - 1]!
       let additional := current.distance next
-      if additional > 0.0 then
+      if additional > fl0p0 then
         let oldSum := distanceSum
         distanceSum := distanceSum + additional
         if distanceSum >= absDistance then
@@ -98,15 +103,15 @@ def pointOnLine (c : KVectorChain) (dist : Float) : KVector := Id.run do
 
 /-- `angleOnLine(dist)`: direction angle (radians) of the segment at the distance. -/
 def angleOnLine (c : KVectorChain) (dist : Float) : Float := Id.run do
-  if c.size < 2 then return 0.0
+  if c.size < 2 then return fl0p0
   let absDistance := dist.abs
-  let mut distanceSum := 0.0
-  if dist >= 0.0 then
+  let mut distanceSum := fl0p0
+  if dist >= fl0p0 then
     for i in [0:c.size - 1] do
       let current := c[i]!
       let next := c[i + 1]!
       let additional := current.distance next
-      if additional > 0.0 then
+      if additional > fl0p0 then
         distanceSum := distanceSum + additional
         if distanceSum >= absDistance then
           return (next - current).toRadians
@@ -117,7 +122,7 @@ def angleOnLine (c : KVectorChain) (dist : Float) : Float := Id.run do
       let current := c[i]!
       let next := c[i - 1]!
       let additional := current.distance next
-      if additional > 0.0 then
+      if additional > fl0p0 then
         distanceSum := distanceSum + additional
         if distanceSum >= absDistance then
           return (next - current).toRadians

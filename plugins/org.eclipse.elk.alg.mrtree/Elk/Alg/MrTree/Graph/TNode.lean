@@ -13,6 +13,11 @@ the edge, `remove_outgoing` removes the *first occurrence* of the edge's target 
 `outgoing_edges` (Java `getChildren()`), so the cache is kept as the field `directChildren` and
 `children()` returns it, exactly like Rust.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.MrTree.Graph
 
 open Elk.Core.Math Elk.Alg.MrTree.Options
@@ -46,11 +51,11 @@ structure TNodeInternals where
   /-- `YCOOR`. -/
   ycoor : Int := 0
   /-- `LEVELHEIGHT`. -/
-  levelHeight : Float := 0.0
+  levelHeight : Float := fl0p0
   /-- `LEVELMIN`. -/
-  levelMin : Float := 0.0
+  levelMin : Float := fl0p0
   /-- `LEVELMAX`. -/
-  levelMax : Float := 0.0
+  levelMax : Float := fl0p0
   /-- `COMPACT_LEVEL_ASCENSION`. -/
   compactLevelAscension : Bool := false
   /-- `COMPACT_CONSTRAINTS` (Rust `unwrap_or_default` = empty). -/
@@ -60,9 +65,9 @@ structure TNodeInternals where
   /-- `POSITION`: the order index of `NodeOrderer`. -/
   position : Int := 0
   /-- `PRELIM`. -/
-  prelim : Float := 0.0
+  prelim : Float := fl0p0
   /-- `MODIFIER`. -/
-  modifier : Float := 0.0
+  modifier : Float := fl0p0
   deriving Inhabited
 
 /-- `org.eclipse.elk.alg.mrtree.graph.TNode`. -/

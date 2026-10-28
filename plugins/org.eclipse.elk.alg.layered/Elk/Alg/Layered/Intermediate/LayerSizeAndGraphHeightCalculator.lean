@@ -15,6 +15,12 @@ elk-rs runs the computation on an `ArenaSync` copy (`all_layer_ids` = the graph'
 arena directly in the same order (`PORTING.md` §15.1). `f64::max`/`f64::min` are `fmax`/`fmin`.
 The `ELK_TRACE_LAYER_HEIGHT` debug output of elk-rs is omitted.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -34,18 +40,18 @@ def spacingPortsSurrounding (graph : LGraphId) : LayeredM ElkMargin := do
 and height (`bottom - top` of the first and last node incl. margins; external port dummies add the
 surrounding port spacing), then the graph height `maxY - minY` and `offset.y -= minY`. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Layer size calculation" 1.0
+  let _ ← monitor.begin "Layer size calculation" fl1p0
   let spacing ← spacingPortsSurrounding graph
   let mut minY := Float.posInf
   let mut maxY := Float.negInf
   let mut foundNodes := false
   let layers := (← getGraph graph).layers
   for layer in layers do
-    modifyLayer layer fun l => { l with size := ⟨0.0, 0.0⟩ }
+    modifyLayer layer fun l => { l with size := ⟨fl0p0, fl0p0⟩ }
     let nodeIds := (← getLayer layer).nodes
     if nodeIds.isEmpty then continue
     foundNodes := true
-    let mut layerWidth : Float := 0.0
+    let mut layerWidth : Float := fl0p0
     for nid in nodeIds do
       let nd ← getNode nid
       layerWidth := fmax layerWidth (nd.size.x + nd.margin.left + nd.margin.right)
@@ -63,8 +69,8 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
     minY := fmin minY top
     maxY := fmax maxY bottom
   if !foundNodes then
-    minY := 0.0
-    maxY := 0.0
+    minY := fl0p0
+    maxY := fl0p0
   let sizeY := maxY - minY
   let offsetY := minY
   modifyGraph graph fun g =>

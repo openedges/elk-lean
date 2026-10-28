@@ -13,6 +13,13 @@ layout provider (clone the hierarchy / lay out the next level) and therefore nee
 layout engine and algorithm provider pool (`Elk.Core.Data`, `Elk.Core.Util.ElkUtil`);
 `getSize` returns `none` for them until the engine is ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+private def fl4p0 : Float := 4.0
+
 namespace Elk.Core.Options
 
 open Elk Elk.Graph Elk.Core.Math
@@ -39,15 +46,15 @@ def getSizeCategoryMultiplier (g : ElkGraph) (node : NodeId) : Float := Id.run d
   let thisGraphSize := getGraphSize g node
   let categories : Int := (n.props.get CoreOptions.TOPDOWN_SIZE_CATEGORIES).getD 3
   match n.parent with
-  | none => return 1.0
+  | none => return fl1p0
   | some parent =>
     -- the minimum found size is computed but unused in the Java/Rust code
     let mut sizeMaxFound : Int := Int.negSucc 2147483647
     for child in (g.node parent).children do
       let size := getGraphSize g child
       if size > sizeMaxFound then sizeMaxFound := size
-    let sizeMin : Float := 1.0
-    let mut sizeMax : Float := Float.pow 4.0 (Float.ofInt categories)
+    let sizeMin : Float := fl1p0
+    let mut sizeMax : Float := Float.pow fl4p0 (Float.ofInt categories)
     if Float.ofInt sizeMaxFound > sizeMax then
       sizeMax := Float.ofInt sizeMaxFound
     let x := (Float.log sizeMax - Float.log sizeMin) / Float.ofInt categories
@@ -55,9 +62,9 @@ def getSizeCategoryMultiplier (g : ElkGraph) (node : NodeId) : Float := Id.run d
     let mut cutoff := sizeMin * factor
     for i in [0:categories.toNat] do
       if Float.ofInt thisGraphSize < cutoff then
-        return Float.pow 2.0 i.toFloat
+        return Float.pow fl2p0 i.toFloat
       cutoff := cutoff * factor
-    return Float.pow 2.0 (Float.ofInt (categories - 1))
+    return Float.pow fl2p0 (Float.ofInt (categories - 1))
 
 end TopdownSizeApproximatorUtil
 

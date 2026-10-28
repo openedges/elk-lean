@@ -19,6 +19,13 @@ ratios read `PortContext.portRatioOrPosition`, margins set up once, strict ratio
 `fmax`). The first label's height is the size recorded in the label cell (Java re-reads
 `label.getSize()`; label sizes do not change during the calculation).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -76,8 +83,8 @@ private def verticalPortMargin (cells : CellArena L) (isFixed : Bool) (portLabel
   let mut margin := pc.portMargin
   let labelHeight := match pc.portLabelCell with
     | some c => cells.minimumHeight c
-    | none => 0.0
-  if labelHeight > 0.0 then
+    | none => fl0p0
+  if labelHeight > fl0p0 then
     if pc.labelsNextToPort then
       -- The label is placed next to the port
       let portHeight := pc.portSize.y
@@ -87,13 +94,13 @@ private def verticalPortMargin (cells : CellArena L) (isFixed : Bool) (portLabel
           | none => #[]
         if portLabelsTreatAsGroup || labels.size == 1 then
           -- Center all labels
-          let overhang := (labelHeight - portHeight) / 2.0
+          let overhang := (labelHeight - portHeight) / fl2p0
           margin := { margin with top := overhang, bottom := overhang }
         else
           -- Simulate centering the first port label
-          let firstLabelHeight := (labels[0]?.map (·.2.y)).getD 0.0
-          let firstLabelOverhang := (firstLabelHeight - portHeight) / 2.0
-          margin := { margin with top := fmax 0.0 firstLabelOverhang }
+          let firstLabelHeight := (labels[0]?.map (·.2.y)).getD fl0p0
+          let firstLabelOverhang := (firstLabelHeight - portHeight) / fl2p0
+          margin := { margin with top := fmax fl0p0 firstLabelOverhang }
           margin := { margin with bottom := labelHeight - firstLabelOverhang - portHeight }
     else
       -- Label placed below the port
@@ -101,7 +108,7 @@ private def verticalPortMargin (cells : CellArena L) (isFixed : Bool) (portLabel
   else if isFixed then
     -- Fixed labels are not in the label cell: use their bounds
     let labelsBounds := pc.getLabelsBounds
-    if labelsBounds.y < 0.0 then
+    if labelsBounds.y < fl0p0 then
       margin := { margin with top := -labelsBounds.y }
     if labelsBounds.y + labelsBounds.height > pc.portSize.y then
       margin := { margin with bottom := labelsBounds.y + labelsBounds.height - pc.portSize.y }
@@ -154,7 +161,7 @@ private def setupPortMargins (ctx : NodeContext N P L) (portSide : PortSide) : N
         match pcs[0]? with
         | some first =>
           if spaceEfficientPortLabels && !first.labelsNextToPort then
-            pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with bottom := 0.0 } }
+            pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with bottom := fl0p0 } }
           else pcs
         | none => pcs
     else ctx
@@ -187,12 +194,12 @@ private def calculateVerticalNodeSizeRequiredByFixedRatioPorts (ctx : NodeContex
     NodeContext N P L := Id.run do
   if (ctx.portContextsOf portSide).isEmpty then
     return updateInsidePortLabelCells ctx portSide fun cs c =>
-      cs.modifyPadding c fun p => { p with top := 0.0, bottom := 0.0 }
+      cs.modifyPadding c fun p => { p with top := fl0p0, bottom := fl0p0 }
   let portLabelsInside := ctx.portLabelsPlacement.contains .inside
   let mut ctx := ctx
   if ctx.sizeConstraints.contains .portLabels then
     ctx := setupPortMargins ctx portSide
-  let mut minHeight := 0.0
+  let mut minHeight := fl0p0
   let surroundingTop := ctx.surroundingPortMargins.top
   let surroundingBottom := ctx.surroundingPortMargins.bottom
   let portPortSpacing := ctx.portPortSpacing
@@ -206,19 +213,19 @@ private def calculateVerticalNodeSizeRequiredByFixedRatioPorts (ctx : NodeContex
       minHeight := fmax minHeight (minSizeRequiredToRespectSpacing requiredSpace prevRatio ratio)
     | none =>
       -- First port: respect the top surrounding port margin
-      if surroundingTop > 0.0 then
-        minHeight := fmax minHeight (minSizeRequiredToRespectSpacing (surroundingTop + pc.portMargin.top) 0.0 ratio)
+      if surroundingTop > fl0p0 then
+        minHeight := fmax minHeight (minSizeRequiredToRespectSpacing (surroundingTop + pc.portMargin.top) fl0p0 ratio)
     previous := some (ratio, pc.portSize.y, pc.portMargin.bottom)
   -- Bottom surrounding port margin
   if let some (prevRatio, prevHeight, prevMarginBottom) := previous then
-    if surroundingBottom > 0.0 then
+    if surroundingBottom > fl0p0 then
       let mut requiredSpace := prevHeight + surroundingBottom
       if portLabelsInside then
         requiredSpace := requiredSpace + prevMarginBottom
-      minHeight := fmax minHeight (minSizeRequiredToRespectSpacing requiredSpace prevRatio 1.0)
+      minHeight := fmax minHeight (minSizeRequiredToRespectSpacing requiredSpace prevRatio fl1p0)
   -- Set the cell size and remove the top padding
   return updateInsidePortLabelCells ctx portSide fun cs c =>
-    (cs.modifyPadding c fun p => { p with top := 0.0 }).modifyMinimumContentAreaSize c
+    (cs.modifyPadding c fun p => { p with top := fl0p0 }).modifyMinimumContentAreaSize c
       fun s => { s with y := minHeight }
 
 /-- `calculateVerticalNodeSizeRequiredByFreePorts(nodeContext, portSide)`: the padding is the
@@ -229,7 +236,7 @@ private def calculateVerticalNodeSizeRequiredByFreePorts (ctx : NodeContext N P 
     NodeContext N P L := Id.run do
   if (ctx.portContextsOf portSide).isEmpty then
     return updateInsidePortLabelCells ctx portSide fun cs c =>
-      cs.modifyPadding c fun p => { p with top := 0.0, bottom := 0.0 }
+      cs.modifyPadding c fun p => { p with top := fl0p0, bottom := fl0p0 }
   -- Set the padding to match the surrounding port space
   let surrTop := ctx.surroundingPortMargins.top
   let surrBottom := ctx.surroundingPortMargins.bottom
@@ -239,7 +246,7 @@ private def calculateVerticalNodeSizeRequiredByFreePorts (ctx : NodeContext N P 
     ctx := setupPortMargins ctx portSide
   let mut height := portHeightPlusPortPortSpacing ctx portSide
   if ctx.getPortAlignment portSide == .distributed then
-    height := height + 2.0 * ctx.portPortSpacing
+    height := height + fl2p0 * ctx.portPortSpacing
   -- Set the cell size
   return updateInsidePortLabelCells ctx portSide fun cs c =>
     cs.modifyMinimumContentAreaSize c fun s => { s with y := height }

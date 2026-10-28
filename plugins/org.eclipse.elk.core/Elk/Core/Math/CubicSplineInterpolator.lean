@@ -4,6 +4,12 @@ import Elk.Core.Math.SplineInterpolator
 
 Interpolates points with cubic Bezier splines (closed and open variants).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Core.Math
 
 namespace CubicSplineInterpolator
@@ -44,8 +50,8 @@ def calculateClosedBezierSpline (points : Array KVector) : BezierSpline := Id.ru
   if m > MAX_K then m := MAX_K
   let mut d : Array KVector := Array.replicate n KVector.zero
   for i in [0:n] do
-    let mut dx := 0.0
-    let mut dy := 0.0
+    let mut dx := fl0p0
+    let mut dy := fl0p0
     for k0 in [0:m] do
       let k := k0 + 1
       let a := if even then INTERP_COEF_ODD[m - 1]![k - 1]!
@@ -69,8 +75,8 @@ def calculateOpenBezierSpline (points : Array KVector) (startTan endTan : KVecto
   let n := points.size - 1
   let mut t : Array KVector := Array.replicate (2 * n) KVector.zero
   let mut d : Array KVector := Array.replicate (n + 1) KVector.zero
-  let mut startScale := 1.0
-  let mut endScale := 1.0
+  let mut startScale := fl1p0
+  let mut endScale := fl1p0
   if tangentScale then
     if points.size == 2 then
       startScale := points[0]!.distance points[1]! * TANGENT_SCALE
@@ -87,8 +93,8 @@ def calculateOpenBezierSpline (points : Array KVector) (startTan endTan : KVecto
     t := t.set! (2 * n - i) points[i]!
   let m := min (n - 1) MAX_K
   for i in [1:n] do
-    let mut dx := 0.0
-    let mut dy := 0.0
+    let mut dx := fl0p0
+    let mut dy := fl0p0
     for k0 in [0:m] do
       let k := k0 + 1
       let a := INTERP_COEF_EVEN[m - 1]![k - 1]!

@@ -11,6 +11,12 @@ adjacent segment length. Like Rust (and Java), duplicate points are kept.
 Rust `assert!`s (more than two points, orthogonal corners) are `Except` errors here; the router
 throws them as `IllegalStateException`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 
 open Elk.Core.Math Elk.Core.Util
@@ -31,8 +37,8 @@ def areOrthogonallyRouted (previous corner next : KVector) : Bool :=
 
 /-- `near_zero_to_zero(vector)`. -/
 def nearZeroToZero (v : KVector) : KVector :=
-  let x := if v.x ≥ -TOLERANCE && v.x ≤ TOLERANCE then 0.0 else v.x
-  let y := if v.y ≥ -TOLERANCE && v.y ≤ TOLERANCE then 0.0 else v.y
+  let x := if v.x ≥ -TOLERANCE && v.x ≤ TOLERANCE then fl0p0 else v.x
+  let y := if v.y ≥ -TOLERANCE && v.y ≤ TOLERANCE then fl0p0 else v.y
   ⟨x, y⟩
 
 /-- `java_signum(value)` (`0.0` for zero and NaN). -/
@@ -51,8 +57,8 @@ def cutCorners (bendPoints : KVectorChain) (distance : Float) : Except String KV
     let offset1 := nearZeroToZero (KVector.diff previous corner)
     let offset2 := nearZeroToZero (KVector.diff next corner)
     let mut effectiveDistance := distance
-    effectiveDistance := fmin effectiveDistance ((offset1.x + offset1.y).abs / 2.0)
-    effectiveDistance := fmin effectiveDistance ((offset2.x + offset2.y).abs / 2.0)
+    effectiveDistance := fmin effectiveDistance ((offset1.x + offset1.y).abs / fl2p0)
+    effectiveDistance := fmin effectiveDistance ((offset2.x + offset2.y).abs / fl2p0)
     let offset1 : KVector := ⟨javaSignum offset1.x * effectiveDistance, javaSignum offset1.y * effectiveDistance⟩
     let offset2 : KVector := ⟨javaSignum offset2.x * effectiveDistance, javaSignum offset2.y * effectiveDistance⟩
     result := result.push (corner + offset1)

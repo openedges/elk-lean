@@ -24,6 +24,13 @@ Ported from Rust, which differs from the Java subclass of `ScanlineConstraintCal
 The scheduled undo operations (Java `Runnable`s) are replayed in the same order. Unknown routing
 styles do nothing (Rust `_ => {}`; Java throws `UnsupportedConfigurationException`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Compaction
 
 open Elk.Core Elk.Core.Util Elk.Core.Options Elk.Alg.Common.Compaction Elk.Alg.Common.Compaction.OneD
@@ -170,7 +177,7 @@ def alterHitbox (md : CompactionMetadata) (node : CNodeId) (spacing fac : Float)
   | none =>
     if (md.nodeOrigin node).isSome then
       modifyCNode node fun c =>
-        { c with hitbox := { c.hitbox with y := c.hitbox.y - delta, height := c.hitbox.height + 2.0 * delta } }
+        { c with hitbox := { c.hitbox with y := c.hitbox.y - delta, height := c.hitbox.height + fl2p0 * delta } }
 
 /-- Rust `alter_grouped_hitbox_orthogonal(group, spacing, fac)` (Java
 `alterGroupedHitboxOrthogonal`): alters the group's master (or first node) like `alterHitbox`
@@ -213,8 +220,8 @@ def minimumSpacing (self : EdgeAwareScanlineConstraintCalculation) : CompactM Fl
       minSpacing := fmin minSpacing self.segmentSpacing
       continue
     if let some spacing := md.nodeNodeSpacing node then
-      minSpacing := fmin minSpacing (fmax (spacing / 2.0 - EPSILON) 0.0)
-  return if minSpacing.isFinite then minSpacing else 0.0
+      minSpacing := fmin minSpacing (fmax (spacing / fl2p0 - EPSILON) fl0p0)
+  return if minSpacing.isFinite then minSpacing else fl0p0
 
 /-- Rust `calculate_for_spline(compactor)` (Java `calculateForSpline`). -/
 def calculateForSpline (self : EdgeAwareScanlineConstraintCalculation) : CompactM Unit := do
@@ -224,11 +231,11 @@ def calculateForSpline (self : EdgeAwareScanlineConstraintCalculation) : Compact
   let nodes ← cNodeIds
   for node in nodes do
     if (md.nodeOrigin node).isSome then
-      alterHitbox md node minSpacing 1.0
+      alterHitbox md node minSpacing fl1p0
   sweep fun _ => true
   for node in nodes do
     if (md.nodeOrigin node).isSome then
-      alterHitbox md node minSpacing (-1.0)
+      alterHitbox md node minSpacing (-fl1p0)
 
 /-- The "nodes" round of `calculate_for_orthogonal`: nodes are enlarged by half their
 edge-edge spacing (minus `EPSILON`) and swept among themselves. -/
@@ -239,12 +246,12 @@ private def orthogonalNodeRound (self : EdgeAwareScanlineConstraintCalculation) 
   for node in nodes do
     if (md.nodeOrigin node).isSome then
       let spacing := (md.nodeEdgeSpacing node).getD self.verticalEdgeEdgeSpacing
-      let adjusted := fmax (spacing / 2.0 - EPSILON) 0.0
-      alterHitbox md node adjusted 1.0
+      let adjusted := fmax (spacing / fl2p0 - EPSILON) fl0p0
+      alterHitbox md node adjusted fl1p0
       schedule := schedule.push (node, adjusted)
   sweep fun n => (md.nodeOrigin n).isSome
   for (node, spacing) in schedule do
-    alterHitbox md node spacing (-1.0)
+    alterHitbox md node spacing (-fl1p0)
 
 /-- Rust `calculate_for_orthogonal(compactor)` (Java `calculateForOrthogonal`): segments, nodes,
 then everything with the grouped hitboxes enlarged by the minimum spacing. -/
@@ -255,19 +262,19 @@ def calculateForOrthogonal (self : EdgeAwareScanlineConstraintCalculation) : Com
   let mut segmentNodes : Array CNodeId := #[]
   for node in nodes do
     if md.isSegment node then
-      alterHitbox md node segmentSpacing 1.0
+      alterHitbox md node segmentSpacing fl1p0
       segmentNodes := segmentNodes.push node
   sweep md.isSegment
   for node in segmentNodes do
-    alterHitbox md node segmentSpacing (-1.0)
+    alterHitbox md node segmentSpacing (-fl1p0)
   self.orthogonalNodeRound nodes
   let minSpacing ← self.minimumSpacing
   let groups ← cGroupIds
   for group in groups do
-    alterGroupedHitboxOrthogonal md group minSpacing 1.0
+    alterGroupedHitboxOrthogonal md group minSpacing fl1p0
   sweep fun _ => true
   for group in groups do
-    alterGroupedHitboxOrthogonal md group minSpacing (-1.0)
+    alterGroupedHitboxOrthogonal md group minSpacing (-fl1p0)
 
 /-- `calculateConstraints(compactor)`: dispatches on the edge routing. -/
 def calculateConstraints (self : EdgeAwareScanlineConstraintCalculation) : CompactM Unit :=

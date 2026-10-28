@@ -37,6 +37,11 @@ Not ported: the `ELK_TRACE_NETWORK_SIMPLEX` diagnostic print when no entering
 edge exists (the state changes are identical), and the reusable allocation
 buffer `postorder_stack` (the traversal uses a local stack).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NetworkSimplex
 
 open Elk.Core.Util
@@ -186,10 +191,10 @@ private def partitionPoint (a : Array Nat) (pred : Nat → Bool) : Nat := Id.run
 running sum of absolute weights stays at most 2^52 (`try_fold` short-circuits
 at the first failure). -/
 def integralWeights (weights : Array Float) : Bool := Id.run do
-  let mut sum := 0.0
+  let mut sum := fl0p0
   for w in weights do
     let sum' := sum + w.abs
-    if !(w.isFinite && fract w == 0.0 && sum' <= TWO_POW_52) then
+    if !(w.isFinite && fract w == fl0p0 && sum' <= TWO_POW_52) then
       return false
     sum := sum'
   return true
@@ -262,7 +267,7 @@ def initState : NetworkSimplexM ο Unit := do
   let numEdges := edges.size
   modify fun s =>
     if s.cutvalue.size < numEdges then
-      { s with cutvalue := ⟨Array.replicate numEdges 0.0⟩, edgeVisited := Array.replicate numEdges false }
+      { s with cutvalue := ⟨Array.replicate numEdges fl0p0⟩, edgeVisited := Array.replicate numEdges false }
     else
       { s with edgeVisited := fillFalse s.edgeVisited }
   modify fun s => { s with edges := edges, treeEdgeIds := #[], postOrder := 1 }

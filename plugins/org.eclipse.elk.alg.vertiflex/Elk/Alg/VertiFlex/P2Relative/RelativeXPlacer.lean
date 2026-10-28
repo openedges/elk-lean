@@ -28,6 +28,12 @@ Conventions of the port:
 * Rust's `.expect(..)` on a missing property throws (`VertiFlexM.expectSome`).
 * `children.sort_by` is stable (`stableSort`); keys are read once before sorting.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.VertiFlex.P2Relative
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Core.Options Elk.Alg.VertiFlex.Options
@@ -37,7 +43,7 @@ namespace RelativeXPlacer
 /-- The fields of the Rust placer struct, set in `process`. -/
 structure Config where
   /-- `spacing_node_node`. -/
-  spacingNodeNode : Float := 0.0
+  spacingNodeNode : Float := fl0p0
   /-- `consider_node_model_order`. -/
   considerNodeModelOrder : Bool := false
 
@@ -201,15 +207,15 @@ def bundleChildren (leftSubtree a b : NodeId) : VertiFlexM Unit := do
 the graph over its children, and `MAX_Y := OUTLINE_MAX_DEPTH`. -/
 def aggregateBounds (graph : NodeId) (children : Array NodeId) : VertiFlexM Unit := do
   let gp ← VertiFlexM.getProps graph
-  let mut outlineMaxDepth := gp.outlineMaxDepth.getD 0.0
-  let mut minX := gp.minX.getD 0.0
-  let mut maxX := gp.maxX.getD 0.0
+  let mut outlineMaxDepth := gp.outlineMaxDepth.getD fl0p0
+  let mut minX := gp.minX.getD fl0p0
+  let mut maxX := gp.maxX.getD fl0p0
   for child in children do
     let cp ← VertiFlexM.getProps child
     let childX := (← ElkM.getNode child).x
-    outlineMaxDepth := fmax outlineMaxDepth (cp.outlineMaxDepth.getD 0.0)
-    minX := fmin minX (childX + cp.minX.getD 0.0)
-    maxX := fmax maxX (childX + cp.maxX.getD 0.0)
+    outlineMaxDepth := fmax outlineMaxDepth (cp.outlineMaxDepth.getD fl0p0)
+    minX := fmin minX (childX + cp.minX.getD fl0p0)
+    maxX := fmax maxX (childX + cp.maxX.getD fl0p0)
   VertiFlexM.modifyProps graph fun p =>
     { p with outlineMaxDepth := some outlineMaxDepth, minX := some minX, maxX := some maxX,
              maxY := some outlineMaxDepth }
@@ -345,7 +351,7 @@ partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : Ver
   for i in [0:children.size - 1] do
     bundleChildren children[0]! children[i]! children[i + 1]!
   let mut pos := 0
-  let mut maxDepth := 0.0
+  let mut maxDepth := fl0p0
   let mut maxDepthStartPos := 0
   while pos < children.size do
     let childY := (← ElkM.getNode children[pos]!).y
@@ -357,13 +363,13 @@ partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : Ver
   let gNode ← ElkM.getNode graph
   let first ← ElkM.getNode children[0]!
   let last ← ElkM.getNode children[children.size - 1]!
-  let mut moveRoot := 0.0
+  let mut moveRoot := fl0p0
   if pos > 0 then
     let childStart ← ElkM.getNode children[maxDepthStartPos]!
     let childEnd ← ElkM.getNode children[pos - 1]!
-    moveRoot := (childStart.x + childEnd.x + childEnd.width) / 2.0 - gNode.x - gNode.width / 2.0
+    moveRoot := (childStart.x + childEnd.x + childEnd.width) / fl2p0 - gNode.x - gNode.width / fl2p0
   if !cfg.considerNodeModelOrder then
-    let mut betterMoveRoot := (first.x + last.x + last.width - gNode.width) / 2.0 - gNode.x
+    let mut betterMoveRoot := (first.x + last.x + last.width - gNode.width) / fl2p0 - gNode.x
     if betterMoveRoot < moveRoot then
       for i in [0:maxDepthStartPos] do
         for j in [i + 1:maxDepthStartPos + 1] do
@@ -371,14 +377,14 @@ partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : Ver
           let ci ← ElkM.getNode children[i]!
           let cj ← ElkM.getNode children[j]!
           let mut rightOutlineX := ci.x + rightOutline.relativeX
-          let posX := cj.x + cj.width / 2.0
+          let posX := cj.x + cj.width / fl2p0
           let mut outlineIter : Option OutlineNode := some rightOutline
           while true do
             match outlineIter with
             | none => break
             | some outline =>
               if outline.absoluteY >= maxDepth then break
-              let newMoveRoot := posX - gNode.width / 2.0
+              let newMoveRoot := posX - gNode.width / fl2p0
                 + (posX - rightOutlineX) * ((gNode.y + gNode.height) - maxDepth)
                   / (maxDepth - outline.absoluteY)
               if newMoveRoot > betterMoveRoot then
@@ -394,14 +400,14 @@ partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : Ver
           let ci ← ElkM.getNode children[i]!
           let cj ← ElkM.getNode children[j]!
           let mut leftOutlineX := ci.x + leftOutline.relativeX
-          let posX := cj.x + cj.width / 2.0
+          let posX := cj.x + cj.width / fl2p0
           let mut outlineIter : Option OutlineNode := some leftOutline
           while true do
             match outlineIter with
             | none => break
             | some outline =>
               if outline.absoluteY >= maxDepth then break
-              let newMoveRoot := posX - gNode.width / 2.0
+              let newMoveRoot := posX - gNode.width / fl2p0
                 + (posX - leftOutlineX) * ((gNode.y + gNode.height) - maxDepth)
                   / (maxDepth - outline.absoluteY)
               if newMoveRoot < betterMoveRoot then
@@ -445,7 +451,7 @@ partial def recursiveBentlinePlacement (cfg : Config) (graph : NodeId) : VertiFl
   let gNode ← ElkM.getNode graph
   let first ← ElkM.getNode children[0]!
   let last ← ElkM.getNode children[children.size - 1]!
-  let moveRoot := (first.x + first.width / 2.0 + last.x + last.width / 2.0 - gNode.width) / 2.0 - gNode.x
+  let moveRoot := (first.x + first.width / fl2p0 + last.x + last.width / fl2p0 - gNode.width) / fl2p0 - gNode.x
   for child in children do
     ElkM.modifyNode child fun nd => { nd with x := nd.x - moveRoot }
     let bendHeight := (← leftOutlineOf child).absoluteY
@@ -455,11 +461,11 @@ partial def recursiveBentlinePlacement (cfg : Config) (graph : NodeId) : VertiFl
   while i < childrenSize - 1 do
     let ci ← ElkM.getNode children[i]!
     let margins := ci.props.getD CoreOptions.MARGINS {}
-    if !(ci.x + ci.width + margins.right - gNode.width / 2.0 <= 0.0) then break
+    if !(ci.x + ci.width + margins.right - gNode.width / fl2p0 <= fl0p0) then break
     i := i + 1
-  let mut globalBendHeight := ((← VertiFlexM.getProps children[i]!).edgeBendHeight).getD 0.0
+  let mut globalBendHeight := ((← VertiFlexM.getProps children[i]!).edgeBendHeight).getD fl0p0
   for child in children do
-    let childHeight := ((← VertiFlexM.getProps child).edgeBendHeight).getD 0.0
+    let childHeight := ((← VertiFlexM.getProps child).edgeBendHeight).getD fl0p0
     if globalBendHeight < childHeight then
       VertiFlexM.modifyProps child fun p => { p with edgeBendHeight := some globalBendHeight }
     else
@@ -468,12 +474,12 @@ partial def recursiveBentlinePlacement (cfg : Config) (graph : NodeId) : VertiFl
   while i > 0 do
     let ci ← ElkM.getNode children[i]!
     let margins := ci.props.getD CoreOptions.MARGINS {}
-    if !(ci.x - margins.left - gNode.width / 2.0 >= 0.0) then break
+    if !(ci.x - margins.left - gNode.width / fl2p0 >= fl0p0) then break
     i := i - 1
   if i < childrenSize then
     for k in [0:i + 1] do
       let a := i - k
-      let childHeight := ((← VertiFlexM.getProps children[a]!).edgeBendHeight).getD 0.0
+      let childHeight := ((← VertiFlexM.getProps children[a]!).edgeBendHeight).getD fl0p0
       if globalBendHeight < childHeight then
         VertiFlexM.modifyProps children[a]! fun p => { p with edgeBendHeight := some globalBendHeight }
       else
@@ -482,8 +488,8 @@ partial def recursiveBentlinePlacement (cfg : Config) (graph : NodeId) : VertiFl
   let graphLeftOutline ← leftOutlineOf graph
   let firstX := (← ElkM.getNode children[0]!).x
   let newLeftX := firstX + leftChildOutline.relativeX - graphLeftOutline.relativeX
-  let newLeftPart := OutlineNode.new 0.0 leftChildOutline.absoluteY leftChildOutline.next
-  let firstBend := ((← VertiFlexM.getProps children[0]!).edgeBendHeight).getD 0.0
+  let newLeftPart := OutlineNode.new fl0p0 leftChildOutline.absoluteY leftChildOutline.next
+  let firstBend := ((← VertiFlexM.getProps children[0]!).edgeBendHeight).getD fl0p0
   let newLeftOutline := OutlineNode.new newLeftX firstBend (some newLeftPart)
   let graphLeftOutline := graphLeftOutline.setThirdNext newLeftOutline
   VertiFlexM.modifyProps graph fun p => { p with leftOutline := some graphLeftOutline }
@@ -492,8 +498,8 @@ partial def recursiveBentlinePlacement (cfg : Config) (graph : NodeId) : VertiFl
   let graphRightOutline ← rightOutlineOf graph
   let lastX := (← ElkM.getNode lastChild).x
   let newRightX := lastX + rightChildOutline.relativeX - graphRightOutline.relativeX
-  let newRightPart := OutlineNode.new 0.0 rightChildOutline.absoluteY rightChildOutline.next
-  let lastBend := ((← VertiFlexM.getProps lastChild).edgeBendHeight).getD 0.0
+  let newRightPart := OutlineNode.new fl0p0 rightChildOutline.absoluteY rightChildOutline.next
+  let lastBend := ((← VertiFlexM.getProps lastChild).edgeBendHeight).getD fl0p0
   let newRightOutline := OutlineNode.new newRightX lastBend (some newRightPart)
   let graphRightOutline := graphRightOutline.setThirdNext newRightOutline
   VertiFlexM.modifyProps graph fun p => { p with rightOutline := some graphRightOutline }

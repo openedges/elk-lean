@@ -16,6 +16,11 @@ code never overlap with a notifying block other than the notifier itself (the no
 Rust deviation from Java kept: `something_was_changed |= absorb_blocks(..)` always runs the
 absorption (no short circuit), like Java's `|=`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.P2Packing
 
 open Elk.Graph Elk.Core.Util Elk.Alg.RectPacking.Util Elk.Alg.RectPacking.Options
@@ -155,7 +160,7 @@ def placeBeside (rows : Array RectRowId) (row : RectRowId) (block nextBlock : Bl
     return (false, rows)
   if shouldRowHeightBeReevaluated then
     let stacks := (← getRow row).stacks
-    let mut potentialWidth : Float := 0.0
+    let mut potentialWidth : Float := fl0p0
     for s in stacks do
       potentialWidth := potentialWidth + ((← BlockStack.getWidthForFixedHeight s nextBlockMinHeight) + nodeNodeSpacing)
     targetWidthOfNextBlock := boundingWidth - potentialWidth
@@ -218,7 +223,7 @@ def compact (rowIdx : Nat) (rows : Array RectRowId) (boundingWidth nodeNodeSpaci
         | some stack => do
           let st ← getStack stack
           pure (st.x + st.width + nodeNodeSpacing)
-        | none => pure 0.0
+        | none => pure fl0p0
       let rowY := (← getRow row).y
       let newStack ← BlockStack.create stackX rowY nodeNodeSpacing
       let ns ← getStack newStack

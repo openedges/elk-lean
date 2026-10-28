@@ -20,6 +20,11 @@ The strategy factories of Rust (`NodeArrangementStrategy::create_phase` / `creat
 `WhitespaceEliminationStrategy::create_phase`) are defined here (`phaseFactory`, `createArranger`)
 to keep the enumerations free of dependencies on the phase implementations.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.TopdownPacking
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Util
@@ -75,7 +80,7 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
     let algorithm ← assembleAlgorithm wrapped
     let _ ← monitor.begin "Topdown Packing" algorithm.size.toFloat
     for processor in algorithm do
-      let sub ← monitor.subTask 1.0
+      let sub ← monitor.subTask fl1p0
       processor.process wrapped sub
     monitor.done
   StateRefT'.run' run wrapped

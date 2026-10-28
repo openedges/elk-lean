@@ -52,6 +52,12 @@ of a `CGraph`, and the application of the compacted positions back to the `LGrap
 * the node groups have no `master` (Rust `CGroup::create`); `EdgeAwareScanlineConstraintCalculation`
   falls back to the first group node, which is the node `CNode`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Compaction
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Alg.Common.Compaction.OneD
@@ -459,7 +465,7 @@ def applySegmentPositions (ctx : CompactionContext) : LayeredM Unit := do
   for i in [0:ctx.cGraph.cNodes.size] do
     let .segment segmentIndex := ctx.cnodeOrigin[i]?.getD (.node ⟨0⟩) | continue
     let some delta := ctx.deltaX ⟨i⟩ | continue
-    if CompareFuzzy.eq delta 0.0 then continue
+    if CompareFuzzy.eq delta fl0p0 then continue
     let some segment := ctx.segments[segmentIndex]? | continue
     let mut adjusted : Std.HashSet (LEdgeId × Nat) := {}
     for (edge, bendIndex) in segment.affectedBends do
@@ -480,10 +486,10 @@ def applySplineSelfLoopOffsets (ctx : CompactionContext) : LayeredM Unit := do
   for i in [0:ctx.cGraph.cNodes.size] do
     let .node node := ctx.cnodeOrigin[i]?.getD (.segment 0) | continue
     let some delta := ctx.deltaX ⟨i⟩ | continue
-    if CompareFuzzy.eq delta 0.0 then continue
+    if CompareFuzzy.eq delta fl0p0 then continue
     for edge in (← withArena (·.nodeOutgoingEdges node)) do
       if !(← withArena (·.edgeIsSelfLoop edge)) then continue
-      modifyEdge edge fun ed => { ed with bendPoints := ed.bendPoints.offsetValues delta 0.0 }
+      modifyEdge edge fun ed => { ed with bendPoints := ed.bendPoints.offsetValues delta fl0p0 }
 
 /-- Rust `first_non_straight_segment(spline, index)`: the first non-straight segment at or after
 `index`, or the last segment; `(index, handle)`. -/
@@ -527,7 +533,7 @@ def adjustControlPointBetweenSegments (ctx : CompactionContext) (left right : Na
   for idx in [idx1:idx2] do
     if let some segment := spline[idx]? then
       let x := pos
-      ctx.splines.modifyBoundingBox segment fun bb => { bb with x := x - bb.width / 2.0 }
+      ctx.splines.modifyBoundingBox segment fun bb => { bb with x := x - bb.width / fl2p0 }
       pos := pos + chunk
 
 /-- Rust `adjust_spline_control_points(spline)` (Java `adjustSplineControlPoints`). -/
@@ -560,7 +566,7 @@ def applySelfLoopLabelOffsets (ctx : CompactionContext) : LayeredM Unit := do
   for i in [0:ctx.cGraph.cNodes.size] do
     let .node node := ctx.cnodeOrigin[i]?.getD (.segment 0) | continue
     let some delta := ctx.deltaX ⟨i⟩ | continue
-    if CompareFuzzy.eq delta 0.0 then continue
+    if CompareFuzzy.eq delta fl0p0 then continue
     for edge in (← withArena (·.nodeOutgoingEdges node)) do
       if !(← withArena (·.edgeIsSelfLoop edge)) then continue
       for label in (← getEdge edge).labels do

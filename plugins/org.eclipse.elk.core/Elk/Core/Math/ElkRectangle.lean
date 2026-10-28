@@ -2,6 +2,11 @@ import Elk.Core.Math.KVector
 /-!
 # `org.eclipse.elk.core.math.ElkRectangle`
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Core.Math
 
 open Elk.Core.Util
@@ -22,7 +27,7 @@ def ofValues (x y width height : Float) : ElkRectangle := ⟨x, y, width, height
 @[inline] def topRight (r : ElkRectangle) : KVector := ⟨r.x + r.width, r.y⟩
 @[inline] def bottomLeft (r : ElkRectangle) : KVector := ⟨r.x, r.y + r.height⟩
 @[inline] def bottomRight (r : ElkRectangle) : KVector := ⟨r.x + r.width, r.y + r.height⟩
-@[inline] def center (r : ElkRectangle) : KVector := ⟨r.x + r.width / 2.0, r.y + r.height / 2.0⟩
+@[inline] def center (r : ElkRectangle) : KVector := ⟨r.x + r.width / fl2p0, r.y + r.height / fl2p0⟩
 @[inline] def maxX (r : ElkRectangle) : Float := r.x + r.width
 @[inline] def maxY (r : ElkRectangle) : Float := r.y + r.height
 

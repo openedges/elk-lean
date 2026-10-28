@@ -10,6 +10,11 @@ that try to add a rectangle to an existing block (used by the compaction).
 Float operations follow the Rust evaluation order (`a + b + c` is `(a + b) + c`, `a += b + c` is
 `a + (b + c)`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.P2Packing
 
 open Elk.Graph Elk.Core.Util Elk.Alg.RectPacking.Util Elk.Alg.RectPacking.Options
@@ -35,23 +40,23 @@ on the rectangle's parent). -/
 def place (rectangles : Array NodeId) (boundingWidth nodeNodeSpacing : Float) :
     RectPackingM (Array RectRowId) := do
   let mut rows : Array RectRowId := #[]
-  let mut row ← RectRow.create 0.0 nodeNodeSpacing
-  let mut drawingHeight : Float := 0.0
-  let block ← Block.create 0.0 0.0 row nodeNodeSpacing
+  let mut row ← RectRow.create fl0p0 nodeNodeSpacing
+  let mut drawingHeight : Float := fl0p0
+  let block ← Block.create fl0p0 fl0p0 row nodeNodeSpacing
   RectRow.addBlock row block
-  let mut currentWidth : Float := 0.0
+  let mut currentWidth : Float := fl0p0
   let mut currentBlock := block
   for rect in rectangles do
     let rectNode ← ElkM.getNode rect
     let rectWidth := rectNode.width
     let inNewRow := (rectNode.props.get RectPackingOptions.IN_NEW_ROW).getD false
     let isBlockEmpty := (← getBlock currentBlock).children.isEmpty
-    let potentialRowWidth := currentWidth + rectWidth + (if isBlockEmpty then 0.0 else nodeNodeSpacing)
+    let potentialRowWidth := currentWidth + rectWidth + (if isBlockEmpty then fl0p0 else nodeNodeSpacing)
     if potentialRowWidth > boundingWidth || inNewRow then
       drawingHeight := drawingHeight + ((← getRow row).height + nodeNodeSpacing)
       rows := rows.push row
       row ← RectRow.create drawingHeight nodeNodeSpacing
-      currentBlock ← Block.create 0.0 (← getRow row).y row nodeNodeSpacing
+      currentBlock ← Block.create fl0p0 (← getRow row).y row nodeNodeSpacing
       RectRow.addBlock row currentBlock
     let rowHeightReevaluation ← match rectNode.parent with
       | some p => do

@@ -24,6 +24,12 @@ the Rust `strategy.create_phase()`), which avoids importing the `p4nodes` packag
 strategy throws `IllegalStateException` (Rust `expect("Missing second node placement strategy")`;
 Java fails with a `NullPointerException`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -39,7 +45,7 @@ def createNodePlacer (strategy : NodePlacementStrategy) : IO LayeredPhase :=
 
 /-- `process(graph, monitor)` (Rust `process`): see the module doc. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Node placement repeater" 1.0
+  let _ ← monitor.begin "Node placement repeater" fl1p0
   let some strategy := (← getGraph graph).props.get
       LayeredOptions.NODE_PLACEMENT_NETWORK_SIMPLEX_NODE_FLEXIBILITY_RECOMPUTE_NODE_PLACEMENT
     | throw (IO.userError "java.lang.IllegalStateException: Missing second node placement strategy")
@@ -54,7 +60,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
           -- removing the constraints restores their fixed-size default
           props := (n.props.remove LayeredOptions.NODE_PLACEMENT_NETWORK_SIMPLEX_NODE_FLEXIBILITY).remove
             LayeredOptions.NODE_SIZE_CONSTRAINTS
-          position := { n.position with y := 0.0 } }
+          position := { n.position with y := fl0p0 } }
   let adapter ← LGraphAdapters.adapt graph true true fun n => n.type == .normal
   let direction ← adapter.graph.getPropertyD graph LayeredOptions.DIRECTION Direction.undefined
   -- the full calculator: its fixed-size path repositions ports and labels without growing sizes

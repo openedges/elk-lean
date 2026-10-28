@@ -11,6 +11,11 @@ Java/Rust call back into the routing generator (`createDependencyIfNecessary`, t
 `countCrossings`); since `OrthogonalRoutingGenerator` imports this module, the splitter is a
 structure holding those two generator functions (Java keeps the generator as a field).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.P5Edges.Orthogonal
 
 open Elk.Graph Elk.Core.Util
@@ -43,7 +48,7 @@ structure AreaRating where
   deriving Inhabited
 
 /-- `center(p1, p2)`. -/
-@[inline] def centerValues (p1 p2 : Float) : Float := (p1 + p2) / 2.0
+@[inline] def centerValues (p1 p2 : Float) : Float := (p1 + p2) / fl2p0
 
 /-- `center(area)`. -/
 @[inline] def centerArea (area : FreeArea) : Float := centerValues area.startPosition area.endPosition
@@ -59,7 +64,7 @@ def findFreeAreas (g : SegmentGraph) (criticalConflictThreshold : Float) : Array
   let sorted := stableSort coordinates Float.comparePartial
   let mut freeAreas : Array FreeArea := #[]
   for i in [1:sorted.size] do
-    if sorted[i]! - sorted[i - 1]! >= 2.0 * criticalConflictThreshold then
+    if sorted[i]! - sorted[i - 1]! >= fl2p0 * criticalConflictThreshold then
       freeAreas := freeAreas.push
         (FreeArea.new (sorted[i - 1]! + criticalConflictThreshold) (sorted[i]! - criticalConflictThreshold))
   return freeAreas
@@ -162,7 +167,7 @@ what remains on both sides of its centre (keeping the threshold distance). -/
 def useArea (freeAreas : Array FreeArea) (usedAreaIndex : Nat) (criticalConflictThreshold : Float) : Array FreeArea := Id.run do
   let oldArea := freeAreas[usedAreaIndex]!
   let mut freeAreas := freeAreas.eraseIdx! usedAreaIndex
-  if oldArea.size / 2.0 >= criticalConflictThreshold then
+  if oldArea.size / fl2p0 >= criticalConflictThreshold then
     let mut insertIndex := usedAreaIndex
     let oldAreaCenter := centerArea oldArea
     let newEnd1 := oldAreaCenter - criticalConflictThreshold

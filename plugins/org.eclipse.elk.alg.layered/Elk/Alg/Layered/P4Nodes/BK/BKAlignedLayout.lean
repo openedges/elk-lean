@@ -15,6 +15,11 @@ flags (`y[i].unwrap_or(0.0)` = `yOf i`). The read-only parts of the Rust struct 
 The algorithms that update a layout incrementally (aligner, compactor, threshold strategies)
 run in `BalM := StateRefT BKAlignedLayout IO`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P4Nodes.BK
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -75,7 +80,7 @@ def new (nodeCount : Nat) (vdir : Option VDirection) (hdir : Option HDirection) 
 
 /-- `y[i].unwrap_or(0.0)`. -/
 @[inline] def yOf (bal : BKAlignedLayout) (i : Nat) : Float :=
-  if bal.yDefined.getD i false then bal.y.get! i else 0.0
+  if bal.yDefined.getD i false then bal.y.get! i else fl0p0
 
 /-- `y[i].is_some()`. -/
 @[inline] def isYDefined (bal : BKAlignedLayout) (i : Nat) : Bool := bal.yDefined.getD i false

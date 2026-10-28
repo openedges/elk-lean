@@ -27,6 +27,13 @@ the layout node is resized (unless `NODE_SIZE_FIXED_GRAPH_SIZE`); the child area
 Rust keeps hash maps from pointer-derived origin ids to `ElkGraph` elements; here the origin of an
 `FGraph` element is the typed `ElkGraph` id (see `Options.InternalProperties`), so no maps are needed.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Force
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Alg.Force.Graph Elk.Alg.Force.Options
@@ -79,7 +86,7 @@ private def importEdge (fgraph : FGraph) (g : ElkGraph) (e : EdgeId) (source tar
         labelText := a.labelText.set! j (some elklabel.text)
         labelProperties := a.labelProperties.set! j elklabel.props
         labelOrigin := a.labelOrigin.set! j (some (Origin.elkLabel l))
-        labelSize := a.labelSize.set! j ⟨fmax elklabel.width 1.0, fmax elklabel.height 1.0⟩ }
+        labelSize := a.labelSize.set! j ⟨fmax elklabel.width fl1p0, fmax elklabel.height fl1p0⟩ }
       fgraph := { fgraph with arena := a }
       fgraph := fgraph.refreshLabelPosition lid
       fgraph := { fgraph with labels := fgraph.labels.push lid }
@@ -132,30 +139,30 @@ private def boundingBox (fgraph : FGraph) : Float × Float × Float × Float := 
   for nid in fgraph.nodes do
     let pos := fgraph.arena.nodePosition[nid.idx]!
     let size := fgraph.arena.nodeSize[nid.idx]!
-    minX := fmin minX (pos.x - size.x / 2.0)
-    minY := fmin minY (pos.y - size.y / 2.0)
-    maxX := fmax maxX (pos.x + size.x / 2.0)
-    maxY := fmax maxY (pos.y + size.y / 2.0)
+    minX := fmin minX (pos.x - size.x / fl2p0)
+    minY := fmin minY (pos.y - size.y / fl2p0)
+    maxX := fmax maxX (pos.x + size.x / fl2p0)
+    maxY := fmax maxY (pos.y + size.y / fl2p0)
   for bid in fgraph.bendpoints do
     let pos := fgraph.arena.bendPosition[bid.idx]!
     let size := fgraph.arena.bendSize[bid.idx]!
-    minX := fmin minX (pos.x - size.x / 2.0)
-    minY := fmin minY (pos.y - size.y / 2.0)
-    maxX := fmax maxX (pos.x + size.x / 2.0)
-    maxY := fmax maxY (pos.y + size.y / 2.0)
+    minX := fmin minX (pos.x - size.x / fl2p0)
+    minY := fmin minY (pos.y - size.y / fl2p0)
+    maxX := fmax maxX (pos.x + size.x / fl2p0)
+    maxY := fmax maxY (pos.y + size.y / fl2p0)
   return (minX, minY, maxX, maxY)
 
 /-- `IGraphImporter::apply_layout(graph)`. -/
 def applyLayout (fgraph : FGraph) : ElkM Unit := do
   let some (Origin.elkNode root) := fgraph.origin | return
   let (minX, minY, maxX, maxY) := boundingBox fgraph
-  let padding := ((← ElkM.getNode root).props.get ForceOptions.PADDING).getD (ElkPadding.ofAny 0.0)
+  let padding := ((← ElkM.getNode root).props.get ForceOptions.PADDING).getD (ElkPadding.ofAny fl0p0)
   let offset : KVector := ⟨padding.left - minX, padding.top - minY⟩
   for nid in fgraph.nodes do
     let some (Origin.elkNode node) := fgraph.arena.nodeOrigin[nid.idx]! | continue
     let nodePos := fgraph.arena.nodePosition[nid.idx]! + offset
     ElkM.modifyNode node fun n =>
-      { n with x := nodePos.x - n.width / 2.0, y := nodePos.y - n.height / 2.0 }
+      { n with x := nodePos.x - n.width / fl2p0, y := nodePos.y - n.height / fl2p0 }
   for eid in fgraph.edges do
     let some (Origin.elkEdge edge) := fgraph.arena.edgeOrigin[eid.idx]! | continue
     let sec ← ensureSingleSection edge
@@ -166,10 +173,10 @@ def applyLayout (fgraph : FGraph) : ElkM Unit := do
     ElkM.modifySection sec fun s =>
       { s with
         bendPoints := bends
-        startX := (start.map (·.x)).getD 0.0
-        startY := (start.map (·.y)).getD 0.0
-        endX := («end».map (·.x)).getD 0.0
-        endY := («end».map (·.y)).getD 0.0 }
+        startX := (start.map (·.x)).getD fl0p0
+        startY := (start.map (·.y)).getD fl0p0
+        endX := («end».map (·.x)).getD fl0p0
+        endY := («end».map (·.y)).getD fl0p0 }
   for lid in fgraph.labels do
     let some (Origin.elkLabel label) := fgraph.arena.labelOrigin[lid.idx]! | continue
     let labelPos := fgraph.arena.labelPosition[lid.idx]! + offset

@@ -25,6 +25,11 @@ Order notes: the Rust `dummy_node_map` (`HashMap<PortRefKey, LNodeRef>`) is only
 this port iterates it in insertion order. The `ElkTrace` debug prints of the Rust code
 (`[compound-pre]`, `[inside-self]`) are not ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Compound
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util
@@ -446,7 +451,7 @@ private def createPortDummiesOfCompoundNode (nestedGraph : LGraphId) (node : LNo
       let pt ← getPort port
       let props ← portPropertyHolder port
       let (dummy, _) ← LGraphUtil.createExternalPortDummy props portConstraints pt.side (-pt.netFlow)
-        ⟨0.0, 0.0⟩ ⟨0.0, 0.0⟩ pt.size direction nestedGraph
+        ⟨fl0p0, fl0p0⟩ ⟨fl0p0, fl0p0⟩ pt.size direction nestedGraph
       modifyNode dummy fun x => { x with internal := { x.internal with origin := some (.lPort port) } }
       putDummy port dummy
       modifyGraph nestedGraph fun g => { g with layerlessNodes := g.layerlessNodes.push dummy }
@@ -462,9 +467,9 @@ private def createPortDummiesOfCompoundNode (nestedGraph : LGraphId) (node : LNo
       let labelPos := lb.position
       let mut dummySize := labelSize
       if !insidePortLabels then
-        let mut insidePart := 0.0
+        let mut insidePart := fl0p0
         if PortLabelPlacement.isFixed portLabelPlacement then
-          insidePart := ElkUtil.computeInsidePart labelPos labelSize portSize 0.0 portSide
+          insidePart := ElkUtil.computeInsidePart labelPos labelSize portSize fl0p0 portSide
         if portConstraints == .free || portSide == .east || portSide == .west then
           dummySize := { dummySize with x := insidePart }
         else

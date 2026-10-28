@@ -17,6 +17,11 @@ disconnected (each once, in first-use order).
 code; it is defined locally as `TOLERANCE`. The `ElkTrace` debug prints (`[compound-post]`) are
 not ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Compound
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util
@@ -87,16 +92,16 @@ private def restoreEdge (origEdge : LEdgeId) (crossEdges : Array CrossHierarchyE
   let mut dummyEdges := dummyEdges
   let mut seen := seen
   for crossEdge in crossEdges do
-    let offset ← LGraphUtil.changeCoordSystem ⟨0.0, 0.0⟩ crossEdge.graph referenceGraph
+    let offset ← LGraphUtil.changeCoordSystem ⟨fl0p0, fl0p0⟩ crossEdge.graph referenceGraph
     let ledge := crossEdge.edge
     let ed ← getEdge ledge
     let bendPoints := ed.bendPoints.offsetValues offset.x offset.y
     let sourcePoint ← match ed.source with
-      | some p => pure ((← withArena (·.portAbsoluteAnchor p)).getD ⟨0.0, 0.0⟩)
-      | none => pure ⟨0.0, 0.0⟩
+      | some p => pure ((← withArena (·.portAbsoluteAnchor p)).getD ⟨fl0p0, fl0p0⟩)
+      | none => pure ⟨fl0p0, fl0p0⟩
     let targetPoint ← match ed.target with
-      | some p => pure ((← withArena (·.portAbsoluteAnchor p)).getD ⟨0.0, 0.0⟩)
-      | none => pure ⟨0.0, 0.0⟩
+      | some p => pure ((← withArena (·.portAbsoluteAnchor p)).getD ⟨fl0p0, fl0p0⟩)
+      | none => pure ⟨fl0p0, fl0p0⟩
     let sourcePoint := sourcePoint + offset
     let targetPoint := targetPoint + offset
     match lastPoint with
@@ -118,7 +123,7 @@ private def restoreEdge (origEdge : LEdgeId) (crossEdges : Array CrossHierarchyE
       let mut targetOffset := offset
       if let some tg := targetGraph then
         if tg != crossEdge.graph then
-          targetOffset ← LGraphUtil.changeCoordSystem ⟨0.0, 0.0⟩ tg referenceGraph
+          targetOffset ← LGraphUtil.changeCoordSystem ⟨fl0p0, fl0p0⟩ tg referenceGraph
       let finalOffset := targetOffset
       modifyEdge origEdge fun e => { e with internal := { e.internal with targetOffset := some finalOffset } }
     copyLabelsBack ledge origEdge referenceGraph

@@ -10,6 +10,11 @@ removed top-down using the vertical spacing between the node types.
 Arena access instead of the Rust `ArenaSync` snapshot (`PORTING.md` §15.1): layers in
 `graph.layers` order, nodes in `layer.nodes` order.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P4Nodes
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -44,7 +49,7 @@ def placeNodes (nodeIds : Array LNodeId) (spacings : Spacings) : LayeredM Unit :
       match nd.internal.originalDummyNodePosition with
       | some original => posY := original
       | none =>
-        minValidY := fmax minValidY 0.0
+        minValidY := fmax minValidY fl0p0
         posY := minValidY + spacing
     let marginTop := nd.margin.top
     let marginBottom := nd.margin.bottom

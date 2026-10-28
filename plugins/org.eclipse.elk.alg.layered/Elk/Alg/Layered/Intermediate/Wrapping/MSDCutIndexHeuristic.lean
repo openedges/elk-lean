@@ -11,6 +11,12 @@ computed greedily; the set with the largest max scale `min(1 / width, (1 / dar) 
 Rust deviations from Java (followed): empty width arrays yield no cuts; `1 / 0` is spelled out as
 `INFINITY` (same value as Java).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
 open Elk.Graph Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
@@ -50,7 +56,7 @@ def cutIndexes (graph : LGraphId) (gs : GraphStats) : LayeredM (Array Int) := do
   let widths := gs.widths
   let heights := gs.heights
   if widths.isEmpty then return #[]
-  let mut widthAtIndex : Array Float := Array.replicate widths.size 0.0
+  let mut widthAtIndex : Array Float := Array.replicate widths.size fl0p0
   widthAtIndex := widthAtIndex.set! 0 widths[0]!
   let mut total := widths[0]!
   for i in [1:widths.size] do
@@ -65,8 +71,8 @@ def cutIndexes (graph : LGraphId) (gs : GraphStats) : LayeredM (Array Int) := do
   let mut m := minM
   while m <= maxM do
     let (cuts, width, height) := cutsFor gs widthAtIndex heights total m
-    let widthScale := if width == 0.0 then Float.posInf else 1.0 / width
-    let heightScale := if height == 0.0 then Float.posInf else (1.0 / gs.dar) / height
+    let widthScale := if width == fl0p0 then Float.posInf else fl1p0 / width
+    let heightScale := if height == fl0p0 then Float.posInf else (fl1p0 / gs.dar) / height
     let maxScale := fmin widthScale heightScale
     if maxScale > bestMaxScale then
       bestMaxScale := maxScale

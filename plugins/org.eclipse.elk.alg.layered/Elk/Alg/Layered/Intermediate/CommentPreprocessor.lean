@@ -20,6 +20,12 @@ Rust/Java parity notes (follows Rust): Java stops the port scan at the first sou
 (Rust keeps scanning for a northern one); Rust's `has_property(TOP_COMMENTS)` is "non-empty" here since
 the lists only ever grow.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -84,13 +90,13 @@ def chooseCommentSide (realNode : LNodeId) : LayeredM (Bool × Bool × Bool) := 
     onlyBottom := hasNorth && !hasSouth
   let mut topFirst := !onlyBottom
   if !onlyTop && !onlyBottom && !nd.labels.isEmpty then
-    let mut labelPosSum := 0.0
+    let mut labelPosSum := fl0p0
     let mut count : Nat := 0
     for label in nd.labels do
       let lb ← getLabel label
-      labelPosSum := labelPosSum + (lb.position.y + lb.size.y / 2.0)
+      labelPosSum := labelPosSum + (lb.position.y + lb.size.y / fl2p0)
       count := count + 1
-    if count != 0 then topFirst := labelPosSum / count.toFloat >= nd.size.y / 2.0
+    if count != 0 then topFirst := labelPosSum / count.toFloat >= nd.size.y / fl2p0
   return (onlyTop, onlyBottom, topFirst)
 
 /-- `removeHierarchicalPortDummyNode(oppositePort)`: removes the `PORT_DUMMY` of the port from its layer

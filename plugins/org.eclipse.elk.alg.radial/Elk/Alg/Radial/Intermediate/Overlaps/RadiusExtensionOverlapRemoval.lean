@@ -27,6 +27,12 @@ Parity notes (Rust is the oracle):
 * the successor cache of the whole tree is built once at the start (`get_next_level_cached`
   removes duplicates, keeping the first occurrence).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial.Intermediate.Overlaps
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Alg.Radial.Options Elk.Alg.Radial.Sorting
@@ -92,8 +98,8 @@ partial def extend (base : AbstractRadiusExtensionCompaction) (sorter : Option I
     let cws : Array Float := nextLevelNodes.map fun n => (g.node n).width
     let chs : Array Float := nextLevelNodes.map fun n => (g.node n).height
     for i in [0:nextLevelNodes.size] do
-      let cx := cxs[i]! + cws[i]! / 2.0
-      let cy := cys[i]! + chs[i]! / 2.0
+      let cx := cxs[i]! + cws[i]! / fl2p0
+      let cy := cys[i]! + chs[i]! / fl2p0
       let dx := cx - rootCx
       let dy := cy - rootCy
       let length := Float.sqrt (dx * dx + dy * dy)
@@ -117,11 +123,11 @@ def removeOverlaps (graph : NodeId) (monitor : ProgressMonitor) : RadialM Unit :
   let props := (← ElkM.getNode graph).props
   let sorter ← (props.getD RadialOptions.SORTER SortingStrategy.none).create
   let base : AbstractRadiusExtensionCompaction :=
-    { spacing := (props.get CoreOptions.SPACING_NODE_NODE).getD 0.0 }
+    { spacing := (props.get CoreOptions.SPACING_NODE_NODE).getD fl0p0 }
   let (successorCache, _) ← RadialUtil.buildTreeCaches root
   let r ← ElkM.getNode root
-  let rootCx := r.x + r.width / 2.0
-  let rootCy := r.y + r.height / 2.0
+  let rootCx := r.x + r.width / fl2p0
+  let rootCy := r.y + r.height / fl2p0
   let successors := (successorCache.get? root).getD #[]
   extend base sorter graph successors monitor successorCache rootCx rootCy
 

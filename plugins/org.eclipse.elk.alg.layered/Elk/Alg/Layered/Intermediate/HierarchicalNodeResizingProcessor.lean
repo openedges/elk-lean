@@ -26,6 +26,12 @@ Differences to Java (Rust is followed):
 
 Slot: after phase 5.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -143,12 +149,12 @@ def resizeGraphNoReallyIMeanIt (lgraph : LGraphId) (oldSize newSize : KVector) :
   let hasExternalPorts := gr.internal.graphProperties.contains .externalPorts
   if newSize.x > oldSize.x then
     if contentAlignment.contains .hCenter then
-      modifyGraph lgraph fun g => { g with offset := { g.offset with x := g.offset.x + (newSize.x - oldSize.x) / 2.0 } }
+      modifyGraph lgraph fun g => { g with offset := { g.offset with x := g.offset.x + (newSize.x - oldSize.x) / fl2p0 } }
     else if contentAlignment.contains .hRight then
       modifyGraph lgraph fun g => { g with offset := { g.offset with x := g.offset.x + (newSize.x - oldSize.x) } }
   if newSize.y > oldSize.y then
     if contentAlignment.contains .vCenter then
-      modifyGraph lgraph fun g => { g with offset := { g.offset with y := g.offset.y + (newSize.y - oldSize.y) / 2.0 } }
+      modifyGraph lgraph fun g => { g with offset := { g.offset with y := g.offset.y + (newSize.y - oldSize.y) / fl2p0 } }
     else if contentAlignment.contains .vBottom then
       modifyGraph lgraph fun g => { g with offset := { g.offset with y := g.offset.y + (newSize.y - oldSize.y) } }
   if hasExternalPorts && (newSize.x > oldSize.x || newSize.y > oldSize.y) then
@@ -174,8 +180,8 @@ def resizeGraph (lgraph : LGraphId) : LayeredM Unit := do
   if sizeConstraint.contains .minimumSize then
     let mut minSize := (gr.props.get CoreOptions.NODE_SIZE_MINIMUM).getD {}
     if sizeOptions.contains .defaultMinimumSize then
-      if minSize.x <= 0.0 then minSize := { minSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
-      if minSize.y <= 0.0 then minSize := { minSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
+      if minSize.x <= fl0p0 then minSize := { minSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
+      if minSize.y <= fl0p0 then minSize := { minSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
     adjustedSize := ⟨fmax adjustedSize.x minSize.x, fmax adjustedSize.y minSize.y⟩
   resizeGraphNoReallyIMeanIt lgraph calculatedSize adjustedSize
 

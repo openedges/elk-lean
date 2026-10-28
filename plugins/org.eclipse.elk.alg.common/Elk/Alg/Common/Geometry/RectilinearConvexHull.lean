@@ -18,6 +18,11 @@ which is a stable sort with the given comparator followed by one handler call
 per point in sorted order. That is inlined here (`stableSort` + loop) so this
 module does not depend on the compaction package.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common
 
 open Elk.Core.Util Elk.Core.Math
@@ -133,7 +138,7 @@ private structure RectangleState where
   rects : Array ElkRectangle := #[]
   minY : Option Point := none
   maxY : Option Point := none
-  lastX : Float := 0.0
+  lastX : Float := fl0p0
   queued : Option ElkRectangle := none
   queuedPoint : Option Point := none
 

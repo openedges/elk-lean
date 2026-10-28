@@ -8,6 +8,13 @@ Ported 1:1 from elk-rs (which mirrors Java), including its quirks: the target
 shape of an edge is looked up in the edge's sources and a port's centre adds
 the parent's x twice. They are kept for oracle parity.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Core.Util
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options
@@ -84,12 +91,12 @@ private def randomizeEdge (e : EdgeId) (random : Random) (drawWidth drawHeight :
     y := y + yincr
     let (fx, r2) := random.nextFloat
     random := r2
-    let mut randx := x + fx * maxRand - maxRand / 2.0
-    if randx < 0.0 then randx := 1.0 else if randx > drawWidth then randx := drawWidth - 1.0
+    let mut randx := x + fx * maxRand - maxRand / fl2p0
+    if randx < fl0p0 then randx := fl1p0 else if randx > drawWidth then randx := drawWidth - fl1p0
     let (fy, r3) := random.nextFloat
     random := r3
-    let mut randy := y + fy * maxRand - maxRand / 2.0
-    if randy < 0.0 then randy := 1.0 else if randy > drawHeight then randy := drawHeight - 1.0
+    let mut randy := y + fy * maxRand - maxRand / fl2p0
+    if randy < fl0p0 then randy := fl1p0 else if randy > drawHeight then randy := drawHeight - fl1p0
     bends := bends.push ⟨randx, randy⟩
   let bendsFinal := bends
   ElkM.modifySection sec fun s => { s with startX := sourcePx, startY := sourcePy, endX := targetPx, endY := targetPy, bendPoints := bendsFinal }

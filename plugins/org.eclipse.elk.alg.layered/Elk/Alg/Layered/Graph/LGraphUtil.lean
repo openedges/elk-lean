@@ -8,6 +8,14 @@ import Elk.Core.Util.Java
 Ported from elk-rs `l_graph_util.rs`; the Java `float` intermediates of `resizeNode` are
 reproduced with `Float.toF32`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p5 : Float := 0.5
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Graph
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Options LayeredM
@@ -21,8 +29,8 @@ def resizeNode (node : LNodeId) (newSize : KVector) (movePorts moveLabels : Bool
   let oldSize := nd.size
   let fixedPorts := nd.props.getD CoreOptions.PORT_CONSTRAINTS PortConstraints.undefined == .fixedPos
   -- Java uses float for these variables
-  let widthRatio := if oldSize.x == 0.0 then 1.0 else Float.toF32 (newSize.x / oldSize.x)
-  let heightRatio := if oldSize.y == 0.0 then 1.0 else Float.toF32 (newSize.y / oldSize.y)
+  let widthRatio := if oldSize.x == fl0p0 then fl1p0 else Float.toF32 (newSize.x / oldSize.x)
+  let heightRatio := if oldSize.y == fl0p0 then fl1p0 else Float.toF32 (newSize.y / oldSize.y)
   let widthDiff := Float.toF32 (newSize.x - oldSize.x)
   let heightDiff := Float.toF32 (newSize.y - oldSize.y)
   if movePorts then
@@ -41,17 +49,17 @@ def resizeNode (node : LNodeId) (newSize : KVector) (movePorts moveLabels : Bool
           | .undefined => pos
         { pt with position := pos }
   -- relative label placement is undefined on a collapsed rectangle
-  if moveLabels && oldSize.x != 0.0 && oldSize.y != 0.0 then
+  if moveLabels && oldSize.x != fl0p0 && oldSize.y != fl0p0 then
     for l in nd.labels do
       modifyLabel l fun lb =>
-        let midx := lb.position.x + lb.size.x / 2.0
-        let midy := lb.position.y + lb.size.y / 2.0
+        let midx := lb.position.x + lb.size.x / fl2p0
+        let midy := lb.position.y + lb.size.y / fl2p0
         let widthPercent := midx / oldSize.x
         let heightPercent := midy / oldSize.y
-        if widthPercent + heightPercent >= 1.0 then
-          if widthPercent - heightPercent > 0.0 && midy >= 0.0 then
+        if widthPercent + heightPercent >= fl1p0 then
+          if widthPercent - heightPercent > fl0p0 && midy >= fl0p0 then
             { lb with position := ⟨lb.position.x + widthDiff, lb.position.y + heightDiff * heightPercent⟩ }
-          else if widthPercent - heightPercent < 0.0 && midx >= 0.0 then
+          else if widthPercent - heightPercent < fl0p0 && midx >= fl0p0 then
             { lb with position := ⟨lb.position.x + widthDiff * widthPercent, lb.position.y + heightDiff⟩ }
           else lb
         else lb
@@ -80,8 +88,8 @@ def offsetGraphs (graphs : Array LGraphId) (offsetx offsety : Float) : LayeredM 
 /-- `placeNodesHorizontally(layer, xoffset)`: x coordinates by alignment within the layer width. -/
 def placeNodesHorizontally (layer : LayerId) (xoffset : Float) : LayeredM Unit := do
   let lay ← getLayer layer
-  if lay.size.x <= 0.0 then
-    let mut maxWidth := 0.0
+  if lay.size.x <= fl0p0 then
+    let mut maxWidth := fl0p0
     for n in lay.nodes do
       let nd ← getNode n
       let width := nd.size.x + nd.margin.left + nd.margin.right
@@ -89,8 +97,8 @@ def placeNodesHorizontally (layer : LayerId) (xoffset : Float) : LayeredM Unit :
     modifyLayer layer fun l => { l with size := { l.size with x := maxWidth } }
   let lay ← getLayer layer
   let layerSize := lay.size
-  let mut maxLeftMargin := 0.0
-  let mut maxRightMargin := 0.0
+  let mut maxLeftMargin := fl0p0
+  let mut maxRightMargin := fl0p0
   for n in lay.nodes do
     let nd ← getNode n
     maxLeftMargin := fmax maxLeftMargin nd.margin.left
@@ -100,9 +108,9 @@ def placeNodesHorizontally (layer : LayerId) (xoffset : Float) : LayeredM Unit :
     let alignment := nd.props.getD CoreOptions.ALIGNMENT Alignment.center
     let ratio ← (do
       match alignment with
-      | .left => pure 0.0
-      | .right => pure 1.0
-      | .center => pure 0.5
+      | .left => pure fl0p0
+      | .right => pure fl1p0
+      | .center => pure fl0p5
       | _ =>
         let mut inports := 0
         let mut outports := 0
@@ -110,11 +118,11 @@ def placeNodesHorizontally (layer : LayerId) (xoffset : Float) : LayeredM Unit :
           let pt ← getPort p
           if !pt.incomingEdges.isEmpty then inports := inports + 1
           if !pt.outgoingEdges.isEmpty then outports := outports + 1
-        if inports + outports == 0 then pure 0.5
+        if inports + outports == 0 then pure fl0p5
         else pure (outports.toFloat / (inports + outports).toFloat))
     let mut xpos := (layerSize.x - nd.size.x) * ratio
-    if ratio > 0.5 then xpos := xpos - maxRightMargin * 2.0 * (ratio - 0.5)
-    else if ratio < 0.5 then xpos := xpos + maxLeftMargin * 2.0 * (0.5 - ratio)
+    if ratio > fl0p5 then xpos := xpos - maxRightMargin * fl2p0 * (ratio - fl0p5)
+    else if ratio < fl0p5 then xpos := xpos + maxLeftMargin * fl2p0 * (fl0p5 - ratio)
     if xpos < nd.margin.left then xpos := nd.margin.left
     let maxX := layerSize.x - nd.margin.right - nd.size.x
     if xpos > maxX then xpos := maxX
@@ -137,8 +145,8 @@ def getDirection (graph : LGraphId) : LayeredM Direction := do
   let gr ← getGraph graph
   let direction := gr.props.getD CoreOptions.DIRECTION Direction.undefined
   if direction == .undefined then
-    let aspectRatio := gr.props.getD CoreOptions.ASPECT_RATIO 1.0
-    return if aspectRatio >= 1.0 then .right else .down
+    let aspectRatio := gr.props.getD CoreOptions.ASPECT_RATIO fl1p0
+    return if aspectRatio >= fl1p0 then .right else .down
   return direction
 
 /-- `computeGraphProperties(layeredGraph)`: sets the `GRAPH_PROPERTIES` flags from the
@@ -185,22 +193,22 @@ def calcPortSide (port : LPortId) (direction : Direction) : LayeredM PortSide :=
   let pt ← getPort port
   let some node := pt.owner | return .undefined
   let nodeSize := (← getNode node).size
-  if nodeSize.x <= 0.0 && nodeSize.y <= 0.0 then return .undefined
+  if nodeSize.x <= fl0p0 && nodeSize.y <= fl0p0 then return .undefined
   let pos := pt.position
   let size := pt.size
   match direction with
   | .left | .right =>
-    if pos.x < 0.0 then return .west
+    if pos.x < fl0p0 then return .west
     if pos.x + size.x > nodeSize.x then return .east
   | .up | .down =>
-    if pos.y < 0.0 then return .north
+    if pos.y < fl0p0 then return .north
     if pos.y + size.y > nodeSize.y then return .south
   | _ => pure ()
-  let widthPercent := (pos.x + size.x / 2.0) / nodeSize.x
-  let heightPercent := (pos.y + size.y / 2.0) / nodeSize.y
-  if widthPercent + heightPercent <= 1.0 && widthPercent - heightPercent <= 0.0 then return .west
-  else if widthPercent + heightPercent >= 1.0 && widthPercent - heightPercent >= 0.0 then return .east
-  else if heightPercent < 0.5 then return .north
+  let widthPercent := (pos.x + size.x / fl2p0) / nodeSize.x
+  let heightPercent := (pos.y + size.y / fl2p0) / nodeSize.y
+  if widthPercent + heightPercent <= fl1p0 && widthPercent - heightPercent <= fl0p0 then return .west
+  else if widthPercent + heightPercent >= fl1p0 && widthPercent - heightPercent >= fl0p0 then return .east
+  else if heightPercent < fl0p5 then return .north
   else return .south
 
 /-- `calcPortOffset(port, side)`: distance of the port from the node border on its side. -/
@@ -267,7 +275,7 @@ def initializePort (port : LPortId) (portConstraints : PortConstraints) (directi
     modifyPort port fun pt => pt.setSide side
     let pt ← getPort port
     let hasBorderOffset := pt.props.has CoreOptions.PORT_BORDER_OFFSET
-    if !hasBorderOffset && portSide != .undefined && (pt.position.x != 0.0 || pt.position.y != 0.0) then
+    if !hasBorderOffset && portSide != .undefined && (pt.position.x != fl0p0 || pt.position.y != fl0p0) then
       let offset ← calcPortOffset port portSide
       setPortProp port CoreOptions.PORT_BORDER_OFFSET offset
   if portConstraints.isRatioFixed then
@@ -276,9 +284,9 @@ def initializePort (port : LPortId) (portConstraints : PortConstraints) (directi
       | some n => pure (← getNode n).size
       | none => pure ({} : KVector)
     let ratio := match portSide with
-      | .north | .south => if nodeSize.x > 0.0 then pt.position.x / nodeSize.x else 0.0
-      | .east | .west => if nodeSize.y > 0.0 then pt.position.y / nodeSize.y else 0.0
-      | .undefined => 0.0
+      | .north | .south => if nodeSize.x > fl0p0 then pt.position.x / nodeSize.x else fl0p0
+      | .east | .west => if nodeSize.y > fl0p0 then pt.position.y / nodeSize.y else fl0p0
+      | .undefined => fl0p0
     modifyPort port fun x => { x with internal := { x.internal with portRatioOrPosition := ratio } }
   let side := portSide
   modifyPort port fun pt =>
@@ -288,12 +296,12 @@ def initializePort (port : LPortId) (portConstraints : PortConstraints) (directi
     | none =>
       if portConstraints.isSideFixed && side != .undefined then
         match side with
-        | .north => { pt with anchor := { pt.anchor with x := portSize.x / 2.0 } }
-        | .east => { pt with anchor := ⟨portSize.x, portSize.y / 2.0⟩ }
-        | .south => { pt with anchor := ⟨portSize.x / 2.0, portSize.y⟩ }
-        | .west => { pt with anchor := { pt.anchor with y := portSize.y / 2.0 } }
+        | .north => { pt with anchor := { pt.anchor with x := portSize.x / fl2p0 } }
+        | .east => { pt with anchor := ⟨portSize.x, portSize.y / fl2p0⟩ }
+        | .south => { pt with anchor := ⟨portSize.x / fl2p0, portSize.y⟩ }
+        | .west => { pt with anchor := { pt.anchor with y := portSize.y / fl2p0 } }
         | .undefined => pt
-      else { pt with anchor := ⟨portSize.x / 2.0, portSize.y / 2.0⟩ }
+      else { pt with anchor := ⟨portSize.x / fl2p0, portSize.y / fl2p0⟩ }
 
 /-- `createPort(node, endPoint, type, layeredGraph)`: a port for an edge end point; for
 merged edges / hypernodes without fixed sides the node's collector port is reused. -/

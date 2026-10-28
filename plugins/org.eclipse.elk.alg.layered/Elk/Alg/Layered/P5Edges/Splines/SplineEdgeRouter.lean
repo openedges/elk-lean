@@ -54,6 +54,13 @@ throws a `NullPointerException`); the Rust behaviour is kept. The only Lean devi
 successor walks of `getEdgeChain`/`getSplinePath` stop at a repeated edge where Rust and Java
 never terminate.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.P5Edges.Splines
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -445,17 +452,17 @@ def clearThenFillMappings (leftLayer rightLayer : Option LayerId) : RouterM Unit
 the layer gap that limits the slope of the edges into `rightLayer` (sloppy routing). -/
 def computeSloppySpacing (rightLayer : LayerId) (edgeEdgeSpacing nodeNodeSpacing sloppyLayerSpacingFactor : Float) :
     LayeredM Float := do
-  let mut maxVertDiff := 0.0
+  let mut maxVertDiff := fl0p0
   for node in (← getLayer rightLayer).nodes do
     let incomingEdges ← withArena (·.nodeIncomingEdges node)
-    let mut maxCurrInputYDiff := 0.0
+    let mut maxCurrInputYDiff := fl0p0
     for incomingEdge in incomingEdges do
       let (sourcePos, targetPos) ← withArena fun a =>
         let ed := a.edge incomingEdge
-        ((ed.source.map (absoluteAnchorY a ·)).getD 0.0, (ed.target.map (absoluteAnchorY a ·)).getD 0.0)
+        ((ed.source.map (absoluteAnchorY a ·)).getD fl0p0, (ed.target.map (absoluteAnchorY a ·)).getD fl0p0)
       maxCurrInputYDiff := fmax maxCurrInputYDiff (targetPos - sourcePos).abs
     maxVertDiff := fmax maxVertDiff maxCurrInputYDiff
-  return sloppyLayerSpacingFactor * fmin (edgeEdgeSpacing / nodeNodeSpacing) 1.0 * maxVertDiff
+  return sloppyLayerSpacingFactor * fmin (edgeEdgeSpacing / nodeNodeSpacing) fl1p0 * maxVertDiff
 
 /-- The segment table and the per-gap collections the segment creation extends: Rust
 `all_spline_segments` (the table), `edge_to_segment_map`, `spline_segments_layer` and
@@ -1091,12 +1098,12 @@ def processLayerPair (graph : LGraphId) (sp : Spacing) (leftLayer rightLayer fir
       | some m => max m (seg.rank + 1)
       | none => seg.rank + 1)
   let slotCount := slotMax.getD 0
-  let mut xSegmentDelta := 0.0
+  let mut xSegmentDelta := fl0p0
   let mut rightLayerPosition := xpos
   let isSpecialLeftLayer := leftLayer.isNone || (isLeftLayerExternal && leftLayer.isSome && leftLayer == firstLayer)
   let isSpecialRightLayer := rightLayer.isNone || (isRightLayerExternal && rightLayer.isSome && rightLayer == lastLayer)
   if slotCount > 0 then
-    let mut increment := 0.0
+    let mut increment := fl0p0
     if leftLayer.isSome then increment := increment + sp.edgeNodeSpacing
     increment := increment + Float.ofInt (slotCount - 1) * sp.edgeEdgeSpacing
     if rightLayer.isSome then increment := increment + sp.edgeNodeSpacing
@@ -1105,7 +1112,7 @@ def processLayerPair (graph : LGraphId) (sp : Spacing) (leftLayer rightLayer fir
         increment := fmax increment
           (← computeSloppySpacing right sp.edgeEdgeSpacing sp.nodeNodeSpacing sp.sloppyLayerSpacingFactor)
     if increment < sp.nodeNodeSpacing && !isSpecialLeftLayer && !isSpecialRightLayer then
-      xSegmentDelta := (sp.nodeNodeSpacing - increment) / 2.0
+      xSegmentDelta := (sp.nodeNodeSpacing - increment) / fl2p0
       increment := sp.nodeNodeSpacing
     rightLayerPosition := rightLayerPosition + increment
   else if !isSpecialLeftLayer && !isSpecialRightLayer then

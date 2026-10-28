@@ -29,6 +29,14 @@ Port notes (Rust is the oracle):
 * `f64 as i32` conversions saturate (`f64AsI32`), `i32` products wrap (`Int.wrap32`);
 * the `debug_assert!` on integral port offsets in `transformEdge` is not ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+private def fl8p0 : Float := 8.0
+
 namespace Elk.Alg.Layered.P4Nodes
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Common.NetworkSimplex
@@ -153,8 +161,8 @@ def isFlexibleNode (graphProps : PropertyMap) (n : LNodeId) : LayeredM Bool := d
 normal–normal, normal–dummy and dummy–dummy edges. -/
 def edgeTypeWeight (t1 t2 : NodeType) : Float :=
   if t1 == .normal && t2 == .normal then EDGE_WEIGHT_BASE
-  else if t1 == .normal || t2 == .normal then 2.0 * EDGE_WEIGHT_BASE
-  else 8.0 * EDGE_WEIGHT_BASE
+  else if t1 == .normal || t2 == .normal then fl2p0 * EDGE_WEIGHT_BASE
+  else fl8p0 * EDGE_WEIGHT_BASE
 
 /-- `isHandledEdge(edge)`: neither a self loop nor an in-layer edge. -/
 def isHandledEdge (a : LGraphArena) (e : LEdgeId) : Bool :=
@@ -330,12 +338,12 @@ private def transformPorts (ports : Array LPortId) (corners : NodeRep) : NspM Un
       | none => pure portSurrounding.top
     let nnode ← createNNode (some (.port port)) "port"
     modify fun s => { s with portMap := s.portMap.insert port nnode }
-    let _ ← createNEdge 0.0 (f64AsI32 spacing.ceil) lastNNode nnode
+    let _ ← createNEdge fl0p0 (f64AsI32 spacing.ceil) lastNNode nnode
     lastPort := some port
     lastNNode := nnode
   if let some last := lastPort then
     let lastSize := (← getPort last).size.y
-    let _ ← createNEdge 0.0 (f64AsI32 (portSurrounding.bottom + lastSize).ceil) lastNNode corners.tail
+    let _ ← createNEdge fl0p0 (f64AsI32 (portSurrounding.bottom + lastSize).ceil) lastNNode corners.tail
 
 /-- `transformNodeFixedOrder(node)`: a head and a tail node connected by the node size edge
 (flexible size: weight `NODE_SIZE_WEIGHT_FLEXIBLE`), west ports (bottom-up) and east ports
@@ -374,7 +382,7 @@ private def transformLayer (layer : LayerId) : NspM Unit := do
       let mut value := lastNd.margin.bottom + vertical + nd.margin.top
       if !last.isFlexible then
         value := value + lastNd.size.y
-      let _ ← createNEdge 0.0 (f64AsI32 value.ceil) last.tail rep.head
+      let _ ← createNEdge fl0p0 (f64AsI32 value.ceil) last.tail rep.head
     lastRep := some rep
 
 /-- The auxiliary node of a port (Rust `port_map[&port]`, which panics when missing). -/
@@ -410,8 +418,8 @@ private def transformEdge (edge : LEdgeId) : NspM Unit := do
   let tp ← getPort targetPort
   let srcOffset := if !srcRep.isFlexible then sp.anchor.y + sp.position.y else sp.anchor.y
   let tgtOffset := if !tgtRep.isFlexible then tp.anchor.y + tp.position.y else tp.anchor.y
-  let tgtDelta := f64AsI32 (fmax (srcOffset - tgtOffset) 0.0).round
-  let srcDelta := f64AsI32 (fmax (tgtOffset - srcOffset) 0.0).round
+  let tgtDelta := f64AsI32 (fmax (srcOffset - tgtOffset) fl0p0).round
+  let srcDelta := f64AsI32 (fmax (tgtOffset - srcOffset) fl0p0).round
   let weight ← getEdgeWeight edge
   let left ← createNEdge weight srcDelta dummy (← portRep sourcePort) (some (.edge edge))
   let right ← createNEdge weight tgtDelta dummy (← portRep targetPort) (some (.edge edge))
@@ -508,7 +516,7 @@ private def insertFlexibleWhereSpaceAuxiliaryEdges : NspM Unit := do
   let usedLayers := maxLayer - minLayer
   let globalSource ← createNNode none ""
   let globalSink ← createNNode none ""
-  let _ ← createNEdge (NODE_SIZE_WEIGHT_STATIC * 2.0) usedLayers globalSource globalSink
+  let _ ← createNEdge (NODE_SIZE_WEIGHT_STATIC * fl2p0) usedLayers globalSource globalSink
   for rep? in (← get).nodeReps do
     let some rep := rep? | continue
     let nd ← getNode rep.origin
@@ -516,8 +524,8 @@ private def insertFlexibleWhereSpaceAuxiliaryEdges : NspM Unit := do
       continue
     let tailLayer ← nlayer rep.tail
     let headLayer ← nlayer rep.head
-    let _ ← createNEdge 0.0 (tailLayer - minLayer) globalSource rep.tail
-    let _ ← createNEdge 0.0 (usedLayers - headLayer) rep.head globalSink
+    let _ ← createNEdge fl0p0 (tailLayer - minLayer) globalSource rep.tail
+    let _ ← createNEdge fl0p0 (usedLayers - headLayer) rep.head globalSink
 
 -- ============================================================================================
 -- Straight edges
@@ -795,14 +803,14 @@ private def improveTwoPath (path : Path) (probe : Bool) : NspM Bool := do
   let mut moveBy : Int := 0
   if !caseD && !caseC then
     if caseA then
-      if aboveDist + Float.ofInt c > 0.0 then
+      if aboveDist + Float.ofInt c > fl0p0 then
         moveBy := c
-      else if belowDist - Float.ofInt a > 0.0 then
+      else if belowDist - Float.ofInt a > fl0p0 then
         moveBy := a
     else if caseB then
-      if aboveDist + Float.ofInt b > 0.0 then
+      if aboveDist + Float.ofInt b > fl0p0 then
         moveBy := b
-      else if belowDist - Float.ofInt d > 0.0 then
+      else if belowDist - Float.ofInt d > fl0p0 then
         moveBy := d
   let mv := moveBy
   modifyNNode nNode.head fun n => { n with layer := n.layer + mv }
@@ -833,7 +841,7 @@ private def adjustLabelPosition (placement : EnumSet NodeLabelPlacement) (label 
   if placement.contains .vBottom then
     modifyLabel label fun l => { l with position := { l.position with y := l.position.y + sizeDelta } }
   else if placement.contains .vCenter then
-    modifyLabel label fun l => { l with position := { l.position with y := l.position.y + sizeDelta / 2.0 } }
+    modifyLabel label fun l => { l with position := { l.position with y := l.position.y + sizeDelta / fl2p0 } }
 
 /-- `applyPositions(graph)`: node y = layer of the head; flexible nodes also get their size,
 east/west port positions, label and south port adjustments. -/
@@ -884,26 +892,26 @@ private def run (monitor : ProgressMonitor) : NspM Unit := do
   let graphProps := (← get).graphProps
   let favorStraightEdges := graphProps.get LayeredOptions.NODE_PLACEMENT_FAVOR_STRAIGHT_EDGES |>.getD false
   if favorStraightEdges then
-    let pm ← monitor.subTask 1.0
-    let _ ← pm.begin "Straight Edges Pre-Processing" 1.0
+    let pm ← monitor.subTask fl1p0
+    let _ ← pm.begin "Straight Edges Pre-Processing" fl1p0
     preferStraightEdges
     pm.done
   withNGraph fun g => pure (g.makeConnected.1, ())
   let thoroughness := graphProps.get LayeredOptions.THOROUGHNESS |>.getD 7
   let iterLimit := Int.wrap32 (thoroughness * Int.wrap32 ((← get).nGraph.nodeList.size : Int))
-  runNetworkSimplex iterLimit (← monitor.subTask 1.0)
+  runNetworkSimplex iterLimit (← monitor.subTask fl1p0)
   let flexibleEdges := (← get).flexibleWhereSpacePermitsEdges
   if !flexibleEdges.isEmpty then
-    let pm ← monitor.subTask 1.0
-    let _ ← pm.begin "Flexible Where Space Processing" 1.0
+    let pm ← monitor.subTask fl1p0
+    let _ ← pm.begin "Flexible Where Space Processing" fl1p0
     insertFlexibleWhereSpaceAuxiliaryEdges
     for edge in flexibleEdges do
       modifyNEdge edge fun e => { e with weight := NODE_SIZE_WEIGHT_FLEXIBLE }
-    runNetworkSimplex iterLimit (← pm.subTask 1.0)
+    runNetworkSimplex iterLimit (← pm.subTask fl1p0)
     pm.done
   if favorStraightEdges then
-    let pm ← monitor.subTask 1.0
-    let _ ← pm.begin "Straight Edges Post-Processing" 1.0
+    let pm ← monitor.subTask fl1p0
+    let _ ← pm.begin "Straight Edges Post-Processing" fl1p0
     postProcessTwoPaths
     pm.done
   applyPositions

@@ -20,6 +20,11 @@ recursively in edge order (a node reachable twice is routed twice, with the same
 The Rust geometry cache (`build_node_geom`) is a snapshot of the children taken before routing;
 node boxes do not change in this phase, so the live boxes are used.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial.P2Routing
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Math Elk.Core.Util Elk.Alg.Radial.Intermediate
@@ -40,8 +45,8 @@ partial def routeEdges (node : NodeId) : ElkM Unit := do
       if ElkGraphUtil.isHierarchicalEdge g edge then return none
       let s := g.node node
       let t := g.node target
-      return some (target, s.x + s.width / 2.0, s.y + s.height / 2.0, s.width, s.height,
-        t.x + t.width / 2.0, t.y + t.height / 2.0, t.width, t.height)
+      return some (target, s.x + s.width / fl2p0, s.y + s.height / fl2p0, s.width, s.height,
+        t.x + t.width / fl2p0, t.y + t.height / fl2p0, t.width, t.height)
     let some (target, sx, sy, nodeWidth, nodeHeight, tx, ty, targetWidth, targetHeight) := info
       | continue
     let mut sourceX := sx

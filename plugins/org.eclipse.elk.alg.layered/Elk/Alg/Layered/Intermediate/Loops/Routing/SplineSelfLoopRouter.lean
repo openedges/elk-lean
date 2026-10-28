@@ -13,6 +13,11 @@ NUB spline through that polygon (`NubSpline::new(true, 3, points).get_bezier_cp_
 `Elk.Alg.Layered.P5Edges.Splines.NubSpline`; the Rust panic of `NubSpline::new` is the modifier's
 error). The directions are `SplinesMath.portSideToDirection`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p5 : Float := 0.5
+
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 
 open Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.P5Edges.Splines
@@ -32,8 +37,8 @@ def modifyBendPoints : BendPointModifier := fun m => Id.run do
       -- midpoint offset away from the node
       let direction := SplinesMath.portSideToDirection currSide
       let mid : KVector :=
-        ⟨(firstBp.x + secondBp.x) * 0.5 + direction.cos * m.edgeLabelDistance,
-         (firstBp.y + secondBp.y) * 0.5 + direction.sin * m.edgeLabelDistance⟩
+        ⟨(firstBp.x + secondBp.x) * fl0p5 + direction.cos * m.edgeLabelDistance,
+         (firstBp.y + secondBp.y) * fl0p5 + direction.sin * m.edgeLabelDistance⟩
       splinePoints := splinePoints.push mid
       currSide := if m.clockwise then currSide.right else currSide.left
     splinePoints := splinePoints.push bendPoints[bendPoints.size - 1]!

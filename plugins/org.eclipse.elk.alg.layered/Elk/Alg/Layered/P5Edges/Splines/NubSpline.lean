@@ -34,6 +34,29 @@ lies on the curve. The knot vector does not store the irrelevant first and last 
 
 `Display` impls (debug output only) are not ported.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl0p5 : Float := 0.5
+private def fl10p0 : Float := 10.0
+private def fl12p0 : Float := 12.0
+private def fl23p0 : Float := 23.0
+private def fl2p2 : Float := 2.2
+private def fl2p5 : Float := 2.5
+private def fl3p5 : Float := 3.5
+private def fl3p8 : Float := 3.8
+private def fl4p0 : Float := 4.0
+private def fl50p0 : Float := 50.0
+private def fl5p0 : Float := 5.0
+private def fl5p5 : Float := 5.5
+private def fl6p0 : Float := 6.0
+private def fl7p0 : Float := 7.0
+private def fl80p0 : Float := 80.0
+private def fl8p0 : Float := 8.0
+private def fl9p0 : Float := 9.0
+
 namespace Elk.Alg.Layered.P5Edges.Splines
 
 open Elk.Core.Math Elk.Core.Util
@@ -61,9 +84,9 @@ structure NubSpline where
   /-- `isBezier`. -/
   isBezier : Bool := false
   /-- `minKnot`. -/
-  minKnot : Float := 0.0
+  minKnot : Float := fl0p0
   /-- `maxKnot`. -/
-  maxKnot : Float := 0.0
+  maxKnot : Float := fl0p0
   deriving Inhabited, Repr
 
 namespace NubSpline
@@ -124,20 +147,20 @@ private def createUniformKnotVector (s : NubSpline) (clamped : Bool) (size : Nat
   let mut s := s
   let mut mySize := 0
   if clamped then
-    s := { s with minKnot := 0.0, maxKnot := 1.0 }
+    s := { s with minKnot := fl0p0, maxKnot := fl1p0 }
     for _ in [0:s.dimNubs] do
-      s := { s with knotVector := s.knotVector.push 0.0 }
+      s := { s with knotVector := s.knotVector.push fl0p0 }
     mySize := size + 1 - 2 * s.dimNubs
   else
     mySize := size + 1
     let ddim := s.dimNubs.toFloat
-    s := { s with minKnot := ddim / (mySize.toFloat + 1.0), maxKnot := (mySize.toFloat - ddim) / mySize.toFloat }
+    s := { s with minKnot := ddim / (mySize.toFloat + fl1p0), maxKnot := (mySize.toFloat - ddim) / mySize.toFloat }
   let fraction := mySize.toFloat
   for i in [1:mySize] do
     s := { s with knotVector := s.knotVector.push (i.toFloat / fraction) }
   if s.isClamped then
     for _ in [0:s.dimNubs] do
-      s := { s with knotVector := s.knotVector.push 1.0 }
+      s := { s with knotVector := s.knotVector.push fl1p0 }
   return .ok s
 
 /-- `NubSpline(clamped, dimension, kVectors)` (Rust `new`/`new_from_vec`): pads the control points
@@ -186,7 +209,7 @@ def generateDerivedNubs (s : NubSpline) : NubSpline := Id.run do
     let next := (s.controlPoints[i + 1]?.map (·.cp)).getD {}
     let prev := (s.controlPoints[i]?.map (·.cp)).getD {}
     let newCp := next - prev
-    let denom := oldKnotVector[i + oldDim]?.getD 0.0 - oldKnotVector[i]?.getD 0.0
+    let denom := oldKnotVector[i + oldDim]?.getD fl0p0 - oldKnotVector[i]?.getD fl0p0
     newControlPoints := newControlPoints.push (newCp.scale (oldDim.toFloat / denom))
   return newWithParams s.isClamped s.isUniform s.isBezier newDim newKnotVector
     (polarControlPoints newKnotVector newDim newControlPoints)
@@ -320,7 +343,7 @@ def getPointOnCurve (s : NubSpline) (t : Float) (modify : Bool) : KVector × Nub
 /-- Shared body of `getZeroXOfControlPoligon`/`getZeroYOfControlPoligon`: the parameter of the first
 sign change (or zero) of the coordinate `coord` along the control polygon, `0.0` if none. -/
 private def zeroOfControlPolygon (s : NubSpline) (coord : KVector → Float) : Float := Id.run do
-  let some first := s.controlPoints[0]? | return 0.0
+  let some first := s.controlPoints[0]? | return fl0p0
   let mut secondCP := first
   let mut secondV := coord secondCP.cp
   let mut secondIsPositive : Bool := secondV > EPSILON
@@ -340,8 +363,8 @@ private def zeroOfControlPolygon (s : NubSpline) (coord : KVector → Float) : F
       let factor := firstV / (firstV - secondV)
       let t1 := getTFromPolar firstCP.polarCoordinate
       let t2 := getTFromPolar secondCP.polarCoordinate
-      return factor * t1 + (1.0 - factor) * t2
-  return 0.0
+      return factor * t1 + (fl1p0 - factor) * t2
+  return fl0p0
 
 /-- `getZeroYOfControlPoligon(nubSpline)`. -/
 def getZeroYOfControlPolygon (s : NubSpline) : Float := s.zeroOfControlPolygon (·.y)
@@ -442,21 +465,21 @@ private def mirrorOnX (original : KVector) (xVal : Float) : KVector := ⟨xVal +
 
 /-- `generateNiceCurve()`: a sample clamped cubic spline (scaled by 5, offset by `(-50, -80)`). -/
 def generateNiceCurve : NubSpline :=
-  let vector1 : KVector := ⟨5.5, 23.0⟩
-  let vector2 : KVector := ⟨2.5, 12.0⟩
-  let vector3 : KVector := ⟨5.0, 10.0⟩
-  let vector4 : KVector := ⟨5.0, 9.0⟩
-  let vector5 : KVector := ⟨3.8, 5.5⟩
-  let vector6 : KVector := ⟨7.0, 4.0⟩
-  let vector7 : KVector := ⟨7.0, 3.5⟩
-  let vector8 : KVector := ⟨6.0, 2.2⟩
-  let vector9 : KVector := ⟨8.0, 0.5⟩
+  let vector1 : KVector := ⟨fl5p5, fl23p0⟩
+  let vector2 : KVector := ⟨fl2p5, fl12p0⟩
+  let vector3 : KVector := ⟨fl5p0, fl10p0⟩
+  let vector4 : KVector := ⟨fl5p0, fl9p0⟩
+  let vector5 : KVector := ⟨fl3p8, fl5p5⟩
+  let vector6 : KVector := ⟨fl7p0, fl4p0⟩
+  let vector7 : KVector := ⟨fl7p0, fl3p5⟩
+  let vector8 : KVector := ⟨fl6p0, fl2p2⟩
+  let vector9 : KVector := ⟨fl8p0, fl0p5⟩
   let chain : KVectorChain := #[vector1, vector1, vector1, vector2, vector3, vector4, vector5, vector6,
     vector7, vector8, vector9, mirrorOnX vector8 vector9.x, mirrorOnX vector7 vector9.x,
     mirrorOnX vector6 vector9.x, mirrorOnX vector5 vector9.x, mirrorOnX vector4 vector9.x,
     mirrorOnX vector3 vector9.x, mirrorOnX vector2 vector9.x, mirrorOnX vector1 vector9.x,
     mirrorOnX vector1 vector9.x, mirrorOnX vector1 vector9.x]
-  let chain := KVectorChain.offsetValues (chain.map (·.scale 5.0)) (-50.0) (-80.0)
+  let chain := KVectorChain.offsetValues (chain.map (·.scale fl5p0)) (-fl50p0) (-fl80p0)
   -- 21 control points, dimension 3: the constructor cannot fail
   match new true 3 chain with
   | .ok s => s

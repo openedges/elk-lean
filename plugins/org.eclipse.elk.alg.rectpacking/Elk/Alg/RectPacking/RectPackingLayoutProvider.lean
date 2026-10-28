@@ -30,6 +30,12 @@ hierarchy aware).
 Strategy options are read with `get_property(..).unwrap_or_default()`; like elk-rs, the enum
 options cannot be parsed from JSON (no parser registered), so only typed values take effect.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl15p0 : Float := 15.0
+private def fl1p3 : Float := 1.3
+
 namespace Elk.Alg.RectPacking
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -73,9 +79,9 @@ on the graph. -/
 def applyAlgorithmDefaults (graph : NodeId) : ElkM Unit := do
   ElkM.modifyNode graph fun n => Id.run do
     let mut props := n.props
-    if !props.has CoreOptions.PADDING then props := props.set CoreOptions.PADDING (ElkPadding.ofAny 15.0)
-    if !props.has CoreOptions.SPACING_NODE_NODE then props := props.set CoreOptions.SPACING_NODE_NODE 15.0
-    if !props.has CoreOptions.ASPECT_RATIO then props := props.set CoreOptions.ASPECT_RATIO 1.3
+    if !props.has CoreOptions.PADDING then props := props.set CoreOptions.PADDING (ElkPadding.ofAny fl15p0)
+    if !props.has CoreOptions.SPACING_NODE_NODE then props := props.set CoreOptions.SPACING_NODE_NODE fl15p0
+    if !props.has CoreOptions.ASPECT_RATIO then props := props.set CoreOptions.ASPECT_RATIO fl1p3
     return { n with props }
 
 /-- `apply_padding(rectangles, padding)`: moves every rectangle by the left/top padding. -/

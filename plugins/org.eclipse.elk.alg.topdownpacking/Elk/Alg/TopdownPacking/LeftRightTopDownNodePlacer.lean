@@ -16,6 +16,12 @@ children of a node on a `cols x rows` grid (`cols = ceil(sqrt(n))`), left to rig
 bottom, each with the hierarchical node width / aspect ratio of the parent. Also the
 `INodeArranger` predicting the resulting graph size.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.TopdownPacking
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -29,9 +35,9 @@ def getPredictedSize (graph : NodeId) : ElkM KVector := do
   let node ← ElkM.getNode graph
   let numberOfChildren := node.children.size
   let padding := node.props.getD TopdownpackingOptions.PADDING {}
-  let nodeNodeSpacing := node.props.getD TopdownpackingOptions.SPACING_NODE_NODE 0.0
-  let hierarchicalNodeWidth := node.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH 0.0
-  let hierarchicalNodeAspectRatio := node.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO 1.0
+  let nodeNodeSpacing := node.props.getD TopdownpackingOptions.SPACING_NODE_NODE fl0p0
+  let hierarchicalNodeWidth := node.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH fl0p0
+  let hierarchicalNodeAspectRatio := node.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO fl1p0
   let cols : Int := Float.toIntTrunc (Float.ceil (Float.sqrt numberOfChildren.toFloat))
   let requiredWidth := Int.toFloat cols * hierarchicalNodeWidth
     + padding.left + padding.right + Int.toFloat (cols - 1) * nodeNodeSpacing

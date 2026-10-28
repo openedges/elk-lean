@@ -13,6 +13,12 @@ The clones are new nodes of the `ElkGraph` arena without a parent (Rust
 exported). Their rows are stored in `RowsStorage` under the clone's key and stay there (Rust only
 removes the rows of the laid-out graph, `RowsGuard`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.RectPacking.P2Packing
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math Elk.Core.Alg
@@ -37,11 +43,11 @@ def configureSecondIteration (layoutGraph clone : NodeId) (drawing : DrawingData
   let n ← ElkM.getNode layoutGraph
   let props := n.props
   let padding := props.getD RectPackingOptions.PADDING {}
-  let aspectRatio := props.getD RectPackingOptions.ASPECT_RATIO 1.0
+  let aspectRatio := props.getD RectPackingOptions.ASPECT_RATIO fl1p0
   let minRowIncrease := props.getD InternalProperties.MIN_ROW_INCREASE Float.posInf
   let minRowDecrease := props.getD InternalProperties.MIN_ROW_DECREASE Float.posInf
-  let targetWidth := props.getD InternalProperties.TARGET_WIDTH 0.0
-  let minWidth := props.getD InternalProperties.MIN_WIDTH 0.0
+  let targetWidth := props.getD InternalProperties.TARGET_WIDTH fl0p0
+  let minWidth := props.getD InternalProperties.MIN_WIDTH fl0p0
   let drawingRatio := (drawing.drawingWidth + padding.left + padding.right) /
     (drawing.drawingHeight + padding.top + padding.bottom)
   let childrenLen := n.children.size

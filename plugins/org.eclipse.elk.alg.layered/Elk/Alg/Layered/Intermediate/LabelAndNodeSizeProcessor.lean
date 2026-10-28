@@ -42,6 +42,11 @@ Deviation: the Rust `LazyLock` switches are read once at startup into
 `LabelAndNodeSizeFlags.global` (like `NodeDimensionFlags.global`); `processWith` takes them
 explicitly (tests).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1em6 : Float := 1e-6
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -122,7 +127,7 @@ def shouldReapplyPhase2PortAxisOverflowSizing (node : LNodeId) : LayeredM Bool :
   let portConstraints := nd.props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
   if !sizeConstraints.contains .ports && !sizeConstraints.contains .portLabels then return false
   if portConstraints.isPosFixed || portConstraints.isRatioFixed then return false
-  let eps : Float := 1e-6
+  let eps : Float := fl1em6
   for port in nd.ports do
     let pt ← getPort port
     let pos := pt.position

@@ -16,6 +16,11 @@ Kept elk-rs specifics:
 * `insertionPos` is the first position whose x center is not smaller (linear scan);
 * the trailing `floor`/`overlap` check of `delete` has no effect in Rust and is not executed.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.Compaction.OneD
 
 open Elk.Core Elk.Core.Util CompactM
@@ -39,7 +44,7 @@ def timestampCmp (g : CGraph) (p1 p2 : Timestamp) : Ordering :=
     -- End positive intervals first. A zero-height interval must be inserted and removed
     -- together, before positive intervals starting here.
     let rank (n : CNode) (low : Bool) : Nat :=
-      if n.hitbox.height == 0.0 then 1 else if low then 2 else 0
+      if n.hitbox.height == fl0p0 then 1 else if low then 2 else 0
     let first := rank n1 p1.low
     let order := compare first (rank n2 p2.low)
     if order != .eq then order

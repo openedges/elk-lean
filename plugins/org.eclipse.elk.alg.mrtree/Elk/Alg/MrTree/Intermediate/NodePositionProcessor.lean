@@ -7,6 +7,12 @@ node, the position of every reached node becomes `(XCOOR, YCOOR)` (the integer c
 by the node placer); afterwards every node of the graph is moved by minus half its size (centre to
 top-left corner).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.MrTree.Intermediate
 
 open Elk.Core.Util Elk.Core.Math Elk.Alg.MrTree.Graph
@@ -31,7 +37,7 @@ private def setCoordinates (currentLevel : Array TNodeId) (monitor : ProgressMon
 
 /-- `NodePositionProcessor::process`. -/
 def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
-  discard <| monitor.begin "Processor set coordinates" 1.0
+  discard <| monitor.begin "Processor set coordinates" fl1p0
   let nodes := (← MrTreeM.getGraph graph).nodes
   let a ← get
   let root := nodes.find? fun n => (a.node n).internal.root
@@ -39,13 +45,13 @@ def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
   if let some root := root then
     MrTreeM.modifyNode root fun n => { n with position := coordinates n }
     let mut nextLevel ← MrTreeM.children root
-    let mut subTasks : Float := 1.0
+    let mut subTasks : Float := fl1p0
     while !nextLevel.isEmpty do
       nextLevel ← setCoordinates nextLevel (← monitor.subTask subTasks)
       subTasks := ((Float.ofNat nextLevel.size).toF32 / (Float.ofNat numberOfNodes).toF32).toF32
   for node in (← MrTreeM.getGraph graph).nodes do
     MrTreeM.modifyNode node fun n =>
-      { n with position := n.position - ⟨n.size.x / 2.0, n.size.y / 2.0⟩ }
+      { n with position := n.position - ⟨n.size.x / fl2p0, n.size.y / fl2p0⟩ }
   monitor.done
 
 /-- The `NodePositionProcessor` (`IntermediateProcessorStrategy.NODE_POSITION_PROC`). -/

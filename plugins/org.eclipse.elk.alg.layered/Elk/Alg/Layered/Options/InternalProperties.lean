@@ -26,6 +26,11 @@ with later packages (`SELF_LOOP_HOLDER`, `BREAKING_POINT_INFO`, `END_LABELS`,
 `SPACINGS`) are added to these structures when those packages are
 ported. `PROCESSORS` is not stored on the graph: `ElkLayered` keeps the processor lists.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Options
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Compound
@@ -117,7 +122,7 @@ structure LNodeInternals where
   /-- `EXT_PORT_REPLACED_DUMMY` (`externalPortReplacedDummy`). -/
   extPortReplacedDummy : Option LNodeId := none
   /-- `PORT_RATIO_OR_POSITION` (`portRatioOrPosition`, `0.0`). -/
-  portRatioOrPosition : Float := 0.0
+  portRatioOrPosition : Float := fl0p0
   /-- `BARYCENTER_ASSOCIATES` (`barycenterAssociates`; Java `null` = empty). -/
   barycenterAssociates : Array LNodeId := #[]
   /-- `TOP_COMMENTS` (`TopSideComments`; Java `null` = empty). -/
@@ -175,11 +180,11 @@ structure LPortInternals where
   /-- `OUTPUT_COLLECT` (`outputCollect`, `false`). -/
   outputCollect : Bool := false
   /-- `PORT_RATIO_OR_POSITION` (`portRatioOrPosition`, `0.0`). -/
-  portRatioOrPosition : Float := 0.0
+  portRatioOrPosition : Float := fl0p0
   /-- `LONG_EDGE_TARGET_NODE` (`longEdgeTargetNode`). -/
   longEdgeTargetNode : Option LNodeId := none
   /-- `MAX_EDGE_THICKNESS` (`maxEdgeThickness`, `0.0`). -/
-  maxEdgeThickness : Float := 0.0
+  maxEdgeThickness : Float := fl0p0
   /-- `MODEL_ORDER` (`modelOrder`). -/
   modelOrder : Option Int := none
   deriving Inhabited

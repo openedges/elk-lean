@@ -28,6 +28,13 @@ keeps the **last** section (`retain_last`) of an edge with several sections and 
 first section (which then is detached); the vertex wiggle adds `(r * amount - amount / 2)` as one
 term (the `KVector.wiggle` of the core adds in a different order, which rounds differently).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p001 : Float := 0.001
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Spore
 
 open Elk Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -40,7 +47,7 @@ structure ElkGraphImporterState where
   /-- The imported graph (`elk_graph`). -/
   elkGraph : Option NodeId := none
   /-- The `spacing.nodeNode` value of the imported graph. -/
-  spacingNodeNode : Float := 0.0
+  spacingNodeNode : Float := fl0p0
 
 /-- `org.eclipse.elk.alg.spore.ElkGraphImporter`: an `IO.Ref` handle (the Java/Rust object is
 mutable and lives across the iterations of the overlap removal). -/
@@ -59,18 +66,18 @@ def new : IO ElkGraphImporter := return ⟨← IO.mkRef {}⟩
 /-- Creates the vertex of a node (unique center, wiggled with `random`) and its rectangle. -/
 private def createNode (nodeMap : Std.HashMap KVector NodeId) (random : Random)
     (spacingNodeNode : Float) (n : ElkNode) : Node × Random := Id.run do
-  let halfWidth := n.width / 2.0
-  let halfHeight := n.height / 2.0
+  let halfWidth := n.width / fl2p0
+  let halfHeight := n.height / fl2p0
   let mut vertex : KVector := ⟨n.x + halfWidth, n.y + halfHeight⟩
   let mut random := random
   while nodeMap.contains vertex do
-    let (v, r) := wiggle vertex random 0.001
+    let (v, r) := wiggle vertex random fl0p001
     vertex := v
     random := r
   let margin : ElkMargin := (n.props.get CoreOptions.MARGINS).getD default
   let rect := ElkRectangle.ofValues
-    (vertex.x - halfWidth - spacingNodeNode / 2.0 - margin.left)
-    (vertex.y - halfHeight - spacingNodeNode / 2.0 - margin.top)
+    (vertex.x - halfWidth - spacingNodeNode / fl2p0 - margin.left)
+    (vertex.y - halfHeight - spacingNodeNode / fl2p0 - margin.top)
     (n.width + spacingNodeNode + margin.left + margin.right)
     (n.height + spacingNodeNode + margin.top + margin.bottom)
   return (Node.new vertex rect, random)
@@ -160,7 +167,7 @@ private def firstEdgeSection (edge : EdgeId) : ElkM SectionId := do
   | none => ElkM.createSection (some edge)
   | some first =>
     ElkM.modifySection first fun s =>
-      { s with bendPoints := #[], startX := 0.0, startY := 0.0, endX := 0.0, endY := 0.0 }
+      { s with bendPoints := #[], startX := fl0p0, startY := fl0p0, endX := fl0p0, endY := fl0p0 }
     modify (·.retainLastEdgeSection edge)
     return first
 

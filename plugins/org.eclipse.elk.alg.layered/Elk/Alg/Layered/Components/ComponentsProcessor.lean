@@ -36,6 +36,11 @@ by `CONSIDER_MODEL_ORDER_COMPONENTS`, else `SimpleRowGraphPlacer`.
 
 The Java `node.id` visit marks are not used (Rust keeps a separate `visited` array).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Components
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -148,7 +153,7 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
     adoptSingleComponent target source
     return
   if components.isEmpty then
-    modifyGraph target fun g => { g with layerlessNodes := #[], size := ⟨0.0, 0.0⟩ }
+    modifyGraph target fun g => { g with layerlessNodes := #[], size := ⟨fl0p0, fl0p0⟩ }
     return
   if hasExternalPorts then
     match considerModelOrder with

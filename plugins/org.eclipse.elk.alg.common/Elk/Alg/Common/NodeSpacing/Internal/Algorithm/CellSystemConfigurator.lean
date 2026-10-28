@@ -18,6 +18,11 @@ Deviations from Java (following elk-rs):
 * `updateVerticalInsidePortLabelCellPadding` uses `f64::max` (`fmax`) instead of `Math.max`, and
   missing cells count as zero height/padding.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -131,9 +136,9 @@ def updateVerticalInsidePortLabelCellPadding (ctx : NodeContext N P L) : NodeCon
     let eastPadding := cells.paddingOpt east
     let westPadding := cells.paddingOpt west
     -- Calculate how much top/bottom padding we actually need
-    let topPadding := fmax (fmax 0.0 (eastPadding.top - topBorderOffset)) (westPadding.top - topBorderOffset)
+    let topPadding := fmax (fmax fl0p0 (eastPadding.top - topBorderOffset)) (westPadding.top - topBorderOffset)
     let bottomPadding :=
-      fmax (fmax 0.0 (eastPadding.bottom - bottomBorderOffset)) (westPadding.bottom - bottomBorderOffset)
+      fmax (fmax fl0p0 (eastPadding.bottom - bottomBorderOffset)) (westPadding.bottom - bottomBorderOffset)
     -- Update paddings
     let update (cells : CellArena L) (cell : Option CellId) : CellArena L :=
       match cell with

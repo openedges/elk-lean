@@ -32,6 +32,11 @@ updated rectangles are written back into the cells in insertion order.
 Rust deviation from Java (followed here): Java writes the port index into `port.id`; elk-rs does not.
 `gatherLabels`/`gatherLabelsFromPort` are public (Rust `pub(crate)`): `LabelSideSelector` uses them.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -59,7 +64,7 @@ def gatherLabelsFromPort (port : LPortId) (targetList : Array LLabelId) : Layere
   let edges := (← getPort port).connectedEdges
   for edge in edges do
     let ed ← getEdge edge
-    let edgeThickness := ed.props.getD CoreOptions.EDGE_THICKNESS 0.0
+    let edgeThickness := ed.props.getD CoreOptions.EDGE_THICKNESS fl0p0
     let isSource := ed.source == some port
     maxEdgeThickness := fmax maxEdgeThickness edgeThickness
     for label in ed.labels do

@@ -12,6 +12,12 @@ The compactions overwrite the step with `COMPACTION_STEP_SIZE` before use, the o
 does not, so its layer expansion is a no-op (up to floating point rounding of `cx + 0 - half_w`).
 `compactionStep` therefore defaults to `0` here.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial.Intermediate.Compaction
 
 open Elk.Graph
@@ -21,7 +27,7 @@ structure AbstractRadiusExtensionCompaction where
   /-- `compaction_step` (`i32`; `0` for `::default()`). -/
   compactionStep : Int := 0
   /-- `spacing`. -/
-  spacing : Float := 0.0
+  spacing : Float := fl0p0
   deriving Inhabited
 
 namespace AbstractRadiusExtensionCompaction
@@ -43,8 +49,8 @@ def contractLayer (self : AbstractRadiusExtensionCompaction) (root : NodeId) (la
   let step := Float.ofInt self.compactionStep
   for node in layerNodes do
     let n ← ElkM.getNode node
-    let halfW := n.width / 2.0
-    let halfH := n.height / 2.0
+    let halfW := n.width / fl2p0
+    let halfH := n.height / fl2p0
     let xPos := n.x + halfW
     let yPos := n.y + halfH
     let dx := xPos - parentX
@@ -85,8 +91,8 @@ def contractLayerSoa (parentX parentY : Float) (x y w h : FloatArray) (step : Fl
   let mut y := y
   let mut changed := false
   for i in [0:x.size] do
-    let halfW := w.get! i / 2.0
-    let halfH := h.get! i / 2.0
+    let halfW := w.get! i / fl2p0
+    let halfH := h.get! i / fl2p0
     let oldX := x.get! i
     let oldY := y.get! i
     let cx := oldX + halfW

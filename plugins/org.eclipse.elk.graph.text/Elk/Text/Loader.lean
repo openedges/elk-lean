@@ -41,6 +41,11 @@ grammar and none of it occurs in the 898 corpus models, so it is deliberately
 **not** ported; the loader implements the grammar of
 `org.eclipse.elk.graph.text/ElkGraph.xtext` instead.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl16p0 : Float := 16.0
+
 namespace Elk.Text
 
 open Elk Elk.Graph Elk.Core Elk.Core.Data Elk.Core.Math Elk.Core.Util
@@ -291,7 +296,7 @@ private def computeLabelSizes (g : ElkGraph) (labels : Array LabelId) : ElkGraph
     else
       g.modifyLabel l fun x =>
         { x with width := if x.width <= 0 then (utf16Length x.text * 9).toFloat else x.width,
-                 height := if x.height <= 0 then 16.0 else x.height }
+                 height := if x.height <= 0 then fl16p0 else x.height }
 
 private partial def applyDefaultsRec (g : ElkGraph) (parent : NodeId) (nodeSize portSize : Float) : ElkGraph := Id.run do
   let mut g := g

@@ -12,6 +12,13 @@ written directly (`PORTING.md` §15.1): layers in `graph.layers` order, nodes in
 `layer.nodes` order. The layer heights are written to `Layer.size.y` (Rust
 `sync_layer_sizes_to_graph`), node positions to `LNode.position.y`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.P4Nodes
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -41,15 +48,15 @@ private def verticalSpacing (spacings : Spacings) (n1 n2 : LNodeId) : LayeredM F
 every layer (`layer.size.y`) and the maximum height; second pass: node y positions, each
 layer centred in the maximum height. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
-  let _ ← monitor.begin "Simple node placement" 1.0
+  let _ ← monitor.begin "Simple node placement" fl1p0
   let some spacings := (← getGraph graph).internal.spacings
     | throw (IO.userError "java.lang.IllegalStateException: Missing spacings configuration for simple node placement")
   let layerIds := (← getGraph graph).layers
-  let mut maxHeight := 0.0
+  let mut maxHeight := fl0p0
   -- first pass: compute layer heights
   for layer in layerIds do
     let nodeIds := (← getLayer layer).nodes
-    let mut layerHeight := 0.0
+    let mut layerHeight := fl0p0
     let mut lastNode : Option LNodeId := none
     for n in nodeIds do
       if let some prev := lastNode then
@@ -64,7 +71,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   for layer in layerIds do
     let layerHeight := (← getLayer layer).size.y
     let nodeIds := (← getLayer layer).nodes
-    let mut pos := (maxHeight - layerHeight) / 2.0
+    let mut pos := (maxHeight - layerHeight) / fl2p0
     let mut lastNode : Option LNodeId := none
     for n in nodeIds do
       if let some prev := lastNode then

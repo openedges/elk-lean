@@ -31,6 +31,12 @@ Deviations from Java (following elk-rs): `ElkMath.maxd` / `Math.max` / `Math.min
 label cell. A northern/southern side without an inside port label cell skips the constrained
 inside placement (Java would throw a `NullPointerException`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -105,7 +111,7 @@ private def portLabelBorderOffsetForPortSide (ctx : NodeContext N P L) (portSide
 node, next to (centered on) the port or beside it, offset from the node border by the border
 offset; northern/southern label heights set the inside port label cell's content height. -/
 private def simpleInsidePortLabelPlacement (ctx : NodeContext N P L) (portSide : PortSide) : NodeContext N P L := Id.run do
-  let mut insideNorthOrSouthPortLabelAreaHeight := 0.0
+  let mut insideNorthOrSouthPortLabelAreaHeight := fl0p0
   let labelBorderOffset := portLabelBorderOffsetForPortSide ctx portSide
   let portLabelSpacingHorizontal := ctx.portLabelSpacingHorizontal
   let portLabelSpacingVertical := ctx.portLabelSpacingVertical
@@ -121,28 +127,28 @@ private def simpleInsidePortLabelPlacement (ctx : NodeContext N P L) (portSide :
     match portSide with
     | .north =>
       cells := cells.modifyCellRectangle lc fun r => { r with
-        x := if labelsNextToPort then (portSize.x - minWidth) / 2.0 else portSize.x + portLabelSpacingHorizontal
+        x := if labelsNextToPort then (portSize.x - minWidth) / fl2p0 else portSize.x + portLabelSpacingHorizontal
         y := portSize.y + portBorderOffset + labelBorderOffset }
       cells := (cells.setHorizontalAlignment lc .center).setVerticalAlignment lc .top
     | .south =>
       cells := cells.modifyCellRectangle lc fun r => { r with
-        x := if labelsNextToPort then (portSize.x - minWidth) / 2.0 else portSize.x + portLabelSpacingHorizontal
+        x := if labelsNextToPort then (portSize.x - minWidth) / fl2p0 else portSize.x + portLabelSpacingHorizontal
         y := -portBorderOffset - labelBorderOffset - minHeight }
       cells := (cells.setHorizontalAlignment lc .center).setVerticalAlignment lc .bottom
     | .east =>
-      let firstHeight := if !portLabelsTreatAsGroup then firstLabelHeight cells lc else 0.0
+      let firstHeight := if !portLabelsTreatAsGroup then firstLabelHeight cells lc else fl0p0
       cells := cells.modifyCellRectangle lc fun r => { r with
         x := -portBorderOffset - labelBorderOffset - minWidth
         y := if labelsNextToPort then
-            (portSize.y - (if portLabelsTreatAsGroup then minHeight else firstHeight)) / 2.0
+            (portSize.y - (if portLabelsTreatAsGroup then minHeight else firstHeight)) / fl2p0
           else portSize.y + portLabelSpacingVertical }
       cells := (cells.setHorizontalAlignment lc .right).setVerticalAlignment lc .center
     | .west =>
-      let firstHeight := if !portLabelsTreatAsGroup then firstLabelHeight cells lc else 0.0
+      let firstHeight := if !portLabelsTreatAsGroup then firstLabelHeight cells lc else fl0p0
       cells := cells.modifyCellRectangle lc fun r => { r with
         x := portSize.x + portBorderOffset + labelBorderOffset
         y := if labelsNextToPort then
-            (portSize.y - (if portLabelsTreatAsGroup then minHeight else firstHeight)) / 2.0
+            (portSize.y - (if portLabelsTreatAsGroup then minHeight else firstHeight)) / fl2p0
           else portSize.y + portLabelSpacingVertical }
       cells := (cells.setHorizontalAlignment lc .left).setVerticalAlignment lc .center
     | .undefined => pure ()
@@ -151,7 +157,7 @@ private def simpleInsidePortLabelPlacement (ctx : NodeContext N P L) (portSide :
       insideNorthOrSouthPortLabelAreaHeight := fmax insideNorthOrSouthPortLabelAreaHeight minHeight
   let ctx := { ctx with cells }
   -- Apply the N/S port label area height
-  if insideNorthOrSouthPortLabelAreaHeight > 0.0 then
+  if insideNorthOrSouthPortLabelAreaHeight > fl0p0 then
     return setInsideNorthSouthLabelCellHeight ctx portSide insideNorthOrSouthPortLabelAreaHeight
   return ctx
 
@@ -222,7 +228,7 @@ private def constrainedInsidePortLabelPlacement (ctx : NodeContext N P L) (portS
   for (lc, r) in added.zip rects do
     cells := cells.setCellRectangle lc r
   let mut ctx := { ctx with cells }
-  if stripHeight > 0.0 then
+  if stripHeight > fl0p0 then
     ctx := setInsideNorthSouthLabelCellHeight ctx portSide stripHeight
   -- Second pass: make the label cell coordinates relative to the port positions
   return makeLabelCellsRelative ctx portSide
@@ -249,7 +255,7 @@ private def simpleOutsidePortLabelPlacement (ctx : NodeContext N P L) (portSide 
     match portSide with
     | .north | .south =>
       if labelsNextToPort then
-        cells := cells.modifyCellRectangle lc fun r => { r with x := (portSize.x - minWidth) / 2.0 }
+        cells := cells.modifyCellRectangle lc fun r => { r with x := (portSize.x - minWidth) / fl2p0 }
         cells := cells.setHorizontalAlignment lc .center
       else if firstSpecial || alwaysAbove then
         cells := cells.modifyCellRectangle lc fun r => { r with x := -minWidth - portLabelSpacingH }
@@ -264,10 +270,10 @@ private def simpleOutsidePortLabelPlacement (ctx : NodeContext N P L) (portSide 
         cells := cells.modifyCellRectangle lc fun r => { r with y := portSize.y + portLabelSpacingV }
         cells := cells.setVerticalAlignment lc .top
     | .east | .west =>
-      let firstHeight := if !portLabelsTreatAsGroup then firstLabelHeight cells lc else 0.0
+      let firstHeight := if !portLabelsTreatAsGroup then firstLabelHeight cells lc else fl0p0
       if labelsNextToPort then
         let labelHeight := if portLabelsTreatAsGroup then minHeight else firstHeight
-        cells := cells.modifyCellRectangle lc fun r => { r with y := (portSize.y - labelHeight) / 2.0 }
+        cells := cells.modifyCellRectangle lc fun r => { r with y := (portSize.y - labelHeight) / fl2p0 }
         cells := cells.setVerticalAlignment lc .center
       else if firstSpecial || alwaysAbove then
         cells := cells.modifyCellRectangle lc fun r => { r with y := -minHeight - portLabelSpacingV }

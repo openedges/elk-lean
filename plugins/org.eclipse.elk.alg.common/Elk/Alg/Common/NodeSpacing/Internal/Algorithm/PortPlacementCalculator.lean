@@ -20,6 +20,12 @@ Deviations from Java (following elk-rs):
 * A side without an inside port label cell is skipped (Java would throw a
   `NullPointerException`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -36,7 +42,7 @@ variable {N P L : Type}
 private def modifiedPortPlacementSize (ctx : NodeContext N P L) (oldPortAlignment : PortAlignment)
     (currentPortPlacementSize : Float) : Float :=
   if oldPortAlignment == .distributed then
-    currentPortPlacementSize - 2.0 * ctx.portPortSpacing
+    currentPortPlacementSize - fl2p0 * ctx.portPortSpacing
   else
     currentPortPlacementSize
 
@@ -86,16 +92,16 @@ private def freePortPlacementStart (ctx : NodeContext N P L) (portCount : Nat) (
     match portAlignment with
     | .begin => pure ()
     | .center =>
-      currentPos := currentPos + (availableSpace - calculatedPortPlacementSize) / 2.0
+      currentPos := currentPos + (availableSpace - calculatedPortPlacementSize) / fl2p0
     | .«end» =>
       currentPos := currentPos + (availableSpace - calculatedPortPlacementSize)
     | .distributed =>
       let additional := (availableSpace - calculatedPortPlacementSize) / (portCount + 1).toFloat
-      spaceBetweenPorts := spaceBetweenPorts + fmax 0.0 additional
+      spaceBetweenPorts := spaceBetweenPorts + fmax fl0p0 additional
       currentPos := currentPos + spaceBetweenPorts
     | .justified =>
       let additional := (availableSpace - calculatedPortPlacementSize) / (portCount - 1).toFloat
-      spaceBetweenPorts := spaceBetweenPorts + fmax 0.0 additional
+      spaceBetweenPorts := spaceBetweenPorts + fmax fl0p0 additional
   return (currentPos, spaceBetweenPorts)
 
 /-! ### Horizontal port placement -/
