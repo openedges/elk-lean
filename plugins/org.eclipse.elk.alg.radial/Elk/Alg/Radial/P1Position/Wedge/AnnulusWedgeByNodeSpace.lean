@@ -20,7 +20,7 @@ partial def calculateWedgeSpacePure (g : ElkGraph) (node : NodeId) : Float :=
   let n := g.node node
   let nodeSize := Float.sqrt (n.width * n.width + n.height * n.height)
   let childSpace := successors.foldl (fun acc child => acc + calculateWedgeSpacePure g child) 0.0
-  fmax childSpace nodeSize
+  javaMax childSpace nodeSize
 
 /-- `calculate_wedge_space(node)`. -/
 def calculateWedgeSpace (node : NodeId) : ElkM Float :=

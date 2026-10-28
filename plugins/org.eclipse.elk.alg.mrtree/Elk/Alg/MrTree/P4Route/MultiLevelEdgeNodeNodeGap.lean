@@ -1,11 +1,11 @@
 import Elk.Core.Util.Java
-import Elk.Core.Util.RustSort
 import Elk.Core.Options
 import Elk.Alg.MrTree.Graph.TArena
 /-!
 # `org.eclipse.elk.alg.mrtree.p4route.MultiLevelEdgeNodeNodeGap`
 
-Port of `p4route/multi_level_edge_node_node_gap.rs` (elk-rs): the gap between two neighbouring nodes
+ELK Java's `MultiLevelEdgeNodeNodeGap` (elk-rs `p4route/multi_level_edge_node_node_gap.rs` was the code
+reference): the gap between two neighbouring nodes
 of one tree level (`neighbor_one` left of the gap, `neighbor_two` right of it; either may be missing
 at the ends of the level) through which several multi-level edges pass. Every edge reserves two bend
 points (by index into its bend point chain); `update_bend_points` spreads the edges over the gap:
@@ -14,13 +14,12 @@ points (by index into its bend point chain); `update_bend_points` spreads the ed
   the near side of `neighbor_two`;
 * only `neighbor_one` (`on_last_node_side`): `padding * (i + 1)` behind `neighbor_one`;
 * only `neighbor_two` (`on_first_node_side`): `padding * (i + 1)` before `neighbor_two`;
-* no neighbour: nothing (Rust returns from the loop).
+* no neighbour: nothing (Java returns from the loop).
 
 The two bend points cross the level from `LEVELMIN - padding` to `LEVELMAX + padding` of the
 reference neighbour (reversed for `LEFT` and `UP`). Node data are read live from the arena; an index
-beyond the current chain is ignored. `add_bend_points` re-sorts the edges by the position of their
-targets (Rust `sort_by` with `partial_cmp`, reproduced with `rustSortBy`; the element is the
-24-byte `BendRef`).
+beyond the current chain is ignored. `addBendPoints` re-sorts the edges by the position of their
+targets (`LinkedList.sort` with `Double.compare`: stable, `javaSortByDouble`).
 -/
 namespace Elk.Alg.MrTree.P4Route
 
@@ -114,13 +113,10 @@ def addBendPoints (gap : MultiLevelEdgeNodeNodeGap) (edge : TEdgeId) (firstIndex
   let bendPoints := gap.bendPoints.push (edge, firstIndex, secondIndex)
   let a ← get
   let horizontal := gap.direction == .left || gap.direction == .right
-  let sorted := rustSortBy bendPoints (elemSize := 24) fun x y =>
-    let px := edgeTargetPos a x.1
-    let py := edgeTargetPos a y.1
-    if horizontal then Float.comparePartial px.y py.y else Float.comparePartial px.x py.x
-  match sorted with
-  | .ok bps => updateBendPoints { gap with bendPoints := bps }
-  | .error e => throw (IO.userError e)
+  let sorted := javaSortByDouble bendPoints fun x =>
+    let p := edgeTargetPos a x.1
+    if horizontal then p.y else p.x
+  updateBendPoints { gap with bendPoints := sorted }
 
 end MultiLevelEdgeNodeNodeGap
 

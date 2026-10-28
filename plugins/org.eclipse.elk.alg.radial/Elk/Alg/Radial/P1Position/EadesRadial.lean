@@ -92,7 +92,7 @@ partial def wedgeSpaces (g : ElkGraph) (criteria : AnnulusWedgeCriteria)
       let (childSpace, cache) := successors.foldl (fun (acc, c) child =>
         let (v, c) := wedgeSpaces g criteria successorCache leafCache child c
         (acc + v, c)) (fl0p0, cache)
-      let v := fmax childSpace nodeSize
+      let v := javaMax childSpace nodeSize
       (v, cache.insert node v)
 
 /-- `positionNodes(node, currentRadius, minAlpha, maxAlpha, optimalOffset)`: places `node` on the
@@ -102,12 +102,12 @@ partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option
     (successorCache : Std.HashMap NodeId (Array NodeId)) (wedgeCache : Std.HashMap NodeId Float)
     (currentRadius minAlpha maxAlpha optimalOffset : Float) : RadialM Unit := do
   let alphaPoint := (minAlpha + maxAlpha) / fl2p0 + optimalOffset
-  let xPos := currentRadius * Float.cos alphaPoint
-  let yPos := currentRadius * Float.sin alphaPoint
+  let xPos := currentRadius * javaCos alphaPoint
+  let yPos := currentRadius * javaSin alphaPoint
   RadialUtil.centerNodesOnRadi node xPos yPos
   let numberOfLeafs := (wedgeCache.get? node).getD fl1p0
   -- Java `2 * Math.acos(currentRadius / currentRadius + radius)` (operator precedence kept)
-  let tau := fl2p0 * Float.acos (currentRadius / currentRadius + radius)
+  let tau := fl2p0 * javaAcos (currentRadius / currentRadius + radius)
   let (s, alpha0) :=
     if tau < maxAlpha - minAlpha then (tau / numberOfLeafs, (minAlpha + maxAlpha - tau) / fl2p0)
     else ((maxAlpha - minAlpha) / numberOfLeafs, minAlpha)

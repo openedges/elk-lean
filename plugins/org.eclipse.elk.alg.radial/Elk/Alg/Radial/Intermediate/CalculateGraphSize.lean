@@ -10,8 +10,9 @@ import Elk.Alg.Radial.Options.RadialOptions
 /-!
 # `org.eclipse.elk.alg.radial.intermediate.CalculateGraphSize`
 
-Port of `calculate_graph_size.rs` (elk-rs): computes the bounding box of all children (including
-margins), moves the children so that the box starts at the padding, sets the size of the graph
+ELK Java's `CalculateGraphSize` (elk-rs `calculate_graph_size.rs` was the code reference): computes the
+bounding box of all children (including margins; Java starts the maxima at `Double.MIN_VALUE` and uses
+`Math.min`/`Math.max`, elk-rs `-f64::MAX` and `f64::min`/`max`), moves the children so that the box starts at the padding, sets the size of the graph
 (unless `NODE_SIZE_FIXED_GRAPH_SIZE`) and the child area. With `CENTER_ON_ROOT` the box is
 extended on one side so that the root is exactly in the middle of the graph.
 -/
@@ -29,17 +30,19 @@ def process (graph : NodeId) (monitor : ProgressMonitor) : RadialM Unit := do
   let children := graphNode.children
   let padding := graphNode.props.getD CoreOptions.PADDING {}
   let centerOnRoot := graphNode.props.getD RadialOptions.CENTER_ON_ROOT false
+  -- Java: `Double.MAX_VALUE` / `Double.MIN_VALUE` (the smallest positive double, not `-MAX_VALUE`)
+  -- and `Math.min`/`Math.max` (a NaN coordinate makes the whole box NaN)
   let mut minXPos := Float.maxValue
   let mut minYPos := Float.maxValue
-  let mut maxXPos := Float.minValue
-  let mut maxYPos := Float.minValue
+  let mut maxXPos := Float.minPositive
+  let mut maxYPos := Float.minPositive
   for node in children do
     let n ← ElkM.getNode node
     let margins := n.props.getD CoreOptions.MARGINS {}
-    minXPos := fmin minXPos (n.x - margins.left)
-    minYPos := fmin minYPos (n.y - margins.top)
-    maxXPos := fmax maxXPos (n.x + n.width + margins.right)
-    maxYPos := fmax maxYPos (n.y + n.height + margins.bottom)
+    minXPos := javaMin minXPos (n.x - margins.left)
+    minYPos := javaMin minYPos (n.y - margins.top)
+    maxXPos := javaMax maxXPos (n.x + n.width + margins.right)
+    maxYPos := javaMax maxYPos (n.y + n.height + margins.bottom)
   let mut offsetX := minXPos - padding.left
   let mut offsetY := minYPos - padding.top
   let mut width := maxXPos - minXPos + padding.left + padding.right

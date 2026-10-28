@@ -210,10 +210,11 @@ def graphTests : Suite := suite "mrtree.graph" do
   checkEq "incoming of x" (a.node x).incomingEdges #[e1, e3]
   checkEq "parent of x" (a.parent x) (some s)
   checkEq "parent of s" (a.parent s) none
-  -- hand: remove_outgoing(e3) drops the *first* x of the cache, so the cache order differs from Java
+  -- hand: remove_outgoing(e3) drops the cache entry of e3 (Java's `getChildren()` are the targets of
+  -- the remaining outgoing edges; elk-rs dropped the first x and gave [y, x])
   let a := a.removeOutgoing s e3
   checkEq "remove_outgoing: outgoing" (a.node s).outgoingEdges #[e1, e2]
-  checkEq "remove_outgoing: cache [y, x] (Rust)" (a.children s) #[y, x]
+  checkEq "remove_outgoing: cache [x, y] (Java)" (a.children s) #[x, y]
   let a := a.replaceOutgoingEdges s #[e2, e1]
   checkEq "replace_outgoing_edges rebuilds the cache" (a.children s) #[y, x]
   -- add_outgoing ignores duplicates
@@ -271,7 +272,9 @@ def importTests : Suite := suite "mrtree.import" do
   let ((a, tg), g) ← ElkM.run (ElkGraphImporter.importGraph root) g
   let graph := a.graph tg
   checkEq "nodes" graph.nodes.size 3
-  checkEq "edges (self loop and hyperedge skipped)" graph.edges.size 3
+  -- Java: the self loop is skipped, the hyperedge e4 becomes an edge to its first target (elk-rs
+  -- skipped hyperedges)
+  checkEq "edges (self loop skipped, hyperedge to its first target)" graph.edges.size 4
   check "graph origin" (match graph.internal.origin with | some (.elkNode n) => n == root | _ => false)
   check "graph props copied (DIRECTION)" ((graph.props.get MrTreeOptions.DIRECTION) == some Direction.right)
   let ns := graph.nodes
@@ -286,12 +289,12 @@ def importTests : Suite := suite "mrtree.import" do
   checkEq "n2 props copied (PRIORITY)" (n2.props.get MrTreeOptions.PRIORITY) (some 5)
   checkFloat "n3 centre x" (a.node ns[2]!).position.x 105.0
   let es := graph.edges
-  checkEq "edge sources" (es.map fun e => (a.edge e).source) #[some ns[0]!, some ns[0]!, some ns[2]!]
-  checkEq "edge targets" (es.map fun e => (a.edge e).target) #[some ns[1]!, some ns[2]!, some ns[0]!]
+  checkEq "edge sources" (es.map fun e => (a.edge e).source) #[some ns[0]!, some ns[0]!, some ns[1]!, some ns[2]!]
+  checkEq "edge targets" (es.map fun e => (a.edge e).target) #[some ns[1]!, some ns[2]!, some ns[0]!, some ns[0]!]
   check "edge origin e1" (match (a.edge es[0]!).internal.origin with
     | some (.elkEdge e) => elkEdgeById g "e1" == some e | _ => false)
   checkEq "n1 children" (a.children ns[0]!) #[ns[1]!, ns[2]!]
-  checkEq "n1 parent (n3 via e5)" (a.parent ns[0]!) (some ns[2]!)
+  checkEq "n1 parent (n2 via the hyperedge e4)" (a.parent ns[0]!) (some ns[1]!)
   -- apply_layout: hand-set top-left positions
   let a := a.modifyNode ns[0]! fun n => { n with position := ⟨0.0, 0.0⟩ }
   let a := a.modifyNode ns[1]! fun n => { n with position := ⟨40.0, 0.0⟩, props := n.props.set MrTreeOptions.TREE_LEVEL 3 }
@@ -305,7 +308,8 @@ def importTests : Suite := suite "mrtree.import" do
     checkEq "edge without points: Java exception" (toString e)
       "java.lang.IllegalArgumentException: The vector chain must contain at least a source and a target point."
   let a := a.modifyEdge es[1]! fun e => { e with bendPoints := #[⟨15, 20⟩, ⟨5, 55⟩] }
-  let a := a.modifyEdge es[2]! fun e => { e with bendPoints := #[⟨5, 55⟩, ⟨15, 20⟩] }
+  let a := a.modifyEdge es[2]! fun e => { e with bendPoints := #[⟨40, 0⟩, ⟨15, 20⟩] }
+  let a := a.modifyEdge es[3]! fun e => { e with bendPoints := #[⟨5, 55⟩, ⟨15, 20⟩] }
   let ((), g) ← ElkM.run (ElkGraphImporter.applyLayout a tg) g
   let kids := (g.node root).children
   check "ELK n2 position" ((g.node kids[1]!).x == 40.0 && (g.node kids[1]!).y == 0.0)
@@ -542,13 +546,20 @@ def fanDifferentialTests : Suite := suite "mrtree.intermediate.fan" do
     let a := if k % 5 == 4 then
         (a.graph g).nodes.foldl (fun a n => a.modifyNode n fun x => { x with id := x.id + 3 }) a
       else a
-    let ((), s) ← MrTreeM.run (FanProcessor.processStrings g) a
-    let f ← runProc FanProcessor.processor a g
     let nodes := (a.graph g).nodes
     let values (x : TArena) := nodes.map fun n => ((x.node n).internal.fan, (x.node n).internal.descendants)
-    if values s == values f then same := same + 1
-    else report s!"fan differential: graph {k}" false
-    if nodes.all fun n => (f.node n).internal.idString.isEmpty then fast := fast + 1
+    -- Java's identifier strings can be shorter than a prefix of their level on a DAG
+    -- (`StringIndexOutOfBoundsException`); the array computation must fail the same way there
+    match ← (MrTreeM.run (FanProcessor.processStrings g) a).toBaseIO,
+        ← (runProc FanProcessor.processor a g).toBaseIO with
+    | .ok ((), s), .ok f =>
+      if values s == values f then same := same + 1
+      else report s!"fan differential: graph {k}" false
+      if nodes.all fun n => (f.node n).internal.idString.isEmpty then fast := fast + 1
+    | .error e1, .error e2 =>
+      if toString e1 == toString e2 then same := same + 1
+      else report s!"fan differential: graph {k} errors" false s!"{e1} / {e2}"
+    | _, _ => report s!"fan differential: graph {k} outcome" false
   checkEq "fan differential: FAN/DESCENDANTS equal on every graph" same count
   -- kinds 0, 1, 2 (trees and forests) always take the array computation; 3 and 4 mostly do not
   check s!"fan differential: array computation used ({fast} of {count})" (fast ≥ 3 * count / 5)
@@ -618,10 +629,13 @@ def placementProcessorTests : Suite := suite "mrtree.intermediate.placement" do
   check "untreeifyer: edge restored" ((u.node us).outgoingEdges == #[ue] && (u.node ut).incomingEdges == #[ue]
     && u.children us == #[ut])
   -- compaction: r (0,0) -> a (0,100) [level 1], r -> b (50,200) [level 2], 10x10 nodes, spacing 10
-  let comp (mode : Option EdgeRoutingMode) (enabled : Bool) : IO (TArena × Array TNodeId) := do
+  -- (DOWN, which `NodePlacer` sets for `UNDEFINED` before the compaction runs; see below for UNDEFINED)
+  let comp (mode : Option EdgeRoutingMode) (enabled : Bool) (dir : Direction := .down) :
+      IO (TArena × Array TNodeId) := do
     let (a, g) := ({} : TArena).createGraph
     let a := a.modifyGraph g fun x =>
       let ps := (x.props.set MrTreeOptions.COMPACTION enabled).set MrTreeOptions.SPACING_NODE_NODE 10.0
+      let ps := ps.set MrTreeOptions.DIRECTION dir
       { x with props := match mode with | some m => ps.set MrTreeOptions.EDGE_ROUTING_MODE m | none => ps }
     let (a, r) := mkNode a g 0 0 0 10 10
     let (a, na) := mkNode a g 1 0 100 10 10
@@ -646,6 +660,13 @@ def placementProcessorTests : Suite := suite "mrtree.intermediate.placement" do
     && (ca.node cas[2]!).internal.compactLevelAscension && levelOf ca cas[2]! == 1)
   let (cd, cds) ← comp none false
   check "compaction disabled" ((cd.node cds[2]!).position == ⟨50.0, 200.0⟩)
+  -- hand: Java's `switch (dir)` has no `UNDEFINED` case, so the new position stays 0
+  let (cu, cus) ← comp (some .none) true .undefined
+  check "compaction (NONE, UNDEFINED): a at 0" ((cu.node cus[1]!).position == ⟨0.0, 0.0⟩)
+  -- hand: the graph's node list is sorted by the projection on the direction (Java sorts in place)
+  let (cs, css) ← comp (some .none) true .up
+  checkEq "compaction: node list sorted in place (UP: b, a, r)" cs.graphs[0]!.nodes
+    #[css[2]!, css[1]!, css[0]!]
   -- lowest dependent node
   let (d, gd) := ({} : TArena).createGraph
   let (d, dp) := mkNode d gd 0 0 0 5 5
@@ -836,8 +857,9 @@ def placeTests : Suite := suite "mrtree.p3place" do
   check "RIGHT: r" ((b.node nsb[0]!).position == ⟨-5.0, 11.0⟩)
   check "RIGHT: a" ((b.node nsb[1]!).position == ⟨25.0, -2.5⟩)
   check "RIGHT: b" ((b.node nsb[2]!).position == ⟨36.0, 23.0⟩)
-  checkEq "roundToI32 saturates" (P3Place.NodePlacer.roundToI32 1e300, P3Place.NodePlacer.roundToI32 (-2.5))
-    ((2147483647 : Int), (-3 : Int))
+  -- Java `(int) Math.round(x)`: `Long.MAX_VALUE` narrowed to `int` is -1; halves round up
+  checkEq "roundToI32: Java (int) Math.round" (P3Place.NodePlacer.roundToI32 1e300, P3Place.NodePlacer.roundToI32 (-2.5))
+    ((-1 : Int), (-2 : Int))
   -- a non-leaf node whose children were all reached before (two parents): Rust panics
   let (c, gc) := ({} : TArena).createGraph
   let (c, c0) := mkNode c gc 0 0 0 10 10

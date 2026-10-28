@@ -1,7 +1,6 @@
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Elk.Core.Util.Java
-import Elk.Core.Util.RustSort
 import Elk.Alg.MrTree.TreeLayoutPhases
 import Elk.Alg.MrTree.TreeUtil
 import Elk.Alg.MrTree.Options.MrTreeOptions
@@ -9,49 +8,54 @@ import Elk.Alg.MrTree.P4Route.MultiLevelEdgeNodeNodeGap
 /-!
 # `org.eclipse.elk.alg.mrtree.p4route.EdgeRouter`
 
-Port of `p4route/edge_router.rs` (elk-rs), the phase `P4_EDGE_ROUTING`. The mode is the graph's
-`EDGE_ROUTING_MODE` (`unwrap_or(AVOID_OVERLAP)`):
+The phase `P4_EDGE_ROUTING` of ELK Java (`EdgeRouter.java`; elk-rs `p4route/edge_router.rs` was the
+code reference, ELK Java decides where they differ). The mode is the graph's `EDGE_ROUTING_MODE`:
 
 * `NONE`: nothing;
-* `MIDDLE_TO_MIDDLE`: every edge of the graph (`middle_to_middle_edge_route`) gets the centre of its
-  source prepended and the centre of its target appended to its bend points; the first point is then
-  moved onto the source border towards the second point, the last point onto the target border
-  towards the (already moved) second to last point;
-* `AVOID_OVERLAP` (`avoid_overlap`): Rust's restructured version of the Java router. The node data
-  (`TREE_LEVEL`, position, size, `LEVELMIN`/`LEVELMAX`, `SUPER_ROOT` label) and the aggregate
-  statistics are read once (`build_node_data`), the edges are classified once (`build_edge_maps`:
-  end points, cycle inducing edges, outgoing/incoming edges crossing levels, without outgoing edges
-  of the `SUPER_ROOT`) and the nodes of every tree level are sorted by their position along the level
-  (`build_level_nodes`). Then (1) `avoid_overlap_set_start_points` prepends two start bend points to
-  every outgoing level-crossing edge of every non-`SUPER_ROOT` node (sorted by the target position;
-  with `COMPACT_LEVEL_ASCENSION` only the cycle inducing ones), (2) `avoid_overlap_special_edges`
-  routes the edges spanning several levels through the node gaps (`MultiLevelEdgeNodeNodeGap`),
-  edges within one level middle-to-middle and edges against the level order around the tree
-  (`avoid_overlap_handle_cycle_inducing_edges`), (3) `avoid_overlap_set_end_points` appends the end
-  bend points of every incoming level-crossing edge (sorted by its current last point). Finally every
-  edge of the graph with fewer than two bend points is routed middle-to-middle.
+* `MIDDLE_TO_MIDDLE`: every entry of the graph's edge list (`middleToMiddleEdgeRoute`) gets the
+  centre of its source prepended and the centre of its target appended to its bend points; the first
+  point is then moved onto the source border towards the second point, the last point onto the target
+  border towards the (already moved) second to last point;
+* `AVOID_OVERLAP` (`avoidOverlap`): (1) `avoidOverlapSetStartPoints` prepends two start bend points to
+  the outgoing level-crossing edges of every non-`SUPER_ROOT` node (with `COMPACT_LEVEL_ASCENSION`
+  only to the cycle inducing ones), (2) `avoidOverlapSpecialEdges` routes the edges spanning several
+  levels through the node gaps (`MultiLevelEdgeNodeNodeGap`), edges within one level middle-to-middle
+  and edges against the level order around the tree (`avoidOverlapHandleCycleInducingEdges`), (3)
+  `avoidOverlapSetEndPoints` appends the end bend points of the incoming level-crossing edges. Finally
+  every edge of the list with fewer than two bend points is routed middle-to-middle.
 
-Data layout (performance, same values and orders): Rust keys the node data and the edge maps by
-pointer (`HashMap`s); here the nodes are addressed by *slot*, their index in the graph's node list
-(`Slots`: the `id` that `DFSTreeifyer.init` sets is that index; nodes whose `id` does not point back at
-them are found in a small map), and the edges by their index in the list of distinct edges with both
-end points (first occurrences in graph edge order, which is the order in which every Rust loop over
-the edges handles them). The node data are arrays by slot (`NodeTable`), the classification of the
-edges arrays by edge index (`EdgeTable`), the level-crossing edges of a node an array per slot and
-the levels arrays of slots; the cycle-inducing test is stored per edge. A node outside the graph's
-node list has no slot and the Rust defaults (level 0, zero position and size, not the `SUPER_ROOT`).
+ELK Java details (elk-rs restructured the router and differs in all of them):
 
-Rust behaviour kept on purpose: the node data are a snapshot taken before routing (Rust `NodeData`);
-the start of a multi-level edge after its first gap is `(0, 0)` (Rust's placeholder for the last
-bend point); the horizontal "first node" test compares `start.y < first.x`; `TREE_LEVEL` is never
-computed by the elk-rs pipeline (`LEVEL_PROC` is not configured), so unless the input sets it (or
-the compaction moves nodes between levels) all nodes are on level 0 and `AVOID_OVERLAP` routes every
-edge middle-to-middle. Every Rust `sort_by` with a `partial_cmp` comparator is reproduced with
-`rustSortBy` (element size 8: `Arc` handles). The Rust pointer-keyed maps are keyed by the typed ids;
-their iteration order is never observed.
+* `TreeUtil.getAllOutgoingEdges(n)`/`getAllIncomingEdges(n)` scan the graph's edges for those whose
+  source/target has the **`id`** of `n` (not the node itself), whose end points' `TREE_LEVEL`
+  `Integer`s differ by `!=` (reference comparison: equal levels outside the `Integer` cache
+  `-128..127` differ unless both ends are the same node), and keep an edge only if no kept edge has
+  the same `toString()` (`n_<label or id>->n_<label or id>`: parallel edges, and edges between
+  nodes with the same first label text, are routed only once — the others get the fallback); the
+  list is sorted by the target's (outgoing) or source's (incoming) **x** coordinate first and then,
+  by the router, by the first/last point of the edge (stable `List.sort`, `Double.compare`);
+* the start point of the "skip unnecessary level side bend points" test of a multi-level edge is
+  the edge's current last bend point (its start bend points, or the second bend point of its previous
+  gap), the source position only for an edge without bend points; the horizontal test compares
+  `start.y < first.x` (a Java typo, kept);
+* the nodes of a level are the graph's nodes in list order (`CompactionProcessor` may have re-sorted
+  the list), stably sorted by position (`Double.compare`);
+* `avoidOverlapHandleCycleInducingEdges` takes the centre of the tree as `DoubleStream.average()`
+  (Kahan summation, `javaDoubleAverage`) and the extreme node borders with `Double.compare`;
+* a cycle inducing incoming edge without bend points makes `getLast()` throw
+  `java.util.NoSuchElementException` (downward layouts).
 
-`get_layout_processor_configuration` slots `LEVEL_COORDS`, `COMPACTION_PROC` and
-`GRAPH_BOUNDS_PROC` before `P4_EDGE_ROUTING`.
+Data layout (performance, same values): node positions, sizes, levels and level bounds do not change
+while routing, so they are read once into a table (`NodeData`) by *slot*: the entries of the graph's
+node list (the `id` that `DFSTreeifyer.init` sets is the list index; other listed nodes are found in a
+small map), then the end points of edges that are not in the list. The distinct edges with both end
+points (first-occurrence order, which is the order of every scan over the edge list after the
+`toString()` deduplication) are indexed once (`EdgeTable`), with their level-crossing flag and
+grouped by the `id` of their source and of their target. Bend points are read from the arena when
+Java reads them.
+
+`getLayoutProcessorConfiguration` slots `LEVEL_COORDS`, `COMPACTION_PROC` and `GRAPH_BOUNDS_PROC`
+before `P4_EDGE_ROUTING`.
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -67,16 +71,16 @@ open Elk.Alg.MrTree.Options Elk.Alg.MrTree.Intermediate
 
 namespace EdgeRouter
 
-/-- `EdgeRouter::ONE_HALF`. -/
+/-- `EdgeRouter.oneHalf`. -/
 def ONE_HALF : Float := 0.5
-/-- `EdgeRouter::STEEP_END_EDGE_THRESHOLD_DISTANCE`. -/
+/-- `EdgeRouter.steepEndEdgeTheresholdDistance`. -/
 def STEEP_END_EDGE_THRESHOLD_DISTANCE : Float := 50.0
-/-- `EdgeRouter::STEEP_END_EDGE_RATIO`. -/
+/-- `EdgeRouter.steepEndEdgeRatio`. -/
 def STEEP_END_EDGE_RATIO : Float := 5.3
-/-- `EdgeRouter::STEEP_END_EDGE_SAMPLE_HEIGHT`. -/
+/-- `EdgeRouter.steepEndEdgeSampleHeight`. -/
 def STEEP_END_EDGE_SAMPLE_HEIGHT : Float := 40.0
 
-/-- `NodeData`: the node data read once by `build_node_data`. -/
+/-- The data of a node the router reads (constant while routing). -/
 structure NodeData where
   level : Int
   pos : KVector
@@ -84,36 +88,47 @@ structure NodeData where
   levelMin : Float
   levelMax : Float
   isSuperRoot : Bool
+  /-- `TGraphElement.id`. -/
+  id : Int
+  /-- `getLabel()`. -/
+  label : Option String
   deriving Inhabited
 
-/-- `GraphStats`. -/
+/-- `getProperty(TREE_LEVEL)`, `getLabel().equals("SUPER_ROOT")` and the geometry of a node. -/
+def NodeData.ofNode (n : TNode) : NodeData :=
+  { level := (n.props.get MrTreeOptions.TREE_LEVEL).getD 0, pos := n.position, size := n.size,
+    levelMin := n.internal.levelMin, levelMax := n.internal.levelMax,
+    isSuperRoot := n.label == some "SUPER_ROOT", id := n.id, label := n.label }
+
+/-- `TNode.toString()`: `n_<label>`, or `n_<id>` for a missing or empty label. -/
+def NodeData.toJavaString (d : NodeData) : String :=
+  match d.label with
+  | some l => if l.isEmpty then s!"n_{d.id}" else s!"n_{l}"
+  | none => s!"n_{d.id}"
+
+/-- `GraphStats`: the aggregates of `avoidOverlapHandleCycleInducingEdges` over the node list. -/
 structure GraphStats where
+  /-- `average()` of the node centres along y (horizontal layouts) / x (vertical layouts). -/
   avgCenterH : Float
   avgCenterV : Float
+  /-- `max(Double::compare)` of `pos + size` along y / x. -/
   maxExtentH : Float
   maxExtentV : Float
+  /-- `min(Double::compare)` of `pos` along y / x. -/
   minExtentH : Float
   minExtentV : Float
 
-namespace GraphStats
+/-- `Stream.max(Double::compare)` step (`BinaryOperator.maxBy`: the first of equal values). -/
+@[inline] private def maxByJava (acc x : Float) : Float :=
+  if Float.compareJava acc x == .lt then x else acc
 
-/-- `average_center(horizontal)`. -/
-@[inline] def averageCenter (s : GraphStats) (horizontal : Bool) : Float :=
-  if horizontal then s.avgCenterH else s.avgCenterV
+/-- `Stream.min(Double::compare)` step. -/
+@[inline] private def minByJava (acc x : Float) : Float :=
+  if Float.compareJava acc x == .gt then x else acc
 
-/-- `max_node_extent(horizontal, padding)`. -/
-@[inline] def maxNodeExtent (s : GraphStats) (horizontal : Bool) (padding : Float) : Float :=
-  if horizontal then s.maxExtentH + padding else s.maxExtentV + padding
-
-/-- `min_node_extent(horizontal, padding)`. -/
-@[inline] def minNodeExtent (s : GraphStats) (horizontal : Bool) (padding : Float) : Float :=
-  if horizontal then s.minExtentH - padding else s.minExtentV - padding
-
-end GraphStats
-
-/-- The slot of a node: its index in the graph's node list. `id` holds the slot of every node that
-`DFSTreeifyer.init` numbered (`nodes[id] = node`); the other nodes of the list (the `SUPER_ROOT`, id
-0) are in `extra`. Nodes outside the list have no slot. -/
+/-- The slot of a node: entries `0 .. nodes.size` are the graph's node list (`id` holds the list index
+of every node that `DFSTreeifyer.init` numbered; other listed nodes are in `extra`), further slots
+are end points of edges outside the list (`extra`). -/
 structure Slots where
   nodes : Array TNodeId
   extra : Std.HashMap TNodeId Nat
@@ -127,192 +142,120 @@ def build (a : TArena) (nodes : Array TNodeId) : Slots := Id.run do
     let n := nodes[i]
     let id := (a.node n).id
     let byId := id >= 0 && nodes[id.toNat]? == some n
-    if !byId then extra := extra.insert n i
+    if !byId && !extra.contains n then extra := extra.insert n i
   return { nodes, extra }
 
-/-- The slot of a node (`none` outside the node list). -/
+/-- The slot of a node (`none` if it has none yet). -/
 @[inline] def get? (s : Slots) (a : TArena) (n : TNodeId) : Option Nat :=
   let id := (a.node n).id
   if id >= 0 && s.nodes[id.toNat]? == some n then some id.toNat else s.extra.get? n
 
 end Slots
 
-/-- `build_node_data`'s map as an array by slot (see `Slots`). -/
+/-- The node table by slot. -/
 abbrev NodeTable := Array NodeData
 
-/-- `build_node_data(nodes)`: the data of every slot and the aggregate statistics (over the node list,
-duplicates included, like Rust's loop). -/
-def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeTable × GraphStats := Id.run do
-  let mut data : NodeTable := Array.mkEmpty nodes.size
-  let mut sumH := fl0p0
-  let mut sumV := fl0p0
-  let mut maxH := Float.minValue
-  let mut maxV := Float.minValue
-  let mut minH := Float.maxValue
-  let mut minV := Float.maxValue
-  let mut count := 0
-  for node in nodes do
-    let n := a.node node
-    let level := (n.props.get MrTreeOptions.TREE_LEVEL).getD 0
-    let pos := n.position
-    let size := n.size
-    let isSuperRoot := n.label == some "SUPER_ROOT"
-    sumH := sumH + (pos.y + size.y / fl2p0)
-    sumV := sumV + (pos.x + size.x / fl2p0)
+/-- The data of the node list (one entry per list entry, duplicates included). -/
+def buildNodeData (a : TArena) (nodes : Array TNodeId) : NodeTable :=
+  nodes.map fun node => NodeData.ofNode (a.node node)
+
+/-- The aggregates of the first `count` entries (the node list) of the table, computed when the first
+cycle inducing edge needs them (Java recomputes them for every such edge; the nodes do not move). -/
+def buildStats (nd : NodeTable) (count : Nat) : GraphStats := Id.run do
+  let mut centersH : Array Float := Array.mkEmpty count
+  let mut centersV : Array Float := Array.mkEmpty count
+  let mut maxH := fl0p0
+  let mut maxV := fl0p0
+  let mut minH := fl0p0
+  let mut minV := fl0p0
+  for i in [0:min count nd.size] do
+    let d := nd[i]!
+    let pos := d.pos
+    let size := d.size
+    centersH := centersH.push (pos.y + size.y / fl2p0)
+    centersV := centersV.push (pos.x + size.x / fl2p0)
     let extH := pos.y + size.y
     let extV := pos.x + size.x
-    if extH > maxH then maxH := extH
-    if extV > maxV then maxV := extV
-    if pos.y < minH then minH := pos.y
-    if pos.x < minV then minV := pos.x
-    count := count + 1
-    data := data.push
-      { level, pos, size, levelMin := n.internal.levelMin, levelMax := n.internal.levelMax, isSuperRoot }
-  let stats : GraphStats := if count > 0 then
-      { avgCenterH := sumH / Float.ofNat count, avgCenterV := sumV / Float.ofNat count,
-        maxExtentH := maxH, maxExtentV := maxV, minExtentH := minH, minExtentV := minV }
+    if i == 0 then
+      maxH := extH; maxV := extV; minH := pos.y; minV := pos.x
     else
-      { avgCenterH := fl0p0, avgCenterV := fl0p0, maxExtentH := fl0p0, maxExtentV := fl0p0,
-        minExtentH := fl0p0, minExtentV := fl0p0 }
-  return (data, stats)
+      maxH := maxByJava maxH extH
+      maxV := maxByJava maxV extV
+      minH := minByJava minH pos.y
+      minV := minByJava minV pos.x
+  return { avgCenterH := (javaDoubleAverage centersH).getD fl0p0, avgCenterV := (javaDoubleAverage centersV).getD fl0p0,
+           maxExtentH := maxH, maxExtentV := maxV, minExtentH := minH, minExtentV := minV }
 
-/-- The missing slot (`Nat` sentinel of the edge table). -/
-def NO_SLOT : Nat := 0x7FFFFFFF
-
-/-- `nd_level` of a slot. -/
+/-- `nd_pos` etc. of a slot. -/
 @[inline] def ndLevel (nd : NodeTable) (s : Nat) : Int := (nd[s]?.map (·.level)).getD 0
-/-- `nd_pos`. -/
 @[inline] def ndPos (nd : NodeTable) (s : Nat) : KVector := (nd[s]?.map (·.pos)).getD {}
-/-- `nd_size`. -/
 @[inline] def ndSize (nd : NodeTable) (s : Nat) : KVector := (nd[s]?.map (·.size)).getD {}
-/-- `nd_level_min`. -/
 @[inline] def ndLevelMin (nd : NodeTable) (s : Nat) : Float := (nd[s]?.map (·.levelMin)).getD fl0p0
-/-- `nd_level_max`. -/
 @[inline] def ndLevelMax (nd : NodeTable) (s : Nat) : Float := (nd[s]?.map (·.levelMax)).getD fl0p0
-/-- `nd_is_super_root`. -/
 @[inline] def ndIsSuperRoot (nd : NodeTable) (s : Nat) : Bool := (nd[s]?.map (·.isSuperRoot)).getD false
+@[inline] def ndId (nd : NodeTable) (s : Nat) : Int := (nd[s]?.map (·.id)).getD 0
 
-/-- `EdgeMaps` as arrays: the distinct edges with both end points in first-occurrence order (`edges`,
-the keys of Rust's `endpoints`) with their end points and their slots (`NO_SLOT` outside the node
-list), the `cycle_inducing` flag per edge, and per node slot the indices of its level-crossing
-`outgoing` (not for the `SUPER_ROOT`) and `incoming` edges, in edge order. -/
+/-- Whether the `TREE_LEVEL` `Integer`s of two nodes differ by Java `!=`: different values, or equal
+values outside the `Integer.valueOf` cache on two different nodes (each node's level is a boxing of
+its own). -/
+@[inline] def levelsDiffer (ls lt : Int) (sameNode : Bool) : Bool :=
+  ls != lt || (!sameNode && (ls < -128 || ls > 127))
+
+/-- The distinct edges with both end points in first-occurrence order (`edges`) with the slots of
+their end points, whether they cross levels (`crosses`, Java `!=` on the levels), whether they are
+cycle inducing, and the level-crossing edges grouped by the `id` of their source (not for
+`SUPER_ROOT` sources) and of their target, in edge order. -/
 structure EdgeTable where
   edges : Array TEdgeId := #[]
   sourceSlot : Array Nat := #[]
   targetSlot : Array Nat := #[]
   cycleInducing : Array Bool := #[]
-  outgoing : Array (Array Nat) := #[]
-  incoming : Array (Array Nat) := #[]
+  outById : Std.HashMap Int (Array Nat) := {}
+  inById : Std.HashMap Int (Array Nat) := {}
 
-/-- `build_edge_maps(edges, nd, direction)`. -/
+/-- The node table extended by the end points outside the node list, and the edge table. -/
 def buildEdgeMaps (a : TArena) (slots : Slots) (edges : Array TEdgeId) (nd : NodeTable)
-    (direction : Direction) : EdgeTable := Id.run do
+    (direction : Direction) : Slots × NodeTable × EdgeTable := Id.run do
   let dirVec := TreeUtil.getDirectionVector direction
-  let n := nd.size
-  let mut em : EdgeTable := { outgoing := Array.replicate n #[], incoming := Array.replicate n #[] }
+  let mut slots := slots
+  let mut nd := nd
+  let mut em : EdgeTable := {}
   let mut seen : Std.HashSet TEdgeId := Std.HashSet.emptyWithCapacity edges.size
   for edge in edges do
     if seen.contains edge then continue
     seen := seen.insert edge
     let (some source, some target) := ((a.edge edge).source, (a.edge edge).target) | continue
-    let ss := (slots.get? a source).getD NO_SLOT
-    let ts := (slots.get? a target).getD NO_SLOT
-    let sourceLevel := ndLevel nd ss
-    let targetLevel := ndLevel nd ts
-    let sourceIsSuperRoot := ndIsSuperRoot nd ss
-    let sourcePos := ndPos nd ss
-    let targetPos := ndPos nd ts
-    let edgeVec : KVector := ⟨targetPos.x - sourcePos.x, targetPos.y - sourcePos.y⟩
+    let ss ← match slots.get? a source with
+      | some s => pure s
+      | none =>
+        let s := nd.size
+        nd := nd.push (NodeData.ofNode (a.node source))
+        slots := { slots with extra := slots.extra.insert source s }
+        pure s
+    let ts ← match slots.get? a target with
+      | some s => pure s
+      | none =>
+        let s := nd.size
+        nd := nd.push (NodeData.ofNode (a.node target))
+        slots := { slots with extra := slots.extra.insert target s }
+        pure s
+    let sd := nd[ss]!
+    let td := nd[ts]!
+    let edgeVec : KVector := ⟨td.pos.x - sd.pos.x, td.pos.y - sd.pos.y⟩
     let k := em.edges.size
     em := { em with
       edges := em.edges.push edge, sourceSlot := em.sourceSlot.push ss, targetSlot := em.targetSlot.push ts
       cycleInducing := em.cycleInducing.push (dirVec.dotProduct edgeVec <= fl0p0) }
-    if sourceLevel != targetLevel then
-      -- both end points of a level-crossing edge are on a level other than the default 0 of a
-      -- missing slot only if they have slots; the lists of nodes without a slot are never read
-      if !sourceIsSuperRoot && ss < n then
-        em := { em with outgoing := em.outgoing.modify ss (·.push k) }
-      if ts < n then
-        em := { em with incoming := em.incoming.modify ts (·.push k) }
-  return em
+    if levelsDiffer sd.level td.level (source == target) then
+      if !sd.isSuperRoot then
+        em := { em with outById := em.outById.alter sd.id fun l => some ((l.getD #[]).push k) }
+      em := { em with inById := em.inById.alter td.id fun l => some ((l.getD #[]).push k) }
+  return (slots, nd, em)
 
-/-- Whether the keys are in non-decreasing order (no key is NaN). -/
-private def keysSorted (keys : FloatArray) (i : Nat) : Bool :=
-  if h : i + 1 < keys.size then
-    if keys[i] <= keys[i + 1] then keysSorted keys (i + 1) else false
-  else true
-  termination_by keys.size - i
-
-/-- Whether some key is NaN. -/
-private def keysHaveNaN (keys : FloatArray) (i : Nat) : Bool :=
-  if h : i < keys.size then
-    if keys[i].isNaN then true else keysHaveNaN keys (i + 1)
-  else false
-  termination_by keys.size - i
-
-/-- Merges the sorted index runs `src[i..iEnd)` and `src[j..jEnd)` into `dst` from `k` on; an
-element of the right run goes first only if its key is strictly smaller (stable). -/
-private partial def mergeRuns (keys : FloatArray) (src dst : Array Nat) (i iEnd j jEnd k : Nat) :
-    Array Nat :=
-  if i < iEnd then
-    if j < jEnd then
-      let a := src[i]!
-      let b := src[j]!
-      if keys.get! b < keys.get! a then
-        mergeRuns keys src (dst.set! k b) i iEnd (j + 1) jEnd (k + 1)
-      else
-        mergeRuns keys src (dst.set! k a) (i + 1) iEnd j jEnd (k + 1)
-    else mergeRuns keys src (dst.set! k src[i]!) (i + 1) iEnd j jEnd (k + 1)
-  else if j < jEnd then mergeRuns keys src (dst.set! k src[j]!) i iEnd (j + 1) jEnd (k + 1)
-  else dst
-
-/-- One bottom-up merge pass with run width `w`, from `lo` on. -/
-private partial def mergePass (keys : FloatArray) (src dst : Array Nat) (w lo : Nat) : Array Nat :=
-  let n := src.size
-  if lo < n then
-    let mid := min (lo + w) n
-    let hi := min (lo + 2 * w) n
-    mergePass keys src (mergeRuns keys src dst lo mid mid hi lo) w (lo + 2 * w)
-  else dst
-
-/-- Bottom-up merge passes until one run covers everything. -/
-private partial def mergeAll (keys : FloatArray) (src dst : Array Nat) (w : Nat) : Array Nat :=
-  if w < src.size then
-    let merged := mergePass keys src dst w 0
-    mergeAll keys merged src (2 * w)
-  else src
-
-/-- The indices `0 .. keys.size` stably sorted by their keys (no key is NaN): a stable merge sort,
-so the permutation equals that of every stable sort with the comparator
-`Float.comparePartial`. -/
-private def sortIndicesByKeys (keys : FloatArray) : Array Nat :=
-  let idx := Array.range keys.size
-  mergeAll keys idx (Array.replicate keys.size 0) 1
-
-/-- `sort_by` with a `partial_cmp` comparator on `key` (Rust panics on an order violation). The
-keys are computed once per element (`key` is pure). Without NaN keys the comparator is a total
-preorder, for which every stable sort (Rust `sort_by` included) yields the same permutation: the
-input is returned as is when it is already sorted, otherwise it is sorted with a local stable merge
-sort on the keys (`sortIndicesByKeys`). With
-a NaN key (inconsistent comparator) the exact Rust algorithm (`rustSortBy`, element size 8) runs. -/
-private def sortByFloat {α : Type} [Inhabited α] (xs : Array α) (key : α → Float) : MrTreeM (Array α) :=
-  -- no comparison happens for fewer than two elements (every path returns the input)
-  if xs.size < 2 then pure xs else
-  let keys : FloatArray := xs.foldl (init := FloatArray.emptyWithCapacity xs.size) fun ks x => ks.push (key x)
-  if keysHaveNaN keys 0 then
-    let keyed := xs.map fun x => (key x, x)
-    match rustSortBy keyed fun x y => Float.comparePartial x.1 y.1 with
-    | .ok s => pure (s.map (·.2))
-    | .error e => throw (IO.userError e)
-  else if keysSorted keys 0 then
-    pure xs
-  else
-    pure ((sortIndicesByKeys keys).map fun i => xs[i]!)
-
-/-- `build_level_nodes(nodes, nd, direction)`: the nodes of every level (as slots; a node listed twice
-twice), sorted by position. -/
+/-- The nodes of every level (as slots, in node list order; a node listed twice twice), stably sorted
+by position (`Double.compare`). -/
 def buildLevelNodes (nodeSlots : Array Nat) (nd : NodeTable) (direction : Direction) :
-    MrTreeM (Array (Array Nat)) := do
+    Array (Array Nat) := Id.run do
   let maxLevel : Int := nodeSlots.foldl (fun m n => match m with
     | some v => some (max v (ndLevel nd n))
     | none => some (ndLevel nd n)) none |>.getD 0
@@ -322,13 +265,25 @@ def buildLevelNodes (nodeSlots : Array Nat) (nd : NodeTable) (direction : Direct
     let level := ndLevel nd node
     if level >= 0 && level.toNat < len then
       levels := levels.modify level.toNat (·.push node)
-  let mut sorted : Array (Array Nat) := #[]
-  for levelVec in levels do
-    sorted := sorted.push (← sortByFloat levelVec fun n =>
-      if direction.isHorizontal then (ndPos nd n).y else (ndPos nd n).x)
-  return sorted
+  return levels.map fun lv =>
+    javaSortByDouble lv fun n => if direction.isHorizontal then (ndPos nd n).y else (ndPos nd n).x
 
-/-- `middle_to_middle_edge_route(edge)`. -/
+/-- `TreeUtil.getAllOutgoingEdges`/`getAllIncomingEdges` of a node: the level-crossing edges whose
+source (`incoming = false`) or target has the node's `id`, without later edges whose `toString()`
+equals that of a kept edge, sorted by the x coordinate of the other end point. -/
+def javaEdgeList (nd : NodeTable) (em : EdgeTable) (id : Int) (incoming : Bool) : Array Nat := Id.run do
+  let cands := ((if incoming then em.inById else em.outById).get? id).getD #[]
+  if cands.size < 2 then return cands
+  let mut seen : Std.HashSet String := {}
+  let mut kept : Array Nat := Array.mkEmpty cands.size
+  for k in cands do
+    let s := s!"{nd[em.sourceSlot[k]!]!.toJavaString}->{nd[em.targetSlot[k]!]!.toJavaString}"
+    if !seen.contains s then
+      seen := seen.insert s
+      kept := kept.push k
+  return javaSortByDouble kept fun k => (ndPos nd (if incoming then em.sourceSlot[k]! else em.targetSlot[k]!)).x
+
+/-- `middleToMiddleEdgeRoute(tEdge)`. -/
 def middleToMiddleEdgeRoute (edge : TEdgeId) : MrTreeM Unit := do
   let e ← MrTreeM.getEdge edge
   let (some source, some target) := (e.source, e.target) | return
@@ -346,7 +301,7 @@ def middleToMiddleEdgeRoute (edge : TEdgeId) : MrTreeM Unit := do
       bps := bps.set! lastIndex targetBorder
     return { x with bendPoints := bps }
 
-/-- `middle_to_middle(graph)`. -/
+/-- `middleToMiddle(tGraph)`. -/
 def middleToMiddle (graph : TGraphId) : MrTreeM Unit := do
   for edge in (← MrTreeM.getGraph graph).edges do
     middleToMiddleEdgeRoute edge
@@ -363,7 +318,7 @@ def middleToMiddle (graph : TGraphId) : MrTreeM Unit := do
 @[inline] private def bendsOf (edge : TEdgeId) : MrTreeM KVectorChain := do
   return (← MrTreeM.getEdge edge).bendPoints
 
-/-- `avoid_overlap_handle_cycle_inducing_edges(...)`: returns the updated side counters. -/
+/-- `avoidOverlapHandleCycleInducingEdges(...)`: returns the updated side counters. -/
 def handleCycleInducingEdges (edge : TEdgeId) (source target : Nat) (direction : Direction)
     (sideEdges : Int × Int) (pad tex : Float) (inOuts : Int × Int) (nd : NodeTable) (stats : GraphStats) :
     MrTreeM (Int × Int) := do
@@ -374,22 +329,21 @@ def handleCycleInducingEdges (edge : TEdgeId) (source target : Nat) (direction :
   let targetPos := ndPos nd target
   let targetSize := ndSize nd target
   let mut bendTmp := fl0p0
+  -- `max over nodes of (border + padding * k)` = `(max of the borders) + padding * k` (`+` is monotone)
   if direction.isHorizontal then
-    let middleTree := stats.averageCenter true
-    if sourcePos.y + sourceSize.y / fl2p0 > middleTree then
+    if sourcePos.y + sourceSize.y / fl2p0 > stats.avgCenterH then
       sideTwoEdges := sideTwoEdges + 1
-      bendTmp := stats.maxNodeExtent true (pad * Float.ofInt sideTwoEdges)
+      bendTmp := stats.maxExtentH + pad * Float.ofInt sideTwoEdges
     else
       sideOneEdges := sideOneEdges + 1
-      bendTmp := stats.minNodeExtent true (pad * Float.ofInt sideOneEdges)
+      bendTmp := stats.minExtentH - pad * Float.ofInt sideOneEdges
   else
-    let middleTree := stats.averageCenter false
-    if sourcePos.x + sourceSize.x / fl2p0 > middleTree then
+    if sourcePos.x + sourceSize.x / fl2p0 > stats.avgCenterV then
       sideTwoEdges := sideTwoEdges + 1
-      bendTmp := stats.maxNodeExtent false (pad * Float.ofInt sideTwoEdges)
+      bendTmp := stats.maxExtentV + pad * Float.ofInt sideTwoEdges
     else
       sideOneEdges := sideOneEdges + 1
-      bendTmp := stats.minNodeExtent false (pad * Float.ofInt sideOneEdges)
+      bendTmp := stats.minExtentV - pad * Float.ofInt sideOneEdges
   match direction with
   | .left =>
     let levelMin := ndLevelMin nd source
@@ -413,19 +367,20 @@ def handleCycleInducingEdges (edge : TEdgeId) (source target : Nat) (direction :
   | _ =>
     let outs := Float.ofInt inOuts.2
     let ins := Float.ofInt inOuts.1
-    let bends ← bendsOf edge
-    if !bends.isEmpty then
-      let last := bends.last!
-      let last : KVector := { last with y := ndLevelMax nd source + pad * outs }
-      MrTreeM.modifyEdge edge fun e => { e with bendPoints := e.bendPoints.set! (e.bendPoints.size - 1) last }
+    if !(← bendsOf edge).isEmpty then
+      let y := ndLevelMax nd source + pad * outs
+      MrTreeM.modifyEdge edge fun e =>
+        let i := e.bendPoints.size - 1
+        { e with bendPoints := e.bendPoints.set! i { e.bendPoints[i]! with y } }
     addBend edge bendTmp (ndLevelMax nd source + pad * outs)
     addBend edge bendTmp (targetPos.y - pad * ins - tex)
   return (sideOneEdges, sideTwoEdges)
 
-/-- `avoid_overlap_special_edges(...)`. -/
+/-- `avoidOverlapSpecialEdges(...)`. -/
 def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : Slots) (nd : NodeTable)
-    (stats : GraphStats) (graphBounds : Float × Float × Float × Float) (em : EdgeTable)
+    (nodeCount : Nat) (graphBounds : Float × Float × Float × Float) (em : EdgeTable)
     (levelNodes : Array (Array Nat)) : MrTreeM Unit := do
+  let mut stats : Option GraphStats := none
   let (graphXmin, graphXmax, graphYmin, graphYmax) := graphBounds
   let horizontal := direction.isHorizontal
   let mut sideOneEdges : Int := 0
@@ -442,7 +397,6 @@ def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : 
     let targetLevel := ndLevel nd target
     let levelDiff := targetLevel - sourceLevel
     if levelDiff > 1 then
-      let mut hasBends := false
       let sourcePos := ndPos nd source
       let targetPos := ndPos nd target
       for k in [0:(levelDiff - 1).toNat] do
@@ -459,7 +413,8 @@ def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : 
           if (if horizontal then pos.y else pos.x) > projection then break
           index := index + 1
         if !nextLevelNodes.isEmpty then
-          let start : KVector := if hasBends then {} else sourcePos
+          -- the edge's current last bend point (the source position without bend points)
+          let start : KVector := (← bendsOf edge).back?.getD sourcePos
           let lastNode := nextLevelNodes[nextLevelNodes.size - 1]!
           let firstNode := nextLevelNodes[0]!
           let lastPos := ndPos nd lastNode
@@ -469,16 +424,15 @@ def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : 
           let firstSize := ndSize nd firstNode
           let first : KVector := ⟨firstPos.x + firstSize.x, firstPos.y + firstSize.y⟩
           if horizontal then
-            if index >= nextLevelNodes.size - 1 && start.y > last.y && targetPos.y > last.y then continue
+            if index + 1 >= nextLevelNodes.size && start.y > last.y && targetPos.y > last.y then continue
             if index == 0 && start.y < first.x && targetPos.y < first.y then continue
           else
-            if index >= nextLevelNodes.size - 1 && start.x > last.x && targetPos.x > last.x then continue
+            if index + 1 >= nextLevelNodes.size && start.x > last.x && targetPos.x > last.x then continue
             if index == 0 && start.x < first.x && targetPos.x < first.x then continue
         let bends ← bendsOf edge
         let firstIndex := bends.size
         let secondIndex := bends.size + 1
         MrTreeM.modifyEdge edge fun e => { e with bendPoints := (e.bendPoints.push {}).push {} }
-        hasBends := true
         let key := TreeUtil.getUniqueLong curLevel (index : Int)
         -- the neighbours of a gap are those of its key (level, index): `neighborOne`/`neighborTwo` of
         -- a stored gap equal `slotOne`/`slotTwo` here
@@ -507,30 +461,40 @@ def avoidOverlapSpecialEdges (direction : Direction) (pad tex : Float) (slots : 
     else if levelDiff == 0 then
       middleToMiddleEdgeRoute edge
     else if levelDiff < 0 then
-      let sourceLevelN := (max sourceLevel 0).toNat
-      let targetLevelN := (max targetLevel 0).toNat
-      if sourceLevelN < outsPerLevel.size then
-        outsPerLevel := outsPerLevel.modify sourceLevelN (· + 1)
-      if targetLevelN < insPerLevel.size then
-        insPerLevel := insPerLevel.modify targetLevelN (· + 1)
-      let inOuts := (insPerLevel[targetLevelN]?.getD 0, outsPerLevel[sourceLevelN]?.getD 0)
+      -- `outsPerLevel[sourceLevel]++; insPerLevel[targetLevel]++` (arrays of the maximal level + 1)
+      if sourceLevel < 0 || sourceLevel >= (maxLevel : Int) then
+        throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {sourceLevel} out of bounds for length {maxLevel}")
+      if targetLevel < 0 || targetLevel >= (maxLevel : Int) then
+        throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {targetLevel} out of bounds for length {maxLevel}")
+      let sourceLevelN := sourceLevel.toNat
+      let targetLevelN := targetLevel.toNat
+      outsPerLevel := outsPerLevel.modify sourceLevelN (· + 1)
+      insPerLevel := insPerLevel.modify targetLevelN (· + 1)
+      let inOuts := (insPerLevel[targetLevelN]!, outsPerLevel[sourceLevelN]!)
+      let st := stats.getD (buildStats nd nodeCount)
+      stats := some st
       let (s1, s2) ← handleCycleInducingEdges edge source target direction (sideOneEdges, sideTwoEdges)
-        pad tex inOuts nd stats
+        pad tex inOuts nd st
       sideOneEdges := s1
       sideTwoEdges := s2
 
-/-- `avoid_overlap_set_start_points(...)`. -/
+/-- `avoidOverlapSetStartPoints(...)`. -/
 def avoidOverlapSetStartPoints (direction : Direction) (pad : Float) (nd : NodeTable) (em : EdgeTable)
     (nodes : Array TNodeId) (nodeSlots : Array Nat) : MrTreeM Unit := do
   for h : j in [0:nodes.size] do
     let node := nodes[j]
     let slot := nodeSlots[j]!
     if ndIsSuperRoot nd slot then continue
-    let outs := em.outgoing[slot]?.getD #[]
-    let targetCoord (k : Nat) : Float :=
-      let t := em.targetSlot[k]!
-      if direction.isHorizontal then (ndPos nd t).y else (ndPos nd t).x
-    let outs ← sortByFloat outs targetCoord
+    let outs := javaEdgeList nd em (ndId nd slot) false
+    -- `outs.sort` by `TreeUtil.getFirstPoint` (the first bend point, else the target position)
+    let outs ← if outs.size < 2 then pure outs else do
+      let mut keys : FloatArray := FloatArray.emptyWithCapacity outs.size
+      for k in outs do
+        let p := match (← bendsOf em.edges[k]!)[0]? with
+          | some p => p
+          | none => ndPos nd em.targetSlot[k]!
+        keys := keys.push (if direction.isHorizontal then p.y else p.x)
+      pure (javaSortByDoubleKeys outs keys)
     let skip := (← MrTreeM.getNode node).internal.compactLevelAscension
     let num := outs.size
     for i in [0:num] do
@@ -545,7 +509,7 @@ def avoidOverlapSetStartPoints (direction : Direction) (pad : Float) (nd : NodeT
       match direction with
       | .left =>
         let y := pos.y + size.y * interpolation
-        addFirstBend edge (fmin levelMin (pos.x - pad)) y
+        addFirstBend edge (javaMin levelMin (pos.x - pad)) y
         addFirstBend edge pos.x y
       | .right =>
         let y := pos.y + size.y * interpolation
@@ -553,14 +517,14 @@ def avoidOverlapSetStartPoints (direction : Direction) (pad : Float) (nd : NodeT
         addFirstBend edge (pos.x + size.x) y
       | .up =>
         let x := pos.x + size.x * interpolation
-        addFirstBend edge x (fmin (pos.y - pad) levelMin)
+        addFirstBend edge x (javaMin (pos.y - pad) levelMin)
         addFirstBend edge x pos.y
       | _ =>
         let x := pos.x + size.x * interpolation
         addFirstBend edge x (levelMax + pad)
         addFirstBend edge x (pos.y + size.y)
 
-/-- The steep end-edge correction of `avoid_overlap_set_end_points` for the horizontal directions:
+/-- The steep end-edge correction of `avoidOverlapSetEndPoints` for the horizontal directions:
 `some (x, y)` of the extra bend point. -/
 private def steepHorizontal (last : KVector) (pos size : KVector) (tex interpolation xOffset : Float) :
     Option (Float × Float) :=
@@ -583,22 +547,25 @@ private def steepVertical (last : KVector) (pos size : KVector) (tex interpolati
     else some (pos.x + size.x * interpolation + tex / 2.0, yOffset)
   else none
 
-/-- `avoid_overlap_set_end_points(...)`. -/
+/-- `avoidOverlapSetEndPoints(...)`. -/
 def avoidOverlapSetEndPoints (direction : Direction) (pad tex : Float) (nd : NodeTable) (em : EdgeTable)
     (nodeSlots : Array Nat) : MrTreeM Unit := do
   for slot in nodeSlots do
     if ndIsSuperRoot nd slot then continue
-    let ins := em.incoming[slot]?.getD #[]
+    let ins := javaEdgeList nd em (ndId nd slot) true
+    -- `ins.sort` by `TreeUtil.getLastPoint` (the last bend point, else the source position)
     let ins ← if ins.size < 2 then pure ins else do
-      let a ← get
-      sortByFloat ins fun k =>
-        let e := em.edges[k]!
-        if direction.isHorizontal then (TreeUtil.getLastPoint a e).y else (TreeUtil.getLastPoint a e).x
+      let mut keys : FloatArray := FloatArray.emptyWithCapacity ins.size
+      for k in ins do
+        let p := match (← bendsOf em.edges[k]!).back? with
+          | some p => p
+          | none => ndPos nd em.sourceSlot[k]!
+        keys := keys.push (if direction.isHorizontal then p.y else p.x)
+      pure (javaSortByDoubleKeys ins keys)
     let num := ins.size
     for i in [0:num] do
       let k := ins[i]!
       let edge := em.edges[k]!
-      let isCycleInducing := em.cycleInducing[k]!
       let interpolation := if num == 1 then ONE_HALF else Float.ofNat (i + 1) / Float.ofNat (num + 1)
       let pos := ndPos nd slot
       let size := ndSize nd slot
@@ -631,9 +598,10 @@ def avoidOverlapSetEndPoints (direction : Direction) (pad tex : Float) (nd : Nod
             addBend edge x y
         addBend edge (pos.x + size.x * interpolation) (pos.y + size.y)
       | _ =>
-        if isCycleInducing then
-          if !bends.isEmpty then
-            addBend edge (pos.x + size.x * interpolation) bends.last!.y
+        if em.cycleInducing[k]! then
+          -- `ins.get(i).getBendPoints().getLast().y`
+          let some last := bends.back? | throw (IO.userError "java.util.NoSuchElementException")
+          addBend edge (pos.x + size.x * interpolation) last.y
         else if pos.y - tex > levelMin then
           addBend edge (pos.x + size.x * interpolation) (levelMin - pad)
         else if !bends.isEmpty then
@@ -642,17 +610,19 @@ def avoidOverlapSetEndPoints (direction : Direction) (pad tex : Float) (nd : Nod
             addBend edge x y
         addBend edge (pos.x + size.x * interpolation) pos.y
 
-/-- The slots, the slot of every listed node, the node data, the statistics and the edge table of
-`avoid_overlap` (a pure function of the arena, which is released before the routing writes). -/
+/-- The slots (extended by end points outside the node list), the slot of every listed node, the node
+data and the edge table of `avoidOverlap` (a pure function of the arena, which is
+released before the routing writes). -/
 def prepare (a : TArena) (nodes : Array TNodeId) (edges : Array TEdgeId) (direction : Direction) :
-    Slots × Array Nat × NodeTable × GraphStats × EdgeTable :=
+    Slots × Array Nat × NodeTable × EdgeTable :=
   let slots := Slots.build a nodes
   -- every listed node has a slot (`Slots.get?` finds `nodes[i]` at its `id` or in `extra`)
-  let nodeSlots := nodes.map fun n => (slots.get? a n).getD NO_SLOT
-  let (nd, stats) := buildNodeData a nodes
-  (slots, nodeSlots, nd, stats, buildEdgeMaps a slots edges nd direction)
+  let nodeSlots := nodes.map fun n => (slots.get? a n).getD 0
+  let nd := buildNodeData a nodes
+  let (slots, nd, em) := buildEdgeMaps a slots edges nd direction
+  (slots, nodeSlots, nd, em)
 
-/-- `avoid_overlap(graph)`. -/
+/-- `avoidOverlap(tGraph)`. -/
 def avoidOverlap (graph : TGraphId) : MrTreeM Unit := do
   let g ← MrTreeM.getGraph graph
   let nodes := g.nodes
@@ -661,13 +631,13 @@ def avoidOverlap (graph : TGraphId) : MrTreeM Unit := do
   let tex := (g.props.get MrTreeOptions.EDGE_END_TEXTURE_LENGTH).getD 0.0
   let direction := (g.props.get MrTreeOptions.DIRECTION).getD .down
   let graphBounds := (g.internal.graphXmin, g.internal.graphXmax, g.internal.graphYmin, g.internal.graphYmax)
-  let (slots, nodeSlots, nd, stats, em) := prepare (← get) nodes edges direction
-  let levelNodes ← buildLevelNodes nodeSlots nd direction
+  let (slots, nodeSlots, nd, em) := prepare (← get) nodes edges direction
+  let levelNodes := buildLevelNodes nodeSlots nd direction
   avoidOverlapSetStartPoints direction pad nd em nodes nodeSlots
-  avoidOverlapSpecialEdges direction pad tex slots nd stats graphBounds em levelNodes
+  avoidOverlapSpecialEdges direction pad tex slots nd nodes.size graphBounds em levelNodes
   avoidOverlapSetEndPoints direction pad tex nd em nodeSlots
 
-/-- `EdgeRouter::process`. -/
+/-- `EdgeRouter.process`. -/
 def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
   discard <| monitor.begin "Edge routing" 1.0
   let mode := ((← MrTreeM.getGraph graph).props.get MrTreeOptions.EDGE_ROUTING_MODE).getD .avoidOverlap
@@ -680,7 +650,7 @@ def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
       if (← bendsOf edge).size < 2 then middleToMiddleEdgeRoute edge
   monitor.done
 
-/-- `get_layout_processor_configuration`. -/
+/-- `getLayoutProcessorConfiguration`. -/
 def configuration : TreeProcessorConfiguration :=
   let c : TreeProcessorConfiguration := LayoutProcessorConfiguration.create
   let c := c.addBefore TreeLayoutPhases.p4EdgeRouting IntermediateProcessorStrategy.levelCoords

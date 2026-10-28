@@ -53,58 +53,91 @@ def formatRight (value : Int) (len : Nat) : String := Id.run do
     s := "0" ++ s
   return s
 
-/-- One level of `calculate_fan`: assigns the identifiers of the level, returns the next level and
-the updated global fan and descendant maps. -/
-private def calculateFanLevel (currentLevel : Array TNodeId) (gloFan gloDesc : Std.HashMap String Int) :
-    MrTreeM (Array TNodeId × Std.HashMap String Int × Std.HashMap String Int) := do
+/-- The `ID` strings of `processStrings` with Java's object identity: `token` stands for the `String`
+object (Java compares `pId != tNode.getProperty(ID)` by reference). Token 0 is the property default
+`""`; every concatenation is a new object; the children of a node share the object of its id. -/
+structure IdState where
+  ids : Std.HashMap TNodeId (String × Nat) := {}
+  nextToken : Nat := 1
+
+namespace IdState
+
+/-- `getProperty(ID)` (default `""`, token 0). -/
+@[inline] def get (s : IdState) (n : TNodeId) : String × Nat := (s.ids.get? n).getD ("", 0)
+
+end IdState
+
+/-- One level of `calculateFan`: assigns the identifiers of the level, returns the next level and
+the updated global fan and descendant maps. The prefix keys are taken from the nodes' identifiers
+*after* the level loop (a node listed twice, or also a child of a node of the level, carries its last
+identifier) for the prefix lengths `1 .. id.length() - digits` of the last assigned `id`; an
+identifier shorter than a prefix is Java's `StringIndexOutOfBoundsException` (`substring`). -/
+private def calculateFanLevel (currentLevel : Array TNodeId) (st : IdState)
+    (gloFan gloDesc : Std.HashMap String Int) :
+    MrTreeM (Array TNodeId × IdState × Std.HashMap String Int × Std.HashMap String Int) := do
+  let mut st := st
   let mut nextLevel : Array TNodeId := #[]
   let digits := (Float.ofNat currentLevel.size).log10.floor.toUInt64.toNat + 1
-  let mut lastParentId : Option String := none
+  -- `pId` starts as `null`, which is no identifier object
+  let mut pId : Option (String × Nat) := none
   let mut index : Int := 0
   let mut lastId := ""
-  let mut cachedIds : Array String := #[]
   for node in currentLevel do
-    let parentId := (← MrTreeM.getNode node).internal.idString
-    if lastParentId != some parentId then
-      lastParentId := some parentId
+    let cur := st.get node
+    if pId.map (·.2) != some cur.2 then
+      pId := some cur
       index := 0
-    let id := if parentId.isEmpty then formatRight index digits else parentId ++ formatRight index digits
+    let parentId := (pId.map (·.1)).getD ""
+    let id := parentId ++ formatRight index digits
     index := index + 1
     lastId := id
-    cachedIds := cachedIds.push id
-    MrTreeM.modifyNode node fun n => { n with internal.idString := id }
+    let obj := (id, st.nextToken)
+    st := { ids := st.ids.insert node obj, nextToken := st.nextToken + 1 }
     for child in (← MrTreeM.children node) do
-      MrTreeM.modifyNode child fun n => { n with internal.idString := lastId }
+      st := { st with ids := st.ids.insert child obj }
       nextLevel := nextLevel.push child
-  -- prefix computation
+  -- prefix computation over the identifiers as they are now
   let mut localFan : Std.HashMap String Int := {}
-  if digits > 0 && lastId.length >= digits then
+  if lastId.length > digits then
+    let ids := currentLevel.map fun n => (st.get n).1
     for i in [0:lastId.length - digits] do
-      for id in cachedIds do
+      for id in ids do
+        if id.length < i + 1 then
+          throw (IO.userError
+            s!"java.lang.StringIndexOutOfBoundsException: Range [0, {i + 1}) out of bounds for length {id.length}")
         let pre := String.ofList (id.toList.take (i + 1))
         localFan := localFan.insert pre (localFan.getD pre 0 + 1)
   let (gloFan, gloDesc) := localFan.fold (init := (gloFan, gloDesc)) fun (fan, desc) key value =>
     let desc := desc.insert key (desc.getD key 0 + value)
     let fan := if fan.getD key 0 < value then fan.insert key value else fan
     (fan, desc)
-  return (nextLevel, gloFan, gloDesc)
+  return (nextLevel, st, gloFan, gloDesc)
 
-/-- The identifier-string computation of Java/Rust `FanProcessor::process` (see the module doc);
-`process` uses it for the graphs below whose root the breadth-first walk is not a tree. -/
+/-- The identifier-string computation of Java `FanProcessor.process` (see the module doc);
+`process` uses it for the graphs below whose root the breadth-first walk is not a tree. The
+identifiers a previous run left on the nodes are distinct objects. -/
 def processStrings (graph : TGraphId) : MrTreeM Unit := do
   let nodes := (← MrTreeM.getGraph graph).nodes
   let a ← get
   let root := nodes.find? fun n => (a.node n).internal.root
+  let mut st : IdState := {}
+  for n in nodes do
+    let s := (a.node n).internal.idString
+    if !s.isEmpty && !st.ids.contains n then
+      st := { ids := st.ids.insert n (s, st.nextToken), nextToken := st.nextToken + 1 }
   let mut gloFan : Std.HashMap String Int := {}
   let mut gloDesc : Std.HashMap String Int := {}
   let mut currentLevel : Array TNodeId := match root with
     | some r => #[r]
     | none => #[]
   while !currentLevel.isEmpty do
-    let (next, fan, desc) ← calculateFanLevel currentLevel gloFan gloDesc
+    let (next, st', fan, desc) ← calculateFanLevel currentLevel st gloFan gloDesc
     currentLevel := next
+    st := st'
     gloFan := fan
     gloDesc := desc
+  for (n, (s, _)) in st.ids.toArray do
+    MrTreeM.modifyNode n fun x => { x with internal.idString := s }
   for node in (← MrTreeM.getGraph graph).nodes do
     MrTreeM.modifyNode node fun n =>
       let key := n.internal.idString

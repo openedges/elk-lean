@@ -603,3 +603,140 @@ layered가 아닌 알고리즘이 있고(node promotion 옵션을 지워도 56�
 (fixture 12), `layered.modelOrderBarycenter.relations`(400), `layered.p2layers.coffmanGraham.java`(520) —
 `tests/fixtures/promotion/`; elk-rs 기대값을 Java로 바꾼 검사: Nikolov no-op(→ 승격), 잠긴 그래프의 group order(→ 그래프 값),
 Coffman–Graham star의 힙 순서(`[[0],[2,1],[4,3]]` → `[[0],[3,1],[4,2]]`)와 `compareNodesInTopo`.
+
+## 15. RJ3: mrtree·radial·layered P4의 Java 경로와 옵션 세트의 파이프라인 편입 (2026-10-29)
+
+방법: 라운드 7 병합본(`757c7c0`, `elk_base`)으로 파이프라인을 `--sets s,v,d,o,p`(시드 1~10)로 돌리고(s·v의 Java 결과는
+라운드 6 기준값 재사용, d·o·p는 새로 실행), 차이 입력을 Java 소스·단계별 trace·새 JVM 단일 실행으로 확인했다. Java 내부
+확인은 스크래치의 그림자 클래스(서명 제거한 ELK jar 사본 + 수정한 `RadialUtil`/`SelfHyperLoop`, 결과 기준값에는 쓰지
+않음)와 스택 트레이스 하네스로 했다. 결과 기준값은 항상 수정하지 않은 Java(`ElkJavaBaseline`)다.
+
+### 15.1 파이프라인: `o`·`p` 세트
+
+- `p`(`scripts/gen_p3_graphs.py`, P3J의 `gen_p3.py`): 시드 `k`의 `v<k>`에서 layered 루트 그래프만 골라 교차 최소화·
+  layering 옵션(전략 4종, greedy switch 종류·문턱, model order 전략·영향도·`portModelOrder`, `forceNodeModelOrder`,
+  thoroughness, 난수 시드, semi-interactive, 포트 정렬, node promotion, interactive 기준점, interactive일 때 노드 위치와
+  굽은 점 section)을 준 사본(시드 1~10 합계 1,802개; 생성 완료 표시 `gen/.p<k>.done`). `o`(`gen_option_graphs.py`,
+  OPT)는 이미 세트 종류였고, 두 세트 모두 추적 보고서에 들어간다. 기본 `--sets s,v`는 그대로(빠른 확인용), 추적
+  보고서 `tests/random_parity/report.md`는 `--sets s,v,d,o,p` 전체 실행에서 게시한다(`TESTING.md` 2B).
+- elk-lean이 Java의 끝나지 않는 재귀를 감지해 던지는 `java.lang.StackOverflowError`(15.2)는 Java의 스택 넘침과 같은
+  `overflow` 결과로 센다(`random_java_parity.py`).
+
+### 15.2 mrtree (전부 ELK Java가 기준, elk-rs와는 달라짐)
+
+- `EdgeRouter`(`AVOID_OVERLAP`): `TreeUtil.getAllOutgoingEdges`/`getAllIncomingEdges`는 노드 **`id`**가 같은 끝점의 간선을
+  모으고(노드 동일성이 아님), 두 끝의 `TREE_LEVEL` `Integer`를 `!=`(참조 비교 — 캐시 범위 `-128..127` 밖에서는 같은 값도
+  다름)로 비교하며, 이미 담은 간선과 **`toString()`(`n_<라벨 또는 id>->n_<라벨 또는 id>`)이 같은 간선은 버린다** — 평행
+  간선(같은 두 노드 사이의 둘째 간선, 포트 간선 포함)과 첫 라벨 글자가 같은 노드 사이의 간선은 시작/끝 점을 받지 못해
+  가운데-가운데 대체 경로가 된다(무작위 mrtree 차이의 대부분, 예 `v6/g0266`). 목록은 다른 끝의 **x**로 먼저 정렬한 뒤
+  라우터가 첫/끝 점으로 다시 정렬한다(안정 `List.sort`, `Double.compare`). 여러 층을 건너는 간선의 "불필요한 층 옆 굽은 점
+  건너뛰기" 판정은 간선의 **현재 마지막 굽은 점**(시작 굽은 점이나 앞 틈새의 둘째 굽은 점; elk-rs는 출발 노드 위치와
+  `(0,0)` 자리표시자)을 쓰고, 수평 판정의 `start.y < first.x`는 Java 오타 그대로다. 층의 노드는 노드 목록 순서(아래
+  `CompactionProcessor`가 바꾼 순서)에서 `Double.compare` 안정 정렬, 사이클 유발 간선의 트리 중심은 `DoubleStream.average()`
+  (Kahan 합, 새 `javaDoubleAverage`), 극값은 `Double.compare`, `MultiLevelEdgeNodeNodeGap`의 재정렬도 `Double.compare`
+  안정 정렬, 아래쪽 레이아웃에서 굽은 점 없는 사이클 유발 들어오는 간선은 `getLast()`의 `NoSuchElementException`.
+- `TNode.getChildren()`은 현재 나가는 간선들의 목표다: elk-rs의 자식 캐시는 간선을 지울 때 그 목표의 **첫** 항목을
+  지워 평행 간선이 있는 노드의 자식 순서가 바뀌었다(`DFSTreeifyer`가 둘째 평행 간선을 지울 때, 예 `v7/g0238`) — 간선의
+  위치에서 지운다.
+- `NodePlacer`: elk-rs는 Java의 Walker 알고리즘(`LevelHeightProcessor`·`NeighborsProcessor` 속성 위의 `firstWalk`/
+  `apportion`/`secondWalk`, 이어지는 `DirectionProcessor`·`NodePositionProcessor`)을 "각 노드를 한 번만 만나는" 너비 우선
+  복사본 위의 Reingold-Tilford로 바꿨다. Java는 자식 목록을 그대로 걷는다: `BFS` 트리화가 남긴 평행 간선과 두 번째 부모는
+  자식 목록에 중복으로 나타나 한 노드를 여러 번 방문하고, 층(앞 층 자식 목록의 연결)의 마지막 대입이 `LEVELHEIGHT`·이웃·
+  형제를 정하며, 한 층에 연달아 두 번 나오는 노드는 **자기 자신의 형제**가 된다 → `secondWalk`가 끝없이 재귀해 Java는
+  `java.lang.StackOverflowError`(o 세트 17건; Lean은 첫 자식/오른쪽 형제 단계의 순환을 걷기 전에 찾아 같은 예외를
+  던진다). 위치는 `(int) Math.round`(음의 반은 올림; elk-rs `round`는 0에서 멀어짐, 예 `v6/g0278`의 1픽셀), 방향 변환은 그
+  `int`에서, 위치 복사는 루트에서 자식 목록으로 닿는 노드, 크기 절반 빼기는 그래프의 **모든** 노드. 새 구현은 노드별
+  배열(`Walker`)에 같은 알고리즘을 옮겼다(왼쪽 형제 사슬이 순환이면 Java는 `apportion`에서 멈추지 않는다 — Lean은
+  `StackOverflowError`로 끊는다).
+- `CompactionProcessor`(`compaction`): 스윕 점은 노드 순서의 모든 시작점 뒤에 모든 끝점(elk-rs는 노드마다 번갈아),
+  활성 집합은 위치 투영으로 정렬한 `TreeSet`(같은 투영의 노드는 넣지 않고, `headSet`/`tailSet`/`remove`는 투영 기준),
+  의존 노드 뒤에서 `RIGHT`/`DOWN`은 `parent + spacing > newPos`일 때(부모 크기는 판정에 없고 새 위치에만 있음 — Java
+  코드 그대로) 부모가 이기며, `UNDEFINED`는 `switch` 분기가 없어 새 위치 0(파이프라인에서는 `NodePlacer`가 이미 `DOWN`으로
+  바꿈), `AVOID_OVERLAP`에서 층 안에 들어간 노드는 **새 위치를 유지**하고(elk-rs는 층 시작으로 붙임) 못 들어간 노드만 다음
+  층 시작으로, 층 번호는 `levels.indexOf`(`Pair.equals`), 그리고 그래프의 노드 목록을 **그 자리에서** 투영 순으로 정렬한다
+  (뒤 프로세서와 라우터가 그 순서를 본다). `getLowestParent`는 그래프 노드 순서의 첫 최댓값.
+- `FanProcessor`(문자열 경로, DAG일 때만): `pId != tNode.getProperty(ID)`는 `String` **참조** 비교(같은 값의 다른 객체는
+  새 무리), 접두사 키는 층 루프가 끝난 뒤의 식별자(두 번 나온 노드는 마지막 것)이고 접두사보다 짧은 식별자는
+  `substring`의 `StringIndexOutOfBoundsException`(o 세트 3건, 문구까지 일치).
+- `ElkGraphImporter`: 하이퍼엣지를 원천 노드마다 첫 목표로 가는 트리 간선으로 가져오고(같은 `ORIGIN`, 마지막으로 라우팅된
+  것이 section을 씀; elk-rs는 건너뜀), 한 노드의 여러 포트가 나열하는 간선은 항목마다 하나씩, 크기 하한과 결과 상자는
+  `Math.max`/`Math.min`과 `Integer.MAX_VALUE`/`MIN_VALUE`.
+
+### 15.3 radial
+
+- 삼각함수: 기준 JVM(Temurin 21.0.13, aarch64)에서 `Math.atan2`·`Math.acos`·`Math.asin`은 `StrictMath`(fdlibm)와 같고
+  (200만 표본 0 차이), C 라이브러리와는 약 16%의 인자에서 1 ulp 다르다. `Math.sin`/`Math.cos`는 HotSpot aarch64 스텁
+  (`macroAssembler_aarch64_trig.cpp`)이며 fdlibm과 5%, C와 7% 다르다 — 스텁을 읽어 보니 fdlibm 알고리즘에 다항식과 중간
+  인자 축소가 **FMA**(`fmadd`/`fmsub`/`fnmsub`)이고, `__kernel_cos`가 축소 **전** 인자의 상위 워드(`ix`, 레지스터 재사용)로
+  분기해 축소된 인자는 늘 `qx = 0.28125` 경로를 탄다. 이를 `Elk.Core.Util.Java`에 옮겼다: `javaSin`/`javaCos`(스텁; C로
+  먼저 모형을 만들어 JVM 덤프 100만+100만 개 — 일반·`k·π/2` 근처·`2^19·π/2`까지 — 와 비트 단위 0 차이), `javaAtan`/
+  `javaAtan2`/`javaAcos`(JDK `FdLibm`). `|x| > 2^19·π/2`의 큰 인자 축소(스텁의 벡터화 `__kernel_rem_pio2`, FMA 포함)는
+  옮기지 않았다(C `sin`/`cos`; ELK의 각도에는 나오지 않음). radial의 호출 지점(`EadesRadial` 위치·`acos`, 극좌표 정렬,
+  `EdgeAngleCalculator`, `AngleRotation`의 회전·`KVector.angle`)을 바꿨다. 코어 `KVector.rotate/angle`, layered
+  `SplinesMath`, DisCo는 담당 밖이라 그대로다.
+- `CalculateGraphSize`: Java는 최댓값을 `Double.MIN_VALUE`(가장 작은 양수)에서 시작하고 `Math.min`/`Math.max`(NaN 전파)를
+  쓴다 — 한 노드가 NaN이면 Java는 모든 노드가 NaN(`v5/g0528`), 이제 Lean도 같다(Lean은 비유한 수를 `null`로 쓰고 Java Gson은
+  `NaN`이라 비교기는 `drift:structure`로 센다 — 수치는 같음, 표현 차이). `findLargestNodeInGraph`·wedge 공간도 `Math.max`.
+- **재현 불가 — 다음 레벨 노드의 `HashSet` 순서**: `RadiusExtensionOverlapRemoval.extend`의 다음 층은
+  `RadialUtil.getNextLevelNodeSet`(`HashSet<ElkNode>`, EMF 객체의 identity hash)이고, 그 첫 노드의 이동 거리로 다음 층 전체를
+  옮긴다. 같은 입력도 JVM 실행 맥락마다 결과가 다르다. 근거: 두 `HashSet`을 `LinkedHashSet`으로 바꾼 그림자 클래스로 돌린
+  Java는 합성 벤치마크 `radial_medium/large/xlarge` 3개와 o 세트의 남은 radial 차이 4개(`o3/g0298`, `o3/g0349`, `o4/g0481`,
+  `o7/g0566`)에서 Lean과 정확히 같다. 합성 3개는 그래서 수정하지 않은 Java와 계속 다르다(23/26).
+- `WEDGE_COMPACTION`이 끝나지 않는 입력: o 세트 2건(`o7/g0337` 노드 3개, `o7/g0560`)은 Java도 끝나지 않는다(`o7/g0337`을
+  새 JVM에서 600초까지 돌려도 끝나지 않음; 파이프라인에서는 양쪽 `timeout_both`). PR이 보고한 350/600 노드 입력
+  (`opt2_081_radial_broad_350`, `opt2_119_radial_broad_600`)은 Java 2초, 이제 Lean도 0.1/0.5초에 끝난다(350은 Java와 정확히
+  같고 600은 위 `HashSet` 순서 차이).
+
+### 15.4 layered P4
+
+- `LinearSegmentsNodePlacer`(`v3/g0156`): 순환을 끊으려고 나눈 선형 세그먼트는 앞 세그먼트의 의존 목록에서 **한 번만**
+  빠지고(`List.remove(Object)`; elk-rs `retain`은 전부 지움) 들어오는 수는 조건 없이 줄어든다(elk-rs는 양수일 때만 — 두
+  가지가 겹쳐 세그먼트가 위상 정렬에서 빠졌다). 같은 층 판정은 층 동일성, 층 배열 인덱스는 `Layer.getIndex()`, 초기 총
+  편향·여유 공간·변위는 `Integer.MAX_VALUE`(elk-rs `f64::MAX`), `Math.min`/`Math.max`, 빈 층의 `NoSuchElementException`,
+  가중치 0 영역 병합의 NaN(Java는 `assert`만).
+- `NetworkSimplexPlacer.markCrossingEdges`(P3 변형 `v10_g0319`): 닫는 간선은 포트 **자신의** 들어오는 간선 목록 순서이고
+  (elk-rs는 `ArenaSync` 발견 순서), Java `ListIterator` 반복은 열린 간선 목록의 0번 항목을 표시하지도 지우지도 않는다
+  (elk-rs는 0번까지).
+
+### 15.5 재현하지 않는 것·Java 실행 맥락 의존
+
+- **layered 실행 맥락 의존**: s·v·p 세트에 남은 layered 차이(LPOS/LEDGE/LNODE) 72개 중 37개는 입력 하나만 새 JVM에서 돌린
+  Java와 정확히 같다(파이프라인은 세트당 한 JVM). 나머지 35개 중 33개는 `SelfHyperLoop`의 변별 `ArrayListMultimap`
+  (`PortSide` 열거형 키의 identity hash 순서)을 열거형 순서로 바꾼 Java(elk-rs 패치 0001과 같은 한 줄, 스크래치 오버레이)와
+  같고, 그중 23개는 수정 없는 Java를 다른 순서(역순)로 돌린 실행과도 같다 — 코퍼스 119개와 같은 종류. 결정적으로 남은 것은
+  2개(15.6). P3J의 변형 세트(`p3a`, 1,802개)에 남은 23개(NIK 병합 후) 중 22개도 다른 JVM 맥락(한 JVM 일괄·역순·셔플 2종) 중 하나와 같다.
+  "최종 간선만 다르다"던 `v8/g0471`·`v9/g0173`은 mrtree 루트의 라우팅이었고(15.2) 이제 새 JVM 단일 실행과 같다 —
+  파이프라인 실행과의 남은 차이는 안쪽 layered 자식의 self-loop 맥락 의존이다.
+- **Java 자체 결함(재현 안 함)**: `CrossingsCounter`/`BinaryIndexedTree`의 `ArrayIndexOutOfBoundsException`(v 2건, mrtree
+  루트 안의 layered 자식, p 세트 다수), `forceNodeModelOrder` NPE 등 — 5장·13장.
+- **표현 차이**: Java Gson의 `NaN` 대 elk-lean `null`(radial 9건, 수치는 같음).
+
+### 15.6 남은 것
+
+- `NetworkSimplexPlacer` 1건(`p2/v2_g0421`, 단계별 trace의 첫 차이: 라벨 더미의 y — 비용이 같은 최적해 중 다른 해; 보조
+  그래프 구성 순서 조사 필요), `SortByInputModelProcessor` 1건(`p5/v5_g0464`: 층 안 포트 순서; P3 담당 영역 — 같은 단계에서 갈라지던
+  `p3a/v2_g0201`은 NIK 병합 후 Java와 같다), `OrthogonalEdgeRouter` 1건(`p3a/v5_g0360`: 두 간선의 세그먼트 x 교환 — 사이클 깨기 난수 상태 또는 세그먼트
+  순서).
+- 담당 밖: SPOrE(`sporeOverlap` 75·`sporeCompaction` 9, o 세트), VertiFlex 10, rectpacking 4.
+
+### 15.7 결과(시드 1~10; Java 기준값은 같은 입력 — s·v는 라운드 6 실행, d·o·p는 이 라운드 실행)
+
+| 세트 | 둘 다 성공 | 정확 일치 전(`757c7c0`) → 후 | 1e-6 전 → 후 |
+|---|---:|---:|---:|
+| s | 1,205 | 1,182 → **1,197** | 1,182 → 1,197 |
+| v | 5,761 | 5,297 → **5,709**(99.1%) | 5,308 → 5,709 |
+| d | 5,761 | 5,298 → 5,709 | 5,309 → 5,709 |
+| o | 5,236 | 4,488 → **5,130** | 4,829 → 5,133 |
+| p | 1,373 | 1,308 → **1,357** | 1,310 → 1,357 |
+| P3J `p3a`(별도, 1,802개) | 1,376 | 1,302 → 1,353 | 1,303 → 1,353 |
+
+정확 → 비정확 0, 비정확 → 정확 1,549(그 밖에 Java의 스택 넘침 17건이 `overflow_both`, 예외 3건이 `error_equal`로). 분류(전 →
+후): DEF:mrtree 752 → 0, POS:mrtree 394 → 0, NML:mrtree 15 → 0, T 365 → 3(radial `HashSet`), POS:radial 21 → 11(`HashSet` 1, NaN 표현
+8 등), LPOS 96 → 93·LEDGE 18·LNODE 9(15.5), 담당 밖 SPOrE 84·VertiFlex 10·rectpacking 4는 그대로. 결과 행렬(o 세트): Lean ok·Java
+overflow 14 → 0, Lean 예외·Java overflow 3 → 0. 코퍼스와 기타 검증은 `HISTORY.md`의 RJ3 행.
+
+테스트: `rj3.java`/`rj3.java.errors`(`tests/fixtures/rj3/` 입력 12개, 새 JVM Java 출력 10개·예외 문구 2개, 기준 바이너리에서 전부
+실패), `core.util.java`의 삼각함수 표본(기준 JVM의 비트 값: `sin`/`cos` 48개, `atan2` 37개, `acos` 29개)과 `javaDoubleAverage`·
+`javaSortByDouble`, mrtree 단위 테스트의 Java 기대값(자식 캐시, 압축 `UNDEFINED`·제자리 정렬, `(int) Math.round`, 하이퍼엣지
+가져오기, Fan 차분 테스트의 예외 일치), Java와 대조해 다시 고정한 mrtree fixture 26개(`tests/fixtures/opt_java_status.tsv`의
+`RJ3 re-pin` 행: 24개 `java_exact`, 2개 `java_error_equal`).

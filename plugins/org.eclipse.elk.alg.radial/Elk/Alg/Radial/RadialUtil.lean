@@ -153,7 +153,7 @@ def polarArc (node : ElkNode) (radialOffset nodeOffsetY : Float) : Float :=
   let position := (node.props.get CoreOptions.POSITION).getD ⟨0.0, 0.0⟩
   let xPos := position.x
   let yPos := position.y + nodeOffsetY
-  let arc := Float.atan2 yPos xPos
+  let arc := javaAtan2 yPos xPos
   let arc := if arc < 0.0 then arc + TWO_PI else arc
   let arc := arc + radialOffset
   if arc > TWO_PI then arc - TWO_PI else arc
@@ -169,8 +169,8 @@ partial def largestNodePure (g : ElkGraph) (graph : NodeId) : Float :=
   (g.node graph).children.foldl (fun largest child =>
     let n := g.node child
     let diameter := Float.sqrt (n.width * n.width + n.height * n.height)
-    let largest := fmax largest diameter
-    fmax largest (largestNodePure g child)) 0.0
+    let largest := javaMax diameter largest
+    javaMax (largestNodePure g child) largest) 0.0
 
 /-- `RadialUtil::find_largest_node_in_graph(graph)`. -/
 def findLargestNodeInGraph (graph : NodeId) : ElkM Float :=

@@ -1,0 +1,155 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "radial",
+  "elk.radial.compactionStepSize": "2",
+  "elk.radial.rotate": "true",
+  "elk.radial.rotation.targetAngle": "0.5",
+  "elk.radial.rotation.computeAdditionalWedgeSpace": "true"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 30.5,
+   "height": 17.4,
+   "labels": [
+    {
+     "id": "n0l",
+     "text": "l",
+     "width": 5.4,
+     "height": 12.1
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "width": 29.0,
+   "height": 15.8
+  },
+  {
+   "id": "n2",
+   "width": 41.2,
+   "height": 28.8,
+   "labels": [
+    {
+     "id": "n2l",
+     "text": "l",
+     "width": 17.5,
+     "height": 9.6
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "width": 33.0,
+   "height": 27.1
+  },
+  {
+   "id": "n4",
+   "width": 35.1,
+   "height": 11.2
+  },
+  {
+   "id": "n5",
+   "width": 29.3,
+   "height": 18.7
+  },
+  {
+   "id": "n6",
+   "width": 43.7,
+   "height": 34.1,
+   "labels": [
+    {
+     "id": "n6l",
+     "text": "l",
+     "width": 27.7,
+     "height": 6.3
+    }
+   ]
+  },
+  {
+   "id": "n7",
+   "width": 37.4,
+   "height": 19.7
+  },
+  {
+   "id": "n8",
+   "width": 20.3,
+   "height": 16.0
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  },
+  {
+   "id": "e4",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e5",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n6"
+   ]
+  },
+  {
+   "id": "e6",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n7"
+   ]
+  },
+  {
+   "id": "e7",
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n8"
+   ]
+  }
+ ]
+}

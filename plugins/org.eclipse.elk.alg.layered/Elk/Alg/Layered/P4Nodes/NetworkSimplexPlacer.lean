@@ -23,9 +23,8 @@ Port notes (Rust is the oracle):
   (Rust `Arc::as_ptr`);
 * the Rust `ArenaSync` snapshot, taken after `prepare`, equals the live arena for everything
   read from it here (sizes, margins, port anchors/positions, port lists by side), so the arena
-  is read live (`PORTING.md` §15.1). The one exception is `port_incoming_edges` in
-  `markCrossingEdges`: the snapshot lists the incoming edges of a port in edge discovery order
-  (ports in arena order, each port's outgoing edges), which `arenaIncomingEdges` reproduces;
+  is read live (`PORTING.md` §15.1); `markCrossingEdges` follows ELK Java (the ports' own
+  incoming edge lists and Java's `ListIterator` scan, see there; elk-rs differs);
 * `f64 as i32` conversions saturate (`f64AsI32`), `i32` products wrap (`Int.wrap32`);
 * the `debug_assert!` on integral port offsets in `transformEdge` is not ported.
 -/
@@ -538,14 +537,13 @@ private def insertFlexibleWhereSpaceAuxiliaryEdges : NspM Unit := do
   if id >= 0 && id.toNat < crossing.size then crossing.set! id.toNat true else crossing
 
 /-- `markCrossingEdges(left, right)`: marks the edges between two layers that cross, using the
-order of the east port edges of the left layer and the west port edges of the right layer
-(nodes bottom-up). For every closing edge, the open edges are scanned from the end: the edge
-itself is removed, every open edge after it is marked together with it. Rust marks and removes
-down to index 0; Java's `ListIterator` loop neither marks nor removes the open edge at index 0
-(Rust is followed). Java iterates `port.getIncomingEdges()`; Rust (followed) the `ArenaSync`
-incoming lists (`arenaIncomingEdges`). -/
-private def markCrossingEdges (arenaIncoming : Std.HashMap LPortId (Array LEdgeId)) (left right : LayerId) :
-    NspM Unit := do
+order of the east port edges of the left layer and the west port edges (`port.getIncomingEdges()`)
+of the right layer (nodes bottom-up). For every closing edge, Java's `ListIterator` scans the open
+edges from the end: every open edge after the closing edge is marked together with it, the closing
+edge is removed — except that the open edge at index 0 is neither marked nor removed (the loop
+stops when there is no previous element; elk-rs, which elk-lean followed before agent RJ3, marks and
+removes down to index 0 and iterates the `ArenaSync` incoming lists instead of the ports' own). -/
+private def markCrossingEdges (left right : LayerId) : NspM Unit := do
   let mut openEdges : Array LEdgeId := #[]
   for node in (← getLayer left).nodes do
     for port in (← withArena (·.nodePortsBySide node .east)) do
@@ -563,7 +561,7 @@ private def markCrossingEdges (arenaIncoming : Std.HashMap LPortId (Array LEdgeI
         openEdges := openEdges.push edge
   for node in (← getLayer right).nodes.reverse do
     for port in (← withArena (·.nodePortsBySide node .west)) do
-      for edge in arenaIncoming.getD port #[] do
+      for edge in (← getPort port).incomingEdges do
         let a ← getThe LGraphArena
         let ed := a.edge edge
         let isSelf := a.edgeIsSelfLoop edge
@@ -574,27 +572,27 @@ private def markCrossingEdges (arenaIncoming : Std.HashMap LPortId (Array LEdgeI
           | none => true
         if isSelf || isInLayer || sourceNotInLeft then
           continue
+        if openEdges.isEmpty then
+          continue
         let edgeIdVal := ed.id
-        let mut idx := openEdges.size
-        while idx > 0 do
+        -- `last = openEdgesIt.previous()`, then `while (last != edge && openEdgesIt.hasPrevious())`
+        let mut idx := openEdges.size - 1
+        while openEdges[idx]! != edge && idx > 0 do
+          let lastId := (a.edge openEdges[idx]!).id
+          modify fun s => { s with crossing := setCrossing (setCrossing s.crossing lastId) edgeIdVal }
           idx := idx - 1
-          let last := openEdges[idx]!
-          if last == edge then
-            openEdges := openEdges.eraseIdx! idx
-            break
-          else
-            let lastId := (a.edge last).id
-            modify fun s => { s with crossing := setCrossing (setCrossing s.crossing lastId) edgeIdVal }
+        -- `if (openEdgesIt.hasPrevious()) openEdgesIt.remove()`
+        if idx > 0 then
+          openEdges := openEdges.eraseIdx! idx
 
 /-- `markEdgeCrossings(graph)`: crossing flags for every pair of consecutive layers. -/
 private def markEdgeCrossings : NspM Unit := do
   let ec := (← get).edgeCount
   modify fun s => { s with crossing := Array.replicate ec false }
   let graph := (← get).graph
-  let arenaIncoming ← withArena (arenaIncomingEdges · graph)
   let layers := (← getGraph graph).layers
   for i in [0:layers.size - 1] do
-    markCrossingEdges arenaIncoming layers[i]! layers[i + 1]!
+    markCrossingEdges layers[i]! layers[i + 1]!
 
 /-- The node state of a node id (`OTHER` outside the array, like Rust `get(..).unwrap_or`). -/
 private def nodeStateOf (id : Int) : NspM Int := do

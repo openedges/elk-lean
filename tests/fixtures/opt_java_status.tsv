@@ -61,9 +61,9 @@ tests/fixtures/force_enum	stress_dimX_rand15	ok->ok	java_exact
 tests/fixtures/force_enum	stress_dimY_components	ok->ok	java_exact
 tests/fixtures/force_enum	stress_dimY_interactive	ok->ok	java_exact
 tests/fixtures/mrtree	corpus_000_algebraic_heateropentank_HeaterOpenTank	ok->ok	java_exact
-tests/fixtures/mrtree	corpus_090_gt_diningphilosophers_DiningPhilosophers	ok->ok	java_differs /children[0]/x: 618.5 vs 618
+tests/fixtures/mrtree	corpus_090_gt_diningphilosophers_DiningPhilosophers	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	corpus_180_ptolemy_execdemos_demos_OrderedMerge	ok->ok	java_exact
-tests/fixtures/mrtree	corpus_270_wireless_evaderandpursuer_EvaderAndPursu	ok->ok	java_differs /edges[3]/sections[0]/endPoint/x: 126.16666666666666 vs 105.83333333333333
+tests/fixtures/mrtree	corpus_270_wireless_evaderandpursuer_EvaderAndPursu	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	corpus_450_ptolemy_execdemos_demos_Controllers	ok->ok	java_exact
 tests/fixtures/mrtree	corpus_540_wireless_smartparking_SmartParking	ok->ok	java_exact
 tests/fixtures/mrtree	hand_apportion	ok->ok	java_exact
@@ -75,12 +75,12 @@ tests/fixtures/mrtree	hand_binary_up	ok->ok	java_exact
 tests/fixtures/mrtree	hand_chain	ok->ok	java_exact
 tests/fixtures/mrtree	hand_compact_down_tex0	ok->ok	java_exact
 tests/fixtures/mrtree	hand_compact_down_tex12	ok->ok	java_exact
-tests/fixtures/mrtree	hand_compact_left_tex0	ok->ok	java_differs /children[4]/x: 84.5 vs 80
-tests/fixtures/mrtree	hand_compact_left_tex12	ok->ok	java_differs /children[4]/x: 84.5 vs 80
-tests/fixtures/mrtree	hand_compact_right_tex0	ok->ok	java_differs /children[4]/x: 115.5 vs 115
-tests/fixtures/mrtree	hand_compact_right_tex12	ok->ok	java_differs /children[4]/x: 115.5 vs 115
-tests/fixtures/mrtree	hand_compact_up_tex0	ok->ok	java_differs /children[2]/y: 105.0 vs 100
-tests/fixtures/mrtree	hand_compact_up_tex12	ok->ok	java_differs /children[2]/y: 105.0 vs 100
+tests/fixtures/mrtree	hand_compact_left_tex0	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	hand_compact_left_tex12	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	hand_compact_right_tex0	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	hand_compact_right_tex12	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	hand_compact_up_tex0	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	hand_compact_up_tex12	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	hand_components	ok->ok	java_exact
 tests/fixtures/mrtree	hand_levels_down_tex0	ok->ok	java_exact
 tests/fixtures/mrtree	hand_levels_down_tex12	ok->ok	java_exact
@@ -93,15 +93,15 @@ tests/fixtures/mrtree	hand_levels_up_tex12	ok->ok	java_exact
 tests/fixtures/mrtree	hand_no_separation	ok->ok	java_exact
 tests/fixtures/mrtree	hand_star	ok->ok	java_exact
 tests/fixtures/mrtree	mt_big_006	ok->ok	java_exact
-tests/fixtures/mrtree	mt_big_134	ok->ok	java_differs /children[1]/y: 114.8 vs 114.613
+tests/fixtures/mrtree	mt_big_134	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	mt_big_262	ok->ok	java_exact
 tests/fixtures/mrtree	mt_compact_069	ok->ok	java_exact
-tests/fixtures/mrtree	mt_compact_197	ok->ok	java_differs /children[0]/y: 426.46349999999995 vs 461.5
-tests/fixtures/mrtree	mt_cyclic_002	ok->error	java_error_differs java.lang.StringIndexOutOfBoundsException: Range [0, 5) out of bounds for length 4
-tests/fixtures/mrtree	mt_cyclic_130	ok->ok	java_differs /children[0]/children[2]/y: 453.3 vs 412.55
+tests/fixtures/mrtree	mt_compact_197	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	mt_cyclic_002	ok->error (RJ3 re-pin)	java_error_equal
+tests/fixtures/mrtree	mt_cyclic_130	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	mt_cyclic_258	ok->ok	java_exact
-tests/fixtures/mrtree	mt_dense_067	ok->ok	java_differs /children[2]/y: 278.02049999999997 vs 242.4925
-tests/fixtures/mrtree	mt_dense_195	ok->ok	java_differs /edges[6]/sections[0]/bendPoints: length 9 vs 7
+tests/fixtures/mrtree	mt_dense_067	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree	mt_dense_195	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	mt_forest_001	ok->ok	java_exact
 tests/fixtures/mrtree	mt_forest_129	ok->ok	java_exact
 tests/fixtures/mrtree	mt_forest_257	ok->ok	java_exact
@@ -109,11 +109,11 @@ tests/fixtures/mrtree	mt_labels_199	ok->ok	java_exact
 tests/fixtures/mrtree	mt_levels_004	ok->ok	java_exact
 tests/fixtures/mrtree	mt_levels_132	ok->ok	java_exact
 tests/fixtures/mrtree	mt_levels_260	ok->ok	java_exact
-tests/fixtures/mrtree	mt_tree_064	ok->ok	java_differs /children[2]/y: 261.55 vs 239.6
+tests/fixtures/mrtree	mt_tree_064	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree	mt_tree_192	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_apportion	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_apportion_wide	ok->ok	java_exact
-tests/fixtures/mrtree/enum	hand_bfs_two_parents	error->ok	java_equal
+tests/fixtures/mrtree/enum	hand_bfs_two_parents	error->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree/enum	hand_binary_down	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_binary_left	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_binary_right	ok->ok	java_exact
@@ -121,12 +121,12 @@ tests/fixtures/mrtree/enum	hand_binary_up	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_chain	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_compact_down_tex0	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_compact_down_tex12	ok->ok	java_exact
-tests/fixtures/mrtree/enum	hand_compact_left_tex0	ok->ok	java_differs /children[4]/x: 84.5 vs 80
-tests/fixtures/mrtree/enum	hand_compact_left_tex12	ok->ok	java_differs /children[4]/x: 84.5 vs 80
-tests/fixtures/mrtree/enum	hand_compact_right_tex0	ok->ok	java_differs /children[4]/x: 115.5 vs 115
-tests/fixtures/mrtree/enum	hand_compact_right_tex12	ok->ok	java_differs /children[4]/x: 115.5 vs 115
-tests/fixtures/mrtree/enum	hand_compact_up_tex0	ok->ok	java_differs /children[2]/y: 105.0 vs 100
-tests/fixtures/mrtree/enum	hand_compact_up_tex12	ok->ok	java_differs /children[2]/y: 105.0 vs 100
+tests/fixtures/mrtree/enum	hand_compact_left_tex0	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree/enum	hand_compact_left_tex12	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree/enum	hand_compact_right_tex0	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree/enum	hand_compact_right_tex12	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree/enum	hand_compact_up_tex0	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree/enum	hand_compact_up_tex12	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree/enum	hand_components	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_interactive_constraint	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_levels_down_tex0	ok->ok	java_exact
@@ -148,15 +148,15 @@ tests/fixtures/mrtree/enum	hand_weighting_constraint	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_weighting_descendants	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_weighting_fan	ok->ok	java_exact
 tests/fixtures/mrtree/enum	hand_weighting_model_order	ok->ok	java_exact
-tests/fixtures/mrtree/enum	mt_big_006	error->ok	java_error java.lang.StringIndexOutOfBoundsException: Range [0, 12) out of bounds for length 11
+tests/fixtures/mrtree/enum	mt_big_006	error->ok (RJ3 re-pin)	java_error_equal
 tests/fixtures/mrtree/enum	mt_big_134	ok->ok	java_exact
 tests/fixtures/mrtree/enum	mt_compact_189	ok->error	java_error_equal
 tests/fixtures/mrtree/enum	mt_cyclic_114	ok->ok	java_exact
-tests/fixtures/mrtree/enum	mt_dense_043	ok->ok	java_differs /edges[40]/sections: only in java
-tests/fixtures/mrtree/enum	mt_dense_171	ok->ok	java_differs /children[0]/x: 145.75 vs 124.75
+tests/fixtures/mrtree/enum	mt_dense_043	ok->ok (RJ3 re-pin)	java_exact
+tests/fixtures/mrtree/enum	mt_dense_171	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree/enum	mt_forest_097	ok->ok	java_exact
 tests/fixtures/mrtree/enum	mt_levels_084	ok->ok	java_exact
-tests/fixtures/mrtree/enum	mt_tree_008	ok->ok	java_differs /children[12]/x: 160.0 vs 115
+tests/fixtures/mrtree/enum	mt_tree_008	ok->ok (RJ3 re-pin)	java_exact
 tests/fixtures/mrtree/enum	mt_tree_136	ok->error	java_error_equal
 tests/fixtures/radial	rad_all_options	ok->error	java_error_equal
 tests/fixtures/radial	rad_center_root	ok->ok	java_exact

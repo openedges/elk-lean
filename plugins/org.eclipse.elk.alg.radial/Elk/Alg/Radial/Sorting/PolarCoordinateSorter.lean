@@ -53,7 +53,7 @@ def DEGREE_315 : Float := 1.75 * Float.pi
 
 /-- The polar angle of a `POSITION` shifted by `offset` (`RadialUtil.createPolarComparator`). -/
 private def positionArc (position : Elk.Core.Math.KVector) (offset : Float) : Float :=
-  let arc := Float.atan2 position.y position.x
+  let arc := javaAtan2 position.y position.x
   let arc := if arc < fl0p0 then arc + RadialUtil.TWO_PI else arc
   let arc := arc + offset
   if arc > RadialUtil.TWO_PI then arc - RadialUtil.TWO_PI else arc
@@ -76,7 +76,7 @@ def sortWithOffset (nodes : Array NodeId) (offset : Float) : ElkM (Array NodeId)
 /-- `node_arc(node)`: the polar angle of the node center (`0 .. 2 PI`). -/
 def nodeArc (node : NodeId) : ElkM Float := do
   let n ← ElkM.getNode node
-  let arc := Float.atan2 (n.y + n.height / 2.0) (n.x + n.width / 2.0)
+  let arc := javaAtan2 (n.y + n.height / 2.0) (n.x + n.width / 2.0)
   return if arc < 0.0 then arc + RadialUtil.TWO_PI else arc
 
 /-- `set_id_for_nodes(nodes, id_offset)`: assigns `ORDER_ID`s to `nodes` and, recursively, to

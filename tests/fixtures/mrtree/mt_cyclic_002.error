@@ -1,1 +1,1 @@
-java.lang.IllegalArgumentException: The vector chain must contain at least a source and a target point.
+java.lang.StringIndexOutOfBoundsException: Range [0, 5) out of bounds for length 4
