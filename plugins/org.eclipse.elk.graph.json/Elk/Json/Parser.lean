@@ -102,12 +102,6 @@ so strict mode needs no further test.) -/
   let i := skipBlanks bs i
   if lenient then skipComments bs i else i
 
-/-- `expected 'c'` at `i`. -/
-@[inline] private def expectByte (bs : String) (i : Nat) (c : UInt8) (ch : Char) : PR Unit :=
-  if i < bs.utf8ByteSize then
-    if byteAt bs i == c then .ok () (i + 1) else fail i s!"expected '{ch}'"
-  else fail i s!"expected '{ch}' but reached end of input"
-
 /-! ## Strings -/
 
 private def hexVal (x : UInt8) : Option Nat :=
@@ -189,8 +183,14 @@ private partial def parseStringBody (bs : String) (q : UInt8) (lenient : Bool) (
     else parseStringBody bs q lenient (i + 1) (buf.push x)
 
 /-- Whether the bytes `[b, b + n)` of `bs` equal the first `n` bytes of `k` (from offset `i`). -/
-private partial def bytesEqAt (bs : String) (b : Nat) (k : String) (i n : Nat) : Bool :=
-  if i < n then byteAt bs (b + i) == byteAt k i && bytesEqAt bs b k (i + 1) n else true
+private partial def bytesEqAt (bs : String) (b : USize) (k : String) (i n : USize) : Bool :=
+  if i < n then
+    if h1 : b + i < Utf8.usize bs then
+      if h2 : i < Utf8.usize k then
+        if Utf8.uget bs (b + i) h1 == Utf8.uget k i h2 then bytesEqAt bs b k (i + 1) n else false
+      else false
+    else false
+  else true
 
 /-- The member name of ELK JSON graphs (`Elk.Json.Key`) that the bytes `[b, b + n)` of `bs` can
 only be, chosen by length and first (or second) byte; `""` when there is none. -/
@@ -225,7 +225,12 @@ of the ELK member names (later lookups then compare pointer-equal strings). -/
 private def internSlice (bs : String) (b e : Nat) : String :=
   let n := e - b
   let k := keyCandidate bs b n
-  if n != 0 && k.utf8ByteSize == n && bytesEqAt bs b k 0 n then k else slice bs b e
+  if n != 0 && k.utf8ByteSize == n && bytesEqAt bs b.toUSize k 0 n.toUSize then k else slice bs b e
+
+/-- End of the plain prefix of a string body from `i` (`scanPlainString`): the body is plain when the
+byte there is the closing quote `q`. -/
+@[inline] private def plainStringEnd (bs : String) (q : UInt8) (lenient : Bool) (i : Nat) : Nat :=
+  (scanPlainString bs q lenient (Utf8.usize bs) rfl i.toUSize).toNat
 
 /-- Parses a string literal starting at the opening quote (`"` or, lenient, `'`); `intern` shares
 the `Elk.Json.Key` constants (object keys, `internSlice`). -/
@@ -236,7 +241,7 @@ private def parseStringLit (bs : String) (lenient : Bool) (i : Nat) (intern : Bo
     if q != 34 && !(q == 39 && lenient) then fail i "expected string"
     else
       let body := i + 1
-      let close := (scanPlainString bs q lenient (Utf8.usize bs) rfl body.toUSize).toNat
+      let close := plainStringEnd bs q lenient body
       if close < bs.utf8ByteSize && byteAt bs close == q then
         .ok (if intern then internSlice bs body close else slice bs body close) (close + 1)
       else
@@ -287,87 +292,83 @@ private def fastDecimal (bs : String) (intStart mantEnd dot fracDigits expStart 
     else if ev >= fracDigits then Elk.Core.Util.FastFloat.ofScientificFast m false (ev - fracDigits)
     else Elk.Core.Util.FastFloat.ofScientificFast m true (fracDigits - ev)
 
-/-- Parses a number lexeme starting at `start`. Values follow ELK Java's JSON input (Gson numbers read
-with `Double.parseDouble`): floats are correctly rounded (`strtod`, or the bit-identical fast path
-`fastDecimal`), integers stay exact, and `-0` is `-0.0` (what Java computes with). elk-rs' serde_json,
-which reads long mantissas with two roundings, is not followed: the result reference is ELK Java. -/
-private def parseNumber (bs : String) (lenient : Bool) (start : Nat) : PR Number := Id.run do
-  let mut pos := start
-  -- sign
-  if pos < bs.utf8ByteSize then
-    let x := byteAt bs pos
-    if x == 45 then pos := pos + 1
-    else if x == 43 && lenient then pos := pos + 1
-  -- lenient Infinity / NaN
-  if lenient then
-    if pos + 8 <= bs.utf8ByteSize && startsWithAt bs pos "Infinity" 0 then
-      let neg := byteAt bs start == 45
-      return .ok (.float (if neg then Float.negInf else Float.posInf)) (pos + 8)
-    if pos + 3 <= bs.utf8ByteSize && startsWithAt bs pos "NaN" 0 then
-      return .ok (.float Float.nan) (pos + 3)
-  -- integer part (a leading zero may not be followed by more digits)
-  if isAt bs pos 48 && pos + 1 < bs.utf8ByteSize && isDigit (byteAt bs (pos + 1)) then
-    return fail pos "invalid number: leading zero"
-  let intStart := pos
-  pos := skipDigits bs pos
-  let intDigits := pos - intStart
-  let mut isFloat := false
-  -- fraction (`dot` stays at `mantEnd` without a decimal point)
-  let dot := pos
-  let mut fracDigits := 0
-  if isAt bs pos 46 then
-    let nextIsDigit := pos + 1 < bs.utf8ByteSize && isDigit (byteAt bs (pos + 1))
-    if nextIsDigit || (lenient && intDigits > 0) then
-      isFloat := true
-      let fracEnd := skipDigits bs (pos + 1)
-      fracDigits := fracEnd - (pos + 1)
-      pos := fracEnd
-    else return fail pos "invalid number"
-  if intDigits == 0 && !isFloat then return fail pos "invalid number"
-  let mantEnd := pos
-  -- exponent
-  let mut expStart := pos
-  let mut expNeg := false
-  let mut expEnd := pos
-  if pos < bs.utf8ByteSize then
-    let x := byteAt bs pos
-    if x == 101 || x == 69 then
-      isFloat := true
-      pos := pos + 1
-      if pos < bs.utf8ByteSize then
-        let y := byteAt bs pos
-        if y == 43 || y == 45 then
-          expNeg := y == 45
-          pos := pos + 1
-      expStart := pos
-      pos := skipDigits bs pos
-      if pos == expStart then return fail pos "invalid exponent"
-      expEnd := pos
-  let neg := byteAt bs start == 45
+/-- `-0.0` (a top-level constant: the literal would be rebuilt by `Float.ofScientific`). -/
+private def NEG_ZERO : Float := -0.0
+
+/-- The value of a validated number lexeme `bs[start:pos]` (`neg`: leading `-`; digits
+`[intStart, intStart + intDigits)`, then the fraction up to `mantEnd` with its point at `dot`, the
+exponent digits `[expStart, expEnd)`), as a JSON value. -/
+private def numberValue (bs : String) (start pos : Nat) (neg isFloat : Bool) (intStart intDigits mantEnd dot fracDigits expStart expEnd : Nat)
+    (expNeg : Bool) : PR Value :=
   -- plain integers of at most 18 digits (always within `i64`) without building the lexeme
   if !isFloat && intDigits <= 18 then
     let v := digitsValue bs intStart pos 0
-    if neg && v == 0 then return .ok (.float (-0.0)) pos
-    return .ok (.int (if neg then -(v : Int) else (v : Int))) pos
-  if isFloat then
-    let f := fastDecimal bs intStart mantEnd dot fracDigits expStart expEnd expNeg
-    -- `f != f` only for NaN: the fast path does not apply
-    if f == f then return .ok (.float (if neg then -f else f)) pos
-  let lexeme := slice bs start pos
-  let lexeme := if lexeme.startsWith "+" then (lexeme.drop 1).toString else lexeme
-  if isFloat then
-    return .ok (.float (strtodUnchecked lexeme)) pos
+    if neg && v == 0 then .ok (.num (.float NEG_ZERO)) pos
+    else .ok (.num (.int (if neg then -(v : Int) else (v : Int)))) pos
   else
-    match parseInt64? lexeme with
-    | some i => return .ok (.int i) pos
-    | none =>
-      -- out of i64 range: parsed as u64 or f64
-      let digits := if lexeme.startsWith "-" then (lexeme.drop 1).toString else lexeme
-      match digits.toNat? with
-      | some n =>
-        if !lexeme.startsWith "-" && n <= 18446744073709551615 then return .ok (.int n) pos
-        else return .ok (.float (strtodUnchecked lexeme)) pos
-      | none => return fail pos "invalid number"
+    let f := if isFloat then fastDecimal bs intStart mantEnd dot fracDigits expStart expEnd expNeg else Float.nan
+    -- `f != f` only for NaN: the fast path does not apply
+    if f == f then .ok (.num (.float (if neg then -f else f))) pos
+    else
+      let lexeme := slice bs start pos
+      let lexeme := if lexeme.startsWith "+" then (lexeme.drop 1).toString else lexeme
+      if isFloat then .ok (.num (.float (strtodUnchecked lexeme))) pos
+      else
+        match parseInt64? lexeme with
+        | some i => .ok (.num (.int i)) pos
+        | none =>
+          -- out of i64 range: parsed as u64 or f64
+          let digits := if lexeme.startsWith "-" then (lexeme.drop 1).toString else lexeme
+          match digits.toNat? with
+          | some n =>
+            if !lexeme.startsWith "-" && n <= 18446744073709551615 then .ok (.num (.int n)) pos
+            else .ok (.num (.float (strtodUnchecked lexeme))) pos
+          | none => fail pos "invalid number"
+
+/-- Parses a number lexeme starting at `start` into a JSON value (`.num`). Values follow ELK Java's
+JSON input (Gson numbers read with `Double.parseDouble`): floats are correctly rounded (`strtod`, or
+the bit-identical fast path `fastDecimal`), integers stay exact, and `-0` is `-0.0` (what Java
+computes with). elk-rs' serde_json, which reads long mantissas with two roundings, is not followed:
+the result reference is ELK Java. Written without mutable `do` state (no tuple per join point); the
+checks and error positions are those of the reference grammar (see `Tests.Json.ParserFuzz`). -/
+private def parseNumber (bs : String) (lenient : Bool) (start : Nat) : PR Value :=
+  let size := bs.utf8ByteSize
+  let x0 := byteAt bs start
+  let neg := x0 == 45
+  -- sign
+  let pos := if start < size && (neg || (x0 == 43 && lenient)) then start + 1 else start
+  -- lenient Infinity / NaN
+  if lenient && pos + 8 <= size && startsWithAt bs pos "Infinity" 0 then
+    .ok (.num (.float (if neg then Float.negInf else Float.posInf))) (pos + 8)
+  else if lenient && pos + 3 <= size && startsWithAt bs pos "NaN" 0 then
+    .ok (.num (.float Float.nan)) (pos + 3)
+  -- integer part (a leading zero may not be followed by more digits)
+  else if isAt bs pos 48 && pos + 1 < size && isDigit (byteAt bs (pos + 1)) then
+    fail pos "invalid number: leading zero"
+  else
+    let intStart := pos
+    let intEnd := skipDigits bs pos
+    let intDigits := intEnd - intStart
+    -- fraction (`dot` is the end of the integer part, the point when there is one)
+    let hasDot := isAt bs intEnd 46
+    if hasDot && !((intEnd + 1 < size && isDigit (byteAt bs (intEnd + 1))) || (lenient && intDigits > 0)) then
+      fail intEnd "invalid number"
+    else
+      let mantEnd := if hasDot then skipDigits bs (intEnd + 1) else intEnd
+      let fracDigits := if hasDot then mantEnd - (intEnd + 1) else 0
+      if intDigits == 0 && !hasDot then fail mantEnd "invalid number"
+      else
+        -- exponent
+        let xe := byteAt bs mantEnd
+        if mantEnd < size && (xe == 101 || xe == 69) then
+          let p1 := mantEnd + 1
+          let ys := byteAt bs p1
+          let signed := p1 < size && (ys == 43 || ys == 45)
+          let expStart := if signed then p1 + 1 else p1
+          let expEnd := skipDigits bs expStart
+          if expEnd == expStart then fail expEnd "invalid exponent"
+          else numberValue bs start expEnd neg true intStart intDigits mantEnd intEnd fracDigits expStart expEnd (signed && ys == 45)
+        else numberValue bs start mantEnd neg hasDot intStart intDigits mantEnd intEnd fracDigits mantEnd mantEnd false
 
 /-! ## Identifiers and literals -/
 
@@ -392,7 +393,8 @@ private def matchLiteral (bs : String) (i : Nat) (lit : String) : Option Nat :=
 
 mutual
 
-/-- A value at `i` (after optional whitespace). -/
+/-- A value at `i` (after optional whitespace). Plain strings and numbers produce their `PR Value`
+directly (no intermediate result object). -/
 partial def parseValue (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
   let i := skipWs bs lenient i
   if i >= bs.utf8ByteSize then fail i "unexpected end of input"
@@ -401,13 +403,13 @@ partial def parseValue (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
     if x == 123 then parseObject bs lenient i
     else if x == 91 then parseArray bs lenient i
     else if x == 34 || (x == 39 && lenient) then
-      match parseStringLit bs lenient i with
-      | .ok s j => .ok (.str s) j
-      | .err e => .err e
-    else if x == 45 || x == 43 || x == 46 || isDigit x then
-      match parseNumber bs lenient i with
-      | .ok n j => .ok (.num n) j
-      | .err e => .err e
+      let close := plainStringEnd bs x lenient (i + 1)
+      if close < bs.utf8ByteSize && byteAt bs close == x then .ok (.str (slice bs (i + 1) close)) (close + 1)
+      else
+        match parseStringLit bs lenient i with
+        | .ok s j => .ok (.str s) j
+        | .err e => .err e
+    else if x == 45 || x == 43 || x == 46 || isDigit x then parseNumber bs lenient i
     else
       match matchLiteral bs i "true" with
       | some j => .ok (.bool true) j
@@ -418,10 +420,7 @@ partial def parseValue (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
       match matchLiteral bs i "null" with
       | some j => .ok .null j
       | none =>
-        if lenient && (x == 73 || x == 78) then
-          match parseNumber bs lenient i with
-          | .ok n j => .ok (.num n) j
-          | .err e => .err e
+        if lenient && (x == 73 || x == 78) then parseNumber bs lenient i
         else fail i "unexpected character"
 
 /-- An array at `i` (the `[`). -/
@@ -455,26 +454,37 @@ partial def parseObject (bs : String) (lenient : Bool) (i : Nat) : PR Value :=
   if isAt bs i 125 then .ok (.obj #[]) (i + 1)
   else parseObjectMembers bs lenient i (Array.emptyWithCapacity 8)
 
-/-- Object members from `i` (a key is expected after optional whitespace). -/
+/-- Object members from `i` (a key is expected after optional whitespace). A plain quoted key goes
+straight to `parseMemberValue` (no intermediate result object). -/
 partial def parseObjectMembers (bs : String) (lenient : Bool) (i : Nat) (kvs : Array (String × Value)) :
     PR Value :=
   let i := skipWs bs lenient i
-  let key : PR String :=
-    if i < bs.utf8ByteSize then
-      let x := byteAt bs i
-      if x == 34 then parseStringLit bs lenient i true
-      else if lenient && x == 39 then parseStringLit bs lenient i true
-      else if lenient && isIdentStart x then parseIdent bs i
-      else fail i "expected object key"
-    else fail i "unterminated object"
-  match key with
-  | .err e => .err e
-  | .ok key i =>
-    let i := skipWs bs lenient i
-    match expectByte bs i 58 ':' with
-    | .err e => .err e
-    | .ok () i =>
-      match parseValue bs lenient i with
+  if i < bs.utf8ByteSize then
+    let x := byteAt bs i
+    if x == 34 || (lenient && x == 39) then
+      let close := plainStringEnd bs x lenient (i + 1)
+      if close < bs.utf8ByteSize && byteAt bs close == x then
+        parseMemberValue bs lenient (internSlice bs (i + 1) close) (close + 1) kvs
+      else
+        match parseStringLit bs lenient i true with
+        | .err e => .err e
+        | .ok key j => parseMemberValue bs lenient key j kvs
+    else if lenient && isIdentStart x then
+      match parseIdent bs i with
+      | .err e => .err e
+      | .ok key j => parseMemberValue bs lenient key j kvs
+    else fail i "expected object key"
+  else fail i "unterminated object"
+
+/-- The rest of a member after its key (ending at `i`): `:`, the value, then `,` and the next
+members or the closing `}`. -/
+partial def parseMemberValue (bs : String) (lenient : Bool) (key : String) (i : Nat)
+    (kvs : Array (String × Value)) : PR Value :=
+  let i := skipWs bs lenient i
+  if i < bs.utf8ByteSize then
+    if byteAt bs i != 58 then fail i "expected ':'"
+    else
+      match parseValue bs lenient (i + 1) with
       | .err e => .err e
       | .ok v i =>
         let kvs := kvs.push (key, v)
@@ -488,6 +498,7 @@ partial def parseObjectMembers (bs : String) (lenient : Bool) (i : Nat) (kvs : A
           else if x == 125 then .ok (.obj kvs) (i + 1)
           else fail i "expected ',' or '}'"
         else fail i "unterminated object"
+  else fail i "expected ':' but reached end of input"
 
 end
 
@@ -497,8 +508,8 @@ def strictNumber? (lexeme : String) : Option Number :=
   let bs := lexeme
   if bs.utf8ByteSize == 0 then none
   else match parseNumber bs false 0 with
-    | .ok n i => if i == bs.utf8ByteSize then some n else none
-    | .err _ => none
+    | .ok (.num n) i => if i == bs.utf8ByteSize then some n else none
+    | _ => none
 
 /-- Parses a complete document; trailing content (other than whitespace/comments) is an error. -/
 def parseDocument (bs : String) (lenient : Bool) : PR Value :=
