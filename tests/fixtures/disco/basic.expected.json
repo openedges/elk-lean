@@ -57,13 +57,13 @@
       ]
     }
   ],
-  "height": 123.65298442292911,
+  "height": 129.6529844229291,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "disco",
     "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
   },
-  "width": 198.39272274012595,
+  "width": 204.39272274012595,
   "x": 0,
   "y": 0
 }

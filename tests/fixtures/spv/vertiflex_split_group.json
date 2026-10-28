@@ -1,0 +1,83 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "vertiflex",
+  "elk.vertiflex.layerDistance": "20"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 17.7,
+   "height": 24.8
+  },
+  {
+   "id": "n1",
+   "width": 15.5,
+   "height": 20.0,
+   "layoutOptions": {
+    "elk.vertiflex.verticalConstraint": "120"
+   },
+   "labels": [
+    {
+     "id": "n1l",
+     "text": "l",
+     "width": 9.5,
+     "height": 13.1
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "width": 29.6,
+   "height": 33.4
+  },
+  {
+   "id": "n3",
+   "width": 59.2,
+   "height": 27.1
+  },
+  {
+   "id": "n4",
+   "width": 39.6,
+   "height": 25.5
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ]
+}

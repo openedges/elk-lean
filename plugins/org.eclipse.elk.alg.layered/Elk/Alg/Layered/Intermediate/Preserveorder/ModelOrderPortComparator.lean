@@ -3,7 +3,7 @@ import Elk.Alg.Layered.Intermediate.Preserveorder.CMGroupModelOrderCalculator
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.preserveorder.ModelOrderPortComparator`
 
-Port of elk-rs `intermediate/preserveorder/model_order_port_comparator.rs`: compares two ports of the
+Port of `ModelOrderPortComparator.java` (elk-rs `model_order_port_comparator.rs`): compares two ports of the
 same node by their side, the order of the nodes their incoming edges come from, the model order of
 their outgoing edges (or of the long edge target nodes) and the port model order. The comparator is
 stateful: every decision is recorded in transitive `biggerThan`/`smallerThan` relations
@@ -11,8 +11,7 @@ stateful: every decision is recorded in transitive `biggerThan`/`smallerThan` re
 
 This module also holds what both comparators share: `ModelOrderRelations` (Rust defines it in
 `model_order_node_comparator.rs`; it lives here because the node comparator imports this module and
-Lean has no import cycles), `layerIdOf` (Rust `layer_id`) and `layerPositionMap` (Rust
-`refill_layer_position_map`).
+Lean has no import cycles) and `layerIdOf` (Rust `layer_id`).
 
 ## API (for `LayerSweepCrossingMinimizer` and `SortByInputModelProcessor`)
 * `ModelOrderPortComparator.new graph previousLayer strategy targetNodeModelOrder portModelOrder`
@@ -23,19 +22,24 @@ Lean has no import cycles), `layerIdOf` (Rust `layer_id`) and `layerPositionMap`
 * `clearTransitiveOrdering`, `resetForPreviousLayer`, `resetForPreviousLayerSlice`,
   `resetForNodeTargetModelOrder` are pure updates (Rust `&mut self` methods).
 
-## Deviations from Java (Rust is followed)
-* The fourth transitivity check uses `smallerThan(p2) ∋ p1` (Java checks `biggerThan(p2)` twice).
-* Missing edge ends or port owners skip the incoming-edge block instead of throwing.
-* The previous-layer check (`compare_in_previous_layer`) uses a position map and decides only when
-  both source nodes are in the previous layer (Java returns as soon as one of them is found).
-* Port and edge (group) model orders (`port_model_order`, `edge_model_order`) check only the group id
-  of the port/edge itself (Java's `CMGroupModelOrderCalculator` checks both elements).
-* The precomputed `targetNodeModelOrder` map is consulted only when both ports have a long edge
-  target node (Java looks up each non-null target separately).
+## Java semantics (ELK Java is the reference; elk-rs differed)
+* The fourth transitivity check of Java tests `biggerThan(p2) ∋ p1` a second time (a copy of the
+  second check), so it never decides; elk-rs tested `smallerThan(p2) ∋ p1`.
+* The previous-layer check is `checkReferenceLayer(previousLayer, …)`: the first of the two source
+  nodes found in the previous layer decides, also when the other one is not in it (elk-rs decided only
+  when both were in it).
+* Port and edge (group) model orders are `CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrder`
+  of the element and the other element: the group offset applies only when both group ids are enforced
+  orders (elk-rs checked only the element's), `int` arithmetic.
+* The precomputed `targetNodeModelOrder` map is consulted for each long edge target node separately
+  (elk-rs only when both ports had one).
+
+Kept from elk-rs: missing edge ends or port owners skip the incoming-edge block (Java would throw a
+`NullPointerException`; the layered graph always has them).
 -/
 namespace Elk.Alg.Layered.Intermediate.Preserveorder
 
-open Elk.Graph Elk.Core.Options Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
+open Elk.Graph Elk.Core.Util Elk.Core.Options Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
 
 /-- Bit `i` of a `Nat` bit set. -/
 @[inline] def bitSetBit (i : Nat) : Nat := 1 <<< i
@@ -119,15 +123,6 @@ def layerIdOf (n : LNodeId) : LayeredM Nat := do
   | some l => return i32AsUsize (← getLayer l).id
   | none => return 0
 
-/-- Rust `refill_layer_position_map`: node → index in `layer` (a repeated node keeps its last index). -/
-def layerPositionMap (layer : Array LNodeId) : Std.HashMap LNodeId Nat := Id.run do
-  let mut m : Std.HashMap LNodeId Nat := {}
-  let mut i := 0
-  for n in layer do
-    m := m.insert n i
-    i := i + 1
-  return m
-
 /-- `-1`, `0` or `1` (Rust `match a.cmp(&b)`). -/
 @[inline] def cmpInt (a b : Int) : Int := if a < b then -1 else if a > b then 1 else 0
 
@@ -140,8 +135,6 @@ structure ModelOrderPortComparator where
   portModelOrder : Bool := false
   /-- `previous_layer`. -/
   previousLayer : Array LNodeId := #[]
-  /-- `previous_layer_position`: node → index in `previousLayer`. -/
-  previousLayerPosition : Std.HashMap LNodeId Nat := {}
   /-- `graph` (the options read through it). -/
   graph : ModelOrderGraphContext := {}
   /-- `strategy` (`CONSIDER_MODEL_ORDER_STRATEGY`). -/
@@ -176,27 +169,30 @@ def portSnapshot (p : LPortId) : LayeredM PortSnapshot := do
            longEdgeTargetNode := pt.internal.longEdgeTargetNode
            hasModelOrder := pt.internal.modelOrder.isSome }
 
-/-- Rust `port_model_order(port, graph, offset)`: `-1` without `MODEL_ORDER`; with an `ENFORCED` group
-order and the port's `GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID` in the enforced orders
-`offset * groupId + MODEL_ORDER`; otherwise `MODEL_ORDER`. -/
-def portModelOrderValue (port : LPortId) (graph : ModelOrderGraphContext) (offset : Int) : LayeredM Int := do
+/-- `CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrder(port, other, graph, offset)` for two
+ports: `-1` without `MODEL_ORDER`; with an `ENFORCED` group order and both ports'
+`GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID`s in the enforced orders `offset * groupId + MODEL_ORDER`
+(`int`); otherwise `MODEL_ORDER`. -/
+def portModelOrderValue (port other : LPortId) (graph : ModelOrderGraphContext) (offset : Int) : LayeredM Int := do
   let pt ← getPort port
   let some order := pt.internal.modelOrder | return -1
   if graph.enforceGroupModelOrder then
     let groupId := pt.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
-    if graph.enforcedGroupOrders.contains groupId then
-      return offset * groupId + order
+    let otherGroupId := (← getPort other).props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
+    if graph.enforcedGroupOrders.contains groupId && graph.enforcedGroupOrders.contains otherGroupId then
+      return Int.wrap32 (offset * groupId + order)
   return order
 
-/-- Rust `edge_model_order(edge, graph, offset)`: like `portModelOrderValue` for an edge, but `0`
-without `MODEL_ORDER`. -/
-def edgeModelOrderValue (edge : LEdgeId) (graph : ModelOrderGraphContext) (offset : Int) : LayeredM Int := do
+/-- The outgoing edge order of `ModelOrderPortComparator.compare`: `calculateModelOrderOrGroupModelOrder(edge,
+other, graph, offset)` if the edge has a `MODEL_ORDER` (else `0`), group offset as in `portModelOrderValue`. -/
+def edgeModelOrderValue (edge other : LEdgeId) (graph : ModelOrderGraphContext) (offset : Int) : LayeredM Int := do
   let ed ← getEdge edge
   let some order := ed.internal.modelOrder | return 0
   if graph.enforceGroupModelOrder then
     let groupId := ed.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
-    if graph.enforcedGroupOrders.contains groupId then
-      return offset * groupId + order
+    let otherGroupId := (← getEdge other).props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
+    if graph.enforcedGroupOrders.contains groupId && graph.enforcedGroupOrders.contains otherGroupId then
+      return Int.wrap32 (offset * groupId + order)
   return order
 
 /-- Rust `to_target_node_position_map`. -/
@@ -209,7 +205,7 @@ namespace ModelOrderPortComparator
 def new (graph : ModelOrderGraphContext) (previousLayer : Array LNodeId) (strategy : OrderingStrategy)
     (targetNodeModelOrder : Option (Array (LNodeId × Int))) (portModelOrder : Bool) : ModelOrderPortComparator :=
   { targetNodeModelOrder := toTargetNodePositionMap targetNodeModelOrder, portModelOrder := portModelOrder
-    previousLayer := previousLayer, previousLayerPosition := layerPositionMap previousLayer
+    previousLayer := previousLayer
     graph := graph, strategy := strategy }
 
 /-- `clearTransitiveOrdering()`. -/
@@ -218,7 +214,7 @@ def clearTransitiveOrdering (c : ModelOrderPortComparator) : ModelOrderPortCompa
 
 /-- Rust `reset_for_previous_layer(previous_layer)`: new previous layer, no target node map, no relations. -/
 def resetForPreviousLayer (c : ModelOrderPortComparator) (previousLayer : Array LNodeId) : ModelOrderPortComparator :=
-  { c with previousLayer := previousLayer, previousLayerPosition := layerPositionMap previousLayer
+  { c with previousLayer := previousLayer
            targetNodeModelOrder := none, relations := {} }
 
 /-- Rust `reset_for_previous_layer_slice(previous_layer)` (same as `resetForPreviousLayer`). -/
@@ -256,13 +252,10 @@ def checkReferenceLayer (layer : Array LNodeId) (p1Node p2Node : LNodeId) : Int 
     else if node == p2Node then return 1
   return 0
 
-/-- Rust `compare_in_previous_layer(p1_node, p2_node)`: compares the positions in the previous layer
-(`0` unless both nodes are in it). -/
+/-- `checkReferenceLayer(previousLayer, p1Node, p2Node)`: `-1` if `p1Node` is found first in the previous
+layer, `1` if `p2Node` is, `0` if neither is in it. -/
 def compareInPreviousLayer (p1Node p2Node : LNodeId) : PortComparatorM Int := do
-  let pos := (← get).previousLayerPosition
-  match pos.get? p1Node, pos.get? p2Node with
-  | some left, some right => return cmpInt left right
-  | _, _ => return 0
+  return checkReferenceLayer (← get).previousLayer p1Node p2Node
 
 /-- The number of ports of a port's node (`0` without a node). -/
 def nodePortCount (n : Option LNodeId) : LayeredM Int := do
@@ -283,12 +276,13 @@ def checkPortModelOrder (p1 p2 : LPortId) (p1HasModelOrder p2HasModelOrder : Boo
   if p1HasModelOrder && p2HasModelOrder then
     let numberOfPorts ← nodePortCount (← getPort p1).owner
     let graph := (← get).graph
-    let p1Order ← portModelOrderValue p1 graph numberOfPorts
-    let p2Order ← portModelOrderValue p2 graph numberOfPorts
+    let p1Order ← portModelOrderValue p1 p2 graph numberOfPorts
+    let p2Order ← portModelOrderValue p2 p1 graph numberOfPorts
     return cmpInt p1Order p2Order
   return 0
 
-/-- The four transitivity checks at the start of `compare` (indices are allocated for `p1`, then `p2`). -/
+/-- The transitivity checks at the start of `compare` (indices are allocated for `p1`, then `p2`): Java's
+fourth check repeats the second one (`biggerThan.get(p2).contains(p1)`) and so never decides. -/
 def relationVerdict (p1 p2 : LPortId) : PortComparatorM (Option Int) := do
   let k1 ← withRelations (·.index p1)
   let k2 ← withRelations (·.index p2)
@@ -296,7 +290,6 @@ def relationVerdict (p1 p2 : LPortId) : PortComparatorM (Option Int) := do
   if rel.isBigger k1 k2 then return some 1
   if rel.isBigger k2 k1 then return some (-1)
   if rel.isSmaller k1 k2 then return some (-1)
-  if rel.isSmaller k2 k1 then return some 1
   return none
 
 /-- Records the decision `p1 > p2` (`v > 0`) or `p2 > p1` and returns `±reverseOrder` (the recurring
@@ -367,14 +360,19 @@ def compareOutgoing (p1 p2 : LPortId) (s1 s2 : PortSnapshot) (reverseOrder : Int
     if result != 0 then
       return ← recordDecision p1 p2 (result > 0) reverseOrder
   let graph := (← get).graph
-  let mut p1Order ← edgeModelOrderValue (s1.outgoingFirst.getD default) graph ((s1.outgoingLen + s1.incomingLen : Nat) : Int)
-  let mut p2Order ← edgeModelOrderValue (s2.outgoingFirst.getD default) graph ((s2.outgoingLen + s2.incomingLen : Nat) : Int)
+  let e1 := s1.outgoingFirst.getD default
+  let e2 := s2.outgoingFirst.getD default
+  let mut p1Order ← edgeModelOrderValue e1 e2 graph ((s1.outgoingLen + s1.incomingLen : Nat) : Int)
+  let mut p2Order ← edgeModelOrderValue e2 e1 graph ((s2.outgoingLen + s2.incomingLen : Nat) : Int)
   if let (some t1, some t2) := (p1TargetNode, p2TargetNode) then
     if t1 == t2 then
       return ← recordDecision p1 p2 (p1Order > p2Order) reverseOrder
-    if let some orders := (← get).targetNodeModelOrder then
+  -- `targetNodeModelOrder.containsKey(target)` for each target separately (`null` is no key)
+  if let some orders := (← get).targetNodeModelOrder then
+    if let some t1 := p1TargetNode then
       if let some order := orders.get? t1 then
         p1Order := order
+    if let some t2 := p2TargetNode then
       if let some order := orders.get? t2 then
         p2Order := order
   recordDecision p1 p2 (p1Order > p2Order) reverseOrder
@@ -390,8 +388,8 @@ def compareRemaining (p1 p2 : LPortId) (s1 s2 : PortSnapshot) (reverseOrder : In
   else if s1.hasModelOrder && s2.hasModelOrder then
     let numberOfPorts ← nodePortCount s1.node
     let graph := (← get).graph
-    let p1Order ← portModelOrderValue p1 graph numberOfPorts
-    let p2Order ← portModelOrderValue p2 graph numberOfPorts
+    let p1Order ← portModelOrderValue p1 p2 graph numberOfPorts
+    let p2Order ← portModelOrderValue p2 p1 graph numberOfPorts
     let reverseOrder := if s1.side == .west || s1.side == .south then -reverseOrder else reverseOrder
     recordDecision p1 p2 (p1Order > p2Order) reverseOrder
   else

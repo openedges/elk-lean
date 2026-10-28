@@ -514,6 +514,13 @@ def acGraphMultipleNorthSouthAndLongEdgeDummies : LayeredM LGraphId := do
 
 def allCrossingsCounterTests : Suite := suite "layered.p3counting.all_crossings_counter" do
   let c := acCfg
+  -- Java `initAfterTraversal`: one `portPos` array for the hyperedge and the crossings counter
+  let shared ← runL do
+    let g ← acCrossForm
+    let counter ← AllCrossingsCounter.new g (← nodeArray g)
+    counter.hyperedgeCrossingsCounter.portPositions.set #[7, 3]
+    counter.crossingCounter.portPositions.get
+  checkEq "hyperedge and crossings counter share portPos" shared #[7, 3]
   let r ← runL do
     let g ← acCrossForm
     countAll g (← nodeArray g)

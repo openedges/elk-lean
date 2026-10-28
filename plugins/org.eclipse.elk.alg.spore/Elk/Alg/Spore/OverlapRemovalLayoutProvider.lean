@@ -16,10 +16,12 @@ graph's edges (no overlap at all ends the loop); the phases Delaunay triangulati
 edges to the overlap edges), minimum spanning tree and grow tree run, the tree positions are
 copied to the vertices and the importer updates the graph. Finally the positions are applied.
 
-Order: the overlap edges are collected in the order the scanline reports them and the Delaunay
-edges are appended (`TEdge.extendUnique`); the Rust `HashSet<TEdge>` iterates in random order, so
-elk-rs is nondeterministic whenever edge costs tie (see `NaiveMinST`). The SVG debug output of the
-scanline check is not ported (TODO(debug)).
+Order: the overlap edges are collected in one Java `HashSet<TEdge>` (`JavaHashSet`) that lives
+across the iterations: it is cleared before every sweep (`clear()` keeps its capacity, which is part
+of its iteration order), becomes the graph's edge set, and the Delaunay phase adds its edges to that
+same set. elk-rs used a `std` set with a random order (nondeterministic whenever spanning tree
+costs tie, see `NaiveMinST`). The SVG debug output of the scanline check is not ported
+(TODO(debug)).
 
 Rust quirk kept: when the monitor is canceled between two processors, `layout` returns at once
 without applying the positions and without `done`.
@@ -36,11 +38,10 @@ open Elk.Alg.Common.Spore Elk.Alg.Spore.Graph Elk.Alg.Spore.Options
 
 namespace OverlapRemovalLayoutProvider
 
-/-- The overlap handler of the scanline check: collects the pair of original vertices of two
-overlapping nodes (`TEdge::new(n1.original_vertex, n2.original_vertex)`) into an insertion-ordered
-duplicate-free edge list (`HashSet<TEdge>::insert`). -/
-def overlapHandler : IOverlapHandler (Array TEdge) :=
-  ⟨fun n1 n2 edges => TEdge.insertUnique edges (TEdge.new n1.originalVertex n2.originalVertex)⟩
+/-- The overlap handler of the scanline check: adds the pair of original vertices of two
+overlapping nodes (`new TEdge(n1.originalVertex, n2.originalVertex)`) to the overlap edge set. -/
+def overlapHandler : IOverlapHandler (JavaHashSet TEdge) :=
+  ⟨fun n1 n2 edges => (edges.add (TEdge.new n1.originalVertex n2.originalVertex)).1⟩
 
 /-- The sub-progress of each processor: `1 / n` in single precision (`1.0` for no processors). -/
 def processorStep (count : Nat) : Float :=
@@ -70,14 +71,18 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   let assembler ← SporeAssembler.create
   let mut overlapsExisted := true
   let mut iteration := 0
+  let mut overlapEdges : JavaHashSet TEdge := {}
   while iteration < maxIterations && overlapsExisted do
     let runScanline := ((← ElkM.getNode layoutGraph).props.get
       SporeOverlapRemovalOptions.OVERLAP_REMOVAL_RUN_SCANLINE).getD true
     if runScanline then
       let scanline := ScanlineOverlapCheck.new overlapHandler
-      let edges := scanline.sweep graph.vertices #[]
-      if edges.isEmpty then break
-      graph := { graph with tEdges := some edges }
+      match scanline.sweep graph.vertices overlapEdges.clear with
+      | .ok edges => overlapEdges := edges
+      | .error msg => throw (IO.userError msg)
+      if overlapEdges.isEmpty then break
+      graph := { graph with tEdges := some overlapEdges }
+      overlapEdges := {}
     assembler.reset
     assembler.setPhase .p1Structure StructureExtractionStrategy.delaunayTriangulation.factory
     assembler.setPhase .p2ProcessingOrder graph.treeConstructionStrategy.factory
@@ -90,6 +95,9 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       let sub ← monitor.subTask step
       let ((), g) ← SporeM.run (processor.process () sub) graph
       graph := g
+    -- the Delaunay phase added its edges to the overlap edge set itself (Java: the same object)
+    if runScanline then
+      overlapEdges := graph.tEdges.getD {}
     graph := graph.syncVerticesFromTree
     graph ← importer.updateGraph graph
     overlapsExisted := (graph.getProperty InternalProperties.OVERLAPS_EXISTED).getD false

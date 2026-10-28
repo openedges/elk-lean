@@ -29,7 +29,7 @@ partial def setYLevels (layerDistance nodeNodeSpacing : Float) (node : NodeId) (
     | none => minHeight
   ElkM.modifyNode node fun nd => { nd with y := minHeight }
   let marginsBottom := (n.props.getD CoreOptions.MARGINS {}).bottom
-  let newMinHeight := minHeight + layerDistance + n.height + fmax marginsBottom nodeNodeSpacing
+  let newMinHeight := minHeight + layerDistance + n.height + javaMax marginsBottom nodeNodeSpacing
   for child in ← VertiFlexUtil.outgoingChildren node do
     setYLevels layerDistance nodeNodeSpacing child newMinHeight
 

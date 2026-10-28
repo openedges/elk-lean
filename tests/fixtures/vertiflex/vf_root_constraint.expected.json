@@ -7,14 +7,14 @@
         "elk.vertiflex.verticalConstraint": "-15"
       },
       "width": 30,
-      "x": 55,
+      "x": 0,
       "y": -15
     },
     {
       "height": 20,
       "id": "n1",
       "width": 40,
-      "x": 0,
+      "x": 45,
       "y": 75
     },
     {
@@ -24,14 +24,14 @@
         "elk.vertiflex.verticalConstraint": "90"
       },
       "width": 20,
-      "x": 60,
+      "x": 5,
       "y": 90
     },
     {
       "height": 25,
       "id": "n3",
       "width": 25,
-      "x": 100,
+      "x": 105,
       "y": 75
     }
   ],
@@ -42,12 +42,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 20,
+            "x": 65,
             "y": 75
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 70,
+            "x": 15,
             "y": 5
           }
         }
@@ -65,12 +65,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 70,
+            "x": 15,
             "y": 90
           },
           "id": "e2_s0",
           "startPoint": {
-            "x": 70,
+            "x": 15,
             "y": 5
           }
         }
@@ -88,12 +88,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 112.5,
+            "x": 117.5,
             "y": 75
           },
           "id": "e3_s0",
           "startPoint": {
-            "x": 70,
+            "x": 15,
             "y": 5
           }
         }
@@ -111,7 +111,7 @@
   "layoutOptions": {
     "elk.algorithm": "org.eclipse.elk.vertiflex"
   },
-  "width": 137,
+  "width": 142,
   "x": 0,
   "y": 0
 }

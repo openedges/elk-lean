@@ -1,0 +1,59 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeCompaction",
+  "elk.processingOrder.spanningTreeCostFunction": "MINIMUM_ROOT_DISTANCE",
+  "elk.compaction.orthogonal": "true"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 35.5,
+   "height": 36.1,
+   "labels": [
+    {
+     "id": "n0l",
+     "text": "l",
+     "width": 16.8,
+     "height": 14.3
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "width": 35.0,
+   "height": 15.0
+  },
+  {
+   "id": "n2",
+   "width": 33.5,
+   "height": 13.4
+  },
+  {
+   "id": "n3",
+   "width": 46.4,
+   "height": 11.0
+  },
+  {
+   "id": "n4",
+   "width": 39.5,
+   "height": 29.3
+  },
+  {
+   "id": "n5",
+   "width": 10.0,
+   "height": 31.1
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n1"
+   ]
+  }
+ ]
+}

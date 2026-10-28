@@ -1,4 +1,5 @@
 import Elk.Core.Util.ElkUtil
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
 /-!
@@ -124,7 +125,8 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
         generateJunctionPoints e
   let fixedGraphSize := (← ElkM.getNode layoutGraph).props.getD FixedLayouterOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
   if !fixedGraphSize then
-    let padding := (← ElkM.getNode layoutGraph).props.getD FixedLayouterOptions.PADDING {}
+    -- Java `getProperty` stores the cloned default padding on the node (`EMapPropertyHolderImpl`)
+    let padding := (← ElkM.getNodePropSticky layoutGraph FixedLayouterOptions.PADDING).getD {}
     let _ ← ElkUtil.resizeNodeWith layoutGraph (maxx + padding.left + padding.right) (maxy + padding.top + padding.bottom) true true
   monitor.done
 

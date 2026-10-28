@@ -11,14 +11,15 @@ iterations and stores the rows (`RowsStorage`) for the whitespace elimination.
 
 The Rust object is mutable (`&mut self`); `start` returns the drawing and the updated object.
 
-Rust deviations from Java kept:
-* After a row has to be compacted again, Rust continues with the **previous** row (`row_idx - 1`,
-  or row 0 again), Java with the same row (`rowIdx--` followed by the loop's `rowIdx++`).
+Java semantics (ELK Java is the reference; elk-rs differed):
+* After a row has to be compacted again, Java compacts the **same** row again (`rowIdx--` followed
+  by the loop's `rowIdx++`); elk-rs continued with the previous row (`row_idx - 1`, or row 0
+  again), which moved later rows onto earlier ones.
 * The rectangles laid out are the children of `layout_graph` (the clone in later compaction
   iterations); the `rectangles` argument is unused (as in Java).
-* `f64::max`/`f64::min` (NaN-ignoring) instead of `Math.max`/`Math.min`.
-* The special case of a single row skips rows without stacks / stacks without blocks (Java would
-  throw).
+* `Math.max`/`Math.min` (NaN propagating; elk-rs `f64::max`/`f64::min`).
+* The special case of a single row reads the last stack / last block with `List.get(size - 1)`
+  (Java's `IndexOutOfBoundsException` for an empty list; elk-rs skipped it).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -56,7 +57,7 @@ def adjustWidthAndHeight (self : RowFillingAndCompaction) (row : RectRowId) : Re
   for stack in stacks do
     BlockStack.updateDimension stack
     let st ← getStack stack
-    maxHeight := fmax maxHeight st.height
+    maxHeight := javaMax maxHeight st.height
     maxWidth := maxWidth + (st.width + (if index > 0 then self.nodeNodeSpacing else fl0p0))
     index := index + 1
   RectRow.setHeight row maxHeight
@@ -95,7 +96,7 @@ def start (self : RowFillingAndCompaction) (_rectangles : Array NodeId) (_monito
         Block.resetBlock block
       RectRow.resetStacks currentRow
       RectRow.setWidth currentRow targetWidth
-      if rowIdx > 0 then rowIdx := rowIdx - 1
+      -- Java `rowIdx--` + the loop's `rowIdx++`: the same row again
     else
       self.adjustWidthAndHeight currentRow
       if h : rowIdx + 1 < rows.size then
@@ -104,34 +105,36 @@ def start (self : RowFillingAndCompaction) (_rectangles : Array NodeId) (_monito
         let nextRowFirstBlockWidth := (← getBlock (← RectRow.getFirstBlock nextRow)).width
         let increase := currentRowWidth + nns + nextRowFirstBlockWidth - targetWidth
         self := { self with
-          potentialRowWidthIncreaseMax := fmax increase self.potentialRowWidthDecreaseMax
-          potentialRowWidthIncreaseMin := fmin increase self.potentialRowWidthDecreaseMin }
+          potentialRowWidthIncreaseMax := javaMax increase self.potentialRowWidthDecreaseMax
+          potentialRowWidthIncreaseMin := javaMin increase self.potentialRowWidthDecreaseMin }
         let stacks := (← getRow currentRow).stacks
         if let some lastStack := stacks.back? then
           let lastStackWidth := (← getStack lastStack).width
           let spacing := if stacks.size <= 1 then fl0p0 else nns
           let decreaseValue := lastStackWidth + spacing
-          self := { self with potentialRowWidthDecreaseMax := fmax self.potentialRowWidthDecreaseMax decreaseValue }
-          self := { self with potentialRowWidthDecreaseMin := fmin self.potentialRowWidthDecreaseMax decreaseValue }
+          self := { self with potentialRowWidthDecreaseMax := javaMax self.potentialRowWidthDecreaseMax decreaseValue }
+          self := { self with potentialRowWidthDecreaseMin := javaMin self.potentialRowWidthDecreaseMax decreaseValue }
       if rows.size == 1 then
         let stacks := (← getRow currentRow).stacks
-        if let some lastStack := stacks.back? then
-          if let some lastBlock := (← getStack lastStack).blocks.back? then
-            let blk ← getBlock lastBlock
-            let lastBlockWidth := blk.width
-            for blockRow in blk.rows do
-              let decrease := lastBlockWidth - blockRow.width
-              self := { self with
-                potentialRowWidthDecreaseMax := fmax self.potentialRowWidthDecreaseMax decrease
-                potentialRowWidthDecreaseMin := fmin self.potentialRowWidthDecreaseMin decrease }
-              let increase := blockRow.width + nns
-              self := { self with
-                potentialRowWidthIncreaseMax := fmax self.potentialRowWidthIncreaseMax increase
-                potentialRowWidthIncreaseMin := fmin self.potentialRowWidthIncreaseMin increase }
+        let some lastStack := stacks.back?
+          | throw (IO.userError "java.lang.IndexOutOfBoundsException: Index -1 out of bounds for length 0")
+        let some lastBlock := (← getStack lastStack).blocks.back?
+          | throw (IO.userError "java.lang.IndexOutOfBoundsException: Index -1 out of bounds for length 0")
+        let blk ← getBlock lastBlock
+        let lastBlockWidth := blk.width
+        for blockRow in blk.rows do
+          let decrease := lastBlockWidth - blockRow.width
+          self := { self with
+            potentialRowWidthDecreaseMax := javaMax self.potentialRowWidthDecreaseMax decrease
+            potentialRowWidthDecreaseMin := javaMin self.potentialRowWidthDecreaseMin decrease }
+          let increase := blockRow.width + nns
+          self := { self with
+            potentialRowWidthIncreaseMax := javaMax self.potentialRowWidthIncreaseMax increase
+            potentialRowWidthIncreaseMin := javaMin self.potentialRowWidthIncreaseMin increase }
       rowIdx := rowIdx + 1
   let size ← DrawingUtil.calculateDimensions rows nns
-  let totalWidth := fmax size.x (minWidth - (padding.left + padding.right))
-  let height := fmax size.y (minHeight - (padding.top + padding.bottom))
+  let totalWidth := javaMax size.x (minWidth - (padding.left + padding.right))
+  let height := javaMax size.y (minHeight - (padding.top + padding.bottom))
   let additionalHeight := height - size.y
   ElkM.setNodeProp layoutGraph InternalProperties.ADDITIONAL_HEIGHT additionalHeight
   let rowsKey ← RowsStorage.storeRows layoutGraph rows

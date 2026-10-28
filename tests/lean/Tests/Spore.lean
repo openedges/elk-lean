@@ -11,10 +11,12 @@ import Elk.Alg.Spore
   execution phases and `ShrinkTree`;
 * `spore.provider`: the providers, including the elk-rs test `scanline_overlap_removal_test`;
 * `spore.fixtures`: `tests/fixtures/spore/<name>.json` laid out through `Elk.Api.layoutJson` against
-  the elk-rs oracle output `<name>.expected.json` (byte-exact). Fixtures whose elk-rs result is
-  nondeterministic (it iterates a `HashSet<TEdge>`, see `NaiveMinST`) carry the other outcomes
-  observed in 60 oracle runs as `<name>.alt<k>.json`; the Lean (insertion order) result must equal
-  one of them. Set `SPORE_DUMP_DIR` to write the Lean outputs as `<name>.lean.json` there.
+  `<name>.expected.json` (byte-exact; elk-rs oracle outputs, re-pinned to ELK Java's output where they
+  differ, see `tests/fixtures/opt_java_status.tsv`) or `<name>.error` (ELK Java's exception text).
+  Fixtures whose elk-rs result is nondeterministic (it iterates a `std` `HashSet<TEdge>`) may carry
+  other outcomes as `<name>.alt<k>.json`, one of which the Lean result must equal; since SPV the Lean
+  result is Java's (`HashSet` order, `JavaHashSet`) and no fixture has alternatives any more. Set `SPORE_DUMP_DIR` to write the Lean outputs as
+  `<name>.lean.json` there.
 
 Not testable against elk-rs: `sporeCompaction` with `underlyingLayoutAlgorithm = sporeOverlap` (and
 the converse) recurses forever in elk-rs and Java (the underlying option is read from the very
@@ -272,14 +274,15 @@ def spanningTreeSuite : Suite := suite "spore.p2" do
   let p (i : Nat) := (vs[i]!).originalVertex
   let edges := #[TEdge.new (p 0) (p 1), TEdge.new (p 0) (p 2), TEdge.new (p 0) (p 3),
     TEdge.new (p 1) (p 2), TEdge.new (p 1) (p 3), TEdge.new (p 2) (p 3)]
-  let g := { mkGraph vs with tEdges := some edges, preferredRootIndex := some 0 }
+  let g := { mkGraph vs with tEdges := some (({} : JavaHashSet TEdge).addAll edges), preferredRootIndex := some 0 }
   let (_, mn) ← runS (MinSTPhase.process () ProgressMonitor.null) g
   checkEq "MinST chain" (treeXs mn) #[0.0, 10.0, 20.0, 30.0]
   let (_, mx) ← runS (MaxSTPhase.process () ProgressMonitor.null) g
   checkEq "MaxST star" (treeXs mx) #[0.0, 30.0, 10.0, 20.0]
-  -- another root: vertex 2
+  -- another root: vertex 2; the edges to 10 and 30 tie, Java's `HashSet<TEdge>` iteration order puts
+  -- (20,30) first (ELK Java `NaiveMinST` on the same set: 20 30 10 0; elk-rs/insertion order: 20 10 0 30)
   let (_, mn2) ← runS (MinSTPhase.process () ProgressMonitor.null) { g with preferredRootIndex := some 2 }
-  checkEq "MinST root 2" (treeXs mn2) #[20.0, 10.0, 0.0, 30.0]
+  checkEq "MinST root 2" (treeXs mn2) #[20.0, 30.0, 10.0, 0.0]
   -- without a preferred root the first vertex is the root
   let (_, mn3) ← runS (MinSTPhase.process () ProgressMonitor.null) { g with preferredRootIndex := none }
   checkEq "MinST default root" (treeXs mn3) #[0.0, 10.0, 20.0, 30.0]
@@ -296,8 +299,9 @@ def spanningTreeSuite : Suite := suite "spore.p2" do
   check "Delaunay edges" ((del.tEdges.map (·.size)).getD 0 >= 3)
   let pre := #[TEdge.new (p 0) (p 3)]
   let (_, del2) ← runS (P1Structure.DelaunayTriangulationPhase.process () ProgressMonitor.null)
-    { mkGraph vs with tEdges := some pre }
-  check "Delaunay keeps existing edges first" ((del2.tEdges.bind (·[0]?)).map (· == pre[0]!) == some true)
+    { mkGraph vs with tEdges := some (({} : JavaHashSet TEdge).addAll pre) }
+  -- Java adds the triangulation to the existing set (iteration order = hash order, not insertion)
+  check "Delaunay keeps existing edges" ((del2.tEdges.map (·.contains pre[0]!)) == some true)
   check "Delaunay extends existing edges" ((del2.tEdges.map (·.size)).getD 0 >= (del.tEdges.map (·.size)).getD 0)
   -- phase factories
   let tc := TreeConstructionStrategy.maximumSpanningTree.factory
@@ -421,7 +425,8 @@ def importerSuite : Suite := suite "spore.importer" do
   let (graph2, _) ← ElkM.run (imp.importGraph root) g
   let moved := { graph2 with
     vertices := graph2.vertices.set! 0 { (graph2.vertices[0]!).translate (kv 4 6) with originalVertex := kv 5 5 },
-    tEdges := some #[TEdge.new (kv 1 1) (kv 2 2)], tree := some (Tree.new graph2.vertices[0]!) }
+    tEdges := some (({} : JavaHashSet TEdge).addAll #[TEdge.new (kv 1 1) (kv 2 2)]),
+    tree := some (Tree.new graph2.vertices[0]!) }
   let updated ← imp.updateGraph moved
   check "update: edges cleared" updated.tEdges.isNone
   check "update: tree cleared" updated.tree.isNone
@@ -514,8 +519,10 @@ def providerSuite : Suite := suite "spore.provider" do
   -- the importer sees overlapping nodes
   let (g, root, _) := scanlineGraph true
   let (graph, _) ← ElkM.run ((← ElkGraphImporter.new).importGraph root) g
-  let edges := (ScanlineOverlapCheck.new OverlapRemovalLayoutProvider.overlapHandler).sweep graph.vertices #[]
-  check "scanline_overlap_removal_test: overlap edges found" (!edges.isEmpty)
+  let edges := (ScanlineOverlapCheck.new OverlapRemovalLayoutProvider.overlapHandler).sweep graph.vertices {}
+  check "scanline_overlap_removal_test: overlap edges found" (match edges with
+    | .ok e => !e.isEmpty
+    | .error _ => false)
   -- no iterations: nothing moves but the graph is placed
   let (g0, root0, ids0) := mkElk #[(0.0, 0.0, 20.0, 20.0), (5.0, 5.0, 20.0, 20.0)] fun g root =>
     g.setNodeProp root SporeOverlapRemovalOptions.OVERLAP_REMOVAL_MAX_ITERATIONS 0
@@ -594,7 +601,14 @@ def fixtureTests : Suite := suite "spore.fixtures" do
   for name in names do
     let input ← IO.FS.readFile (fixtureDir / s!"{name}.json")
     let expectedPath := fixtureDir / s!"{name}.expected.json"
-    if !(← expectedPath.pathExists) then
+    let errorPath := fixtureDir / s!"{name}.error"
+    if ← errorPath.pathExists then
+      -- ELK Java throws for this input (the exception text, Java class first)
+      let expectedError := (← IO.FS.readFile errorPath).trimAscii.toString
+      match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
+      | .error e => checkEq s!"{name}: fails with the ELK Java exception" (javaExceptionText e) expectedError
+      | .ok _ => report s!"{name}: fails with the ELK Java exception" false "layout succeeded"
+    else if !(← expectedPath.pathExists) then
       report s!"{name}: expected output exists" false s!"missing {expectedPath}"
     else
       let expected ← IO.FS.readFile expectedPath

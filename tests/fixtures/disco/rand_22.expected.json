@@ -194,14 +194,14 @@
       ]
     }
   ],
-  "height": 807.8685339550569,
+  "height": 813.8685339550569,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "disco",
     "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
     "org.eclipse.elk.polyomino.traversalStrategy": "QUADRANTS_MANHATTAN"
   },
-  "width": 807.8685339550569,
+  "width": 813.8685339550569,
   "x": 0,
   "y": 0
 }

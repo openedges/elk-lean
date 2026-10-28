@@ -61,20 +61,20 @@ partial def checkVerticalConstraintValidity (root : NodeId) (currentMinConstrain
     | some value => value
     | none => currentMinConstraint
   let margins := node.props.getD CoreOptions.MARGINS {}
-  let newMinConstraint := rootHeight + node.height + fmax margins.bottom nodeNodeSpacing
-  let edges ← ElkM.withGraph fun g => ElkGraphUtil.allOutgoingEdges g root
-  for edge in edges do
-    let some child ← VertiFlexUtil.edgeTargetNode edge | continue
+  let newMinConstraint := rootHeight + node.height + javaMax margins.bottom nodeNodeSpacing
+  -- Java `root.getOutgoingEdges()` with `(ElkNode) getTargets().get(0)` per edge (`edgeChild`): a
+  -- child that violates its constraint is reported before a later edge's `ClassCastException`
+  for edge in (← ElkM.getNode root).outgoingEdges do
+    let child ← VertiFlexUtil.edgeChild edge
     let childNode ← ElkM.getNode child
     if childNode.props.has VertiFlexOptions.VERTICAL_CONSTRAINT then
       let childConstraint := (childNode.props.get VertiFlexOptions.VERTICAL_CONSTRAINT).getD fl0p0
       let childMargin := childNode.props.getD CoreOptions.MARGINS {}
       if newMinConstraint > childConstraint + childMargin.top then
-        let identifier := childNode.identifier.getD "<unknown>"
+        let identifier := childNode.identifier.getD "null"
         throwUnsupportedConfiguration
           s!"Invalid vertical constraints. Node {identifier} has a vertical constraint that is too low for its ancestors."
-  for edge in edges do
-    let some child ← VertiFlexUtil.edgeTargetNode edge | continue
+  for child in ← VertiFlexUtil.outgoingChildren root do
     checkVerticalConstraintValidity child newMinConstraint nodeNodeSpacing
 
 /-- `set_graph_size(graph)`: the size of the graph is the bounding box of the children (with
@@ -106,7 +106,8 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       | throwUnsupportedConfiguration "The given graph is not a tree!"
     let children := (← ElkM.getNode layoutGraph).children
     for child in children do
-      let numberOfParents ← ElkM.withGraph fun g => (ElkGraphUtil.allIncomingEdges g child).size
+      -- Java `child.getIncomingEdges().size()`: the node's own incoming edges (not its ports')
+      let numberOfParents := (← ElkM.getNode child).incomingEdges.size
       if numberOfParents > 1 then
         throwUnsupportedConfiguration "The given graph is not an acyclic tree!"
       ElkM.modifyNode child fun n => { n with x := fl0p0, y := fl0p0 }

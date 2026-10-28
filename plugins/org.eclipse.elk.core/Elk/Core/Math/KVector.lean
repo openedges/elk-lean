@@ -1,4 +1,5 @@
 import Elk.Core.Util.Java
+import Elk.Core.Util.JavaHashSet
 import Elk.Core.Util.Random
 /-!
 # `org.eclipse.elk.core.math.KVector`
@@ -6,6 +7,9 @@ import Elk.Core.Util.Random
 Immutable two-dimensional vector. The Java class mutates in place
 (`v.add(w)` returns `v`); the Lean port is value based, so every
 "mutating" method returns the new vector and callers rebind.
+
+The trigonometric methods use the reference JVM's functions (`Math.sin`/`Math.cos`: HotSpot
+aarch64 stubs, `Math.asin`/`Math.acos`: fdlibm; `Elk.Core.Util.Java`), not the C library.
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -34,13 +38,21 @@ def DEFAULT_FUZZYNESS : Float := 0.05
 /-- `new KVector(start, end)`: the vector from `start` to `end`. -/
 @[inline] def fromPoints (start «end» : KVector) : KVector := ⟨«end».x - start.x, «end».y - start.y⟩
 
-/-- `new KVector(angle)`: unit vector of the given angle (radians). -/
-def fromAngle (angle : Float) : KVector := ⟨Float.cos angle, Float.sin angle⟩
+/-- `new KVector(angle)`: unit vector of the given angle (radians; `Math.cos`, `Math.sin`). -/
+def fromAngle (angle : Float) : KVector := ⟨javaCos angle, javaSin angle⟩
 
 /-- Java `equals`: exact comparison of both coordinates (`==` on doubles). -/
 instance : BEq KVector := ⟨fun a b => a.x == b.x && a.y == b.y⟩
 
 instance : Hashable KVector := ⟨fun v => mixHash (hash v.x.toBits) (hash v.y.toBits)⟩
+
+/-- Bitwise equal coordinates (the identity stand-in of `JavaHashCode.javaSame`). -/
+@[inline] def sameBits (a b : KVector) : Bool := a.x.toBits == b.x.toBits && a.y.toBits == b.y.toBits
+
+/-- Java `hashCode()`: `Double.hashCode(x) + Integer.reverse(Double.hashCode(y))` (`int` wrap). -/
+instance : JavaHashCode KVector where
+  javaHashCode v := v.x.javaHashCode + v.y.javaHashCode.javaReverse
+  javaSame := sameBits
 
 /-- Java/Rust `toString`: `(x,y)` with Rust `Display` number formatting. -/
 instance : ToString KVector := ⟨fun v => s!"({Float.toRustDisplay v.x},{Float.toRustDisplay v.y})"⟩
@@ -79,12 +91,12 @@ def normalize (v : KVector) : KVector :=
 
 def scaleToLength (v : KVector) (l : Float) : KVector := (v.normalize).scale l
 
-/-- `toRadians`: the angle of the vector in `[0, 2π)`. -/
+/-- `toRadians`: the angle of the vector in `[0, 2π)` (`Math.asin`). -/
 def toRadians (v : KVector) : Float :=
   let l := v.length
-  if v.x >= fl0p0 && v.y >= fl0p0 then Float.asin (v.y / l)
-  else if v.x < fl0p0 then Float.pi - Float.asin (v.y / l)
-  else fl2p0 * Float.pi + Float.asin (v.y / l)
+  if v.x >= fl0p0 && v.y >= fl0p0 then javaAsin (v.y / l)
+  else if v.x < fl0p0 then Float.pi - javaAsin (v.y / l)
+  else fl2p0 * Float.pi + javaAsin (v.y / l)
 
 def toDegrees (v : KVector) : Float := Float.toDegrees v.toRadians
 
@@ -97,12 +109,14 @@ def toDegrees (v : KVector) : Float := Float.toDegrees v.toRadians
 
 @[inline] def crossProduct (v w : KVector) : Float := v.x * w.y - v.y * w.x
 
+/-- `rotate(angle)`: anti-clockwise rotation (`Math.cos`, `Math.sin`). -/
 def rotate (v : KVector) (angle : Float) : KVector :=
-  let c := Float.cos angle
-  let s := Float.sin angle
+  let c := javaCos angle
+  let s := javaSin angle
   ⟨v.x * c - v.y * s, v.x * s + v.y * c⟩
 
-def angle (a b : KVector) : Float := Float.acos (a.dotProduct b / (a.length * b.length))
+/-- `angle(other)`: `Math.acos(dot / (|a| · |b|))`. -/
+def angle (a b : KVector) : Float := javaAcos (a.dotProduct b / (a.length * b.length))
 
 /-- `bound(lowx, lowy, highx, highy)`: clamps into the rectangle. (Java throws
 if `highx < lowx` or `highy < lowy`; the port clamps anyway.) -/

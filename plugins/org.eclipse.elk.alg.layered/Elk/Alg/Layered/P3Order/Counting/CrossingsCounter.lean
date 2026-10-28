@@ -15,7 +15,8 @@ and the elk-rs `graph_element().id` path.
 elk-rs additionally has a `CrossMinSnapshot` fast path (`set_snapshot`, used by the
 `GraphInfoHolder`'s `AllCrossingsCounter`). It reads the same ids from the snapshot and filters
 `node.ports` by side instead of `getPortSideView`; both coincide because ports are sorted by side
-during crossing minimisation and ids/edges do not change after the snapshot is built. Here the
+during crossing minimisation and ids/edges do not change after the snapshot is built (here the
+views are Java's cached ranges on both paths). Here the
 snapshot (`setSnapshot`) is used by `countCrossingsBetweenLayers` and `countInLayerCrossingsOnSide`
 to read the far ends of a port's edges (`port_predecessors`, then `port_successors`, which is
 `connectedEdges` order) as captured ids (the in-layer count only when every numbered port has
@@ -280,24 +281,12 @@ starts with a fresh tree. -/
 @[inline] private def writeAt (pids : Array Nat) (len pid : Nat) : Array Nat :=
   if len < pids.size then pids.set! len pid else pids.push pid
 
-/-- The cached `[lo, hi)` range of `getPortSideView(side)` of a node (`sideView` without the
-`allOnSide` test, which the numbering loop does on the fly); `none` for the uncached view. -/
-@[inline] private def cachedRange (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) : Option (Nat × Nat) :=
-  if !nd.portSidesCached then none
-  else
-    let indices := match nd.portSideIndices with
-      | some idx => idx
-      | none => a.findPortIndices n
-    match indices[ElkEnum.ordinal side]? with
-    | some (some (first, last)) =>
-      let hi := Nat.min last nd.ports.size
-      if first >= hi then some (0, 0) else some (first, hi)
-    | _ => none
-
 /-- Whether `node` is a captured node without nested graph none of whose ports lies on `side`
-(`nodeSideMask`). The crossing minimisation only permutes the ports of such a node and does not
-change their sides, so `getPortSideView(side)` is empty: the cached range is either empty or fails
-`allOnSide`, and the filter finds no port. -/
+(`nodeSideMask`). The crossing minimisation only permutes the ports of such a node within their
+sides and does not change the sides, and its side cache was made from these ports
+(`GraphInfoHolder.initHolder` caches every node before the snapshot is built, the distributor
+caches again after sorting), so the cache has no range for `side` and `getPortSideView(side)` is
+empty. -/
 @[inline] def noPortOnSide (s : CrossMinSnapshot) (node : LNodeId) (side : PortSide) : Bool :=
   let flat1 := s.nodeMap.get node.idx
   flat1 != 0 && !s.nodeHasNestedGraph (flat1 - 1) && s.nodeSideMask (flat1 - 1) &&& sideBit side == 0
@@ -313,41 +302,27 @@ side and id (`portFlags`, `portId`) are the live ones. -/
 `topDown`; the views are not reversed, as for `EAST` top-down and `WEST` bottom-up), continuing
 after the `len` ports numbered so far: `positions[LPort.id] := len`, and the captured id of the
 port goes to `pids[len]` (`pids` is a scratch buffer; only `pids[0:len]` is meaningful). The state
-is the current node's port list `ports` and the cursor `j < hi` in it (`filter`: the uncached view,
-ports on other sides skipped; else the cached range), `start` the value of `len` when the node was
-entered, `k` the next node to visit. A cached range is numbered while its ports are checked
-(`sideView`'s `allOnSide`): at the first port on another side the node is numbered again from
-`start` with the filter (every port numbered before lies on `side`, so its position is written
-again, and `pids[start:]` is overwritten). -/
+is the current node's port list `ports` and the cursor `j < hi` in its view `ports[j:hi]` (`sideView`,
+Java's range without re-validating the sides), `k` the next node to visit. -/
 private partial def numberSideViewsSnap (a : LGraphArena) (s : CrossMinSnapshot) (nodes : Array LNodeId)
-    (side : PortSide) (topDown : Bool) (k : Nat) (ports : Array LPortId) (j hi : Nat) (filter stable : Bool)
-    (start : Nat) (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
+    (side : PortSide) (topDown : Bool) (k : Nat) (ports : Array LPortId) (j hi : Nat) (stable : Bool)
+    (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
   if h : j < hi ∧ j < ports.size then
     let p := ports[j]
     let pid := s.portId p
-    -- side and `LPort.id` of the port: for a `stable` node (`isStableNode`) the captured ones
-    let onSide := if stable then s.portFlag pid >>> 3 == sideCode side else sideIs (a.port p).side side
-    if !onSide then
-      if filter then
-        numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter stable start len positions pids
-      else
-        numberSideViewsSnap a s nodes side topDown k ports 0 ports.size true stable start start positions pids
-    else
-      let liveId := if stable then pid else asUsize (a.port p).id
-      numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi filter stable start (len + 1)
-        (setPosition positions liveId len) (writeAt pids len pid)
+    -- `LPort.id` of the port: for a `stable` node (`isStableNode`) the captured one
+    let liveId := if stable then pid else asUsize (a.port p).id
+    numberSideViewsSnap a s nodes side topDown k ports (j + 1) hi stable (len + 1)
+      (setPosition positions liveId len) (writeAt pids len pid)
   else if k < nodes.size then
     let node := nodes[if topDown then k else nodes.size - 1 - k]!
     let stable := isStableNode s node
     if stable && noPortOnSide s node side then
-      numberSideViewsSnap a s nodes side topDown (k + 1) #[] 0 0 false stable len len positions pids
+      numberSideViewsSnap a s nodes side topDown (k + 1) #[] 0 0 stable len positions pids
     else
       let nd := a.node node
-      match cachedRange a node nd side with
-      | some (lo, hi) =>
-        numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports lo hi false stable len len positions pids
-      | none =>
-        numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports 0 nd.ports.size true stable len len positions pids
+      let v := sideView a node nd side
+      numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports v.lo v.hi stable len positions pids
   else (positions, pids, len)
 
 /-- Whether a far end of `ends[k:hi]` lies above `cur`. -/
@@ -444,35 +419,25 @@ cardinalities are not stored (the `AllCrossingsCounter` never reads them before 
 /-- `numberSideViewsSnap` with every view reversed (`getPorts` top-down of a side other than `EAST`):
 the current node's view `ports[lo:j]` is walked downwards. -/
 private partial def numberSideViewsSnapRev (a : LGraphArena) (s : CrossMinSnapshot) (nodes : Array LNodeId)
-    (side : PortSide) (k : Nat) (ports : Array LPortId) (j lo : Nat) (filter stable : Bool)
-    (start : Nat) (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
+    (side : PortSide) (k : Nat) (ports : Array LPortId) (j lo : Nat) (stable : Bool)
+    (len : Nat) (positions : Array Int) (pids : Array Nat) : Array Int × Array Nat × Nat :=
   if lo < j then
     match ports[j - 1]? with
     | some p =>
       let pid := s.portId p
-      let onSide := if stable then s.portFlag pid >>> 3 == sideCode side else sideIs (a.port p).side side
-      if !onSide then
-        if filter then
-          numberSideViewsSnapRev a s nodes side k ports (j - 1) lo filter stable start len positions pids
-        else
-          numberSideViewsSnapRev a s nodes side k ports ports.size 0 true stable start start positions pids
-      else
-        let liveId := if stable then pid else asUsize (a.port p).id
-        numberSideViewsSnapRev a s nodes side k ports (j - 1) lo filter stable start (len + 1)
-          (setPosition positions liveId len) (writeAt pids len pid)
-    | none => numberSideViewsSnapRev a s nodes side k ports (j - 1) lo filter stable start len positions pids
+      let liveId := if stable then pid else asUsize (a.port p).id
+      numberSideViewsSnapRev a s nodes side k ports (j - 1) lo stable (len + 1)
+        (setPosition positions liveId len) (writeAt pids len pid)
+    | none => numberSideViewsSnapRev a s nodes side k ports (j - 1) lo stable len positions pids
   else if h : k < nodes.size then
     let node := nodes[k]
     let stable := isStableNode s node
     if stable && noPortOnSide s node side then
-      numberSideViewsSnapRev a s nodes side (k + 1) #[] 0 0 false stable len len positions pids
+      numberSideViewsSnapRev a s nodes side (k + 1) #[] 0 0 stable len positions pids
     else
       let nd := a.node node
-      match cachedRange a node nd side with
-      | some (lo, hi) =>
-        numberSideViewsSnapRev a s nodes side (k + 1) nd.ports hi lo false stable len len positions pids
-      | none =>
-        numberSideViewsSnapRev a s nodes side (k + 1) nd.ports nd.ports.size 0 true stable len len positions pids
+      let v := sideView a node nd side
+      numberSideViewsSnapRev a s nodes side (k + 1) nd.ports v.hi v.lo stable len positions pids
   else (positions, pids, len)
 
 /-- Whether every captured id of `pids[i:n]` has `portEndsOk`. -/
@@ -665,35 +630,20 @@ structure NSState where
   match st with
   | ⟨positions, ports, index, stack⟩ => ⟨positions, ports, index, stack.push n⟩
 
-/-- Numbers the ports of a side view from position `j` (`v`: `ports[lo:hi]` when cached, else the
-ports on `side`), only those with a `PORT_DUMMY` with `needDummy`. -/
-partial def nsNumberView (a : LGraphArena) (ports : Array LPortId) (v : SideView) (side : PortSide) (needDummy : Bool)
+/-- Numbers the ports of a side view (`ports[lo:hi]`) from position `j`, only those with a
+`PORT_DUMMY` with `needDummy`. -/
+partial def nsNumberView (a : LGraphArena) (ports : Array LPortId) (v : SideView) (needDummy : Bool)
     (j : Nat) (st : NSState) : NSState :=
-  if v.cached then
-    if h : j < v.hi ∧ j < ports.size then
-      let p := ports[j]
-      let st := if !needDummy || (a.port p).internal.portDummy.isSome then nsNumber a p st else st
-      nsNumberView a ports v side needDummy (j + 1) st
-    else st
-  else if h : j < ports.size then
+  if h : j < v.hi ∧ j < ports.size then
     let p := ports[j]
-    let pt := a.port p
-    let st := if sideIs pt.side side && (!needDummy || pt.internal.portDummy.isSome) then nsNumber a p st else st
-    nsNumberView a ports v side needDummy (j + 1) st
+    let st := if !needDummy || (a.port p).internal.portDummy.isSome then nsNumber a p st else st
+    nsNumberView a ports v needDummy (j + 1) st
   else st
-
-/-- The position of the first port of a side view from position `j` (`ports.size` for an empty view). -/
-partial def viewFirstIdx (a : LGraphArena) (ports : Array LPortId) (v : SideView) (side : PortSide) (j : Nat) : Nat :=
-  if v.cached then
-    if j < v.hi && j < ports.size then j else ports.size
-  else if h : j < ports.size then
-    if sideIs (a.port ports[j]).side side then j else viewFirstIdx a ports v side (j + 1)
-  else ports.size
 
 /-- The position of `getPortSideView(side)[0]` in the node's port list (`ports.size`: empty view). -/
 @[inline] def firstIdxOnSide (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) : Nat :=
   let v := sideView a n nd side
-  viewFirstIdx a nd.ports v side (if v.cached then v.lo else 0)
+  if v.lo < v.hi && v.lo < nd.ports.size then v.lo else nd.ports.size
 
 /-- Numbers `getPortSideView(side)[0]` of a node when the view is not empty. -/
 @[inline] def nsNumberFirst (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) (st : NSState) : NSState :=
@@ -729,10 +679,10 @@ partial def nsInitLoop (a : LGraphArena) (nodes : Array LNodeId) (i : Nat) (hasL
     match nd.type with
     | .normal =>
       let vn := sideView a current nd .north
-      let st := nsNumberView a nd.ports vn .north true (if vn.cached then vn.lo else 0) st
+      let st := nsNumberView a nd.ports vn true vn.lo st
       let st := nsEmptyStack a st
       let vs := sideView a current nd .south
-      let st := nsNumberView a nd.ports vs .south true (if vs.cached then vs.lo else 0) st
+      let st := nsNumberView a nd.ports vs true vs.lo st
       nsInitLoop a nodes (i + 1) hasLast last st
     | .northSouthPort =>
       let st := nsNumberFirst a current nd .west st
@@ -740,7 +690,7 @@ partial def nsInitLoop (a : LGraphArena) (nodes : Array LNodeId) (i : Nat) (hasL
       nsInitLoop a nodes (i + 1) hasLast last st
     | .longEdge =>
       let vw := sideView a current nd .west
-      let st := nsNumberView a nd.ports vw .west false (if vw.cached then vw.lo else 0) st
+      let st := nsNumberView a nd.ports vw false vw.lo st
       let st := if firstIdxOnSide a current nd .east < nd.ports.size then nsPush current st else st
       nsInitLoop a nodes (i + 1) hasLast last st
     | _ => nsInitLoop a nodes (i + 1) hasLast last st
@@ -985,8 +935,8 @@ def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : A
     let a ← get
     let positions ← c.portPositions.swap #[]
     let pids ← c.idScratch.swap #[]
-    let (positions, pids, len) := numberSideViewsSnap a s leftLayer .east true 0 #[] 0 0 false false 0 0 positions pids
-    let (positions, pids, n) := numberSideViewsSnap a s rightLayer .west false 0 #[] 0 0 false false len len positions pids
+    let (positions, pids, len) := numberSideViewsSnap a s leftLayer .east true 0 #[] 0 0 false 0 positions pids
+    let (positions, pids, n) := numberSideViewsSnap a s rightLayer .west false 0 #[] 0 0 false len positions pids
     c.portPositions.set positions
     let crossings := countBetweenSnapLoop s positions pids 0 n (Array.replicate (2 * n + 1) 0) #[] 0 0
     c.idScratch.set pids
@@ -1011,8 +961,8 @@ def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (
     let pids ← c.idScratch.swap #[]
     -- `getPorts(node, side, true)`: the `EAST` views as they are, the others reversed
     let (positions, pids, n) := if sideIs side .east then
-        numberSideViewsSnap a s nodes side true 0 #[] 0 0 false false 0 0 positions pids
-      else numberSideViewsSnapRev a s nodes side 0 #[] 0 0 false false 0 0 positions pids
+        numberSideViewsSnap a s nodes side true 0 #[] 0 0 false 0 positions pids
+      else numberSideViewsSnapRev a s nodes side 0 #[] 0 0 false 0 positions pids
     if !allEndsOk s pids 0 n then
       -- ports whose far ends the snapshot does not know: the live path (which numbers the same again)
       c.portPositions.set positions

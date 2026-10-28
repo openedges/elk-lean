@@ -220,9 +220,17 @@ def aggregateBounds (graph : NodeId) (children : Array NodeId) : VertiFlexM Unit
     { p with outlineMaxDepth := some outlineMaxDepth, minX := some minX, maxX := some maxX,
              maxY := some outlineMaxDepth }
 
-/-- `split_group(group, width_left_right)`: the index of the last node of the group that goes to
-the left, with the updated `(width_left, width_right)` pair. -/
-def splitGroup (group : Array NodeId) (widthLeft widthRight : Float) : ElkM (Nat × Float × Float) := do
+/-- `splitGroup(group, widthLeftRight)`: the index of the last node of the group that goes to the
+left (`-1`: none), with the updated `(widthLeft, widthRight)` pair.
+
+Java's loop `while (desiredLeft < newLeftWidth && i < group.size()) newLeftWidth += group.get(i)
+.getWidth();` never increments `i`: it starts with `newLeftWidth = 0` and only runs for a negative
+`desiredLeft`, which non-negative widths cannot produce (`widthLeft` only accumulates `exceed =
+-desiredLeft ≤ 0`); with it, Java does not terminate unless the first width is negative. So `i` is
+`0`, `under = desiredLeft + width₀` and the result is `-1` unless `exceed > under`: a group of
+several nodes goes entirely to the right. (elk-rs incremented `i` and used `usize` indices; the
+earlier Lean port truncated `i - 1` to `0`.) -/
+def splitGroup (group : Array NodeId) (widthLeft widthRight : Float) : ElkM (Int × Float × Float) := do
   if group.size == 1 then
     return (0, widthLeft, widthRight)
   let mut widths : Array Float := #[]
@@ -232,16 +240,22 @@ def splitGroup (group : Array NodeId) (widthLeft widthRight : Float) : ElkM (Nat
   for w in widths do
     totalNewWidth := totalNewWidth + w
   let desiredLeft := (totalNewWidth - widthLeft + widthRight) / 2.0
-  let mut i := 0
+  let i : Nat := 0
   let mut newLeftWidth := 0.0
-  while desiredLeft < newLeftWidth && i < group.size do
-    newLeftWidth := newLeftWidth + widths[i]!
-    i := i + 1
+  let w0 := widths[i]!
+  if desiredLeft < newLeftWidth then
+    -- Java's loop without `i++`: it ends only when the first width is negative (or NaN: the sum
+    -- becomes NaN and the test fails); a width `>= 0` keeps the sum above `desiredLeft` forever
+    if w0 >= 0.0 then
+      throw (IO.userError
+        "java.lang.IllegalStateException: VertiFlex RelativeXPlacer.splitGroup does not terminate (Java loops forever)")
+    while desiredLeft < newLeftWidth do
+      newLeftWidth := newLeftWidth + w0
   let exceed := newLeftWidth - desiredLeft
-  let under := desiredLeft - (newLeftWidth - widths[i - 1]!)
-  let resultIndex := if exceed > under then i else i - 1
+  let under := desiredLeft - (newLeftWidth - w0)
+  let resultIndex : Int := if exceed > under then (i : Int) else (i : Int) - 1
   let mut newRightWidth := 0.0
-  for w in widths.extract (resultIndex + 1) widths.size do
+  for w in widths.extract (resultIndex + 1).toNat widths.size do
     newRightWidth := newRightWidth + w
   return (resultIndex, widthLeft + exceed, widthRight + newRightWidth)
 
@@ -279,16 +293,16 @@ def splitNodesWithModelOrder (original : Array NodeId) : VertiFlexM (Array NodeI
       let (finalIndexOfLeft, wl, wr) ← splitGroup currentGroup widthLeft widthRight
       widthLeft := wl
       widthRight := wr
-      left := left ++ currentGroup.extract 0 (finalIndexOfLeft + 1)
-      right := right ++ currentGroup.extract (finalIndexOfLeft + 1) currentGroup.size
+      left := left ++ currentGroup.extract 0 (finalIndexOfLeft + 1).toNat
+      right := right ++ currentGroup.extract (finalIndexOfLeft + 1).toNat currentGroup.size
       currentGroup := #[next]
     current := next
     if i == original.size - 1 then
       let (finalIndexOfLeft, wl, wr) ← splitGroup currentGroup widthLeft widthRight
       widthLeft := wl
       widthRight := wr
-      left := left ++ currentGroup.extract 0 (finalIndexOfLeft + 1)
-      right := right ++ currentGroup.extract (finalIndexOfLeft + 1) currentGroup.size
+      left := left ++ currentGroup.extract 0 (finalIndexOfLeft + 1).toNat
+      right := right ++ currentGroup.extract (finalIndexOfLeft + 1).toNat currentGroup.size
   return (left, right)
 
 /-- `sort_subtrees(children)`: sorts by y (stable, model order as tie breaker), then arranges the
@@ -340,16 +354,16 @@ def sortSubtrees (cfg : Config) (children : Array NodeId) : VertiFlexM (Array No
 /-- `recursive_straightline_placement(graph)`. -/
 partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : VertiFlexM Unit := do
   makeSimpleOutlines cfg graph
-  let outgoing ← ElkM.withGraph fun g => ElkGraphUtil.allOutgoingEdges g graph
-  if outgoing.isEmpty then return
+  -- Java `graph.getOutgoingEdges()`: the node's own edges (`VertiFlexUtil.outgoingChildren`)
+  let targets ← VertiFlexUtil.outgoingChildren graph
+  if targets.isEmpty then return
   let mut children : Array NodeId := #[]
-  for edge in outgoing do
-    if let some child ← VertiFlexUtil.edgeTargetNode edge then
-      recursiveStraightlinePlacement cfg child
-      children := children.push child
+  for child in targets do
+    recursiveStraightlinePlacement cfg child
+    children := children.push child
   children ← sortSubtrees cfg children
   if children.isEmpty then
-    throw (IO.userError "index out of bounds: the len is 0 but the index is 0")
+    throw (IO.userError "java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0")
   for i in [0:children.size - 1] do
     bundleChildren children[0]! children[i]! children[i + 1]!
   let mut pos := 0
@@ -370,7 +384,9 @@ partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : Ver
     let childStart ← ElkM.getNode children[maxDepthStartPos]!
     let childEnd ← ElkM.getNode children[pos - 1]!
     moveRoot := (childStart.x + childEnd.x + childEnd.width) / fl2p0 - gNode.x - gNode.width / fl2p0
-  if !cfg.considerNodeModelOrder then
+  -- Java reads `CONSIDER_NODE_MODEL_ORDER` from the tree node here (`graph` is the subtree root), not
+  -- from the layout graph like `sortSubTrees`: unset on the node, it is the default `true`
+  if !(gNode.props.getD VertiFlexOptions.CONSIDER_NODE_MODEL_ORDER true) then
     let mut betterMoveRoot := (first.x + last.x + last.width - gNode.width) / fl2p0 - gNode.x
     if betterMoveRoot < moveRoot then
       for i in [0:maxDepthStartPos] do
@@ -439,15 +455,14 @@ partial def recursiveStraightlinePlacement (cfg : Config) (graph : NodeId) : Ver
 /-- `recursive_bentline_placement(graph)`. -/
 partial def recursiveBentlinePlacement (cfg : Config) (graph : NodeId) : VertiFlexM Unit := do
   makeSimpleOutlines cfg graph
-  let outgoing ← ElkM.withGraph fun g => ElkGraphUtil.allOutgoingEdges g graph
-  if outgoing.isEmpty then return
+  let targets ← VertiFlexUtil.outgoingChildren graph
+  if targets.isEmpty then return
   let mut children : Array NodeId := #[]
-  for edge in outgoing do
-    if let some child ← VertiFlexUtil.edgeTargetNode edge then
-      recursiveBentlinePlacement cfg child
-      children := children.push child
+  for child in targets do
+    recursiveBentlinePlacement cfg child
+    children := children.push child
   if children.isEmpty then
-    throw (IO.userError "index out of bounds: the len is 0 but the index is 0")
+    throw (IO.userError "java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0")
   for i in [0:children.size - 1] do
     bundleChildren children[0]! children[i]! children[i + 1]!
   let gNode ← ElkM.getNode graph

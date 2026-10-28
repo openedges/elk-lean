@@ -1,0 +1,93 @@
+{
+ "children": [
+  {
+   "height": 20.0,
+   "id": "n0",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "q",
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     },
+     "width": 4.0,
+     "x": 8.0,
+     "y": 20.0
+    }
+   ],
+   "width": 20.0,
+   "x": 5.0,
+   "y": 0.0
+  },
+  {
+   "height": 20.0,
+   "id": "n1",
+   "width": 20.0,
+   "x": 0.0,
+   "y": 0.0
+  },
+  {
+   "height": 10.0,
+   "id": "n2",
+   "width": 30.0,
+   "x": 0.0,
+   "y": 90.0
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 10.0,
+      "y": 0.0
+     },
+     "id": "e_s0",
+     "startPoint": {
+      "x": 15.0,
+      "y": 20.0
+     }
+    }
+   ],
+   "sources": [
+    "q"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "f",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 15.0,
+      "y": 90.0
+     },
+     "id": "f_s0",
+     "startPoint": {
+      "x": 15.0,
+      "y": 20.0
+     }
+    }
+   ],
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  }
+ ],
+ "height": 112.0,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "vertiflex"
+ },
+ "width": 42.0,
+ "x": 0.0,
+ "y": 0.0
+}

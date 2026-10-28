@@ -1,0 +1,83 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeOverlap",
+  "elk.processingOrder.spanningTreeCostFunction": "CIRCLE_UNDERLAP",
+  "elk.spacing.nodeNode": "20"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 45.3,
+   "height": 28.4
+  },
+  {
+   "id": "n1",
+   "width": 21.1,
+   "height": 33.2
+  },
+  {
+   "id": "n2",
+   "width": 15.3,
+   "height": 16.4
+  },
+  {
+   "id": "n3",
+   "width": 19.5,
+   "height": 12.8
+  },
+  {
+   "id": "n4",
+   "width": 46.2,
+   "height": 19.5
+  },
+  {
+   "id": "n5",
+   "width": 10.1,
+   "height": 10.0
+  },
+  {
+   "id": "n6",
+   "width": 40.7,
+   "height": 36.0
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "n3"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "n6"
+   ],
+   "targets": [
+    "n5"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n3"
+   ]
+  }
+ ]
+}

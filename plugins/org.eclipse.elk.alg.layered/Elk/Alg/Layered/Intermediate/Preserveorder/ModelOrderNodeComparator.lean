@@ -3,7 +3,7 @@ import Elk.Alg.Layered.Intermediate.Preserveorder.ModelOrderPortComparator
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.preserveorder.ModelOrderNodeComparator`
 
-Port of elk-rs `intermediate/preserveorder/model_order_node_comparator.rs`: compares two nodes of one
+Port of `ModelOrderNodeComparator.java` (elk-rs `model_order_node_comparator.rs`): compares two nodes of one
 layer by the order of the previous-layer nodes they are connected to (for dummy nodes or with
 `PREFER_EDGES`), by the long edge feedback structure of helper dummies, and by their (group) model
 order. Like the port comparator it is stateful: every decision is recorded in transitive
@@ -21,14 +21,17 @@ the comparison sequence of the sorting algorithm matters (Rust and Java sort wit
   `StateT ModelOrderNodeComparator LayeredM`.
 * `clearTransitiveOrdering`, `resetForPreviousLayer`, `resetForPreviousLayerSlice` are pure updates.
 
-## Deviations from Java (Rust is followed)
+## Java semantics (ELK Java is the reference; elk-rs differed)
+* Java's fourth transitivity check repeats the second one (`biggerThan.get(n2).contains(n1)`) and so
+  never decides (elk-rs tested `smallerThan(n2) ∋ n1`).
+* The previous-layer check iterates the previous layer and the first of the two source nodes found
+  decides, also when the other one is not in it (elk-rs decided only when both were in it).
+
+## Deviations from Java (kept from elk-rs)
 * A `visiting` set of the pairs currently being compared makes a recursive comparison of the same
   pair return `0` (Java can recurse without bound).
-* The fourth transitivity check uses `smallerThan(n2) ∋ n1` (Java checks `biggerThan(n2)` twice).
 * `layer_id` is `Layer.id as usize` (`0` without a layer); the "previous layer" of a node in layer id
   `0` does not exist (Rust `checked_sub`).
-* The previous-layer check uses a position map and decides only when both source nodes are in the
-  previous layer (Java returns as soon as one is found).
 * Missing ports, edge ends or owners make `handle_helper_dummy_nodes` return `0` instead of throwing.
 * `model_order_from_connected_edges` falls back to `LongEdgeOrderingStrategy.returnValue` when the
   first incoming edge has no `MODEL_ORDER` (Java would throw on unboxing `null`).
@@ -41,8 +44,6 @@ open Elk.Graph Elk.Core.Options Elk.Alg.Layered.Graph Elk.Alg.Layered.Options La
 structure ModelOrderNodeComparator where
   /-- `previous_layer`. -/
   previousLayer : Array LNodeId := #[]
-  /-- `previous_layer_position`: node → index in `previousLayer`. -/
-  previousLayerPosition : Std.HashMap LNodeId Nat := {}
   /-- `graph` (the options read through it). -/
   graph : ModelOrderGraphContext := {}
   /-- `ordering_strategy` (`CONSIDER_MODEL_ORDER_STRATEGY`). -/
@@ -134,7 +135,7 @@ groupOrderStrategy, beforePorts)`. -/
 def new (graph : ModelOrderGraphContext) (previousLayer : Array LNodeId) (orderingStrategy : OrderingStrategy)
     (longEdgeNodeOrder : LongEdgeOrderingStrategy) (groupOrderStrategy : GroupOrderStrategy) (beforePorts : Bool) :
     ModelOrderNodeComparator :=
-  { previousLayer := previousLayer, previousLayerPosition := layerPositionMap previousLayer, graph := graph
+  { previousLayer := previousLayer, graph := graph
     orderingStrategy := orderingStrategy, groupOrderStrategy := groupOrderStrategy
     longEdgeNodeOrder := longEdgeNodeOrder, beforePorts := beforePorts }
 
@@ -144,7 +145,7 @@ def clearTransitiveOrdering (c : ModelOrderNodeComparator) : ModelOrderNodeCompa
 
 /-- Rust `reset_for_previous_layer(previous_layer)`: new previous layer, no relations. -/
 def resetForPreviousLayer (c : ModelOrderNodeComparator) (previousLayer : Array LNodeId) : ModelOrderNodeComparator :=
-  { c with previousLayer := previousLayer, previousLayerPosition := layerPositionMap previousLayer
+  { c with previousLayer := previousLayer
            relations := {}, visiting := {} }
 
 /-- Rust `reset_for_previous_layer_slice(previous_layer)` (same as `resetForPreviousLayer`). -/
@@ -180,7 +181,8 @@ def recordDecision (n1 n2 : LNodeId) (n1Bigger : Bool) : NodeComparatorM Int := 
 def recordCompared (n1 n2 : LNodeId) (compared : Int) : NodeComparatorM Unit := do
   if compared > 0 then updateBiggerAndSmaller n1 n2 else updateBiggerAndSmaller n2 n1
 
-/-- The four transitivity checks at the start of `compare` (indices are allocated for `n1`, then `n2`). -/
+/-- The transitivity checks at the start of `compare` (indices are allocated for `n1`, then `n2`); Java's
+fourth check (`biggerThan.get(n2).contains(n1)`, a repetition of the second) never decides. -/
 def relationVerdict (n1 n2 : LNodeId) : NodeComparatorM (Option Int) := do
   let k1 ← withRelations (·.index n1)
   let k2 ← withRelations (·.index n2)
@@ -188,16 +190,12 @@ def relationVerdict (n1 n2 : LNodeId) : NodeComparatorM (Option Int) := do
   if rel.isBigger k1 k2 then return some 1
   if rel.isBigger k2 k1 then return some (-1)
   if rel.isSmaller k1 k2 then return some (-1)
-  if rel.isSmaller k2 k1 then return some 1
   return none
 
-/-- Rust `compare_in_previous_layer(p1_node, p2_node)`: compares the positions in the previous layer
-(`0` unless both nodes are in it). -/
+/-- `for (LNode previousNode : previousLayer)`: `-1` if `p1Node` is found first, `1` if `p2Node` is,
+`0` if neither is in the previous layer. -/
 def compareInPreviousLayer (p1Node p2Node : LNodeId) : NodeComparatorM Int := do
-  let pos := (← get).previousLayerPosition
-  match pos.get? p1Node, pos.get? p2Node with
-  | some left, some right => return cmpInt left right
-  | _, _ => return 0
+  return ModelOrderPortComparator.checkReferenceLayer (← get).previousLayer p1Node p2Node
 
 /-- Rust `model_order_from_connected_edges(node)`: `MODEL_ORDER` of the first incoming edge of the
 first port with incoming edges, else `long_edge_node_order.return_value()`. -/

@@ -64,9 +64,17 @@ def tEdgeTriangle : Suite := suite "alg.common.TEdge/TTriangle" do
   let e := TEdge.new (kv 0 0) (kv 1 2)
   let r := TEdge.new (kv 1 2) (kv 0 0)
   check "edge equality is unordered" (e == r)
-  check "edge hash is unordered" (hash e == hash r)
+  check "edge hash is unordered (Java u.hashCode() + v.hashCode())"
+    (JavaHashCode.javaHashCode e == JavaHashCode.javaHashCode r)
   check "edge inequality" (!(e == TEdge.new (kv 0 0) (kv 1 3)))
-  check "edge set key" (TEdge.sameSetKey e r && (TEdge.insertUnique #[e] r).size == 1)
+  check "edge set dedups the reversed edge" (((({} : JavaHashSet TEdge).add e).1.add r).1.size == 1)
+  -- JVM values (Temurin 21): `KVector.hashCode()` = `Double.hashCode(x) + Integer.reverse(Double.hashCode(y))`
+  checkEq "KVector(1.5, -2.25).hashCode()" (JavaHashCode.javaHashCode (kv 1.5 (-2.25))) (1073233923 : UInt32)
+  checkEq "KVector(-0.0, 0.0).hashCode()" (JavaHashCode.javaHashCode (kv (-0.0) 0.0)) (2147483648 : UInt32)
+  checkEq "KVector(NaN, 3).hashCode()" (JavaHashCode.javaHashCode (kv (0.0 / 0.0) 3)) (2146963458 : UInt32)
+  checkEq "TEdge((0,0),(1,2)).hashCode()" (JavaHashCode.javaHashCode e) (1072693250 : UInt32)
+  checkEq "Integer.reverse(12345)" (UInt32.javaReverse 12345) (2618032128 : UInt32)
+  checkEq "Double.hashCode(12.7)" (Float.javaHashCode 12.7) (642711552 : UInt32)
   let t := TTriangle.new (kv 0 0) (kv 2 0) (kv 0 2)
   checkFloat "circumcenter x" t.getCircumcenter.x 1.0
   checkFloat "circumcenter y" t.getCircumcenter.y 1.0
@@ -78,7 +86,9 @@ def tEdgeTriangle : Suite := suite "alg.common.TEdge/TTriangle" do
   check "containsVertex" (t.containsVertex (kv 2 0) && !t.containsVertex (kv 2 2))
   let t2 := TTriangle.new (kv 2 0) (kv 0 2) (kv 0 0)
   check "triangle equality is order independent" (t == t2)
-  check "triangle set key is order dependent" (!TTriangle.sameSetKey t t2 && TTriangle.sameSetKey t t)
+  check "triangle hash is order independent (Java sum)" (JavaHashCode.javaHashCode t == JavaHashCode.javaHashCode t2)
+  checkEq "TTriangle((0,0),(2,0),(0,2)).hashCode()" (JavaHashCode.javaHashCode t) (1073741826 : UInt32)
+  check "triangle set dedups a permutation" (((({} : JavaHashSet TTriangle).add t).1.add t2).1.size == 1)
 
 private def hasEdge (es : Array TEdge) (a b : KVector) : Bool := es.any (· == TEdge.new a b)
 
@@ -94,14 +104,14 @@ def bowyerWatson : Suite := suite "alg.common.BowyerWatsonTriangulation" do
   let b := kv 10 0
   let c := kv 5 8
   let d := kv 5 (-8)
-  let es := BowyerWatsonTriangulation.triangulateWithoutDebug #[a, b, c, d]
+  let es := (BowyerWatsonTriangulation.triangulateWithoutDebug #[a, b, c, d]).toArray
   checkEq "rhombus edge count" es.size 5
   check "rhombus short diagonal" (hasEdge es a b)
   check "rhombus no long diagonal" (!hasEdge es c d)
   check "rhombus sides" (hasEdge es a c && hasEdge es c b && hasEdge es b d && hasEdge es d a)
   -- square with center: 4 sides + 4 spokes
   let sq := #[kv 0 0, kv 10 0, kv 10 10, kv 0 10, kv 5 5]
-  let es := BowyerWatsonTriangulation.triangulate sq
+  let es := (BowyerWatsonTriangulation.triangulate sq).toArray
   checkEq "square+center edge count" es.size 8
   check "square+center spokes" (#[kv 0 0, kv 10 0, kv 10 10, kv 0 10].all (hasEdge es (kv 5 5)))
   check "square+center no diagonal" (!hasEdge es (kv 0 0) (kv 10 10) && !hasEdge es (kv 10 0) (kv 0 10))
@@ -110,7 +120,7 @@ def bowyerWatson : Suite := suite "alg.common.BowyerWatsonTriangulation" do
     (es.all fun e => sq.any (· == e.u) && sq.any (· == e.v))
   -- 6 points: a triangle with three points inside forming a smaller triangle
   let six := #[kv 0 0, kv 100 0, kv 50 90, kv 50 20, kv 35 45, kv 65 45]
-  let es := BowyerWatsonTriangulation.triangulateWithoutDebug six
+  let es := (BowyerWatsonTriangulation.triangulateWithoutDebug six).toArray
   -- the finite super triangle swallows the two long hull edges (0,0)-(50,90) and
   -- (100,0)-(50,90): 10 edges instead of 3n - 3 - h = 12 (same edge set as elk-rs,
   -- checked against the oracle crate)
@@ -142,6 +152,10 @@ def naiveMinST : Suite := suite "alg.common.NaiveMinST" do
   -- ties keep the input order: from the root, (a,c) comes before (a,b) at equal cost
   let tie := NaiveMinST.createSpanningTree #[TEdge.new a c, TEdge.new b a] a (fun _ => 1.0)
   checkEq "tie keeps input order" (tie.children.map (·.node)) #[c, b]
+  -- Java `weight <= minWeight` (+∞) never takes a NaN-weight edge; `Double.compareTo` sorts NaN last
+  let nanCost : ICostFunction := fun e => if e.v == c || e.u == c then 0.0 / 0.0 else 1.0
+  let skipNaN := NaiveMinST.createSpanningTree #[TEdge.new a c, TEdge.new a b] a nanCost
+  checkEq "NaN weight edge skipped" (skipNaN.preorder) #[a, b]
   -- maximum spanning tree via an inverted cost function (MaxSTPhase)
   let maxST := NaiveMinST.createSpanningTreeWithoutDebug edges a (fun e => -lengthCost e)
   checkEq "max st root children" (maxST.children.map (·.node)) #[d]

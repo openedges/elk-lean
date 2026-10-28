@@ -66,3 +66,14 @@ outputs, no longer elk-rs ones. They were checked against ELK Java 0.12.0 where 
 `rand_20` differs only in the graph size, the others still differ from Java (DisCo itself;
 `external_ports`, `rand_17`, `rand_23`, `rand_27`, `rand_33`, `rand_34`: Java throws a
 `NullPointerException`).
+
+## SPV: re-pinned outputs
+
+The component layout algorithm (`fixed`, `box`) lays out the whole DisCo graph first, and ELK Java's
+`getProperty` stores the cloned default padding of that algorithm (`FixedLayouterOptions.PADDING` /
+`BoxLayouterOptions.PADDING` = 15) on the graph (`EMapPropertyHolderImpl`); DisCo's own padding read
+afterwards finds 15, not 12. elk-lean now does the same (`ElkM.getNodePropSticky` in the box, fixed and
+random providers), which grows the graph size by 6. 35 expected files are the new elk-lean outputs
+(`tests/fixtures/opt_java_status.tsv`, rows `SPV re-pin`): `ports`, `rand_19`, `rand_20`, `single`,
+`zero_size` equal ELK Java exactly, the graph size equals Java's in 13 of the 42 fixtures Java lays out
+(2 before); the others still differ from Java in the DisCo packing itself (outside SPV).

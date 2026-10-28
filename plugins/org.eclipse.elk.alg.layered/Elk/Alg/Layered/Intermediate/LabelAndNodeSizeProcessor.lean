@@ -218,7 +218,7 @@ private def traceNodeLine (node : LNodeId) (nodeSize : KVector) (sizeConstraints
   let a ← get
   let nd := a.node node
   let placement := nd.props.getD CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
-  let count := fun side => (a.nodePortSideView node side).size
+  let count := fun side => (a.nodePortsBySide node side).size
   IO.eprintln s!"label-node-size: node id={nd.id} ident={a.nodeDesignation node} size=({Float.toRustDisplay nodeSize.x}, {Float.toRustDisplay nodeSize.y}) constraints={sizeConstraints} port_constraints={portConstraints} placement={placement} sides(N/E/S/W/U)=({count .north}/{count .east}/{count .south}/{count .west}/{count .undefined})"
 
 /-- Places the ports of all four sides for the node's port constraints (shared tail of

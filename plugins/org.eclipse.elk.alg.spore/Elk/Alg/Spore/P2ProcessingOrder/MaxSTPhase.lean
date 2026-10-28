@@ -28,7 +28,7 @@ def process (_graph : Unit) (monitor : ProgressMonitor) : SporeM Unit := do
       | none => g
       | some edges =>
         let inverted := InvertedCostFunction.new (GraphCostFunction.new g)
-        let tree := NaiveMinST.createSpanningTree edges root inverted
+        let tree := NaiveMinST.createSpanningTree edges.toArray root inverted
         MinSTPhase.convertTree tree g
   monitor.done
 

@@ -9,8 +9,8 @@ import Std.Data.HashSet
 
 Approximates the crossings between two layers when ports carry several edges (hyperedges), after
 Gansner et al. / Sander (elk-rs `hyperedge_crossings_counter.rs`). Port positions are indexed by
-`LPort.id` and kept in the counter's own array (Java shares it with the `CrossingsCounter`;
-elk-rs uses a separate one).
+`LPort.id` in `portPositions`, which `AllCrossingsCounter` shares with its `CrossingsCounter`
+(`shared`, Java's single `portPos` array; elk-rs used a separate one).
 
 The hyperedge identity used as the last sort key (Rust: address of the first source port, Java:
 `hashCode()`) is the arena index of that port. Identities are unique per active hyperedge, so the
@@ -84,6 +84,12 @@ arguments are unused (as in Java/elk-rs). -/
 def new (_inLayerEdgeCount : Array Int) (_hasNorthSouthPorts : Array Bool) (portPositions : Array Int) :
     BaseIO HyperedgeCrossingsCounter := do
   return { portPositions := ← IO.mkRef portPositions, scratch := ← IO.mkRef {} }
+
+/-- `new HyperedgeCrossingsCounter(inLayerEdgeCount, hasNorthSouthPorts, portPos)` sharing the array
+`portPos` with other counters (Java `AllCrossingsCounter` hands the same `int[]` to its
+`CrossingsCounter`). -/
+def shared (portPositions : IO.Ref (Array Int)) : BaseIO HyperedgeCrossingsCounter := do
+  return { portPositions, scratch := ← IO.mkRef {} }
 
 /-- Rust `port_id(port)`: `port.id as usize`. -/
 @[inline] private def portIdOf (a : LGraphArena) (p : LPortId) : Nat := asUsize (a.port p).id

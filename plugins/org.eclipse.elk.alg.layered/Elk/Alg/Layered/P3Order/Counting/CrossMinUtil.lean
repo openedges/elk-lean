@@ -129,35 +129,25 @@ every comparator, also one that is not a total preorder (NaN keys). -/
 /-- `a == b` on `PortSide`s without the out-of-line derived `BEq`. -/
 @[inline] def sideIs (a b : PortSide) : Bool := sideCode a == sideCode b
 
-/-- `getPortSideView(side)` of a node as a view of its port list: with `cached` the ports
-`ports[lo:hi]`, otherwise the ports whose side is `side` (`LGraphArena.nodePortSideView`'s filter
-fallback). -/
+/-- `getPortSideView(side)` of a node as the range `ports[lo:hi]` of its port list (see
+`LGraphArena.nodePortSideView`). -/
 structure SideView where
   lo : Nat
   hi : Nat
-  cached : Bool
-
-/-- Whether all ports `ports[i:hi]` lie on `side`. -/
-partial def allOnSide (a : LGraphArena) (ports : Array LPortId) (i hi : Nat) (side : PortSide) : Bool :=
-  if h : i < hi ∧ i < ports.size then
-    if sideIs (a.port ports[i]).side side then allOnSide a ports (i + 1) hi side else false
-  else true
 
 /-- The `SideView` of `getPortSideView(side)` of `nd` (exactly `LGraphArena.nodePortSideView`: the cached
-`[first, last)` range clamped like `Array.extract` when all its ports lie on `side`, else the filter). -/
+or freshly found `[first, last)` range, clamped like `Array.extract`, not re-validated). -/
 @[inline] def sideView (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) : SideView :=
-  if !nd.portSidesCached then ⟨0, 0, false⟩
-  else
-    let indices := match nd.portSideIndices with
+  let indices := if nd.portSidesCached then
+      match nd.portSideIndices with
       | some idx => idx
       | none => a.findPortIndices n
-    match indices[ElkEnum.ordinal side]? with
-    | some (some (first, last)) =>
-      let hi := Nat.min last nd.ports.size
-      if first >= hi then ⟨0, 0, true⟩
-      else if allOnSide a nd.ports first hi side then ⟨first, hi, true⟩
-      else ⟨0, 0, false⟩
-    | _ => ⟨0, 0, false⟩
+    else a.findPortIndices n
+  match indices[ElkEnum.ordinal side]? with
+  | some (some (first, last)) =>
+    let hi := Nat.min last nd.ports.size
+    if first >= hi then ⟨0, 0⟩ else ⟨first, hi⟩
+  | _ => ⟨0, 0⟩
 
 /-- Pushes `ports[i:hi]` (ascending) onto `out`. -/
 partial def pushRange (ports : Array LPortId) (i hi : Nat) (out : Array LPortId) : Array LPortId :=
@@ -171,32 +161,12 @@ partial def pushRangeRev (ports : Array LPortId) (lo i : Nat) (out : Array LPort
     | none => pushRangeRev ports lo (i - 1) out
   else out
 
-/-- Pushes the ports of `ports` on `side` (ascending) onto `out`. -/
-partial def pushOnSide (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (i : Nat) (out : Array LPortId) :
-    Array LPortId :=
-  if h : i < ports.size then
-    let p := ports[i]
-    pushOnSide a ports side (i + 1) (if sideIs (a.port p).side side then out.push p else out)
-  else out
-
-/-- Pushes the ports of `ports[0:i]` on `side` (descending) onto `out`. -/
-partial def pushOnSideRev (a : LGraphArena) (ports : Array LPortId) (side : PortSide) (i : Nat) (out : Array LPortId) :
-    Array LPortId :=
-  if i > 0 then
-    match ports[i - 1]? with
-    | some p => pushOnSideRev a ports side (i - 1) (if sideIs (a.port p).side side then out.push p else out)
-    | none => pushOnSideRev a ports side (i - 1) out
-  else out
-
 /-- Appends `getPortSideView(side)` of `node` (reversed with `rev`) to `out` without copying the view. -/
 def appendSideView (a : LGraphArena) (node : LNodeId) (side : PortSide) (rev : Bool) (out : Array LPortId) :
     Array LPortId :=
   let nd := a.node node
   let v := sideView a node nd side
-  if v.cached then
-    if rev then pushRangeRev nd.ports v.lo v.hi out else pushRange nd.ports v.lo v.hi out
-  else
-    if rev then pushOnSideRev a nd.ports side nd.ports.size out else pushOnSide a nd.ports side 0 out
+  if rev then pushRangeRev nd.ports v.lo v.hi out else pushRange nd.ports v.lo v.hi out
 
 namespace CrossMinUtil
 

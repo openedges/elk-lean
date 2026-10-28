@@ -1,0 +1,1 @@
+java.lang.IllegalStateException: Invalid hitboxes for scanline overlap calculation.

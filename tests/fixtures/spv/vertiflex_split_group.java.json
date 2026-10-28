@@ -1,0 +1,155 @@
+{
+ "children": [
+  {
+   "height": 24.8,
+   "id": "n0",
+   "width": 17.7,
+   "x": 10.950000000000001,
+   "y": 0.0
+  },
+  {
+   "height": 20.0,
+   "id": "n1",
+   "labels": [
+    {
+     "height": 13.1,
+     "id": "n1l",
+     "text": "l",
+     "width": 9.5,
+     "x": 0.0,
+     "y": 0.0
+    }
+   ],
+   "layoutOptions": {
+    "elk.vertiflex.verticalConstraint": "120"
+   },
+   "width": 15.5,
+   "x": 12.05,
+   "y": 120.0
+  },
+  {
+   "height": 33.4,
+   "id": "n2",
+   "width": 29.6,
+   "x": 39.800000000000004,
+   "y": 64.8
+  },
+  {
+   "height": 27.1,
+   "id": "n3",
+   "width": 59.2,
+   "x": 89.39999999999999,
+   "y": 64.8
+  },
+  {
+   "height": 25.5,
+   "id": "n4",
+   "width": 39.6,
+   "x": 0.0,
+   "y": 180.0
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e0",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 19.8,
+      "y": 120.0
+     },
+     "id": "e0_s0",
+     "startPoint": {
+      "x": 19.8,
+      "y": 24.8
+     }
+    }
+   ],
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "e1",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 54.60000000000001,
+      "y": 64.8
+     },
+     "id": "e1_s0",
+     "startPoint": {
+      "x": 19.8,
+      "y": 24.8
+     }
+    }
+   ],
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n2"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "e2",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 119.0,
+      "y": 64.8
+     },
+     "id": "e2_s0",
+     "startPoint": {
+      "x": 19.8,
+      "y": 24.8
+     }
+    }
+   ],
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n3"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "e3",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 19.8,
+      "y": 180.0
+     },
+     "id": "e3_s0",
+     "startPoint": {
+      "x": 19.8,
+      "y": 140.0
+     }
+    }
+   ],
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n4"
+   ]
+  }
+ ],
+ "height": 217.5,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "vertiflex",
+  "elk.vertiflex.layerDistance": "20"
+ },
+ "width": 160.6,
+ "x": 0.0,
+ "y": 0.0
+}

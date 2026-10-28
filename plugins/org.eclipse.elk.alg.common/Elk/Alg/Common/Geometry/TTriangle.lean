@@ -3,13 +3,12 @@ import Elk.Alg.Common.Spore.InternalProperties
 /-!
 # `org.eclipse.elk.alg.common.TTriangle`
 
-Representation of a triangle (elk-rs `t_triangle.rs`).
+Representation of a triangle (`TTriangle.java`, elk-rs `t_triangle.rs`).
 
-Equality follows Rust `PartialEq for TTriangle`: two triangles are equal if
-every vertex of the other is a vertex of this one (order independent). The
-Rust `Hash` however hashes `a`, `b`, `c` *in order*, so a `HashSet<TTriangle>`
-only identifies triangles with the same vertex order; `sameSetKey` reproduces
-that identity.
+Equality follows Java `equals`: two triangles are equal if every vertex of the other is a vertex of
+this one (order independent). The Java `hashCode()` is the sum of the vertex hashes (order
+independent; elk-rs hashed `a`, `b`, `c` in order, so its sets only identified triangles with the
+same vertex order).
 -/
 namespace Elk.Alg.Common
 
@@ -68,18 +67,14 @@ def containsEdge (t : TTriangle) (edge : TEdge) : Bool := t.tEdges.any (· == ed
 /-- `containsVertex(vertex)` (`KVector ==`). -/
 def containsVertex (t : TTriangle) (vertex : KVector) : Bool := t.vertices.any (· == vertex)
 
-/-- Rust `PartialEq for TTriangle`: the other triangle's vertices are all vertices of this one. -/
+/-- Java `equals`: the other triangle's vertices are all vertices of this one. -/
 instance : BEq TTriangle :=
   ⟨fun s o => s.containsVertex o.a && s.containsVertex o.b && s.containsVertex o.c⟩
 
-/-- Rust `Hash for TTriangle`: `a`, `b`, `c` in order. -/
-instance : Hashable TTriangle := ⟨fun t => mixHash (mixHash (hash t.a) (hash t.b)) (hash t.c)⟩
-
-private def bitsEq (v w : KVector) : Bool := v.x.toBits == w.x.toBits && v.y.toBits == w.y.toBits
-
-/-- Identity inside a Rust `HashSet<TTriangle>`: same hash (bitwise equal `a`, `b`, `c` in
-order) and `==`. -/
-def sameSetKey (s o : TTriangle) : Bool := bitsEq s.a o.a && bitsEq s.b o.b && bitsEq s.c o.c && s == o
+/-- Java `hashCode()`: `Objects.hashCode(a) + Objects.hashCode(b) + Objects.hashCode(c)`. -/
+instance : JavaHashCode TTriangle where
+  javaHashCode t := JavaHashCode.javaHashCode t.a + JavaHashCode.javaHashCode t.b + JavaHashCode.javaHashCode t.c
+  javaSame s o := s.a.sameBits o.a && s.b.sameBits o.b && s.c.sameBits o.c
 
 end TTriangle
 

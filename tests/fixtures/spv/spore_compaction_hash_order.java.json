@@ -1,0 +1,91 @@
+{
+ "children": [
+  {
+   "height": 36.1,
+   "id": "n0",
+   "labels": [
+    {
+     "height": 14.3,
+     "id": "n0l",
+     "text": "l",
+     "width": 16.8,
+     "x": 0.0,
+     "y": 0.0
+    }
+   ],
+   "width": 35.5,
+   "x": 26.0,
+   "y": 45.3
+  },
+  {
+   "height": 15.0,
+   "id": "n1",
+   "width": 35.0,
+   "x": 26.0,
+   "y": 45.3
+  },
+  {
+   "height": 13.4,
+   "id": "n2",
+   "width": 33.5,
+   "x": 26.0,
+   "y": 45.3
+  },
+  {
+   "height": 11.0,
+   "id": "n3",
+   "width": 46.4,
+   "x": 67.5,
+   "y": 45.3
+  },
+  {
+   "height": 29.3,
+   "id": "n4",
+   "width": 39.5,
+   "x": 26.0,
+   "y": 8.0
+  },
+  {
+   "height": 31.1,
+   "id": "n5",
+   "width": 10.0,
+   "x": 8.0,
+   "y": 45.3
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e0",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 44.059701492537314,
+      "y": 45.3
+     },
+     "id": "e0_s0",
+     "startPoint": {
+      "x": 44.656716417910445,
+      "y": 37.3
+     }
+    }
+   ],
+   "sources": [
+    "n4"
+   ],
+   "targets": [
+    "n1"
+   ]
+  }
+ ],
+ "height": 89.4,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "sporeCompaction",
+  "elk.compaction.orthogonal": "true",
+  "elk.processingOrder.spanningTreeCostFunction": "MINIMUM_ROOT_DISTANCE"
+ },
+ "width": 121.9,
+ "x": 0.0,
+ "y": 0.0
+}

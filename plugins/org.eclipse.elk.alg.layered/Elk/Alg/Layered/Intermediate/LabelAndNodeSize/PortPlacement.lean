@@ -78,7 +78,7 @@ def nodeHasNonZeroBorderOffset (node : LNodeId) : LayeredM Bool := do
 side's ports (`port_side_view`) to the node border, respecting `PORT_BORDER_OFFSET`; the coordinate
 along the side is kept. -/
 def adjustPortsOnSide (node : LNodeId) (side : PortSide) (width height : Float) : LayeredM Unit := do
-  let ports ← withArena (·.nodePortSideView node side)
+  let ports ← withArena (·.nodePortsBySide node side)
   for port in ports do
     modifyPort port fun pt =>
       let portSize := pt.size
@@ -95,7 +95,7 @@ def adjustPortsOnSide (node : LNodeId) (side : PortSide) (width height : Float) 
 /-- Rust `place_ports_fixed_ratio_on_side(node, side, width, height)`: positions the side's ports
 at `PORT_RATIO_OR_POSITION` times the side length, on the border (with `PORT_BORDER_OFFSET`). -/
 def placePortsFixedRatioOnSide (node : LNodeId) (side : PortSide) (width height : Float) : LayeredM Unit := do
-  let ports ← withArena (·.nodePortSideView node side)
+  let ports ← withArena (·.nodePortsBySide node side)
   for port in ports do
     modifyPort port fun pt =>
       let portSize := pt.size
@@ -115,10 +115,10 @@ def placeInsideSelfLoopPorts (node : LNodeId) (width height : Float) : LayeredM 
   adjustPortsOnSide node .north width height
   adjustPortsOnSide node .south width height
   let centerY := height / fl2p0
-  let westPorts ← withArena (·.nodePortSideView node .west)
+  let westPorts ← withArena (·.nodePortsBySide node .west)
   for port in westPorts do
     modifyPort port fun pt => { pt with position := ⟨-pt.size.x, centerY - pt.size.y / fl2p0⟩ }
-  let eastPorts ← withArena (·.nodePortSideView node .east)
+  let eastPorts ← withArena (·.nodePortsBySide node .east)
   for port in eastPorts do
     modifyPort port fun pt => { pt with position := ⟨width, centerY - pt.size.y / fl2p0⟩ }
 
@@ -488,7 +488,7 @@ overhang the spacing is squeezed instead. -/
 def placePortsOnSide (node : LNodeId) (side : PortSide) (width height graphPortSpacing : Float)
     (graphPortsSurrounding : ElkMargin) : LayeredM Unit := do
   let nd ← getNode node
-  let ports ← withArena (·.nodePortSideView node side)
+  let ports ← withArena (·.nodePortsBySide node side)
   let st := sidePlacementSettings nd side graphPortSpacing graphPortsSurrounding
   let count := ports.size
   if count == 0 then return

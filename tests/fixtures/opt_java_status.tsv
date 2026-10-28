@@ -314,3 +314,60 @@ tests/fixtures/rectpacking/enum	g4_141	ok->error	java_error_equal
 tests/fixtures/rectpacking/enum	g4_272	ok->error	java_error_equal
 tests/fixtures/rectpacking/enum	g4_282	ok->error	java_error_equal
 tests/fixtures/rectpacking/enum	g4_285	ok->error	java_error_equal
+tests/fixtures/spore	co_grid	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	co_under_box	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	co_under_random	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	ov_cluster	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	ov_under_box	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	ov_under_fixed	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	ov_under_random	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	rnd_000	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	rnd_003	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	rnd_015	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	rnd_022	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	vf_constraints_model	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	vf_constraints_nomodel	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	vf_ports_labels	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/vertiflex	vf_root_constraint	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/rectpacking	g2_332	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/spore	ov_zero_size	ok->error (SPV re-pin)	java_error_equal java.lang.IllegalStateException: Invalid hitboxes for scanline overlap calculation.
+tests/fixtures/rectpacking	g2_168	ok->error (SPV re-pin)	java_error_equal java.lang.ArrayIndexOutOfBoundsException: arraycopy: source index -1 out of bounds for object array[32]
+tests/fixtures/rectpacking	g2_364	ok->error (SPV re-pin)	java_error_equal java.lang.ArrayIndexOutOfBoundsException: arraycopy: source index -1 out of bounds for object array[10]
+tests/fixtures/rectpacking	g2_335	error->error (SPV: Java text)	java_error_equal org.eclipse.elk.core.UnsupportedConfigurationException: A target width has to be set if the TargetWidthWidthApproximator should be used.
+tests/fixtures/rectpacking/enum	g4_155	ok->error (SPV re-pin)	java_error_equal java.lang.ArrayIndexOutOfBoundsException: arraycopy: source index -1 out of bounds for object array[4]
+tests/fixtures/rectpacking/enum	g3_170	error->error (SPV: Java text)	java_error_equal java.lang.ArrayIndexOutOfBoundsException: arraycopy: source index -1 out of bounds for object array[52]
+tests/fixtures/disco	aspect_tall	ok->ok (SPV re-pin)	java_differs /children/0/x: 110.94618747155323 vs 71.66233123008726
+tests/fixtures/disco	aspect_wide	ok->ok (SPV re-pin)	java_differs /children/0/x: 333.5547061731937 vs 176.41928120732985
+tests/fixtures/disco	basic	ok->ok (SPV re-pin)	java_differs /children/0/x: 29.73973831719683 vs 73.33791900222832
+tests/fixtures/disco	box_components	ok->ok (SPV re-pin)	java_differs /children/0/x: 142.8860677034403 vs 126.06429687088983
+tests/fixtures/disco	chain	ok->ok (SPV re-pin)	java_differs /children/0/x: 11.445477382522412 vs 18.590025120774655
+tests/fixtures/disco	external_ports	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException
+tests/fixtures/disco	fill_false	ok->ok (SPV re-pin)	java_differs /children/0/x: 13.653055113662532 vs 158.9002152146959
+tests/fixtures/disco	fill_true	ok->ok (SPV re-pin)	java_differs /children/0/x: 86.27663516417921 vs 158.9002152146959
+tests/fixtures/disco	labels	ok->ok (SPV re-pin)	java_differs /children/2/x: 33.083802059680224 vs 160.48492700291277
+tests/fixtures/disco	many	ok->ok (SPV re-pin)	java_differs /children/0/x: 157.40225030452967 vs 189.30050567551345
+tests/fixtures/disco	ports	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/disco	rand_01	ok->ok (SPV re-pin)	java_differs /children/6/x: 156.4048803389824 vs 63.03066300242102
+tests/fixtures/disco	rand_02	ok->ok (SPV re-pin)	java_differs /children/0/x: 324.5513871492706 vs 395.1429516528044
+tests/fixtures/disco	rand_04	ok->ok (SPV re-pin)	java_differs /children/0/x: 221.61621697002766 vs 452.23243394005533
+tests/fixtures/disco	rand_06	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException: Cannot invoke "Object.equals(Object)" because the return value of "org.eclipse.elk.graph
+tests/fixtures/disco	rand_08	ok->ok (SPV re-pin)	java_differs /children/0/x: 194.52821665132507 vs 250.19169807972972
+tests/fixtures/disco	rand_09	ok->ok (SPV re-pin)	java_differs /children/2/x: 308.0512578643935 vs 181.66898227734134
+tests/fixtures/disco	rand_10	ok->ok (SPV re-pin)	java_differs /children/0/x: 84.43077631417523 vs 412.2092605195359
+tests/fixtures/disco	rand_13	ok->ok (SPV re-pin)	java_differs /children/0/x: 146.2604734829418 vs 80.35628408976508
+tests/fixtures/disco	rand_14	ok->ok (SPV re-pin)	java_differs /children/0/y: 36.157931430622114 vs 421.3016789622368
+tests/fixtures/disco	rand_19	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/disco	rand_20	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/disco	rand_22	ok->ok (SPV re-pin)	java_differs /children/0/y: 570.797732304675 vs 701.4424879638511
+tests/fixtures/disco	rand_24	ok->ok (SPV re-pin)	java_differs /children/0/x: 305.0172619107529 vs 388.5840773884411
+tests/fixtures/disco	rand_25	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException: Cannot invoke "Object.equals(Object)" because the return value of "org.eclipse.elk.graph
+tests/fixtures/disco	rand_26	ok->ok (SPV re-pin)	java_differs /children/0/y: 314.89790034739684 vs 400.527910633617
+tests/fixtures/disco	rand_27	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException: Cannot invoke "Object.equals(Object)" because the return value of "org.eclipse.elk.graph
+tests/fixtures/disco	rand_34	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException: Cannot invoke "Object.equals(Object)" because the return value of "org.eclipse.elk.graph
+tests/fixtures/disco	rand_35	ok->ok (SPV re-pin)	java_differs /children/0/x: 24.805321405752025 vs 223.9044784664593
+tests/fixtures/disco	rand_37	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException: Cannot invoke "Object.equals(Object)" because the return value of "org.eclipse.elk.graph
+tests/fixtures/disco	rand_39	ok->ok (SPV re-pin)	java_error java.lang.NullPointerException: Cannot invoke "Object.equals(Object)" because the return value of "org.eclipse.elk.graph
+tests/fixtures/disco	single	ok->ok (SPV re-pin)	java_exact
+tests/fixtures/disco	sort_options	ok->ok (SPV re-pin)	java_differs /children/0/x: 254.84955518917252 vs 355.8993327837588
+tests/fixtures/disco	strategy_explicit	ok->ok (SPV re-pin)	java_differs /children/0/x: 22.070119761077546 vs 14.177381600979587
+tests/fixtures/disco	zero_size	ok->ok (SPV re-pin)	java_exact
