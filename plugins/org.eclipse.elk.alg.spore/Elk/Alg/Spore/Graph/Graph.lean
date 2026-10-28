@@ -1,5 +1,6 @@
 import Std.Data.HashMap
 import Elk.Graph.Properties
+import Elk.Core.Util.JavaHashSet
 import Elk.Alg.Common.Geometry.TEdge
 import Elk.Alg.Common.Geometry.Tree
 import Elk.Alg.Common.Spore.Node
@@ -17,9 +18,8 @@ copies of the vertices, copied back by `syncVerticesFromTree`.
 
 The graph lives in the algorithm's own monad, `SporeM = StateRefT Graph IO` (see `SporePhases`).
 
-Order: `tEdges` (Rust `Option<HashSet<TEdge>>`) is an insertion-ordered, duplicate-free array
-(`TEdge.insertUnique`/`extendUnique`); the Rust set has a random iteration order (see
-`NaiveMinST`).
+Order: `tEdges` (Java `Set<TEdge>`, a `HashSet`) is a `JavaHashSet` with Java's iteration order
+(see `BowyerWatsonTriangulation`, `NaiveMinST`); elk-rs' set had a random order.
 -/
 namespace Elk.Alg.Spore.Graph
 
@@ -32,7 +32,7 @@ structure Graph where
   /-- The vertices (nodes) of the graph. -/
   vertices : Array Node := #[]
   /-- The edges of the structure phase (`None` until the first structure phase ran). -/
-  tEdges : Option (Array TEdge) := none
+  tEdges : Option (Elk.Core.Util.JavaHashSet TEdge) := none
   /-- The tree construction strategy (phase 2). -/
   treeConstructionStrategy : TreeConstructionStrategy
   /-- The spanning tree (phase 2 result). -/

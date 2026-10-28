@@ -22,11 +22,16 @@ def DEBUG_SVG : Property Bool := Property.withDefault "debugSVG" false
 the minimum spanning tree were overlapping (`"overlapsExisted"`, default `true`). -/
 def OVERLAPS_EXISTED : Property Bool := Property.withDefault "overlapsExisted" true
 
-/-- Rust private `fuzzy_compare(a, b, eps)` (duplicated in `t_triangle.rs`, `node.rs`,
-`depth_first_compaction.rs`, `scanline_overlap_check.rs`): `0` if `|a - b| <= eps`,
-otherwise the sign of `a - b`. -/
+/-- Guava `DoubleMath.fuzzyCompare(a, b, tolerance)` (the Java callers `TTriangle`, `Node`,
+`DepthFirstCompaction`, `ScanlineOverlapCheck`): `0` if `fuzzyEquals` (`|a - b| <= eps`, `a == b`
+— equal infinities — or both NaN), else `-1`/`1` by `<`/`>`, else (one NaN) NaN is the larger.
+(elk-rs' `fuzzy_compare` gave `1` for equal infinities and NaN.) -/
 def fuzzyCompare (a b eps : Float) : Int :=
-  if (a - b).abs <= eps then 0 else if a < b then -1 else 1
+  if (a - b).abs <= eps || a == b || (a.isNaN && b.isNaN) then 0
+  else if a < b then -1
+  else if a > b then 1
+  else if a.isNaN then 1
+  else -1
 
 end InternalProperties
 

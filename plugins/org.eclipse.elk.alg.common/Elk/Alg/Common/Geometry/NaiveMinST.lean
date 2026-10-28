@@ -13,12 +13,13 @@ Precondition: the edge list `E` represents a connected graph `(V, E)` and
 `root ∈ V`. Postcondition: the returned tree connects all vertices in `V` once.
 
 ## Order
-Rust collects the input `HashSet<TEdge>` into a `Vec` (hash iteration order)
-and stable-sorts it by cost (`partial_cmp().unwrap_or(Equal)`); the Lean port
-stable-sorts the input array in its given order, so ties keep the caller's
-order. The `HashMap<TEdge, f64>` of weights only caches `cost(edge)` and the
-`HashSet<KVector>` of tree nodes is only used for membership tests, so neither
-order is observable. SVG debug output is not ported (TODO(debug)).
+Java copies the input `Set<TEdge>` into a list (the set's iteration order: callers pass
+`JavaHashSet.toArray`) and sorts it by cost with `Double.compareTo` (stable TimSort; any stable sort
+gives the same result for this total order, NaN last). The `HashMap<TEdge, Double>` of weights only
+caches `cost(edge)` and the `HashMap<KVector, Tree>` of tree nodes is only used for membership tests
+and lookups, so neither order is observable. An edge whose weight is NaN is never taken
+(`weight <= minWeight` with `minWeight = +∞` is false). SVG debug output is not ported
+(TODO(debug)).
 -/
 namespace Elk.Alg.Common
 
@@ -32,8 +33,8 @@ order) with exactly one endpoint in the tree. The debug output file is ignored. 
 def createSpanningTree (tEdges : Array TEdge) (root : KVector) (costFunction : ICostFunction)
     (_debugOutputFile : Option String := none) : Tree KVector := Id.run do
   let weighted : Array (TEdge × Float) := tEdges.map fun e => (e, costFunction e)
-  let sorted := stableSort weighted fun e1 e2 => Float.comparePartial e1.2 e2.2
-  let mut edges : Array TEdge := sorted.map (·.1)
+  let sorted := stableSort weighted fun e1 e2 => Float.compareJava e1.2 e2.2
+  let mut edges : Array (TEdge × Float) := sorted
 
   let mut minST := Tree.new root
   let mut treeNodes : Std.HashSet KVector := Std.HashSet.emptyWithCapacity
@@ -42,13 +43,14 @@ def createSpanningTree (tEdges : Array TEdge) (root : KVector) (costFunction : I
   while !edges.isEmpty do
     let mut next : Option (Nat × KVector × KVector) := none
     let mut idx := 0
-    for edge in edges do
-      if treeNodes.contains edge.u && !treeNodes.contains edge.v then
-        next := some (idx, edge.v, edge.u)
-        break
-      if treeNodes.contains edge.v && !treeNodes.contains edge.u then
-        next := some (idx, edge.u, edge.v)
-        break
+    for (edge, weight) in edges do
+      if weight <= Float.posInf then
+        if treeNodes.contains edge.u && !treeNodes.contains edge.v then
+          next := some (idx, edge.v, edge.u)
+          break
+        if treeNodes.contains edge.v && !treeNodes.contains edge.u then
+          next := some (idx, edge.u, edge.v)
+          break
       idx := idx + 1
     let some (edgeIndex, nextNode, nodeInTree) := next | break
     minST := (minST.addChildTo nodeInTree nextNode).1

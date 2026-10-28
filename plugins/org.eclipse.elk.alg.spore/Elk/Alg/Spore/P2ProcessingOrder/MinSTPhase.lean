@@ -9,9 +9,9 @@ spanning tree for the edges of the graph with the root `Graph.preferredRoot` (de
 vertex), using `NaiveMinST` with the `GraphCostFunction`, and converts it to a `Tree Node`
 (`convertTree`, also used by `MaxSTPhase`).
 
-Order: the input edges are the insertion-ordered `Graph.tEdges`; the Rust `HashSet<TEdge>` is
-iterated in random order, which makes the result of elk-rs nondeterministic when edge costs tie
-(see `NaiveMinST`). The SVG debug output is not ported (TODO(debug)).
+Order: the input edges are `Graph.tEdges` in Java `HashSet` iteration order (`JavaHashSet`), which
+decides the spanning tree when edge costs tie (see `NaiveMinST`); elk-rs iterated a `std` set in
+random order. The SVG debug output is not ported (TODO(debug)).
 -/
 namespace Elk.Alg.Spore.P2ProcessingOrder
 
@@ -52,7 +52,7 @@ def process (_graph : Unit) (monitor : ProgressMonitor) : SporeM Unit := do
       match g.tEdges with
       | none => g
       | some edges =>
-        let tree := NaiveMinST.createSpanningTree edges root (GraphCostFunction.new g)
+        let tree := NaiveMinST.createSpanningTree edges.toArray root (GraphCostFunction.new g)
         convertTree tree g
   monitor.done
 

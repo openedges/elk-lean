@@ -6,9 +6,9 @@ import Elk.Alg.Spore.SporePhases
 Port of `p1structure/delaunay_triangulation_phase.rs` (elk-rs) and `DelaunayTriangulationPhase.java`:
 creates a Delaunay triangulation of the vertices' `originalVertex` positions with
 `BowyerWatsonTriangulation` and stores its edges in `Graph.tEdges`. If the graph already has edges
-(the scanline overlap check of `OverlapRemovalLayoutProvider` stores some), the triangulation edges
-are added to them (`HashSet::extend`: insertion-ordered, duplicates dropped, see
-`TEdge.extendUnique`). The SVG debug output is not ported (TODO(debug)).
+(the scanline overlap check of `OverlapRemovalLayoutProvider` stores its set there), the
+triangulation edges are added to that set in their iteration order (`addAll`). The SVG debug output
+is not ported (TODO(debug)).
 -/
 namespace Elk.Alg.Spore.P1Structure
 
@@ -23,7 +23,7 @@ def process (_graph : Unit) (monitor : ProgressMonitor) : SporeM Unit := do
     let vertices := g.vertices.map (·.originalVertex)
     let edges := BowyerWatsonTriangulation.triangulate vertices
     { g with tEdges := some (match g.tEdges with
-        | some existing => TEdge.extendUnique existing edges
+        | some existing => existing.addAll edges.toArray
         | none => edges) }
   monitor.done
 

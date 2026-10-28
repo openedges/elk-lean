@@ -87,30 +87,42 @@ def depthFirstCompaction : Suite := suite "alg.common.spore.DepthFirstCompaction
   -- a leaf stays unchanged
   checkEq "single node" (rectXs (DepthFirstCompaction.compact (Tree.new (node 3 4 5 6)) false)) #[3]
 
-private def collect : IOverlapHandler (Array TEdge) :=
-  ⟨fun n1 n2 acc => TEdge.insertUnique acc (TEdge.new n1.originalVertex n2.originalVertex)⟩
+private def collect : IOverlapHandler (JavaHashSet TEdge) :=
+  ⟨fun n1 n2 acc => (acc.add (TEdge.new n1.originalVertex n2.originalVertex)).1⟩
+
+/-- The handler state of a sweep that does not throw (the default of an `.error`). -/
+private def okOr {σ : Type} (d : σ) : Except String σ → σ
+  | .ok v => v
+  | .error _ => d
 
 private def pairs : IOverlapHandler (Array (Float × Float)) :=
   ⟨fun n1 n2 acc => acc.push (n1.rect.x, n2.rect.x)⟩
 
 def scanlineOverlapCheck : Suite := suite "alg.common.spore.ScanlineOverlapCheck" do
   let nodes := #[node 0 0 10 10, node 5 5 10 10, node 100 0 10 10, node 8 30 10 10]
-  let found := (ScanlineOverlapCheck.new pairs).sweep nodes #[]
+  let found := okOr #[] ((ScanlineOverlapCheck.new pairs).sweep nodes #[])
   checkEq "overlapping pair (inserted, active)" found #[(5.0, 0.0)]
   -- touching rectangles do not overlap (strict fuzzy comparison)
-  let touching := (ScanlineOverlapCheck.new pairs).sweep #[node 0 0 10 10, node 10 0 10 10] #[]
+  let touching := okOr #[(0.0, 0.0)]
+    ((ScanlineOverlapCheck.new pairs).sweep #[node 0 0 10 10, node 10 0 10 10] #[])
   checkEq "touching not reported" touching.size 0
   -- three mutually overlapping nodes
-  let three := (ScanlineOverlapCheck.new pairs).sweep
-    #[node 0 0 10 10, node 2 2 10 10, node 4 4 10 10] #[]
+  let three := okOr #[] ((ScanlineOverlapCheck.new pairs).sweep
+    #[node 0 0 10 10, node 2 2 10 10, node 4 4 10 10] #[])
   checkEq "three overlapping" three #[(2.0, 0.0), (4.0, 0.0), (4.0, 2.0)]
   -- scanline_overlap_removal_test: graph of build_graph(true), overlap check part
   let graph := #[node 0 30 160 20, node 150 40 160 20, node 150 0 20 20, node 150 70 20 20]
-  let edges := (ScanlineOverlapCheck.new collect).sweep graph #[]
+  let edges := okOr {} ((ScanlineOverlapCheck.new collect).sweep graph {})
   check "scanline_overlap_removal_test overlaps found" (!edges.isEmpty)
   checkEq "scanline_overlap_removal_test overlap count" edges.size 1
   check "scanline_overlap_removal_test pair"
-    (edges.all (· == TEdge.new (kv 80 40) (kv 230 50)))
+    (edges.toArray.all (· == TEdge.new (kv 80 40) (kv 230 50)))
+  -- Java `TreeSet.add` fails for a node comparing equal to an active one (same rect.x and center):
+  -- `IllegalStateException: Invalid hitboxes for scanline overlap calculation.`
+  let dup := (ScanlineOverlapCheck.new pairs).sweep #[node 0 0 10 10, node 0 0 10 10] #[]
+  check "equal nodes: Java IllegalStateException" (match dup with
+    | .error e => e == ScanlineOverlapCheck.INVALID_HITBOXES
+    | .ok _ => false)
   checkEq "timestamp order: upper end before lower end at equal y"
     (ScanlineOverlapCheck.timestampCmp #[node 0 0 10 10, node 0 10 10 10] ⟨0, false⟩ ⟨1, true⟩ == .lt)
     true

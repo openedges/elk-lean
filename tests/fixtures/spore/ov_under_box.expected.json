@@ -4,52 +4,52 @@
       "height": 12,
       "id": "n0",
       "width": 36,
-      "x": 8,
-      "y": 48
+      "x": 15,
+      "y": 55
     },
     {
       "height": 25,
       "id": "n1",
       "width": 12,
-      "x": 66,
-      "y": 8
+      "x": 73,
+      "y": 15
     },
     {
       "height": 13,
       "id": "n2",
       "width": 13,
-      "x": 8,
-      "y": 8
+      "x": 15,
+      "y": 15
     },
     {
       "height": 17,
       "id": "n3",
       "width": 15,
-      "x": 36,
-      "y": 8
+      "x": 43,
+      "y": 15
     },
     {
       "height": 22,
       "id": "n4",
       "width": 33,
-      "x": 59,
-      "y": 48
+      "x": 66,
+      "y": 55
     },
     {
       "height": 19,
       "id": "n5",
       "width": 44,
-      "x": 8,
-      "y": 85
+      "x": 15,
+      "y": 92
     }
   ],
-  "height": 112,
+  "height": 126,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeOverlap",
     "org.eclipse.elk.underlyingLayoutAlgorithm": "org.eclipse.elk.box"
   },
-  "width": 100,
+  "width": 114,
   "x": 0,
   "y": 0
 }
