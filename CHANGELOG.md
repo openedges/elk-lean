@@ -12,7 +12,7 @@ with the ELK release they port (see `VERSIONING.md`).
 
 First release: a pure Lean 4 port of the Eclipse Layout Kernel 0.12.0 (reference ELK / elkjs
 0.12.0, performance and secondary parity oracle elk-rs 0.12.1 at `eb586b6d`). Not yet tagged or
-published; the numbers below are the `AGENTS.md` snapshot of 2026-10-27.
+published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 
 ### Delivered
 - **ELK port**: all layered phases (P1 cycle breaking to P5 edge routing, 59 intermediate
