@@ -179,6 +179,12 @@
 
 - **9차 라운드 마감(병합본 `5637d3a` = SPV, 2026-10-29)**: `lake test` 16830/0, Java 코퍼스 1878/119, elk-rs 1447/1447, 무작위 v 정확 **5,711/5,761(99.1%)**·s 1,197/1,205(99.3%)·o 5,224/5,236(99.8%)·p 1,359/1,373(99.0%), npm 59/60, 합성 기하평균 0.82배(게이트 통과, 기준선 갱신). 무작위 입력 Java parity 작업(7b)은 재현 가능한 차이가 사실상 소진된 상태: 남은 134건(LPOS 93·LEDGE 17·LNODE 8·radial 16)은 Java의 JVM 실행 컨텍스트/identity hash·radial `HashSet` 순서·Gson `NaN` 표기·Java 결함·비종료이며, 결정적으로 남은 것은 DisCo 패킹(fixture 35 중 30)과 `npb/v1_g0132`의 예외 인덱스뿐이다.
 
+### 10차 라운드 작업 할당표 (2026-10-29)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| DIS. DisCo 패킹의 Java parity(fixture 35 중 30 불일치: polyomino 패킹·`TraversalStrategy` 9종 중 5종·미등록 polyomino 옵션), Lean CLI 옵션 범위 검증이 Java 엔진 예외보다 먼저 거부하는 순서(`iterations = 0`, 음수 `desiredPosition`) | Java `alg.disco/**`, `core/options` 검증, `Elk/Api` | opus | xhigh | 서브에이전트 DIS(worktree) | 진행 중 |
+| LM. layered의 남은 elk-rs 잔여: `LayerSweepCrossingMinimizer.countModelOrder{Node,Port}Changes`(층 0의 빈 이전 층·전처리 순서), `npb/v1_g0132`의 AIOOBE 인덱스(실패 단계의 far-end 위치), HotSpot `sin/cos` 큰 인자(> 2^19·π/2) 축소, `MAX_MODEL_ORDER_NODES` null NPE 정책 재검토 | Java `p3order/LayerSweepCrossingMinimizer`, `CrossingsCounter`, HotSpot `stubRoutines` | opus | high | 서브에이전트 LM(worktree) | 진행 중 |
+
 ### 8차 라운드 작업 할당표 (2026-10-29)
 | 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|

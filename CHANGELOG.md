@@ -42,8 +42,16 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 13806 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 16830 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
+- **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
+  graphs per run plus option-focused and crossing-minimisation variant sets): where both succeed,
+  5,711 of 5,761 layouts (99.1%) are exact; inputs Java rejects fail in elk-lean with Java's
+  exception class and message (4,787/4,792). The remaining differences come from Java's own run
+  context (identity hash codes, `HashSet` orders, HotSpot defects) and are documented in
+  `docs/robustness-random-graphs.md`. To reach this, elk-lean reproduces JDK 21 `TimSort`
+  (`Elk.Core.Util.JavaSort`), `HashMap` iteration order (`JavaHashSet`), fdlibm / HotSpot
+  `sin`, `cos`, `asin`, `atan2`, `acos`, `log`, and ELK's option defaults per read site.
 - **Result parity against unmodified ELK Java 0.12.0** (corpus of 1,998 models, 1,997 compared; 1
   fails identically on both sides): 1,878 exact (tolerance 0). The other 119 depend on the Java
   execution context (see below); against Java with patch 0001 applied all of them match.
@@ -56,9 +64,9 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 - **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.82x
   (layered 0.94 to 1.03x, force 0.84 to 0.86x, stress 0.99 to 1.05x, mrtree 0.87 to 0.89x,
   rectpacking 0.78 to 0.96x, radial 0.18 to 0.32x, edge routing 0.92 to 1.05x, hierarchy 0.94 to
-  1.04x); over the 1,447 corpus models 1.23x in total and 1.09x per model (geometric mean), the
-  remaining gap being the crossing minimisation of large layered graphs. Repeated layouts keep RSS
-  flat. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
+  1.04x; mrtree and radial follow Java's full algorithms and stay at about 0.8x and 0.2 to 0.8x);
+  over the 1,447 corpus models 1.01x in total and 1.00x per model (geometric mean). Repeated
+  layouts keep RSS flat. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
 
 ### Known differences
 - **119 context-dependent models**: ELK Java iterates a few `HashMap`/`HashSet`s keyed by objects
