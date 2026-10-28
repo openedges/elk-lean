@@ -175,7 +175,7 @@ def getIndividualOrDefaultF64 (s : Spacings) (nodeProps : PropertyMap) (p : Prop
 
 /-- The spacing between two nodes of the given types: the larger individual-or-graph value of
 the table's option (`slots`: the table's `horizontalSlots`/`verticalSlots`). -/
-private def localSpacing? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
+@[inline] private def localSpacing? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
     (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float := do
   let i := ElkEnum.ordinal t1
   let j := ElkEnum.ordinal t2
@@ -183,7 +183,7 @@ private def localSpacing? (s : Spacings) (table : Array (Array (Option (Property
   let graphValue := s.slotValue slots i j option
   return fmax (individualOr p1 option graphValue) (individualOr p2 option graphValue)
 
-private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
+@[inline] private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
     (t1 t2 : NodeType) : Option Float := do
   let i := ElkEnum.ordinal t1
   let j := ElkEnum.ordinal t2
@@ -191,19 +191,19 @@ private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (
   return s.slotValue slots i j option
 
 /-- `getHorizontalSpacing(n1, n2)`: `none` = Java `UnspecifiedSpacingException`. -/
-def getHorizontalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
+@[inline] def getHorizontalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
   s.localSpacing? s.horizontal s.horizontalSlots t1 p1 t2 p2
 
 /-- `getVerticalSpacing(n1, n2)`. -/
-def getVerticalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
+@[inline] def getVerticalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
   s.localSpacing? s.vertical s.verticalSlots t1 p1 t2 p2
 
 /-- `getHorizontalSpacing(NodeType, NodeType)`. -/
-def getHorizontalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
+@[inline] def getHorizontalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
   s.localSpacingForTypes? s.horizontal s.horizontalSlots t1 t2
 
 /-- `getVerticalSpacing(NodeType, NodeType)`. -/
-def getVerticalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
+@[inline] def getVerticalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
   s.localSpacingForTypes? s.vertical s.verticalSlots t1 t2
 
 /-- Throwing variants (the Java methods throw `UnspecifiedSpacingException`). -/
