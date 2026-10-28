@@ -244,11 +244,12 @@ def loopLabelPosition (a : LGraphArena) (h : SelfLoopHolder) (l : SelfHyperLoop)
   let lanePosition := (slotPosition side slot positions).getD 0.0
   let localPos := localPosition a h nodeSize lb.size lb.alignment lb.alignmentReferenceSLPort
   let labelDistance := if inlineLabels then 0.0 else edgeLabelDistance
+  -- Java: `labelPosition -= edgeLabelDistance + slLabels.getSize().y` (sum first)
   match side with
-  | .north => some ⟨localPos.x, lanePosition - labelDistance - lb.size.y⟩
+  | .north => some ⟨localPos.x, lanePosition - (labelDistance + lb.size.y)⟩
   | .south => some ⟨localPos.x, lanePosition + labelDistance⟩
   | .east => some ⟨lanePosition + labelDistance, localPos.y⟩
-  | .west => some ⟨lanePosition - labelDistance - lb.size.x, localPos.y⟩
+  | .west => some ⟨lanePosition - (labelDistance + lb.size.x), localPos.y⟩
   | .undefined => none
 
 /-- `place_loop_labels(slLoop, nodeSize, edgeLabelDistance, positions, margins)` for hyper loop `l`
