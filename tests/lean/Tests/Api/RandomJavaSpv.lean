@@ -113,6 +113,77 @@ def javaHashSet : Suite := suite "spv.javaHashSet" do
   checkEq "every iteration order equals java.util.HashSet's" firstDiff none
   check "the sequence reaches tree bins (at least 9 keys in one bin, table of 64 bins)" (maxTrees > 0)
 
-def suites : Array Suite := #[layouts, errors, javaHashSet]
+/-- `Math.asin` of the reference JVM (Temurin 21.0.13, aarch64; `scripts/java/AsinDump.java`, seed 42):
+argument and result bits — the branch boundaries (`|x| = 1`, `0.5`, `0.975`, `2^-27`), NaN arguments
+and random arguments of every branch. -/
+private def javaAsinSamples : Array (UInt64 × UInt64) := #[
+  (0x3FF0000000000000, 0x3FF921FB54442D18),
+  (0xBFF0000000000000, 0xBFF921FB54442D18),
+  (0x0000000000000000, 0x0000000000000000),
+  (0x8000000000000000, 0x8000000000000000),
+  (0x3FE0000000000000, 0x3FE0C152382D7366),
+  (0xBFE0000000000000, 0xBFE0C152382D7366),
+  (0x3FDFFFFFFFFFFFFF, 0x3FE0C152382D7365),
+  (0x3FEF333333333333, 0x3FF58C2B5CE0C3E5),
+  (0xBFEF333333333333, 0xBFF58C2B5CE0C3E5),
+  (0x3FEF333333333332, 0x3FF58C2B5CE0C3E3),
+  (0x3FEF33333333338D, 0x3FF58C2B5CE0C4B0),
+  (0x3DDB7CDFD9D7BDBB, 0x3DDB7CDFD9D7BDBB),
+  (0xBDDB7CDFD9D7BDBB, 0xBDDB7CDFD9D7BDBB),
+  (0x01A56E1FC2F8F359, 0x01A56E1FC2F8F359),
+  (0x3E30000000000000, 0x3E30000000000000),
+  (0x3E40000000000000, 0x3E40000000000000),
+  (0x3FD3333333333333, 0x3FD380159E14F6FF),
+  (0xBFE6666666666666, 0xBFE8D00E692AFD95),
+  (0x3FEFFFFFFAA19C47, 0x3FF9216709C28B31),
+  (0xBFEFFFFFFAA19C47, 0xBFF9216709C28B31),
+  (0x3FF0000000000001, 0x7FF8000000000000),
+  (0xBFF8000000000000, 0x7FF8000000000000),
+  (0x4000000000000000, 0x7FF8000000000000),
+  (0x7FF8000000000000, 0x7FF8000000000000),
+  (0x7FF0000000000000, 0x7FF8000000000000),
+  (0x0000000000000001, 0x0000000000000001),
+  (0x3FDD20CE81BFD15C, 0x3FDE3DB0915C82CC),
+  (0x3FC773DDE188B804, 0x3FC795FA20331C0E),
+  (0x3FEF561C63818F9D, 0x3FF5DE58FF4F04A5),
+  (0xBD61BBA76B52C856, 0xBD61BBA76B52C856),
+  (0x3FE9D0D9E738597C, 0x3FEE0930BB7C46AA),
+  (0xBFC0CBB8B3C99470, 0xBFC0D82823F6C6F4),
+  (0x3FEF4E02022A6B75, 0x3FF5CA949938434D),
+  (0x3E6DAC800C318574, 0x3E6DAC800C318578),
+  (0x3FEAD644326E6BC6, 0x3FEFD57C0D37BADE),
+  (0xBFB04220A3DA51E0, 0xBFB044EE35D6CEF8),
+  (0x3FEFC289751A753E, 0x3FF72BEAFB044F56),
+  (0xBE28BD82FCC5C830, 0xBE28BD82FCC5C830),
+  (0x3FC82750D5A6D650, 0x3FC84C9CAF4F7AC0),
+  (0xBFD2932B0BFD4A90, 0xBFD2D897808C280C),
+  (0x3FEFD53AB82AEA5E, 0x3FF77F3E8363B72C),
+  (0xBDB60B3CC513B2BC, 0xBDB60B3CC513B2BC)]
+
+private def hexBits (s : String) : UInt64 :=
+  s.foldl (fun acc c =>
+    let d := if c.isDigit then c.toNat - '0'.toNat else c.toLower.toNat - 'a'.toNat + 10
+    acc * 16 + d.toUInt64) 0
+
+/-- `javaAsin` (`KVector.toRadians`) against the reference JVM's `Math.asin`, bit for bit; with
+`ELK_ASIN_CASES` set to the output of `java AsinDump <n>` also every line of that file. -/
+def javaAsin : Suite := suite "spv.javaAsin" do
+  for (x, v) in javaAsinSamples do
+    if (Float.ofBits v).isNaN then check s!"javaAsin {x} = NaN" (Elk.Core.Util.javaAsin (Float.ofBits x)).isNaN
+    else checkEq s!"javaAsin {x}" (Elk.Core.Util.javaAsin (Float.ofBits x)).toBits v
+  let some path ← IO.getEnv "ELK_ASIN_CASES"
+    | IO.println "SKIP spv.javaAsin (full): ELK_ASIN_CASES not set"
+  let mut n := 0
+  let mut bad := 0
+  for line in ← IO.FS.lines path do
+    if let [a, b] := line.splitOn " " then
+      n := n + 1
+      let got := (Elk.Core.Util.javaAsin (Float.ofBits (hexBits a))).toBits
+      let expected := hexBits b
+      unless got == expected || ((Float.ofBits got).isNaN && (Float.ofBits expected).isNaN) do
+        bad := bad + 1
+  check s!"javaAsin equals Math.asin on all {n} arguments of {path}" (n > 0 && bad == 0)
+
+def suites : Array Suite := #[layouts, errors, javaHashSet, javaAsin]
 
 end Tests.Api.RandomJavaSpv
