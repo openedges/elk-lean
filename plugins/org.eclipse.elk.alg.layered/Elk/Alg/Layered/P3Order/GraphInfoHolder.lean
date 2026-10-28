@@ -23,8 +23,8 @@ the sweep type decision (`dontSweepInto`) and the model order settings.
    (node-relative for `true`, layer-total for `false`).
 2. `AllCrossingsCounter.new graph order`.
 3. The heuristic: `BARYCENTER` → a `ForsterConstraintResolver` and, with
-   `CROSSING_MINIMIZATION_FORCE_NODE_MODEL_ORDER`, a `ModelOrderBarycenterHeuristic` (the processed
-   graph is passed as `lockedGraph`, see its module doc), otherwise a `BarycenterHeuristic`;
+   `CROSSING_MINIMIZATION_FORCE_NODE_MODEL_ORDER`, a `ModelOrderBarycenterHeuristic`, otherwise a
+   `BarycenterHeuristic`;
    `MEDIAN` → `MedianHeuristic`; the greedy switch types → `GreedySwitchHeuristic`.
 4. `LayerSweepTypeDecider.new graph parent hasParent (heuristic.isDeterministic)`.
 5. The holder's own initialisation pass (`cachePortSides` and child graph collection per node in
@@ -118,7 +118,7 @@ namespace GraphInfoHolder
 def createCrossMinimizer (graph : LGraphId) (crossMinType : CrossMinType) (order : Array (Array LNodeId))
     (barycenterDistributor : Option BarycenterPortDistributor) (random : IO.Ref Random) (hasParent : Bool)
     (forceModelOrder : Bool) (maxModelOrderNodes : Int) (constraintsBetweenNonDummies : Bool)
-    (groupOrderStrategy : GroupOrderStrategy) (lockedGraph : Option LGraphId) :
+    (groupOrderStrategy : GroupOrderStrategy) :
     LayeredM (CrossingMinimizationHeuristic × Option GreedySwitchHeuristic) := do
   match crossMinType with
   | .barycenter =>
@@ -127,7 +127,7 @@ def createCrossMinimizer (graph : LGraphId) (crossMinType : CrossMinType) (order
       | throw (IO.userError "java.lang.IllegalStateException: barycenter distributor missing")
     if forceModelOrder then
       let h ← ModelOrderBarycenterHeuristic.new resolver distributor forceModelOrder maxModelOrderNodes
-        groupOrderStrategy lockedGraph
+        groupOrderStrategy
       return (h.toHeuristic random, none)
     else
       let h ← BarycenterHeuristic.new resolver distributor
@@ -192,7 +192,7 @@ def readSettings (graph : LGraphId) : LayeredM Settings := do
 
 /-- `GraphInfoHolder::build(..)` (see the module doc for the steps). -/
 def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : Array (Array LNodeId))
-    (s : Settings) (random : IO.Ref Random) (lockedGraph : Option LGraphId) : LayeredM GraphInfoHolder := do
+    (s : Settings) (random : IO.Ref Random) : LayeredM GraphInfoHolder := do
   let hasParent := s.parentNode.isSome
   let parentGraphRef ← match s.parentNode with
     | some p => nodeGraph p
@@ -207,7 +207,7 @@ def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : A
   let crossingsCounter ← AllCrossingsCounter.new graph currentNodeOrder
   let (crossMinimizer, greedySwitch) ← createCrossMinimizer graph crossMinType currentNodeOrder
     barycenterDistributor random hasParent s.forceModelOrder s.maxModelOrderNodes s.constraintsBetweenNonDummies
-    s.groupOrderStrategy lockedGraph
+    s.groupOrderStrategy
   let crossMinDeterministic ← crossMinimizer.isDeterministic
   let decider ← LayerSweepTypeDecider.new graph s.parentNode hasParent crossMinDeterministic
   let (childGraphs, nPorts) ← initHolder currentNodeOrder
@@ -228,13 +228,11 @@ def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : A
     thoroughness := s.thoroughness, random, snapshot, firstTryWithInitialOrder := s.firstTryWithInitialOrder }
 
 /-- `GraphInfoHolder::new(graph, cross_min_type)` / `new_with_graph(graph_ref, graph, cross_min_type,
-shared_random)`: `random` is the generator Rust would use (see the module doc); `lockedGraph` is the
-graph elk-rs holds locked while the minimiser runs (for `ModelOrderBarycenterHeuristic`). -/
-def new (graph : LGraphId) (crossMinType : CrossMinType) (random : IO.Ref Random)
-    (lockedGraph : Option LGraphId := none) : LayeredM GraphInfoHolder := do
+shared_random)`: `random` is the generator Rust would use (see the module doc). -/
+def new (graph : LGraphId) (crossMinType : CrossMinType) (random : IO.Ref Random) : LayeredM GraphInfoHolder := do
   let order := (← get).graphToNodeArray graph
   let s ← readSettings graph
-  build graph crossMinType order s random lockedGraph
+  build graph crossMinType order s random
 
 /-- `dont_sweep_into()`. -/
 @[inline] def dontSweepInto (h : GraphInfoHolder) : Bool := h.useBottomUp

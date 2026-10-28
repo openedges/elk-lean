@@ -537,14 +537,81 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
 `f64::MIN_POSITIVE` → `Double.MIN_VALUE`·정렬 함수, `SweepCopy`의 `FIXED_POS` 변 교정(안 함 → 함), node promotion 1층 정렬
 (안 함 → 함).
 
-## 14. RJ3: mrtree·radial·layered P4의 Java 경로와 옵션 세트의 파이프라인 편입 (2026-10-29)
+## 14. NIK: node promotion(Nikolov 전략)·`ModelOrderBarycenterHeuristic`·Coffman–Graham의 Java 경로 (2026-10-29)
+
+방법: elk-lean이 아직 elk-rs 의미론을 따르던 layered 지점을 Java 0.12.0 소스대로 옮기고, 처리기 단위로는 수정하지 않은
+Java 클래스를 직접 호출하는 하네스(같은 `LGraph`를 만들어 `new NodePromotion().process(..)`, `new CoffmanGrahamLayerer()
+.process(..)`, 리플렉션으로 private `updateBiggerAndSmallerAssociations`)와 차분 비교했다. 무작위 생성기(s/v/d)는 node
+promotion·layering 전략·group model order를 쓰지 않으므로, v 집합의 layered 루트 그래프 1,802개에 옵션을 준 변형 세트
+4개로 전체 레이아웃을 Java(`ElkJavaBaseline`, 600개 단위가 아닌 1,802개 한 JVM)와 비교했다: `npa`(node promotion 9전략·
+`maxIterations`·layering 전략·간격, 30%는 `forceNodeModelOrder`와 group model order — 하위 알고리즘은 원본 그대로),
+`npb`(같은 생성기, 모든 compound 노드를 layered로), `mob`(루트에 `forceNodeModelOrder`·`cmGroupOrderStrategy`, 자식에
+crossing minimisation group id 0~300만), P3J의 `p3a`.
+
+### 14.1 변경(전부 ELK Java가 기준, elk-rs와는 달라짐)
+
+- `NodePromotion`의 Nikolov 계열(`NIKOLOV`, `NIKOLOV_PIXEL`, `NIKOLOV_IMPROVED(_PIXEL)`, `DUMMYNODE_PERCENTAGE`,
+  `NODECOUNT_PERCENTAGE`, `NO_BOUNDARY`·기본 분기): elk-rs는 아무것도 하지 않았다(I7의 "oracle 특이점"). Java의
+  `precalculateAndSetInformation`(역순 layer id, node id, 차수, 폭 추정: `int` 노드+더미 수, `double` 픽셀 폭 =
+  `size.y + spacing.nodeNode`, 더미 `spacing.edgeNodeBetweenLayers`, `Math.max`), `promotionMagic`, 재귀 `promoteNode`
+  (`layers[node]`는 재귀 뒤에 기록 — 두 경로로 닿는 선행 노드는 두 번 승격될 수 있음), 전략 분기, `setNewLayering`(새 layer
+  `maxHeight + 1`개, id `maxHeight - i`, 빈 layer 제거)을 줄 단위로 옮겼다. Java의 부기 결함도 그대로: `currentWidthBackup =
+  currentWidth`가 **같은 리스트**라 첫 채택·복원 전까지 "백업"이 함께 바뀌어 첫 복원은 기각된 승격의 폭을 남기고(리스트가
+  `maxHeight`보다 길어질 수 있고 이후 `get(nodeLayerPos)`는 그 낡은 칸을 읽음), 채택 시 `dummyBackup = dummyNodeCount +
+  promotionPair.getFirst()`(차이를 두 번 뺌)와 `reducedDummies += dummyBackup - dummyNodeCount`. 백분율 전략은
+  `(int) Math.ceil(n * promoteUntil / 100.0)`(`int` 곱), IMPROVED는 `NO_BOUNDARY` 실행 뒤 폭 리스트 전체의 최댓값이 처음
+  최댓값을 넘으면 `NIKOLOV(_PIXEL)`로 한 번 더. 처리기 차분: 무작위 layered 그래프 5,500개(10전략, `maxIterations`, 간격,
+  label 더미·model order 포함)에서 레이어링·예외(`NoSuchElementException`) 전부 Java와 같다.
+- `NodePromotion`(model order): Java가 남기는 `layer.id`(새 layer의 id = **키**, 빈 키는 건너뜀)와 `node.id`를 설정한다.
+  `SortByInputModelProcessor`의 `ModelOrderNodeComparator`/`ModelOrderPortComparator`가 아직 번호를 다시 매기지 않은 뒤
+  layer의 id를 비교하므로 관찰된다(`p3a/v2_g0201`, `npa/v9_g0207`).
+- `ModelOrderBarycenterHeuristic`: (1) `CMGroupModelOrderCalculator`의 group order 옵션과 offset(`MAX_MODEL_ORDER_NODES`)을
+  `n1.getGraph()`에서 읽는다 — elk-rs는 처리 중인 그래프를 잠근 채 `try_lock`이 실패해 기본값을 써서 루트의 `ENFORCED`가
+  무시됐다(`LayerSweepCrossingMinimizer`의 model order 계수도 같은 수정). (2) `ONLY_WITHIN_GROUP`의
+  `n1.getProperty(ID) != n2.getProperty(ID)`는 `Integer` 동일성 — 캐시 `[-128, 127]` 밖의 같은 id는 다른 그룹. (3) 관계
+  집합: Java는 살아 있는 `HashSet`을 돌며 고치고 elk-rs는 두 집합을 먼저 복사하지만, 루프 중에 커지는 집합은 그 루프가 어차피
+  더하는 원소만 얻으므로 결과는 같다(순환·자기 관계를 포함한 임의 상태 3,000개를 리플렉션으로 Java 메서드와 비교해 전부 일치;
+  `insertionSort` 한 번 안에서는 관계가 항상 추이 폐포라 순환 자체가 생기지 않는다). Lean은 Java 순서대로 다시 썼다.
+  `CMGroupModelOrderCalculator`의 group 값은 `int` 산술(`Int.wrap32`).
+- `CoffmanGrahamLayerer`(P2): 두 우선순위 큐를 `java.util.PriorityQueue` 이진 힙(JDK 21 `siftUp`/`siftDown`)으로,
+  `compareNodesInTopo`를 Java 비교자로 — `Integer !=`(캐시 밖 같은 값은 `Integer.compare` = 0), 한쪽 목록이 비면 node id,
+  둘 다 비지 않고 끝까지 같으면 `1`. 일관된 순서가 아니어서 힙 구조가 결과를 정한다(elk-rs: 리스트의 첫 최솟값
+  `pop_best_by`, 값 비교, id 대체). node promotion이 Coffman–Graham 레이어링에서 출발할 때 차이가 드러났다(`npa/v8_g0337`:
+  기존 Lean의 CG 결과가 우연히 Java의 CG + 승격 결과와 같아 일치했다). 처리기 차분: 무작위 DAG 3,000개(454개는 노드 128개
+  초과) 전부 Java와 같다.
+
+### 14.2 결과
+
+| 측정(정확 일치, tol 0) | 전(`757c7c0`) | 후 |
+|---|---:|---:|
+| `npa` node promotion 변형(1,802개, 양쪽 성공 1,378) | 1,144 | **1,266** |
+| `npb` 같은 변형, 전부 layered(양쪽 성공 1,151) | 937 | **1,142** |
+| `mob` model order barycenter 변형(양쪽 성공 1,715) | 1,602 | **1,634** |
+| `p3a` P3 옵션 변형(양쪽 성공 1,415) | 1,302 | 1,303 |
+
+네 세트 모두 정확 → 비정확 0. 단계별로는 Nikolov+MOBH 이식 +179(`npb`)·+112(`npa`: +113, `v8_g0337` −1은 Coffman–Graham
+이식 뒤 복구), Coffman–Graham +26·+9, model order layer id +1(`npa`)·+1(`p3a`); `mob`의 +32는 MOBH 수정만의 몫이다. 남은 차이: `npb` 9개 — 6개는 새 JVM의 Java와 정확히 같음(실행 맥락 의존), 2개는
+모든 단계 trace가 같고 최종 간선 section만 다름, 1개 `SortByInputModelProcessor` 포트 순서; `npa` 57개 중 55개는 hierarchy에
+layered가 아닌 알고리즘이 있고(node promotion 옵션을 지워도 56개가 그대로 다름 — 다른 원인), 2개 `SelfLoopRouter`, 1개
+`SortByInputModelProcessor`(`ModelOrderPortComparator`가 아직 elk-rs를 따르는 지점: 네 번째 추이 검사, 앞 layer 검사의 조기
+반환 등). Java만 실패하는 입력은 재현하지 않았다: 중첩 그래프의 `MAX_MODEL_ORDER_NODES`가 `null`이라 나는 언박싱 NPE
+(MOBH·`SortByInputModelProcessor`·model order cycle breaker), `CrossingsCounter`/`BinaryIndexedTree`의 AIOOBE.
+
+코퍼스에는 node promotion·`COFFMAN_GRAHAM`·group model order를 쓰는 모델이 없다(`forceNodeModelOrder`는 1개, group 옵션
+없음). Lean 출력 1,998개 바이트 동일, Java 정확 1878/119(집합 동일), Java 단계별 trace 1,743/1,997(P3J와 같음), 합성 26개
+바이트 동일, 무작위 s/v 세트 결과 불변. 테스트 `layered.nodePromotion.java`(처리기 424), `layered.nodePromotion.layouts`
+(fixture 12), `layered.modelOrderBarycenter.relations`(400), `layered.p2layers.coffmanGraham.java`(520) —
+`tests/fixtures/promotion/`; elk-rs 기대값을 Java로 바꾼 검사: Nikolov no-op(→ 승격), 잠긴 그래프의 group order(→ 그래프 값),
+Coffman–Graham star의 힙 순서(`[[0],[2,1],[4,3]]` → `[[0],[3,1],[4,2]]`)와 `compareNodesInTopo`.
+
+## 15. RJ3: mrtree·radial·layered P4의 Java 경로와 옵션 세트의 파이프라인 편입 (2026-10-29)
 
 방법: 라운드 7 병합본(`757c7c0`, `elk_base`)으로 파이프라인을 `--sets s,v,d,o,p`(시드 1~10)로 돌리고(s·v의 Java 결과는
 라운드 6 기준값 재사용, d·o·p는 새로 실행), 차이 입력을 Java 소스·단계별 trace·새 JVM 단일 실행으로 확인했다. Java 내부
 확인은 스크래치의 그림자 클래스(서명 제거한 ELK jar 사본 + 수정한 `RadialUtil`/`SelfHyperLoop`, 결과 기준값에는 쓰지
 않음)와 스택 트레이스 하네스로 했다. 결과 기준값은 항상 수정하지 않은 Java(`ElkJavaBaseline`)다.
 
-### 14.1 파이프라인: `o`·`p` 세트
+### 15.1 파이프라인: `o`·`p` 세트
 
 - `p`(`scripts/gen_p3_graphs.py`, P3J의 `gen_p3.py`): 시드 `k`의 `v<k>`에서 layered 루트 그래프만 골라 교차 최소화·
   layering 옵션(전략 4종, greedy switch 종류·문턱, model order 전략·영향도·`portModelOrder`, `forceNodeModelOrder`,
@@ -552,10 +619,10 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
   굽은 점 section)을 준 사본(시드 1~10 합계 1,802개; 생성 완료 표시 `gen/.p<k>.done`). `o`(`gen_option_graphs.py`,
   OPT)는 이미 세트 종류였고, 두 세트 모두 추적 보고서에 들어간다. 기본 `--sets s,v`는 그대로(빠른 확인용), 추적
   보고서 `tests/random_parity/report.md`는 `--sets s,v,d,o,p` 전체 실행에서 게시한다(`TESTING.md` 2B).
-- elk-lean이 Java의 끝나지 않는 재귀를 감지해 던지는 `java.lang.StackOverflowError`(14.2)는 Java의 스택 넘침과 같은
+- elk-lean이 Java의 끝나지 않는 재귀를 감지해 던지는 `java.lang.StackOverflowError`(15.2)는 Java의 스택 넘침과 같은
   `overflow` 결과로 센다(`random_java_parity.py`).
 
-### 14.2 mrtree (전부 ELK Java가 기준, elk-rs와는 달라짐)
+### 15.2 mrtree (전부 ELK Java가 기준, elk-rs와는 달라짐)
 
 - `EdgeRouter`(`AVOID_OVERLAP`): `TreeUtil.getAllOutgoingEdges`/`getAllIncomingEdges`는 노드 **`id`**가 같은 끝점의 간선을
   모으고(노드 동일성이 아님), 두 끝의 `TREE_LEVEL` `Integer`를 `!=`(참조 비교 — 캐시 범위 `-128..127` 밖에서는 같은 값도
@@ -595,7 +662,7 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
   것이 section을 씀; elk-rs는 건너뜀), 한 노드의 여러 포트가 나열하는 간선은 항목마다 하나씩, 크기 하한과 결과 상자는
   `Math.max`/`Math.min`과 `Integer.MAX_VALUE`/`MIN_VALUE`.
 
-### 14.3 radial
+### 15.3 radial
 
 - 삼각함수: 기준 JVM(Temurin 21.0.13, aarch64)에서 `Math.atan2`·`Math.acos`·`Math.asin`은 `StrictMath`(fdlibm)와 같고
   (200만 표본 0 차이), C 라이브러리와는 약 16%의 인자에서 1 ulp 다르다. `Math.sin`/`Math.cos`는 HotSpot aarch64 스텁
@@ -620,7 +687,7 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
   (`opt2_081_radial_broad_350`, `opt2_119_radial_broad_600`)은 Java 2초, 이제 Lean도 0.1/0.5초에 끝난다(350은 Java와 정확히
   같고 600은 위 `HashSet` 순서 차이).
 
-### 14.4 layered P4
+### 15.4 layered P4
 
 - `LinearSegmentsNodePlacer`(`v3/g0156`): 순환을 끊으려고 나눈 선형 세그먼트는 앞 세그먼트의 의존 목록에서 **한 번만**
   빠지고(`List.remove(Object)`; elk-rs `retain`은 전부 지움) 들어오는 수는 조건 없이 줄어든다(elk-rs는 양수일 때만 — 두
@@ -631,20 +698,20 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
   (elk-rs는 `ArenaSync` 발견 순서), Java `ListIterator` 반복은 열린 간선 목록의 0번 항목을 표시하지도 지우지도 않는다
   (elk-rs는 0번까지).
 
-### 14.5 재현하지 않는 것·Java 실행 맥락 의존
+### 15.5 재현하지 않는 것·Java 실행 맥락 의존
 
 - **layered 실행 맥락 의존**: s·v·p 세트에 남은 layered 차이(LPOS/LEDGE/LNODE) 72개 중 37개는 입력 하나만 새 JVM에서 돌린
   Java와 정확히 같다(파이프라인은 세트당 한 JVM). 나머지 35개 중 33개는 `SelfHyperLoop`의 변별 `ArrayListMultimap`
   (`PortSide` 열거형 키의 identity hash 순서)을 열거형 순서로 바꾼 Java(elk-rs 패치 0001과 같은 한 줄, 스크래치 오버레이)와
   같고, 그중 23개는 수정 없는 Java를 다른 순서(역순)로 돌린 실행과도 같다 — 코퍼스 119개와 같은 종류. 결정적으로 남은 것은
-  2개(14.6). P3J의 변형 세트(`p3a`, 1,802개)에 남은 24개 중 22개도 다른 JVM 맥락(한 JVM 일괄·역순·셔플 2종) 중 하나와 같다.
-  "최종 간선만 다르다"던 `v8/g0471`·`v9/g0173`은 mrtree 루트의 라우팅이었고(14.2) 이제 새 JVM 단일 실행과 같다 —
+  2개(15.6). P3J의 변형 세트(`p3a`, 1,802개)에 남은 24개 중 22개도 다른 JVM 맥락(한 JVM 일괄·역순·셔플 2종) 중 하나와 같다.
+  "최종 간선만 다르다"던 `v8/g0471`·`v9/g0173`은 mrtree 루트의 라우팅이었고(15.2) 이제 새 JVM 단일 실행과 같다 —
   파이프라인 실행과의 남은 차이는 안쪽 layered 자식의 self-loop 맥락 의존이다.
 - **Java 자체 결함(재현 안 함)**: `CrossingsCounter`/`BinaryIndexedTree`의 `ArrayIndexOutOfBoundsException`(v 2건, mrtree
   루트 안의 layered 자식, p 세트 다수), `forceNodeModelOrder` NPE 등 — 5장·13장.
 - **표현 차이**: Java Gson의 `NaN` 대 elk-lean `null`(radial 9건, 수치는 같음).
 
-### 14.6 남은 것
+### 15.6 남은 것
 
 - `NetworkSimplexPlacer` 1건(`p2/v2_g0421`, 단계별 trace의 첫 차이: 라벨 더미의 y — 비용이 같은 최적해 중 다른 해; 보조
   그래프 구성 순서 조사 필요), `SortByInputModelProcessor` 2건(`p5/v5_g0464`, `p3a/v2_g0201`: 층 안 노드/포트 순서;
@@ -652,7 +719,7 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
   순서).
 - 담당 밖: SPOrE(`sporeOverlap` 75·`sporeCompaction` 9, o 세트), VertiFlex 10, rectpacking 4.
 
-### 14.7 결과(시드 1~10; Java 기준값은 같은 입력 — s·v는 라운드 6 실행, d·o·p는 이 라운드 실행)
+### 15.7 결과(시드 1~10; Java 기준값은 같은 입력 — s·v는 라운드 6 실행, d·o·p는 이 라운드 실행)
 
 | 세트 | 둘 다 성공 | 정확 일치 전(`757c7c0`) → 후 | 1e-6 전 → 후 |
 |---|---:|---:|---:|
@@ -665,7 +732,7 @@ TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포�
 
 정확 → 비정확 0, 비정확 → 정확 1,549(그 밖에 Java의 스택 넘침 17건이 `overflow_both`, 예외 3건이 `error_equal`로). 분류(전 →
 후): DEF:mrtree 752 → 0, POS:mrtree 394 → 0, NML:mrtree 15 → 0, T 365 → 3(radial `HashSet`), POS:radial 21 → 11(`HashSet` 1, NaN 표현
-8 등), LPOS 96 → 93·LEDGE 18·LNODE 9(14.5), 담당 밖 SPOrE 84·VertiFlex 10·rectpacking 4는 그대로. 결과 행렬(o 세트): Lean ok·Java
+8 등), LPOS 96 → 93·LEDGE 18·LNODE 9(15.5), 담당 밖 SPOrE 84·VertiFlex 10·rectpacking 4는 그대로. 결과 행렬(o 세트): Lean ok·Java
 overflow 14 → 0, Lean 예외·Java overflow 3 → 0. 코퍼스와 기타 검증은 `HISTORY.md`의 RJ3 행.
 
 테스트: `rj3.java`/`rj3.java.errors`(`tests/fixtures/rj3/` 입력 12개, 새 JVM Java 출력 10개·예외 문구 2개, 기준 바이너리에서 전부

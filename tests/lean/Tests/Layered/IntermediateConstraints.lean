@@ -780,15 +780,32 @@ def nodePromotionTests : Suite := suite "layered.intermediate.NodePromotion" do
       return (g, na, nl, nc, nx, ny))
   checkEq "hand: LTR through a label layer" (layerNodes a g) #[#[na], #[nl], #[nc, nx], #[ny]]
   check "hand: invariants after label-layer promotion" (layeringInvariantsHold a g)
-  -- elk-rs parity: the Nikolov family is a no-op (Java would run promotionMagic)
+  -- Java runs the Nikolov et al. heuristic (`promotionMagic`) for the other strategies (elk-rs: no-op).
+  -- Expected layerings from the unmodified ELK Java 0.12.0 `NodePromotion` on the same `LGraph`s.
   for strategy in #[NodePromotionStrategy.nikolov, .nikolovPixel, .nikolovImproved, .nikolovImprovedPixel, .noBoundary,
       .dummynodePercentage, .nodecountPercentage] do
+    -- every edge spans one layer: no promotion saves a dummy, the layering is rebuilt unchanged
     let ((g, ns), a) ← LayeredM.run (do
         let r ← promotionGraph strategy
         runProc NodePromotion.processor r.1
         return r)
-    checkEq s!"elk-rs parity: {strategy} leaves the layering unchanged" (layerNodes a g)
+    checkEq s!"Java: {strategy} keeps a layering without dummies" (layerNodes a g)
       #[#[ns[0]!], #[ns[1]!, ns[3]!], #[ns[2]!]]
+    -- layers [a] [b] [c, d], edges a→b, b→c, a→d: promoting the sink d next to b saves the dummy of a→d
+    let ((g, na, nb, nc, nd), a) ← LayeredM.run (do
+        let (g, layers) ← graphWithLayers 3
+        LayeredM.setGraphProp g LayeredOptions.LAYERING_NODE_PROMOTION_STRATEGY strategy
+        let na ← addToLayer g layers[0]!
+        let nb ← addToLayer g layers[1]!
+        let nc ← addToLayer g layers[2]!
+        let nd ← addToLayer g layers[2]!
+        let _ ← connectNodes na nb
+        let _ ← connectNodes nb nc
+        let _ ← connectNodes na nd
+        runProc NodePromotion.processor g
+        return (g, na, nb, nc, nd))
+    checkEq s!"Java: {strategy} promotes the sink of a long edge" (layerNodes a g) #[#[na], #[nb, nd], #[nc]]
+    check s!"Java: {strategy} keeps the layering invariants" (layeringInvariantsHold a g)
   -- Java: a single layer is still sorted by model order (descending for left-to-right) and rebuilt
   -- (elk-rs leaves graphs with fewer than two layers untouched)
   let ((g, ns), a) ← LayeredM.run (do

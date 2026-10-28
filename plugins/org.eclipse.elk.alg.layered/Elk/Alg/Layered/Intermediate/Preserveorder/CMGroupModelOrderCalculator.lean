@@ -11,10 +11,12 @@ The Rust calculator (and both comparators) read three graph options from their `
 with `try_lock()`, falling back to defaults when the lock is busy. The Lean port passes these values
 explicitly as a `ModelOrderGraphContext`:
 
-* `ModelOrderGraphContext.ofGraph g` reads them from the graph (a successful `try_lock`, and what
-  `SortByInputModelProcessor`'s `build_ordering_context_graph` copies into its private context graph);
+* `ModelOrderGraphContext.ofGraph g` reads them from the graph — what Java always does (and what
+  `SortByInputModelProcessor`'s `build_ordering_context_graph` copies into its private context graph).
+  `ModelOrderBarycenterHeuristic` and the model order counts of `LayerSweepCrossingMinimizer` use it
+  also for the processed graph (elk-rs holds that graph locked);
 * `ModelOrderGraphContext.unavailable` is what Rust sees when `try_lock` fails (`MAX_MODEL_ORDER_NODES`
-  `0`, group order strategy `ONLY_WITHIN_GROUP`, no enforced group orders).
+  `0`, group order strategy `ONLY_WITHIN_GROUP`, no enforced group orders); no Java path uses it.
 
 Rust differs from Java in that only `LNode`s are supported (Java takes any `LGraphElement`; Rust's
 port and edge variants are local helpers of `ModelOrderPortComparator` that check only the group id
@@ -22,7 +24,7 @@ of the element itself).
 -/
 namespace Elk.Alg.Layered.Intermediate.Preserveorder
 
-open Elk.Graph Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
+open Elk.Graph Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
 
 /-- The graph options read by the model order comparators and `CMGroupModelOrderCalculator`
 (the Rust `graph: LGraphRef` field / `parent` argument, see the module doc). -/
@@ -68,7 +70,8 @@ def calculateModelOrderOrGroupModelOrderOf (parent : ModelOrderGraphContext) (el
       let elementGroupId := element.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
       let otherGroupId := other.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
       if parent.enforcedGroupOrders.contains elementGroupId && parent.enforcedGroupOrders.contains otherGroupId then
-        offset * elementGroupId + elementModelOrder
+        -- Java `int` arithmetic
+        Int.wrap32 (offset * elementGroupId + elementModelOrder)
       else elementModelOrder
     else elementModelOrder
 

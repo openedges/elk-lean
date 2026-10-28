@@ -53,8 +53,8 @@ else reads a `RANDOM` while the minimiser runs, so every shared state is written
   layer `0` itself); one comparator per count, reset per layer (and per node for ports); nodes with
   fewer than two ports are skipped *before* `longEdgeTargetNodePreprocessing` (Java preprocesses every
   node); the strategy and the port model order flag are the swept graph's (Java: each node's graph).
-  The comparators get the swept graph as `ModelOrderGraphContext`: `unavailable` for the processed
-  graph, which elk-rs holds locked (`try_lock` fails), `ofGraph` for nested graphs.
+  The comparators get the swept graph's own options (`ModelOrderGraphContext.ofGraph`, Java; elk-rs held
+  the processed graph locked and used the defaults there).
 * The model-order crossing count of nested graphs is the plain crossing count (only the start graph's
   model order changes are added).
 * `compare_different_randomized_layouts` resets the heuristic's sweep iteration and increments it
@@ -105,8 +105,6 @@ structure LayerSweepCrossingMinimizer where
   randomSeed : Int := 0
   /-- The shared generators to write back: the graph holding the `RANDOM` state and its ref. -/
   randomRefs : Array (LGraphId × IO.Ref Random) := #[]
-  /-- The graph `process` was called with (locked in elk-rs). -/
-  processedGraph : LGraphId
 
 /-- The minimiser monad. -/
 abbrev SweepM := StateRefT LayerSweepCrossingMinimizer LayeredM
@@ -225,9 +223,10 @@ def sortPortDummiesByPortPositions (parentNode : LNodeId) (layerCloseToEdge : Ar
 
 /-! ## Model order counts -/
 
-/-- The comparators' view of graph `g`: `unavailable` for the processed graph (locked in elk-rs). -/
-def graphContext (processed g : LGraphId) : LayeredM ModelOrderGraphContext :=
-  if g == processed then pure ModelOrderGraphContext.unavailable else ModelOrderGraphContext.ofGraph g
+/-- The comparators' view of graph `g`: its own options (Java passes `currentGraph.lGraph()`; elk-rs
+held the processed graph locked, so its `try_lock` fell back to the defaults there). -/
+def graphContext (g : LGraphId) : LayeredM ModelOrderGraphContext :=
+  ModelOrderGraphContext.ofGraph g
 
 /-- The previous layer of `layerIndex` (`[]` for layer `0`). -/
 @[inline] def previousLayerOf (layers : Array (Array LNodeId)) (layerIndex : Nat) : Array LNodeId :=
@@ -429,7 +428,7 @@ def countCurrentNumberOfCrossingsNodePortOrder (startIndex : Nat) : SweepM Float
   let mut modelOrderInfluence : Float := 0.0
   if h.considerModelOrderStrategy != .none then
     let order := (← holderAt startIndex).currentNodeOrder
-    let ctx ← graphContext (← get).processedGraph h.lGraph
+    let ctx ← graphContext h.lGraph
     let nodeChanges ← countModelOrderNodeChanges ctx order h.considerModelOrderStrategy h.groupOrderStrategy
     modelOrderInfluence := modelOrderInfluence + h.nodeInfluence * Float.ofInt nodeChanges
     let portChanges ← countModelOrderPortChanges ctx order h.considerModelOrderStrategy h.portModelOrder
@@ -694,7 +693,6 @@ def initializeGraphs (root : LGraphId) : SweepM (Array Nat) := do
                            graphsDirtyForCrossingCount := #[], cachedCrossingsByGraph := #[] }
   initializeRandom root
   let crossMinType := (← get).crossMinType
-  let processed := (← get).processedGraph
   let mut graphsToSweepOn : Array Nat := #[]
   let mut queue : Array LGraphId := #[root]
   let mut head := 0
@@ -704,7 +702,7 @@ def initializeGraphs (root : LGraphId) : SweepM (Array Nat) := do
     let index := (← get).graphInfoHolders.size
     modifyGraph graph fun g => { g with id := index }
     let random ← randomFor graph (graph == root)
-    let gData ← GraphInfoHolder.new graph crossMinType random (some processed)
+    let gData ← GraphInfoHolder.new graph crossMinType random
     let holders := (← get).graphInfoHolders
     let parentIndex := gData.parentGraphRef.bind fun parentGraph =>
       holders.findIdx? (·.lGraph == parentGraph)
@@ -764,7 +762,7 @@ def processGraph (graph : LGraphId) (monitor : ProgressMonitor) : SweepM Unit :=
 /-- `process(graph, monitor)`: a fresh minimiser per call. -/
 def process (crossMinType : CrossMinType) (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   let random ← IO.mkRef (Random.ofInt 0)
-  let s : LayerSweepCrossingMinimizer := { crossMinType, random, processedGraph := graph }
+  let s : LayerSweepCrossingMinimizer := { crossMinType, random }
   let ((), _) ← (processGraph graph monitor).run s
 
 /-- `INTERMEDIATE_PROCESSING_CONFIGURATION`: `LONG_EDGE_SPLITTER` before P3,
