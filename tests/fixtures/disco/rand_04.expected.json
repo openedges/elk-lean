@@ -321,7 +321,7 @@
       ]
     }
   ],
-  "height": 584.0679554986386,
+  "height": 590.0679554986386,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "disco",
@@ -329,7 +329,7 @@
     "org.eclipse.elk.polyomino.highLevelSort": "NUM_OF_EXTERNAL_SIDES_THAN_NUM_OF_EXTENSIONS_LAST",
     "org.eclipse.elk.polyomino.traversalStrategy": "QUADRANTS_JITTER"
   },
-  "width": 551.1227816457775,
+  "width": 557.1227816457775,
   "x": 0,
   "y": 0
 }

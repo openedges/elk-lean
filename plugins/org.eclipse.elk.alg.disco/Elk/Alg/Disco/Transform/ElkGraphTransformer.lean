@@ -73,17 +73,18 @@ private def HALF_PI : Float := Float.pi / 2.0
 
 /-- `get_orthogonal_points`: the two points at distance `radius` perpendicular to the direction
 from `(curX, curY)` to `(nxtX, nxtY)`, counter-clockwise first. Note the argument order of
-`atan2` (`dif_x.atan2(dif_y)`). -/
+`atan2` (`Math.atan2(difX, difY)`). The reference JVM's `Math.atan2` (fdlibm) and `Math.sin`/`Math.cos`
+(HotSpot stubs) are used (`Elk.Core.Util.Java`). -/
 private def getOrthogonalPoints (curX curY nxtX nxtY radius : Float) : KVector × KVector :=
   let difX := nxtX - curX
   let difY := nxtY - curY
-  let angleRadians := Float.atan2 difX difY
+  let angleRadians := javaAtan2 difX difY
   let orthAngleCcw := angleRadians + HALF_PI
   let orthAngleCw := angleRadians - HALF_PI
-  let xCcw := radius * Float.sin orthAngleCcw + curX
-  let yCcw := radius * Float.cos orthAngleCcw + curY
-  let xCw := radius * Float.sin orthAngleCw + curX
-  let yCw := radius * Float.cos orthAngleCw + curY
+  let xCcw := radius * javaSin orthAngleCcw + curX
+  let yCcw := radius * javaCos orthAngleCcw + curY
+  let xCw := radius * javaSin orthAngleCw + curX
+  let yCw := radius * javaCos orthAngleCw + curY
   (KVector.mk' xCcw yCcw, KVector.mk' xCw yCw)
 
 /-- `compute_intersection(p1, p2, p3, p4)`: intersection of the lines `p1p2` and `p3p4`
