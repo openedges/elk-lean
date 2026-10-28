@@ -83,19 +83,20 @@ private partial def skipBlanks (bs : String) (n : Nat) (hn : n = bs.utf8ByteSize
     if x == 32 || x == 10 || x == 13 || x == 9 then skipBlanks bs n hn (i + 1) else i
   else i
 
-/-- Skips whitespace, and comments in lenient mode. -/
-private partial def skipWs (bs : String) (lenient : Bool) (i : Nat) : Nat :=
-  let i := skipBlanks bs bs.utf8ByteSize rfl i
-  if i < bs.utf8ByteSize then
-    let x := byteAt bs i
-    if isWs x then skipWs bs lenient (i + 1)
-    else if x == 47 && lenient && i + 1 < bs.utf8ByteSize then
-      let y := byteAt bs (i + 1)
-      if y == 47 then skipWs bs lenient (skipLineComment bs (i + 2))
-      else if y == 42 then skipWs bs lenient (skipBlockComment bs (i + 2))
-      else i
+/-- Skips whitespace and comments (lenient mode), from a non-whitespace byte at `i`. -/
+private partial def skipComments (bs : String) (i : Nat) : Nat :=
+  if i + 1 < bs.utf8ByteSize && byteAt bs i == 47 then
+    let y := byteAt bs (i + 1)
+    if y == 47 then skipComments bs (skipBlanks bs bs.utf8ByteSize rfl (skipLineComment bs (i + 2)))
+    else if y == 42 then skipComments bs (skipBlanks bs bs.utf8ByteSize rfl (skipBlockComment bs (i + 2)))
     else i
   else i
+
+/-- Skips whitespace, and comments in lenient mode. (`skipBlanks` stops at a non-whitespace byte,
+so strict mode needs no further test.) -/
+@[inline] private def skipWs (bs : String) (lenient : Bool) (i : Nat) : Nat :=
+  let i := skipBlanks bs bs.utf8ByteSize rfl i
+  if lenient then skipComments bs i else i
 
 /-- `expected 'c'` at `i`. -/
 @[inline] private def expectByte (bs : String) (i : Nat) (c : UInt8) (ch : Char) : PR Unit :=
@@ -186,28 +187,47 @@ private partial def parseStringBody (bs : String) (q : UInt8) (lenient : Bool) (
     else if x < 32 && !lenient then fail i "control character in string"
     else parseStringBody bs q lenient (i + 1) (buf.push x)
 
-/-- Member names of ELK JSON graphs, most frequent first. A plain key equal to one of them shares
-the constant instead of allocating a copy (and later lookups compare pointer-equal strings). -/
-private def knownKeys : Array String :=
-  #[Key.id, Key.x, Key.y, Key.width, Key.height, Key.labels, Key.text, Key.ports, Key.layoutOptions,
-    Key.properties, Key.children, Key.edges, Key.sources, Key.targets, Key.source, Key.target,
-    Key.sourcePort, Key.targetPort, Key.sections, Key.startPoint, Key.endPoint, Key.bendPoints,
-    Key.incomingShape, Key.outgoingShape, Key.incomingSections, Key.outgoingSections,
-    Key.junctionPoints, Key.container, Key.individualSpacings]
-
 /-- Whether the bytes `[b, b + n)` of `bs` equal the first `n` bytes of `k` (from offset `i`). -/
 private partial def bytesEqAt (bs : String) (b : Nat) (k : String) (i n : Nat) : Bool :=
   if i < n then byteAt bs (b + i) == byteAt k i && bytesEqAt bs b k (i + 1) n else true
 
-/-- The bytes `[b, e)` of `bs` as a string, shared with `knownKeys` when it is one of them. -/
-private partial def internSlice (bs : String) (b e : Nat) (j : Nat) : String :=
-  if h : j < knownKeys.size then
-    let k := knownKeys[j]
-    if k.utf8ByteSize == e - b && bytesEqAt bs b k 0 (e - b) then k else internSlice bs b e (j + 1)
-  else slice bs b e
+/-- The member name of ELK JSON graphs (`Elk.Json.Key`) that the bytes `[b, b + n)` of `bs` can
+only be, chosen by length and first (or second) byte; `""` when there is none. -/
+private def keyCandidate (bs : String) (b n : Nat) : String :=
+  let c := byteAt bs b
+  match n with
+  | 1 => if c == 120 then Key.x else if c == 121 then Key.y else ""
+  | 2 => Key.id
+  | 4 => Key.text
+  | 5 => if c == 119 then Key.width else if c == 112 then Key.ports else if c == 101 then Key.edges else ""
+  | 6 =>
+    if c == 104 then Key.height else if c == 108 then Key.labels
+    else if c == 115 then Key.source else if c == 116 then Key.target else ""
+  | 7 => if c == 115 then Key.sources else if c == 116 then Key.targets else ""
+  | 8 => if c == 99 then Key.children else if c == 115 then Key.sections else if c == 101 then Key.endPoint else ""
+  | 9 => Key.container
+  | 10 =>
+    if c == 112 then Key.properties else if c == 116 then Key.targetPort
+    else if c == 98 then Key.bendPoints
+    else if c == 115 then (if byteAt bs (b + 1) == 111 then Key.sourcePort else Key.startPoint)
+    else ""
+  | 13 =>
+    if c == 108 then Key.layoutOptions else if c == 105 then Key.incomingShape
+    else if c == 111 then Key.outgoingShape else ""
+  | 14 => Key.junctionPoints
+  | 16 => if c == 105 then Key.incomingSections else if c == 111 then Key.outgoingSections else ""
+  | 18 => Key.individualSpacings
+  | _ => ""
+
+/-- The bytes `[b, e)` of `bs` as a string, shared with the `Elk.Json.Key` constant when it is one
+of the ELK member names (later lookups then compare pointer-equal strings). -/
+private def internSlice (bs : String) (b e : Nat) : String :=
+  let n := e - b
+  let k := keyCandidate bs b n
+  if n != 0 && k.utf8ByteSize == n && bytesEqAt bs b k 0 n then k else slice bs b e
 
 /-- Parses a string literal starting at the opening quote (`"` or, lenient, `'`); `intern` shares
-the strings of `knownKeys` (object keys). -/
+the `Elk.Json.Key` constants (object keys, `internSlice`). -/
 private def parseStringLit (bs : String) (lenient : Bool) (i : Nat) (intern : Bool := false) : PR String :=
   if i >= bs.utf8ByteSize then fail i "expected string"
   else
@@ -217,7 +237,7 @@ private def parseStringLit (bs : String) (lenient : Bool) (i : Nat) (intern : Bo
       let body := i + 1
       match scanPlainString bs q lenient body with
       | some close =>
-        .ok (if intern then internSlice bs body close 0 else slice bs body close) (close + 1)
+        .ok (if intern then internSlice bs body close else slice bs body close) (close + 1)
       | none =>
         match parseStringBody bs q lenient body ByteArray.empty with
         | .err e => .err e
@@ -242,10 +262,34 @@ private partial def startsWithAt (bs : String) (i : Nat) (lit : String) (k : Nat
     i + k < bs.utf8ByteSize && byteAt bs (i + k) == byteAt lit k && startsWithAt bs i lit (k + 1)
   else true
 
+/-- Value of the decimal digits `bs[i:j]` with the byte `skip` (the decimal point) left out. -/
+private partial def mantissaValue (bs : String) (i j skip : Nat) (acc : Nat) : Nat :=
+  if i < j then
+    if i == skip then mantissaValue bs (i + 1) j skip acc
+    else mantissaValue bs (i + 1) j skip (acc * 10 + (byteAt bs i - 48).toNat)
+  else acc
+
+/-- The double of a decimal lexeme with digits `[intStart, mantEnd)` (a decimal point at `dot`, or
+`dot = mantEnd` without one), `fracDigits` digits after the point and exponent digits
+`[expStart, expEnd)` (sign `expNeg`), when Clinger's fast path applies: at most 18 digits whose value
+`M` is below `2^53`, and a decimal exponent `e` with `|e| ≤ 22`. Then `M` and `10^|e|` are exact
+doubles and one IEEE multiplication or division (`FastFloat.ofScientificFast`) rounds the exact
+decimal value correctly, which is what `strtod` returns. NaN when the fast path does not apply. -/
+private def fastDecimal (bs : String) (intStart mantEnd dot fracDigits expStart expEnd : Nat) (expNeg : Bool) : Float :=
+  let digits := mantEnd - intStart - (if dot < mantEnd then 1 else 0)
+  if digits > 18 || expEnd - expStart > 4 then Float.nan
+  else
+    let m := mantissaValue bs intStart mantEnd dot 0
+    let ev := digitsValue bs expStart expEnd 0
+    -- decimal exponent `±ev - fracDigits`
+    if expNeg then Elk.Core.Util.FastFloat.ofScientificFast m true (ev + fracDigits)
+    else if ev >= fracDigits then Elk.Core.Util.FastFloat.ofScientificFast m false (ev - fracDigits)
+    else Elk.Core.Util.FastFloat.ofScientificFast m true (fracDigits - ev)
+
 /-- Parses a number lexeme starting at `start`. Values follow ELK Java's JSON input (Gson numbers read
-with `Double.parseDouble`): floats are correctly rounded (`strtod`), integers stay exact, and `-0` is
-`-0.0` (what Java computes with). elk-rs' serde_json, which reads long mantissas with two roundings,
-is not followed: the result reference is ELK Java. -/
+with `Double.parseDouble`): floats are correctly rounded (`strtod`, or the bit-identical fast path
+`fastDecimal`), integers stay exact, and `-0` is `-0.0` (what Java computes with). elk-rs' serde_json,
+which reads long mantissas with two roundings, is not followed: the result reference is ELK Java. -/
 private def parseNumber (bs : String) (lenient : Bool) (start : Nat) : PR Number := Id.run do
   let mut pos := start
   -- sign
@@ -267,15 +311,23 @@ private def parseNumber (bs : String) (lenient : Bool) (start : Nat) : PR Number
   pos := skipDigits bs pos
   let intDigits := pos - intStart
   let mut isFloat := false
-  -- fraction
+  -- fraction (`dot` stays at `mantEnd` without a decimal point)
+  let dot := pos
+  let mut fracDigits := 0
   if isAt bs pos 46 then
     let nextIsDigit := pos + 1 < bs.utf8ByteSize && isDigit (byteAt bs (pos + 1))
     if nextIsDigit || (lenient && intDigits > 0) then
       isFloat := true
-      pos := skipDigits bs (pos + 1)
+      let fracEnd := skipDigits bs (pos + 1)
+      fracDigits := fracEnd - (pos + 1)
+      pos := fracEnd
     else return fail pos "invalid number"
   if intDigits == 0 && !isFloat then return fail pos "invalid number"
+  let mantEnd := pos
   -- exponent
+  let mut expStart := pos
+  let mut expNeg := false
+  let mut expEnd := pos
   if pos < bs.utf8ByteSize then
     let x := byteAt bs pos
     if x == 101 || x == 69 then
@@ -283,16 +335,23 @@ private def parseNumber (bs : String) (lenient : Bool) (start : Nat) : PR Number
       pos := pos + 1
       if pos < bs.utf8ByteSize then
         let y := byteAt bs pos
-        if y == 43 || y == 45 then pos := pos + 1
-      let expStart := pos
+        if y == 43 || y == 45 then
+          expNeg := y == 45
+          pos := pos + 1
+      expStart := pos
       pos := skipDigits bs pos
       if pos == expStart then return fail pos "invalid exponent"
+      expEnd := pos
   let neg := byteAt bs start == 45
   -- plain integers of at most 18 digits (always within `i64`) without building the lexeme
   if !isFloat && intDigits <= 18 then
     let v := digitsValue bs intStart pos 0
     if neg && v == 0 then return .ok (.float (-0.0)) pos
     return .ok (.int (if neg then -(v : Int) else (v : Int))) pos
+  if isFloat then
+    let f := fastDecimal bs intStart mantEnd dot fracDigits expStart expEnd expNeg
+    -- `f != f` only for NaN: the fast path does not apply
+    if f == f then return .ok (.float (if neg then -f else f)) pos
   let lexeme := slice bs start pos
   let lexeme := if lexeme.startsWith "+" then (lexeme.drop 1).toString else lexeme
   if isFloat then

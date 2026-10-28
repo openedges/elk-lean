@@ -94,6 +94,74 @@ def suite : Suite := Tests.suite "json.parser.differential" do
         if !sameResult text false then diff := diff.push f.toString
     checkEq s!"parsers agree on {n} corpus files" diff #[]
 
-def suites : Array Suite := #[suite]
+/-- A random decimal lexeme: optional `-`, 1–20 integer digits (no leading zero unless `0`),
+optionally a fraction of 0–20 digits and an exponent with 1–3 digits. -/
+def randomDecimal (r : Random) : String × Random := Id.run do
+  let mut r := r
+  let mut s := ""
+  let (sign, r1) := r.nextInt 3
+  r := r1
+  if sign == 0 then s := s.push '-'
+  let (intLen, r2) := r.nextInt 21
+  r := r2
+  if intLen == 0 then s := s.push '0'
+  else
+    for k in [0:intLen.toNat] do
+      let (d, r3) := r.nextInt 10
+      r := r3
+      let d := if k == 0 && d == 0 then 1 else d
+      s := s.push (Char.ofNat (48 + d.toNat))
+  let (fracKind, r4) := r.nextInt 4
+  r := r4
+  if fracKind != 0 then
+    let (fracLen, r5) := r.nextInt 21
+    r := r5
+    s := s.push '.'
+    for _ in [0:(max fracLen.toNat 1)] do
+      let (d, r6) := r.nextInt 10
+      r := r6
+      s := s.push (Char.ofNat (48 + d.toNat))
+  let (expKind, r7) := r.nextInt 3
+  r := r7
+  if expKind == 0 || fracKind == 0 then
+    let (e, r8) := r.nextInt 40
+    let (es, r9) := r8.nextInt 3
+    r := r9
+    s := s.push (if es == 0 then 'E' else 'e')
+    if es == 1 then s := s.push '-' else if es == 2 then s := s.push '+'
+    s := s ++ toString e.toNat
+  return (s, r)
+
+/-- `strictNumber?` (with the Clinger fast path) against `strtod` on random decimal lexemes and on
+boundary cases of the fast path (`2^53`, `10^22`, 18/19 digits). -/
+def numberSuite : Suite := Tests.suite "json.parser.number_fast_path" do
+  let fixed := #["0.0", "-0.0", "-0e5", "9007199254740991.0", "9007199254740992.0", "9007199254740993.0",
+    "1e22", "1e23", "1.5e-22", "1.5e-23", "123456789012345678.5", "12345678901234567.8", "0.000001",
+    "4.9e-324", "1.7976931348623157e308", "2.2250738585072014e-308", "8.0", "101.0", "15.5", "-12.25",
+    "0.1", "0.3", "1e0", "1E+0", "1e-0", "100000000000000000000000.0", "999999999999999999e-22"]
+  let mut bad : Array String := #[]
+  let check (t : String) : Option String :=
+    match Elk.Json.Parser.strictNumber? t with
+    | some (.float f) => if f.toBits == (strtodUnchecked t).toBits then none else some t
+    | some (.int _) => none
+    | none => some s!"{t} (rejected)"
+  for t in fixed do
+    if let some e := check t then bad := bad.push e
+  let mut r := Random.ofInt 11
+  for _ in [0:20000] do
+    let (t, r') := randomDecimal r
+    r := r'
+    if let some e := check t then
+      if bad.size < 20 then bad := bad.push e
+  checkEq "fast path agrees with strtod" bad #[]
+  -- lenient spellings
+  for t in #["5.", ".5", "+1.25", "+.5e1", "-5.e2"] do
+    match Elk.Json.parse t true with
+    | .ok (.num (.float f)) =>
+      let lex := if t.startsWith "+" then (t.drop 1).toString else t
+      checkEq s!"lenient {t}" f.toBits (strtodUnchecked lex).toBits
+    | _ => checkEq s!"lenient {t} parses" false true
+
+def suites : Array Suite := #[suite, numberSuite]
 
 end Tests.Json.ParserFuzz

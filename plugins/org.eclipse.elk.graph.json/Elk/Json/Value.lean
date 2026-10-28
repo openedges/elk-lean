@@ -72,7 +72,7 @@ inductive Value where
   deriving Inhabited
 
 /-! Member names of ELK JSON graphs as shared constants. The parser returns these very objects
-for equal keys (`Parser.knownKeys`), and the importer looks members up with them, so most key
+for equal keys (`Parser.internSlice`), and the importer looks members up with them, so most key
 comparisons succeed on pointer equality (`lean_string_eq` tests it first). -/
 namespace Key
 
