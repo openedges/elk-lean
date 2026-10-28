@@ -704,7 +704,7 @@ Coffman–Graham star의 힙 순서(`[[0],[2,1],[4,3]]` → `[[0],[3,1],[4,2]]`)
   Java와 정확히 같다(파이프라인은 세트당 한 JVM). 나머지 35개 중 33개는 `SelfHyperLoop`의 변별 `ArrayListMultimap`
   (`PortSide` 열거형 키의 identity hash 순서)을 열거형 순서로 바꾼 Java(elk-rs 패치 0001과 같은 한 줄, 스크래치 오버레이)와
   같고, 그중 23개는 수정 없는 Java를 다른 순서(역순)로 돌린 실행과도 같다 — 코퍼스 119개와 같은 종류. 결정적으로 남은 것은
-  2개(15.6). P3J의 변형 세트(`p3a`, 1,802개)에 남은 24개 중 22개도 다른 JVM 맥락(한 JVM 일괄·역순·셔플 2종) 중 하나와 같다.
+  2개(15.6). P3J의 변형 세트(`p3a`, 1,802개)에 남은 23개(NIK 병합 후) 중 22개도 다른 JVM 맥락(한 JVM 일괄·역순·셔플 2종) 중 하나와 같다.
   "최종 간선만 다르다"던 `v8/g0471`·`v9/g0173`은 mrtree 루트의 라우팅이었고(15.2) 이제 새 JVM 단일 실행과 같다 —
   파이프라인 실행과의 남은 차이는 안쪽 layered 자식의 self-loop 맥락 의존이다.
 - **Java 자체 결함(재현 안 함)**: `CrossingsCounter`/`BinaryIndexedTree`의 `ArrayIndexOutOfBoundsException`(v 2건, mrtree
@@ -714,8 +714,8 @@ Coffman–Graham star의 힙 순서(`[[0],[2,1],[4,3]]` → `[[0],[3,1],[4,2]]`)
 ### 15.6 남은 것
 
 - `NetworkSimplexPlacer` 1건(`p2/v2_g0421`, 단계별 trace의 첫 차이: 라벨 더미의 y — 비용이 같은 최적해 중 다른 해; 보조
-  그래프 구성 순서 조사 필요), `SortByInputModelProcessor` 2건(`p5/v5_g0464`, `p3a/v2_g0201`: 층 안 노드/포트 순서;
-  P3 담당 영역), `OrthogonalEdgeRouter` 1건(`p3a/v5_g0360`: 두 간선의 세그먼트 x 교환 — 사이클 깨기 난수 상태 또는 세그먼트
+  그래프 구성 순서 조사 필요), `SortByInputModelProcessor` 1건(`p5/v5_g0464`: 층 안 포트 순서; P3 담당 영역 — 같은 단계에서 갈라지던
+  `p3a/v2_g0201`은 NIK 병합 후 Java와 같다), `OrthogonalEdgeRouter` 1건(`p3a/v5_g0360`: 두 간선의 세그먼트 x 교환 — 사이클 깨기 난수 상태 또는 세그먼트
   순서).
 - 담당 밖: SPOrE(`sporeOverlap` 75·`sporeCompaction` 9, o 세트), VertiFlex 10, rectpacking 4.
 
@@ -728,7 +728,7 @@ Coffman–Graham star의 힙 순서(`[[0],[2,1],[4,3]]` → `[[0],[3,1],[4,2]]`)
 | d | 5,761 | 5,298 → 5,709 | 5,309 → 5,709 |
 | o | 5,236 | 4,488 → **5,130** | 4,829 → 5,133 |
 | p | 1,373 | 1,308 → **1,357** | 1,310 → 1,357 |
-| P3J `p3a`(별도, 1,802개) | 1,376 | 1,302 → 1,352 | 1,303 → 1,352 |
+| P3J `p3a`(별도, 1,802개) | 1,376 | 1,302 → 1,353 | 1,303 → 1,353 |
 
 정확 → 비정확 0, 비정확 → 정확 1,549(그 밖에 Java의 스택 넘침 17건이 `overflow_both`, 예외 3건이 `error_equal`로). 분류(전 →
 후): DEF:mrtree 752 → 0, POS:mrtree 394 → 0, NML:mrtree 15 → 0, T 365 → 3(radial `HashSet`), POS:radial 21 → 11(`HashSet` 1, NaN 표현
