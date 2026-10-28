@@ -1093,7 +1093,9 @@ def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) 
   let ctx := PortPlacementCalculator.placeVerticalPorts ctx
   let ctx := PortLabelPlacementCalculator.placeVerticalPortLabels ctx
   -- PHASE 7 (THANKSGIVING): Place Labels and Apply Stuff
-  let ctx ← LabelPlacer.placeLabels a ctx
+  -- (without labels in the label cells this would only lay out the outer label containers,
+  -- whose rectangles are not read below: skipped, see `LabelPlacer.hasLabelsToPlace`)
+  let ctx ← if LabelPlacer.hasLabelsToPlace ctx then LabelPlacer.placeLabels a ctx else pure ctx
   -- elk-rs `set_node_padding` only returns the padding, which `process_with_options` discards
   let _discardedNodePadding := NodeLabelAndSizeUtilities.computeNodePadding ctx
   -- applyStuff: write computed sizes/positions back to the adapter

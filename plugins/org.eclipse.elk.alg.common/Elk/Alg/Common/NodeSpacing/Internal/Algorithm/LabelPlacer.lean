@@ -116,6 +116,25 @@ def labelCellsToPlace (ctx : NodeContext N P L) : Array CellId := Id.run do
     if let some c := pc.portLabelCell then result := result.push c
   return result
 
+/-- Whether one of the `labelCellsToPlace` may hold a label: some registered node label cell
+(`NodeContext.nodeLabelCells`; every node label cell in the inside grid or an outside container
+is created and registered by `NodeLabelCellCreator.retrieveNodeLabelCell`) or some port label
+cell has labels. When none does, `placeLabels` only lays out the outer node label containers and
+writes no label position (no Java counterpart; `NodeLabelAndSizeCalculator.processWithOptions`
+then skips it, since nothing reads those container rectangles afterwards). -/
+def hasLabelsToPlace (ctx : NodeContext N P L) : Bool := Id.run do
+  let cells := ctx.cells
+  -- Node labels (inside and outside)
+  for cell in ctx.nodeLabelCells do
+    if let some c := cell then
+      if cells.hasLabels c then return true
+  -- Port labels
+  for pcs in ctx.portContexts do
+    for pc in pcs do
+      if let some c := pc.portLabelCell then
+        if cells.hasLabels c then return true
+  return false
+
 /-- `LabelPlacer.placeLabels(nodeContext)` without side effects: places the outer node label
 containers and returns every label with its new position (`LabelCell.applyLabelLayout()` with the
 label sizes recorded when the labels were added), in `labelCellsToPlace` order. -/

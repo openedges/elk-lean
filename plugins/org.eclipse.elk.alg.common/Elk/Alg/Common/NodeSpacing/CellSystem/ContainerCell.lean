@@ -22,6 +22,57 @@ abbrev CellMeasure (L : Type) := CellArena L → CellId → Float
 `layoutChildrenVertically()`); a no-op on non-container cells. -/
 abbrev CellLayout (L : Type) := CellArena L → CellId → CellArena L
 
+/-- `0.0` as a global constant for the container algorithms (also `StripContainerCell` and
+`GridContainerCell`): once those are specialized, literal `0.0`s were evaluated at run time
+(`FastFloat.ofScientificImpl`) because common-subexpression elimination shared their arguments
+with other constants (PLAN §7.1 item 8). -/
+def cellZero : Float := 0.0
+
+/-- `2.0` as a global constant (see `cellZero`). -/
+def cellTwo : Float := 2.0
+
+/-- The three per-area values of a strip or a grid row/column (Java `double[3]`, indexed by
+`ContainerArea` ordinal). A structure with unboxed `Float` fields instead of a tuple, so that the
+measures of `StripContainerCell` / `GridContainerCell` allocate nothing once they are inlined. -/
+structure Sizes3 where
+  /-- `BEGIN`. -/
+  v0 : Float
+  /-- `CENTER`. -/
+  v1 : Float
+  /-- `END`. -/
+  v2 : Float
+
+namespace Sizes3
+
+/-- The values with symmetry applied when `symmetrical` (the outer values get the larger of the
+two, `Math.max`/`f64::max`). -/
+@[inline] def symmetrize (symmetrical : Bool) (v : Sizes3) : Sizes3 :=
+  if symmetrical then
+    let o := fmax v.v0 v.v2
+    ⟨o, v.v1, o⟩
+  else v
+
+/-- Sum of the positive values plus `gap` between each pair of them (the active-cell loop of
+`StripContainerCell.getMinimumWidth()` / `GridContainerCell.sumWithGaps`, visiting `BEGIN`,
+`CENTER`, `END` in that order). -/
+@[inline] def sumActive (gap : Float) (v : Sizes3) : Float := Id.run do
+  let mut sum := cellZero
+  let mut activeCells : Nat := 0
+  if v.v0 > cellZero then
+    sum := sum + v.v0
+    activeCells := activeCells + 1
+  if v.v1 > cellZero then
+    sum := sum + v.v1
+    activeCells := activeCells + 1
+  if v.v2 > cellZero then
+    sum := sum + v.v2
+    activeCells := activeCells + 1
+  if activeCells > 1 then
+    sum := sum + gap * (activeCells - 1).toFloat
+  return sum
+
+end Sizes3
+
 namespace CellArena
 
 variable {L : Type}
@@ -29,37 +80,37 @@ variable {L : Type}
 /-- `ContainerCell.minWidthOfCell(cell, respectContributionFlag)`: `0` for an empty slot, for a
 non-contributing cell (if the flag is respected) and for an atomic cell without content width;
 otherwise the cell's minimum width. -/
-def minWidthOfCell (a : CellArena L) (minWidth : CellMeasure L) (cell : Option CellId)
+@[inline] def minWidthOfCell (a : CellArena L) (minWidth : CellMeasure L) (cell : Option CellId)
     (respectContributionFlag : Bool) : Float :=
   match cell with
-  | none => 0.0
+  | none => cellZero
   | some c =>
     let cl := a.get c
-    if respectContributionFlag && !cl.contributesToMinimumWidth then 0.0
+    if respectContributionFlag && !cl.contributesToMinimumWidth then cellZero
     else match cl.kind with
-      | .atomic s => if s.x == 0.0 then 0.0 else minWidth a c
+      | .atomic s => if s.x == cellZero then cellZero else minWidth a c
       | _ => minWidth a c
 
 /-- `ContainerCell.minHeightOfCell(cell, respectContributionFlag)`. -/
-def minHeightOfCell (a : CellArena L) (minHeight : CellMeasure L) (cell : Option CellId)
+@[inline] def minHeightOfCell (a : CellArena L) (minHeight : CellMeasure L) (cell : Option CellId)
     (respectContributionFlag : Bool) : Float :=
   match cell with
-  | none => 0.0
+  | none => cellZero
   | some c =>
     let cl := a.get c
-    if respectContributionFlag && !cl.contributesToMinimumHeight then 0.0
+    if respectContributionFlag && !cl.contributesToMinimumHeight then cellZero
     else match cl.kind with
-      | .atomic s => if s.y == 0.0 then 0.0 else minHeight a c
+      | .atomic s => if s.y == cellZero then cellZero else minHeight a c
       | _ => minHeight a c
 
 /-- `ContainerCell.applyHorizontalLayout(cell, x, width)` (no-op for an empty slot). -/
-def applyHorizontalLayout (a : CellArena L) (cell : Option CellId) (x width : Float) : CellArena L :=
+@[inline] def applyHorizontalLayout (a : CellArena L) (cell : Option CellId) (x width : Float) : CellArena L :=
   match cell with
   | none => a
   | some c => a.modifyCellRectangle c fun r => { r with x := x, width := width }
 
 /-- `ContainerCell.applyVerticalLayout(cell, y, height)` (no-op for an empty slot). -/
-def applyVerticalLayout (a : CellArena L) (cell : Option CellId) (y height : Float) : CellArena L :=
+@[inline] def applyVerticalLayout (a : CellArena L) (cell : Option CellId) (y height : Float) : CellArena L :=
   match cell with
   | none => a
   | some c => a.modifyCellRectangle c fun r => { r with y := y, height := height }
@@ -69,7 +120,7 @@ def gap (a : CellArena L) (id : CellId) : Float :=
   match (a.get id).kind with
   | .strip d => d.gap
   | .grid d => d.gap
-  | _ => 0.0
+  | _ => cellZero
 
 end CellArena
 

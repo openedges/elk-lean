@@ -151,22 +151,22 @@ def add (a : CellArena L) (c : Cell L) : CellArena L × CellId :=
 @[inline] def padding (a : CellArena L) (id : CellId) : ElkPadding := (a.get id).padding
 
 /-- Replaces the cell's padding (Java: mutating the object returned by `getPadding()`). -/
-def setPadding (a : CellArena L) (id : CellId) (p : ElkPadding) : CellArena L :=
+@[inline] def setPadding (a : CellArena L) (id : CellId) (p : ElkPadding) : CellArena L :=
   a.modify id fun c => { c with padding := p }
 
 /-- Updates the cell's padding (Rust `padding()` mutable access). -/
-def modifyPadding (a : CellArena L) (id : CellId) (f : ElkPadding → ElkPadding) : CellArena L :=
+@[inline] def modifyPadding (a : CellArena L) (id : CellId) (f : ElkPadding → ElkPadding) : CellArena L :=
   a.modify id fun c => { c with padding := f c.padding }
 
 /-- `Cell.getCellRectangle()`. -/
 @[inline] def cellRectangle (a : CellArena L) (id : CellId) : ElkRectangle := (a.get id).cellRectangle
 
 /-- Replaces the cell rectangle (Java: mutating the object returned by `getCellRectangle()`). -/
-def setCellRectangle (a : CellArena L) (id : CellId) (r : ElkRectangle) : CellArena L :=
+@[inline] def setCellRectangle (a : CellArena L) (id : CellId) (r : ElkRectangle) : CellArena L :=
   a.modify id fun c => { c with cellRectangle := r }
 
 /-- Updates the cell rectangle (Rust `cell_rectangle()` mutable access). -/
-def modifyCellRectangle (a : CellArena L) (id : CellId) (f : ElkRectangle → ElkRectangle) : CellArena L :=
+@[inline] def modifyCellRectangle (a : CellArena L) (id : CellId) (f : ElkRectangle → ElkRectangle) : CellArena L :=
   a.modify id fun c => { c with cellRectangle := f c.cellRectangle }
 
 /-- `Cell.isContributingToMinimumWidth()`. -/
@@ -174,7 +174,7 @@ def modifyCellRectangle (a : CellArena L) (id : CellId) (f : ElkRectangle → El
   (a.get id).contributesToMinimumWidth
 
 /-- `Cell.setContributesToMinimumWidth(b)`. -/
-def setContributesToMinimumWidth (a : CellArena L) (id : CellId) (b : Bool) : CellArena L :=
+@[inline] def setContributesToMinimumWidth (a : CellArena L) (id : CellId) (b : Bool) : CellArena L :=
   a.modify id fun c => { c with contributesToMinimumWidth := b }
 
 /-- `Cell.isContributingToMinimumHeight()`. -/
@@ -182,27 +182,27 @@ def setContributesToMinimumWidth (a : CellArena L) (id : CellId) (b : Bool) : Ce
   (a.get id).contributesToMinimumHeight
 
 /-- `Cell.setContributesToMinimumHeight(b)`. -/
-def setContributesToMinimumHeight (a : CellArena L) (id : CellId) (b : Bool) : CellArena L :=
+@[inline] def setContributesToMinimumHeight (a : CellArena L) (id : CellId) (b : Bool) : CellArena L :=
   a.modify id fun c => { c with contributesToMinimumHeight := b }
 
 /-- Java `cell instanceof AtomicCell` (elk-rs `CellChild::is_atomic`). -/
-def isAtomic (a : CellArena L) (id : CellId) : Bool :=
+@[inline] def isAtomic (a : CellArena L) (id : CellId) : Bool :=
   match (a.get id).kind with | .atomic _ => true | _ => false
 
 /-- Java `cell instanceof LabelCell` (elk-rs `matches!(c, CellChild::Label(_))`). -/
-def isLabel (a : CellArena L) (id : CellId) : Bool :=
+@[inline] def isLabel (a : CellArena L) (id : CellId) : Bool :=
   match (a.get id).kind with | .label _ => true | _ => false
 
 /-- Java `cell instanceof StripContainerCell`. -/
-def isStrip (a : CellArena L) (id : CellId) : Bool :=
+@[inline] def isStrip (a : CellArena L) (id : CellId) : Bool :=
   match (a.get id).kind with | .strip _ => true | _ => false
 
 /-- Java `cell instanceof GridContainerCell`. -/
-def isGrid (a : CellArena L) (id : CellId) : Bool :=
+@[inline] def isGrid (a : CellArena L) (id : CellId) : Bool :=
   match (a.get id).kind with | .grid _ => true | _ => false
 
 /-- Java `cell instanceof ContainerCell` (strip or grid). -/
-def isContainer (a : CellArena L) (id : CellId) : Bool :=
+@[inline] def isContainer (a : CellArena L) (id : CellId) : Bool :=
   match (a.get id).kind with | .strip _ | .grid _ => true | _ => false
 
 /-! ### Optional-child helpers (elk-rs `CellChild` methods on a possibly empty slot) -/
