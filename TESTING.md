@@ -65,6 +65,7 @@ sh scripts/build_oracle.sh
 |------|------------|------|
 | **Java result parity** | ELK Java layout JSON vs Lean layout JSON, values compared exactly (abs tol 0; formatting differs by design: Gson `12.0`, elk-lean `12`) and at 1e-6 | `scripts/run_java_parity.sh <java_baseline_dir> <out>` |
 | **Java phase-step trace** | ELK Java LGraph after every layered processor vs Lean, tolerance 0, strict node/port order | `scripts/run_java_trace_parity.sh <models> <out>` |
+| **Java random-graph parity** | `gen_nodesize_graphs.py` graphs (seeds × 600, as generated "s" and sanitised for Java's node size validation "v"): outcome (ok / exception / timeout / stack overflow) on both sides, layouts at tol 0 and 1e-6, exception class + text equality, mismatch classification (`classify_random_parity.py`) | `scripts/run_random_java_parity.sh <out> [--seeds 1-10] [--with-oracle]` → `<out>/report.md`, `details.tsv`, `classification.md`; tracked summary `tests/random_parity/report.md` |
 | elk-rs model parity | elk-rs layout JSON vs Lean, semantic, abs tol 1e-6 (`compare_bytes.sh` reports byte identity, which is informational only: elk-rs snaps values within 1e-6 to integers and reads long mantissas with two roundings, elk-lean follows ELK Java) | `scripts/run_model_parity.sh`, `scripts/compare_bytes.sh` |
 | elk-rs phase-step trace | per-processor LGraph snapshots, tol 1e-3, strict storage order (`--strict-order`) | `scripts/run_trace_parity.sh` |
 
@@ -78,6 +79,7 @@ python3 scripts/compare_phase_traces.py out/oracle_trace out/lean_trace
 # ELK Java (result reference)
 sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity   # report_exact.md (tol 0), report.md (1e-6)
 sh scripts/run_java_trace_parity.sh external/elk-models tests/tmp/java_trace          # generates Java traces, compares every step
+sh scripts/run_random_java_parity.sh tests/tmp/random_parity --seeds 1-10 --with-oracle   # random graphs, regenerates tests/random_parity/report.md
 
 # elk-rs (secondary), whole corpus
 sh scripts/run_model_parity.sh external/elk-models tests/model_parity   # .json + .elkt (converted with `elk convert`; PARITY_INCLUDE_ELKT=0 to skip)
@@ -99,6 +101,32 @@ runner forces the root algorithm to layered (`force_layered_algorithm`); `elk ba
 and `elk layout --force-algorithm` do the same. Expected result: every compared model matches
 within 1e-6 and every trace step matches strictly; one ticket model fails identically on both
 sides. Exact (tolerance 0) agreement is checked against ELK Java, not against elk-rs.
+
+Random-graph Java parity (`scripts/run_random_java_parity.sh`, driver `scripts/random_java_parity.py`):
+seed `k` writes `gen/s<k>` = `gen_nodesize_graphs.py <dir> <count> k` (the generator's seed
+semantics, so seed `k` reproduces agent HX's set `k`) and `gen/v<k>` = the same graphs through
+`scripts/sanitize_for_java.py` (ports without a side get one from their id's CRC32; port label
+placements with more than one of `ALWAYS_SAME_SIDE`/`ALWAYS_OTHER_SAME_SIDE`/`SPACE_EFFICIENT` lose
+`SPACE_EFFICIENT`, and the deprecated `SPACE_EFFICIENT_PORT_LABELS` size option is dropped where it
+would bring it back — Java rejects about 80% of the "s" graphs in its node size calculator, which
+elk-lean and elk-rs do not validate). ELK Java runs one JVM per set (`ElkJavaBaseline`, prebuilt
+classes from `.reference/java-baseline/`, compiled through `run_java_baseline.sh` when missing or with
+`RANDOM_PARITY_JAVA_REBUILD=1`); a watchdog kills a JVM whose manifest makes no progress for
+`--java-timeout` seconds (default 60), records that model as `timeout` and restarts on the rest; a
+per-set alarm (`--java-set-timeout`, 1800 s) records everything left as `timeout`. elk-lean runs
+`elk layout --pretty --sort-keys` once per input (`--jobs` 3, `--timeout` 15 s; `Stack overflow
+detected` = overflow; `elk batch` cannot be used because a stack overflow aborts the whole process).
+`--with-oracle` adds elk-rs per input (`rs_vs_lean`: elk-rs equals elk-lean within 1e-6, i.e. the
+difference is inherited from elk-rs). Stages already present in `<out>` are reused (`--force` reruns,
+`--stages lean,report` after deleting `<out>/lean` re-evaluates a new binary against the same Java
+results). Default seeds 1–10: all 10 seeds (12,000 inputs) take about 4 minutes on an 8-core Mac
+(Java ≈ 3 min with two JVMs next to the Lean processes; the report and classification add a few minutes) plus about 15 minutes for `--with-oracle`
+(elk-rs hangs on about 140 inputs until the time limit). `match_class` in `details.tsv`: `exact`,
+`tol1e-6`, `drift:<category>`, `error_equal` (class + text), `error_wrapped` (equal after the
+pre-RJ2 API wrapper), `error_class_equal`, `error_differs`, `<x>_both`, `outcome:<lean>/<java>`.
+`classify_random_parity.py` attributes every difference to the deepest layout unit (one algorithm
+invocation, layered `INCLUDE_CHILDREN` graphs merged into their root) whose own results differ and
+groups the mismatches by that origin's algorithm and difference kinds (flags `NML`, `DEF`, `SEC`, `LNODE`, `LEDGE`, `LPOS`, `POS`), with option feature lifts. Set kind `d` (`--sets s,v,d`, experiment) = `v` plus ELK Java's algorithm specific option defaults written explicitly (`sanitize_for_java.py --explicit-defaults`); first results and hypotheses: `docs/robustness-random-graphs.md` section 8.
 
 Differential inputs for the node size / port label cell system (ports with and without labels,
 every size constraint/option combination, port label placements, hierarchy, several algorithms):

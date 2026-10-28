@@ -149,6 +149,11 @@ s 집합의 문제 입력도 같은 클래스로 나뉜다: hang 45(전부 A, Ja
 보인다. 비교는 이 접두를 떼고 했다. Java(`Throwable.toString()`)와 같게 하려면 `catchLayout`이 `java.` 클래스도 통과시키면 되지만,
 API 규약(elk-rs·elkjs 호환) 결정이라 바꾸지 않았다(7.3절).
 
+**RJ2 후속(해결)**: `catchLayout`은 이제 완전한 Java 예외 클래스 이름(`java.…`/`org.eclipse.…`, `…Exception`/`…Error`)으로
+시작하는 오류를 그대로 내보낸다(`isJavaThrowableText`). API·CLI·NAPI 오류 문구가 Java `Throwable.toString()`과 같다
+(`java.lang.IllegalArgumentException: …`, `org.eclipse.elk.graph.json.JsonImportException: …`). 이 무작위 비교는 이제
+`scripts/run_random_java_parity.sh`로 반복 실행하며(`TESTING.md` 2B), 최신 결과는 `tests/random_parity/report.md`에 있다.
+
 ## 7. 열린 항목
 
 ### 7.1 노드 크기 계산기 검증 미이식(s 집합 4,561건)
@@ -174,9 +179,58 @@ v1 62→97, v2 56→107로 늘었다(elk-rs parity는 확인하지 않음, 커�
 
 ### 7.3 기타
 
-- JSON API가 `java.lang.*` 예외를 `UnsupportedConfigurationException`으로 감싸는 규약(6.2절)을 유지할지.
-- layered `LayerConstraintPreprocessor`/`Postprocessor`의 예외 메시지(`Node '…' has its layer constraint …`)도 Java는
+- ~~JSON API가 `java.lang.*` 예외를 `UnsupportedConfigurationException`으로 감싸는 규약(6.2절)을 유지할지~~ — RJ2에서 Java 문구로 바꿨다.
+- ~~layered `LayerConstraintPreprocessor`/`Postprocessor`의 예외 메시지~~ — RJ2에서 해결(`LGraphArena.errorNode` + `LayeredLayoutProvider`가
+  오류 경로에서 식별자 경로를 넣는다; postprocessor 문구의 Java 이중 공백 `that  does`도 맞췄다). 원래 기록: 예외 메시지(`Node '…' has its layer constraint …`)도 Java는
   `getDesignation()`(식별자 경로 포함)을 쓰지만 Lean은 식별자 없는 `nodeDesignation`이다. 무작위 입력에서는 나오지 않아 두었다.
 - `elk batch`는 overflow 입력에서 프로세스 전체가 중단된다(Lean 런타임의 스택 오버플로 처리). 무작위 Java parity를 돌릴 때는
   overflow 입력을 매니페스트에서 빼야 했다.
 - Java가 실패하는 v 집합 결함(5장)을 Lean이 재현해야 하는지(현재 정책: 재현하지 않음).
+
+
+## 8. 반복 실행 파이프라인과 첫 차이 분류 (RJ2, 2026-10-28)
+
+### 8.1 파이프라인
+
+`sh scripts/run_random_java_parity.sh <out> [--seeds 1-10] [--sets s,v] [--with-oracle]`(상세 `TESTING.md` 2B):
+생성(`gen_nodesize_graphs.py`, 시드 의미 그대로라 HX의 집합과 바이트 동일) → Java용 정리(`sanitize_for_java.py`) →
+ELK Java(집합마다 JVM 1개, 모델별 무진행 감시 60초·집합 경보 1800초) → elk-lean(입력마다 프로세스, 15초) →
+선택적으로 elk-rs → 비교(tol 0·1e-6, 예외 클래스+문구, 결과 행렬) → 분류(`classify_random_parity.py`).
+산출물은 `<out>/report.md`·`details.tsv`·`classification.md`·`classes.tsv`, 추적 사본은 `tests/random_parity/report.md`.
+시드 1~10 전체(12,000개)는 이 Mac에서 생성·실행 약 4분과 비교·분류 몇 분, `--with-oracle`이면 약 15분이 더 든다(elk-rs가 라벨 쌓기 루프 입력
+약 140개에서 제한 시간까지 돈다). 실험용 `d` 집합(`--sets s,v,d`)은 `v`에 Java의 알고리즘별 옵션 기본값을 명시적으로
+써 넣은 사본이다(`sanitize_for_java.py --explicit-defaults`).
+
+### 8.2 첫 결과(수정 후 바이너리, 시드 1~10, 집합당 6,000개)
+
+| 집합 | Lean ok/예외/timeout/overflow | Java ok/예외/timeout/overflow | 둘 다 ok | 정확 일치(tol 0) | 1e-6 | 둘 다 예외 | 문구 일치 | elk-rs=Java 정확 |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| s | 5,772/216/0/12 | 1,205/4,793/0/2 | 1,205 | 417 | 418 | 216 | 74 | 307 |
+| v | 5,772/216/0/12 | 5,761/227/0/12 | 5,761 | 616 | 623 | 216 | **216** | 416 |
+| d(실험) | 5,772/216/0/12 | 5,761/227/0/12 | 5,761 | **1,067** | 1,079 | 216 | 216 | 762 |
+
+- 수정 전 바이너리와 결과·레이아웃은 같고 예외 문구만 다르다: v 집합 문구 일치 64 → **216/216**(152건은 API 래퍼만 달랐다),
+  s 집합 32 → 74(나머지 142건은 Java가 노드 크기 검증 예외를 먼저 던지는 입력 — 7.1절, RJ1 담당).
+- 결과가 다른 입력: v 집합 Lean ok·Java 예외 11(5장 Java 결함), s 집합 Lean ok·Java 예외 4,567(검증 미이식 4,561 + Java 결함 6),
+  Lean overflow·Java 예외 10(Java가 검증에서 먼저 실패). 양쪽 hang/timeout 0.
+- elk-rs는 Lean보다 Java와 덜 맞는다(v 416 vs 616) — Lean이 이미 고친 Java 정렬·수치 의미론 차이 때문이다.
+
+### 8.3 차이 분류(둘 다 성공한 12,727개 중 정확 불일치 10,627개)
+
+차이를 "자기 결과가 다른 가장 깊은 레이아웃 단위"(알고리즘 1회 실행)에 귀속시킨 플래그다. 한 입력이 여러 플래그를 가질 수 있다.
+`rs=lean`은 elk-rs가 Lean과 같은 출력을 낸 수(= elk-rs에서 물려받은 차이). 최신 수치는 `tests/random_parity/report.md`.
+
+| 플래그 | 입력 수 | rs=lean | 알고리즘별 | 가설 / 다음 작업 |
+|---|---:|---:|---|---|
+| `NML` 비layered 노드 마이크로 레이아웃(자식 노드 크기·포트·라벨) | 7,601 | 7,183 | force 1,854, stress 1,825, mrtree 1,788, rectpacking 1,756, radial 1,574, box 323, fixed 277 | elk-rs의 단순화 ELK 경로가 포트를 아예 배치하지 않는다(예: `s1/g0123` force 루트의 자식 `n1` SOUTH 포트가 Java는 y 20.1에, Lean은 (0,0)에 남는다). Java `NodeMicroLayout` → `NodeLabelAndSizeCalculator` 경로로 전환(**RJ1 진행 중**). 복합 자식의 포트·라벨도 부모 비layered 알고리즘의 마이크로 레이아웃이 놓는다. |
+| `SEC` 한쪽에만 간선 섹션 | 2,838 | 2,661 | box 708, fixed 693, rectpacking 603, radial 578, force/mrtree/stress 약 275씩 | Java는 알고리즘이 경로를 만들지 않은 간선에 `sections`를 쓰지 않는데 Lean은 직선 섹션을 만든다(3,565 단위 전부 `edge-extra-section`, 반대 방향 0). box/fixed 단위의 모든 간선, 포트가 있는 radial 그래프 등. 담당 후보: JSON `transferLayout`/각 provider의 간선 처리(예: `d1/g0011` `n2_n3`[fixed], `v1/g0015` `n1`[radial]). |
+| `LNODE` layered 노드 크기·포트·라벨 | 2,178 | 2,056 | — | layered 단독 입력 1,999개 중 27.9%가 불일치; 복합·`INCLUDE_CHILDREN`·포트 정렬(`portAlignment.default`)·포트 라벨 배치에서 lift 1.3~1.65. `LabelAndNodeSizeProcessor`(Java 셀 시스템)·`HierarchicalPortConstraintProcessor`·외부 포트 배치 조사(예: `d1/g0007` `n2_n1`의 자식 폭 Java 0 vs Lean 50, `d1/g0009`). |
+| `DEF` 비layered 알고리즘의 Java 기본값 미적용 | 1,551(s+v) | 1,489 | box 845, fixed 659, force 49, mrtree 43, rectpacking 9 | Java는 `.melk`의 `supports <option> = <값>`을 알고리즘별 `Options` 상수의 기본값으로 읽는다: box padding 15·nodeNode 15·aspectRatio 1.3, fixed padding 15, force padding 50·nodeNode 80·edgeLabel 5, mrtree padding 20·nodeNode 20·edgeNode 3, rectpacking padding 15·nodeNode 15. elk-lean/elk-rs는 `CoreOptions` 기본값(12/20)을 쓴다 — 옵션 없는 3노드 그래프만으로도 box/fixed/force/mrtree가 Java와 다르다. `d` 실험에서 이 값을 명시하면 v 616 → **1,067** 정확 일치(+451). 각 `<Alg>Options`의 재선언 기본값 이식(옵션 메타데이터 `ForceMetaDataProvider` 등에는 이미 있다). |
+| `LEDGE` layered 간선 경로·간선 라벨만 | 922 | 853 | — | 예: `d1/g0018` 굽은 점 x 141.9000015258789 vs 141.89999389648438 — float(f32) 반올림 경로 차이로 보인다(포트 크기·라벨이 f32인 값). 스플라인·직교 라우팅 조사. |
+| `LPOS` layered 노드 위치만 | 104 | 92 | — | P4 노드 배치(BK/NS), 소수. |
+| `POS` 비layered 위치만(기본값으로 설명 안 됨) | 73 | 67 | radial 24, stress 19, mrtree 17 | radial 위치(옵션 없는 3노드 그래프도 다름: `radial_edge` 프로브), stress/mrtree 소수. |
+| `T` 1e-6 이내 | 20 | 18 | — | 부동소수점 잡음. |
+
+옵션 기능별 lift는 무작위 생성기가 대부분의 옵션을 그래프 어딘가에 넣기 때문에 1 근처라 정보가 적다(보고서의 layered 단독 표가 더 유용하다).
+다음 라운드 브리프 단위: (1) `NML`(RJ1), (2) `DEF` 알고리즘별 기본값, (3) `SEC` 경로 없는 간선의 섹션, (4) `LNODE` layered 노드/포트,
+(5) `LEDGE`/`LPOS` layered 라우팅·배치, (6) `POS:radial`.
