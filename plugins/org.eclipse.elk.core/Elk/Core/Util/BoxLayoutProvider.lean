@@ -1,4 +1,5 @@
 import Elk.Core.Util.ElkUtil
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.Util.Sort
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
@@ -424,7 +425,8 @@ def layout (layoutNode : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   let _ ← monitor.begin "Box layout" 2.0
   let node ← ElkM.getNode layoutNode
   let objSpacing := node.props.getD BoxLayouterOptions.SPACING_NODE_NODE 0.0
-  let padding := node.props.getD BoxLayouterOptions.PADDING {}
+  -- Java `getProperty` stores the cloned default padding on the node (`EMapPropertyHolderImpl`)
+  let padding := (← ElkM.getNodePropSticky layoutNode BoxLayouterOptions.PADDING).getD {}
   let expandNodes := node.props.getD BoxLayouterOptions.EXPAND_NODES false
   let interactive := node.props.getD BoxLayouterOptions.INTERACTIVE false
   let packingMode := node.props.getD BoxLayouterOptions.BOX_PACKING_MODE .simple

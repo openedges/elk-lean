@@ -1,4 +1,5 @@
 import Elk.Core.Util.ElkUtil
+import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
 /-!
@@ -156,7 +157,9 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   -- Java `getProperty(..).floatValue()` (random layouter defaults 1.6f and 15)
   let aspectRatio := Float.toF32 (node.props.getD RandomLayouterOptions.ASPECT_RATIO 1.0)
   let spacing := Float.toF32 (node.props.getD RandomLayouterOptions.SPACING_NODE_NODE 0.0)
-  let padding := node.props.getD RandomLayouterOptions.PADDING {}
+  -- Java `getProperty` stores the cloned default padding on the node (`EMapPropertyHolderImpl`): a
+  -- later reader of the same graph (SPOrE after `underlyingLayoutAlgorithm`) sees 15
+  let padding := (← ElkM.getNodePropSticky layoutGraph RandomLayouterOptions.PADDING).getD {}
   let random ← if randomSeed != 0 then pure (Random.ofInt randomSeed)
     else do
       let nanos ← IO.monoNanosNow

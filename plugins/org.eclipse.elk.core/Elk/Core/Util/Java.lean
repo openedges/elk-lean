@@ -607,6 +607,47 @@ def javaAcos (x : Float) : Float := Id.run do
     let w := r * s + c
     return trigTwo * (df + w)
 
+private def asinPio4Hi : Float := Float.ofBits 0x3FE921FB54442D18
+private def asinHuge : Float := 1.0e300
+
+/-- Java `StrictMath.asin` (= `Math.asin` on HotSpot, not intrinsified; JDK `FdLibm.Asin`). Same
+coefficients as `javaAcos`. -/
+def javaAsin (x : Float) : Float := Id.run do
+  let hx : Int32 := (x.toBits >>> 32).toUInt32.toInt32
+  let ix : UInt32 := hx.toUInt32 &&& 0x7fffffff
+  let lx : UInt32 := (x.toBits &&& 0xffffffff).toUInt32
+  let poly (t : Float) : Float × Float :=
+    (t * (acosPS0 + t * (acosPS1 + t * (acosPS2 + t * (acosPS3 + t * (acosPS4 + t * acosPS5))))),
+     trigOne + t * (acosQS1 + t * (acosQS2 + t * (acosQS3 + t * acosQS4))))
+  if ix ≥ 0x3ff00000 then
+    -- |x| ≥ 1: ±π/2 for |x| = 1, NaN otherwise
+    if ix == 0x3ff00000 && lx == 0 then return x * acosPio2Hi + x * acosPio2Lo
+    return (x - x) / (x - x)
+  if ix < 0x3fe00000 then
+    -- |x| < 0.5 (`x` itself below 2^-27: `HUGE + x > 1.0` always holds)
+    if ix < 0x3e400000 then
+      if asinHuge + x > trigOne then return x
+    let t := x * x
+    let (p, q) := poly t
+    let w := p / q
+    return x + x * w
+  let w := trigOne - x.abs
+  let t := w * trigHalf
+  let (p, q) := poly t
+  let s := t.sqrt
+  let r : Float :=
+    if ix ≥ 0x3fef3333 then
+      let w := p / q
+      acosPio2Hi - (trigTwo * (s + s * w) - acosPio2Lo)
+    else
+      let w := Float.ofBits (s.toBits &&& 0xffffffff00000000)
+      let c := (t - w * w) / (s + w)
+      let r := p / q
+      let p := trigTwo * s * r - (acosPio2Lo - trigTwo * c)
+      let q := asinPio4Hi - trigTwo * w
+      asinPio4Hi - (p - q)
+  return if hx > 0 then r else -r
+
 /-- Java integer division (truncates toward zero). -/
 @[inline] def Int.jdiv (a b : Int) : Int := Int.tdiv a b
 /-- Java integer remainder (sign of the dividend). -/

@@ -35,7 +35,7 @@
 | `Vec<T>` | `Array T` (`List` 금지) |
 | `VecDeque<T>` | `Array T` + 인덱스, 또는 `Std.Queue` |
 | `HashMap<K,V>`/`FxHashMap` | `Std.HashMap K V` (순회 순서가 결과에 영향을 주면 `Array (K × V)` 또는 삽입 순서 유지 구조 사용) |
-| `HashSet<T>` | `Std.HashSet T` |
+| `HashSet<T>` | `Std.HashSet T` (Java 값 `hashCode` 순회 순서가 결과에 영향을 주면 `Elk.Core.Util.JavaHashSet`) |
 | `BTreeMap`/`BTreeSet` (정렬 순회) | `Array` + `stableSort` 또는 `Std.TreeMap`(필요 시) |
 | `LinkedHashSet` | `Array T` + `Std.HashSet T`(중복 검사) |
 | `Arc<Mutex<LNode>>`, `LNodeRef`, `Rc<RefCell<..>>` | typed id (`NodeId`, `PortId`, …) |
@@ -171,6 +171,7 @@ lake build && lake test     # 종료 전 전체
 - 상태를 가진 알고리즘 객체(`OneDimensionalCompactor`, `NetworkSimplex`, `DepthFirstCompaction`)는 `structure` + `abbrev XM := StateRefT X IO`로 두고, 요소 갱신은 `modifyNode id f` 류 헬퍼로 한다(상태 전체를 `let s ← get`로 묶은 채 `modify` 금지).
 - Rust의 `panic!`/`expect`는 `throw (IO.userError "java.lang.IllegalStateException: <원문 메시지>")`(또는 `IllegalArgumentException`)로 옮긴다. 순수 함수에서 실패가 필요하면 `Except String`을 반환한다.
 - 순회 순서가 결과를 바꾸는 컬렉션(`HashSet`, `HashMap`, `BTreeSet`, `TreeMultimap`)은 Rust 포팅이 쓰는 순서를 그대로 재현한다. `Array`+삽입 순서(중복 제거는 선형 탐색 또는 `Std.HashSet`로 "존재 여부"만) 또는 정렬 키가 명시된 `stableSort`를 사용하고, 어떤 순서를 재현했는지 docstring에 적는다.
+  Java가 기준인 지금은 Java의 순서가 우선이다: 원소의 `hashCode`가 값 기반(`KVector`, `TEdge`, `TTriangle`, `Double`)인 `java.util.HashSet`은 `Elk.Core.Util.JavaHashSet`(`HashMap`의 빈·`resize` 분할·트리 빈, `JavaHashCode` 인스턴스에 Java `hashCode`)로 순회 순서까지 재현한다(`scripts/java/HashSetOrder.java` 차분 검사). `Object.hashCode`(identity hash) 기반 순서는 JVM 실행마다 달라 재현하지 않는다.
 - 부동소수점 비교: Rust `partial_cmp(..).unwrap_or(Equal)` → `Float.comparePartial`, `f64::max/min` → `fmax/fmin`, `total_cmp` → `Float.compareTotal`. `-0.0`, `NaN`, `INFINITY` 상수는 `Float` 리터럴/`(0.0/0.0)` 대신 `Elk.Core.Util.Java`의 상수를 사용한다.
 
 ## 15. layered 규약 (Phase 4)
