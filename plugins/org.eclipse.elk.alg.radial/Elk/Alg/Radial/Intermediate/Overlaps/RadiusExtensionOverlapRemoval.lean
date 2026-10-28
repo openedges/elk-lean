@@ -20,12 +20,20 @@ Port of `radius_extension_overlap_removal.rs` (elk-rs): for every level of the t
 layer away from the root until no neighbouring nodes of the layer overlap, then moves the next
 level by the distance the first node of the layer has moved.
 
-Parity notes (Rust is the oracle):
-* the object is created with the derived `Default`, so `compaction_step` is `0` (Java: `1`).
-  Expanding by `0` leaves the layer where it is (modulo the rounding of `cx + 0 - half_w`), the
-  loop runs to its 10000 iteration guard whenever the layer overlaps;
-* the successor cache of the whole tree is built once at the start (`get_next_level_cached`
-  removes duplicates, keeping the first occurrence).
+Java semantics (agent OPT):
+* the compaction step is the Java field initialiser `1` (elk-rs creates the object with a derived
+  `Default`, step `0`, so its loop never moves a layer and runs into the iteration guard);
+* the overlap test is Java's corner case test (`AbstractRadiusExtensionCompaction.overlapBounds`);
+* the next level is `new ArrayList<>(getNextLevelNodeSet(nodes))`; Java sorts a *copy* of it with the
+  `SORTER` (only the side effects of the sorter remain, e.g. the `ORDER_ID`s of
+  `PolarCoordinateSorter.initialize`) and recurses on the unsorted set (elk-rs recurses on the
+  sorted list).
+Kept from elk-rs: the successor cache of the whole tree is built once at the start
+(`get_next_level_cached` removes duplicates, keeping the first occurrence). Java's next level is a
+`HashSet` of `ElkNode`s, iterated in identity hash order, which varies with the JVM state; insertion
+order is the deterministic stand-in (equal to Java whenever a level has at most one node or no
+overlaps). The loop keeps a 10000 pass guard (Java has none; a pass that changes no coordinate
+stops it as well).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -112,9 +120,9 @@ partial def extend (base : AbstractRadiusExtensionCompaction) (sorter : Option I
       let y := cys[i]!
       ElkM.modifyNode nextLevelNodes[i]! fun n => { n with x := x, y := y }
     if ← monitor.isLoggingEnabled then monitor.logGraph "Child movement 1"
-  let nextLevelNodes ← match sorter with
-    | some sorter => sorter.sort nextLevelNodes
-    | none => pure nextLevelNodes
+  -- Java `sorter.sort(new ArrayList<>(nextLevelNodes))` sorts a copy: only its side effects count
+  if let some sorter := sorter then
+    let _ ← sorter.sort nextLevelNodes
   extend base sorter graph nextLevelNodes monitor successorCache rootCx rootCy
 
 /-- `remove_overlaps(graph, progress_monitor)`. -/

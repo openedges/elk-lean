@@ -23,11 +23,20 @@ Port of `eades_radial.rs` (elk-rs): phase 1 of the radial layout. Places the roo
 and the successors of every node on the next radius, in an annulus wedge proportional to the
 number of leaves below them (algorithm of Peter Eades, "Drawing free trees", 1991).
 
-Follows the Rust port: the leaf counts come from the tree caches, the sorter is asked with
-`sort_for_parent`, and the optimal rotation offset (`OPTIMIZATION_CRITERIA`) is searched over the
-360 whole degrees with the first strictly smaller evaluation winning. The wedge criteria object
-is created but unused by `translate`, as in Rust. The Rust `RadialSoA` (node sizes extracted
-once) is a performance device; sizes do not change in this phase, so the live sizes are used.
+Java semantics (agent OPT; elk-rs, which elk-lean followed before, differs in all three points):
+* the wedge of a node is divided by the space the `WEDGE_CRITERIA` assigns to it
+  (`AnnulusWedgeByNodeSpace` by default: the maximum of the node diagonal and the sum over its
+  successors; `AnnulusWedgeByLeafs`: the number of leaves); elk-rs always uses the leaf count;
+* `tau = 2 * Math.acos(currentRadius / currentRadius + radius)` keeps Java's operator precedence,
+  `acos((currentRadius / currentRadius) + radius)`, which is `NaN` for a positive radius (and at the
+  root), so the `tau` branch is taken only for radius 0 off the root; elk-rs computes
+  `acos(currentRadius / (currentRadius + radius))`;
+* with a sorter, every node calls `sorter.initialize(root)` and then `sorter.sort(successors)`
+  (elk-rs: `sort_for_parent`).
+The optimal rotation offset (`OPTIMIZATION_CRITERIA`) is searched over the 360 whole degrees with the
+first strictly smaller evaluation winning. The wedge spaces depend only on the tree and the node
+sizes, which this phase does not change, so they are computed once per node (`wedgeCache`; the same
+sums in the same order as Java's recursion).
 
 This module also hosts the factories `AnnulusWedgeCriteria.create` and
 `RadialTranslationStrategy.create` (the factory halves of the Rust option enums).
@@ -63,25 +72,42 @@ def createEvaluation : RadialTranslationStrategy → Option IEvaluation
 
 namespace EadesRadial
 
-/-- `f64::clamp(-1.0, 1.0)`. -/
-private def clampUnit (x : Float) : Float :=
-  if x < -1.0 then -1.0 else if x > 1.0 then 1.0 else x
-
-/-- `position_nodes_soa(...)`: places `node` on the circle of `currentRadius` at the middle of
-its wedge `[minAlpha, maxAlpha]` (rotated by `optimalOffset`) and recurses into its (sorted)
-successors. -/
-partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option IRadialSorter)
+/-- `IAnnulusWedgeCriteria.calculateWedgeSpace` of every node below `node` (Java recursion order:
+`AnnulusWedgeByNodeSpace` sums the successors left to right and takes the maximum with
+`sqrt(height * height + width * width)`; `AnnulusWedgeByLeafs` is the leaf count). -/
+partial def wedgeSpaces (g : ElkGraph) (criteria : AnnulusWedgeCriteria)
     (successorCache : Std.HashMap NodeId (Array NodeId)) (leafCache : Std.HashMap NodeId Float)
+    (node : NodeId) (cache : Std.HashMap NodeId Float) : Float × Std.HashMap NodeId Float :=
+  match cache.get? node with
+  | some v => (v, cache)
+  | none =>
+    match criteria with
+    | .leafNumber =>
+      let v := (leafCache.get? node).getD (RadialUtil.numberOfLeavesPure g node)
+      (v, cache.insert node v)
+    | .nodeSize =>
+      let successors := (successorCache.get? node).getD (RadialUtil.successorsPure g node)
+      let n := g.node node
+      let nodeSize := Float.sqrt (n.height * n.height + n.width * n.width)
+      let (childSpace, cache) := successors.foldl (fun (acc, c) child =>
+        let (v, c) := wedgeSpaces g criteria successorCache leafCache child c
+        (acc + v, c)) (fl0p0, cache)
+      let v := fmax childSpace nodeSize
+      (v, cache.insert node v)
+
+/-- `positionNodes(node, currentRadius, minAlpha, maxAlpha, optimalOffset)`: places `node` on the
+circle of `currentRadius` at the middle of its wedge `[minAlpha, maxAlpha]` (rotated by
+`optimalOffset`) and recurses into its (sorted) successors. -/
+partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option IRadialSorter)
+    (successorCache : Std.HashMap NodeId (Array NodeId)) (wedgeCache : Std.HashMap NodeId Float)
     (currentRadius minAlpha maxAlpha optimalOffset : Float) : RadialM Unit := do
   let alphaPoint := (minAlpha + maxAlpha) / fl2p0 + optimalOffset
   let xPos := currentRadius * Float.cos alphaPoint
   let yPos := currentRadius * Float.sin alphaPoint
   RadialUtil.centerNodesOnRadi node xPos yPos
-  let numberOfLeafs := (leafCache.get? node).getD fl1p0
-  let ratio :=
-    if (currentRadius + radius).abs < Float.epsilon then fl1p0
-    else clampUnit (currentRadius / (currentRadius + radius))
-  let tau := fl2p0 * Float.acos ratio
+  let numberOfLeafs := (wedgeCache.get? node).getD fl1p0
+  -- Java `2 * Math.acos(currentRadius / currentRadius + radius)` (operator precedence kept)
+  let tau := fl2p0 * Float.acos (currentRadius / currentRadius + radius)
   let (s, alpha0) :=
     if tau < maxAlpha - minAlpha then (tau / numberOfLeafs, (minAlpha + maxAlpha - tau) / fl2p0)
     else ((maxAlpha - minAlpha) / numberOfLeafs, minAlpha)
@@ -90,28 +116,30 @@ partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option
     | some cached => pure cached
     | none => RadialUtil.getSuccessors node
   if let some sorter := sorter then
-    successors ← sorter.sortForParent successors node root (currentRadius == fl0p0)
+    sorter.init root
+    successors ← sorter.sort successors
   for child in successors do
-    let numberOfChildLeafs := (leafCache.get? child).getD fl1p0
-    positionNodes child root radius sorter successorCache leafCache (currentRadius + radius) alpha
+    let numberOfChildLeafs := (wedgeCache.get? child).getD fl1p0
+    positionNodes child root radius sorter successorCache wedgeCache (currentRadius + radius) alpha
       (alpha + s * numberOfChildLeafs) optimalOffset
     alpha := alpha + s * numberOfChildLeafs
 
-/-- `translate(root, radius, sorter, annulus, optimizer)`. -/
+/-- `translate(graph)`. -/
 def translate (root : NodeId) (radius : Float) (sorter : Option IRadialSorter)
-    (optimizer : Option IEvaluation) : RadialM Unit := do
+    (criteria : AnnulusWedgeCriteria) (optimizer : Option IEvaluation) : RadialM Unit := do
   let (successorCache, leafCache) ← RadialUtil.buildTreeCaches root
+  let (_, wedgeCache) ← ElkM.withGraph fun g => wedgeSpaces g criteria successorCache leafCache root {}
   let mut optimalOffset := fl0p0
   let mut optimalValue := Float.maxValue
   if let some optimizer := optimizer then
     for i in [0:CIRCLE_DEGREES] do
       let offset := i.toFloat * DEGREE_TO_RAD
-      positionNodes root root radius sorter successorCache leafCache fl0p0 fl0p0 (fl2p0 * Float.pi) offset
+      positionNodes root root radius sorter successorCache wedgeCache fl0p0 fl0p0 (fl2p0 * Float.pi) offset
       let translatedValue ← optimizer.evaluate root
       if translatedValue < optimalValue then
         optimalOffset := offset
         optimalValue := translatedValue
-  positionNodes root root radius sorter successorCache leafCache fl0p0 fl0p0 (fl2p0 * Float.pi) optimalOffset
+  positionNodes root root radius sorter successorCache wedgeCache fl0p0 fl0p0 (fl2p0 * Float.pi) optimalOffset
 
 /-- `process(graph, progress_monitor)`. -/
 def process (graph : NodeId) (monitor : ProgressMonitor) : RadialM Unit := do
@@ -121,9 +149,9 @@ def process (graph : NodeId) (monitor : ProgressMonitor) : RadialM Unit := do
   let props := (← ElkM.getNode graph).props
   let radius := (props.get RadialOptions.RADIUS).getD 0.0
   let sorter ← (props.getD RadialOptions.SORTER SortingStrategy.none).create
-  let _annulus := createAnnulusWedgeCriteria (props.getD RadialOptions.WEDGE_CRITERIA AnnulusWedgeCriteria.nodeSize)
+  let criteria := props.getD RadialOptions.WEDGE_CRITERIA AnnulusWedgeCriteria.nodeSize
   let optimizer := createEvaluation (props.getD RadialOptions.OPTIMIZATION_CRITERIA RadialTranslationStrategy.none)
-  translate root radius sorter optimizer
+  translate root radius sorter criteria optimizer
   if ← monitor.isLoggingEnabled then monitor.logGraph "After"
   monitor.done
 

@@ -7,7 +7,8 @@ import Elk.Alg.Radial.Intermediate.Optimization.IEvaluation
 Port of `edge_length_position_optimization.rs` (elk-rs): the sum of the distances between the
 center of every direct successor of the root and the point
 `(root.x + position.x + root.width / 2, root.y + position.y + root.height)`, where `position` is
-the `POSITION` property of the successor (`(0, 0)` if unset).
+the `POSITION` property of the successor. An unset position is Java's `NullPointerException`
+(`Cannot read field "x" because "position" is null`; elk-rs reads it as `(0, 0)`, agent OPT).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -32,7 +33,8 @@ def evaluate (root : NodeId) : ElkM Float := do
     let t := g.node target
     let targetX := t.x + t.width / fl2p0
     let targetY := t.y + t.height / fl2p0
-    let position := (t.props.get CoreOptions.POSITION).getD ⟨fl0p0, fl0p0⟩
+    let some position := t.props.get CoreOptions.POSITION
+      | throw (IO.userError "java.lang.NullPointerException: Cannot read field \"x\" because \"position\" is null")
     let rootX := r.x + position.x + r.width / fl2p0
     let rootY := r.y + position.y + r.height
     let vectorX := targetX - rootX

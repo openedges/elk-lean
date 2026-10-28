@@ -2,6 +2,7 @@ import Elk.Graph
 import Elk.Core.Options
 import Elk.Core.Util.Java
 import Elk.Core.Util.Sort
+import Elk.Core.Util.JavaSort
 import Elk.Alg.Radial.RadialUtil
 import Elk.Alg.Radial.Options.SortingStrategy
 import Elk.Alg.Radial.Sorting.IRadialSorter
@@ -50,21 +51,27 @@ def DEGREE_270 : Float := 1.5 * Float.pi
 /-- `DEGREE_315`. -/
 def DEGREE_315 : Float := 1.75 * Float.pi
 
-/-- `sort_with_offset(nodes, offset)`: the nodes stably sorted by the polar angle of their
-`POSITION` property shifted by `offset`. -/
+/-- The polar angle of a `POSITION` shifted by `offset` (`RadialUtil.createPolarComparator`). -/
+private def positionArc (position : Elk.Core.Math.KVector) (offset : Float) : Float :=
+  let arc := Float.atan2 position.y position.x
+  let arc := if arc < fl0p0 then arc + RadialUtil.TWO_PI else arc
+  let arc := arc + offset
+  if arc > RadialUtil.TWO_PI then arc - RadialUtil.TWO_PI else arc
+
+/-- `nodes.sort(RadialUtil.createPolarComparator(offset, 0))`: Java's `List.sort` (`TimSort`,
+`javaSortByIO`) with the comparator that reads the `POSITION` property of `node1`, then of `node2`;
+an unset position is Java's `NullPointerException` at the first comparison that meets it
+(`Cannot read field "x" because "position1" is null`, resp. `"position2"`). Lists with fewer than
+two nodes are not compared. (elk-rs uses `(0, 0)` for an unset position.) -/
 def sortWithOffset (nodes : Array NodeId) (offset : Float) : ElkM (Array NodeId) := do
-  let mut arcs : Array Float := #[]
-  for node in nodes do
-    let n ← ElkM.getNode node
-    let position := (n.props.get CoreOptions.POSITION).getD ⟨fl0p0, fl0p0⟩
-    let arc := Float.atan2 position.y position.x
-    let arc := if arc < fl0p0 then arc + RadialUtil.TWO_PI else arc
-    let arc := arc + offset
-    let arc := if arc > RadialUtil.TWO_PI then arc - RadialUtil.TWO_PI else arc
-    arcs := arcs.push arc
-  let indices := stableSort (Array.range nodes.size) fun a b =>
-    RadialUtil.fuzzyCompare arcs[a]! arcs[b]! RadialUtil.EPSILON
-  return indices.map fun i => nodes[i]!
+  if nodes.size < 2 then return nodes
+  let g ← get
+  javaSortByIO nodes fun a b => do
+    let some p1 := (g.node a).props.get CoreOptions.POSITION
+      | throw (IO.userError "java.lang.NullPointerException: Cannot read field \"x\" because \"position1\" is null")
+    let some p2 := (g.node b).props.get CoreOptions.POSITION
+      | throw (IO.userError "java.lang.NullPointerException: Cannot read field \"x\" because \"position2\" is null")
+    return RadialUtil.fuzzyCompare (positionArc p1 offset) (positionArc p2 offset) RadialUtil.EPSILON
 
 /-- `node_arc(node)`: the polar angle of the node center (`0 .. 2 PI`). -/
 def nodeArc (node : NodeId) : ElkM Float := do
@@ -82,7 +89,7 @@ partial def setIdForNodes (nodes : Array NodeId) (idOffset : Int) : ElkM Int := 
     let arc ← nodeArc node
     id := id + 1
     let mut nodeSuccessors ← RadialUtil.getSuccessors node
-    if !(DEGREE_45 <= arc && arc <= DEGREE_315) then
+    if arc < DEGREE_45 || arc > DEGREE_315 then
       nodeSuccessors ← sortWithOffset nodeSuccessors Float.pi
     else if arc <= DEGREE_315 && arc > DEGREE_225 then
       nodeSuccessors ← sortWithOffset nodeSuccessors DEGREE_270

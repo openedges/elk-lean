@@ -11,13 +11,9 @@ import Elk.Alg.MrTree.Intermediate.GraphBoundsProcessor
 
 Port of `components_processor.rs` (elk-rs).
 
-`split` (only if `SEPARATE_CONNECTED_COMPONENTS`, `unwrap_or(true)`; otherwise the graph itself is the
-only component): an undirected adjacency over the node list (nodes found through a map from the
-integer node `id` to the list index, the last index winning for duplicate ids) is searched breadth
-first from every unvisited node in list order. Each component is a new graph with the properties of
-the input graph (public options and internal properties), its nodes in BFS order and the edges of the
-input graph (in input order, deduplicated) whose both end points lie in the component. With more than
-one component the nodes of every component are renumbered `0, 1, …`. An empty graph has no component.
+`split` (only if `SEPARATE_CONNECTED_COMPONENTS`, mrtree default `true`; otherwise the graph itself is
+the only component): Java's recursive depth first search over the incidence lists (see `split`). An
+empty graph has no component.
 
 `pack`: no component gives a new empty graph; one component is only normalised
 (`apply_padding_and_normalize_positions`). Otherwise every component gets `PRIORITY` (the sum of its
@@ -27,8 +23,9 @@ the properties of the first sorted component; the components are placed in rows 
 `max(widest box, sqrt(total area) * ASPECT_RATIO)` separated by `SPACING_NODE_NODE`; finally the
 `GraphBoundsProcessor` runs on the result and the result is normalised.
 
-`move_graph` adds the offset *minus* the source's `BB_UPLEFT` (so the box origin is subtracted twice
-when packing, as in Rust) to the nodes and the bend points, and appends nodes and (deduplicated) edges
+`move_graph` adds the offset *minus* the source's `BB_UPLEFT` to the nodes and the bend points (the
+packing passes `xpos, ypos` like Java; elk-rs passes `xpos - min.x`, subtracting the box origin twice,
+which elk-lean followed before agent OPT), and appends nodes and (deduplicated) edges
 to the destination. `apply_padding_and_normalize_positions` sets `BB_UPLEFT := (0, 0)` and moves the
 graph by `(padding.left - GRAPH_XMIN, padding.top - GRAPH_YMIN)` into a throw-away graph, which the
 Lean port omits (`moveGraph` with no destination); the moved graph keeps its node and edge lists.
@@ -46,7 +43,45 @@ open Elk.Alg.MrTree.Intermediate
 
 namespace ComponentsProcessor
 
-/-- `ComponentsProcessor::split(graph)`: the connected components (see the module doc). -/
+/-- Java `dfs(node, component)`: visits `idx` (preorder: the node is appended first), then for every
+edge of its incidence list (graph edge order) recurses into the other end point(s) and appends the
+edge afterwards, so every edge is appended once per incident visit (twice in total, a self loop
+twice from the same node). -/
+private partial def dfs (a : TArena) (nodes : Array TNodeId) (idToIndex : Std.HashMap Int Nat)
+    (incidence : Array (Array TEdgeId)) (idx : Nat)
+    (st : Array Bool × Array TNodeId × Array TEdgeId) : Array Bool × Array TNodeId × Array TEdgeId :=
+  let (visited, compNodes, compEdges) := st
+  if visited[idx]! then st
+  else
+    let node := nodes[idx]!
+    let st := (visited.set! idx true, compNodes.push node, compEdges)
+    incidence[idx]!.foldl (fun st e =>
+      let edge := a.edge e
+      let st := match edge.source with
+        | some src =>
+          if src != node then
+            match idToIndex[(a.node src).id]? with
+            | some i => dfs a nodes idToIndex incidence i st
+            | none => st
+          else st
+        | none => st
+      let st := match edge.target with
+        | some tgt =>
+          if tgt != node then
+            match idToIndex[(a.node tgt).id]? with
+            | some i => dfs a nodes idToIndex incidence i st
+            | none => st
+          else st
+        | none => st
+      (st.1, st.2.1, st.2.2.push e)) st
+
+/-- `ComponentsProcessor.split(graph)`: Java's recursive depth first search from every unvisited node
+in list order over the incidence lists (graph edge order, both end points); a component lists its
+nodes in preorder and every edge once per incident node visit (so twice, `dfs`), and gets the
+properties of the input graph. With more than one component the nodes of every component are
+renumbered `0, 1, …`. (elk-rs searches breadth first and lists each edge once in input order, which
+elk-lean followed before agent OPT; the duplicated edges are why Java's `moveGraph` takes
+`distinct()` edges and why `MIDDLE_TO_MIDDLE` routes every edge twice.) -/
 def split (graph : TGraphId) : MrTreeM (Array TGraphId) := do
   let g ← MrTreeM.getGraph graph
   let separate := (g.props.get MrTreeOptions.SEPARATE_CONNECTED_COMPONENTS).getD true
@@ -57,37 +92,18 @@ def split (graph : TGraphId) : MrTreeM (Array TGraphId) := do
   let mut idToIndex : Std.HashMap Int Nat := {}
   for idx in [0:nodes.size] do
     idToIndex := idToIndex.insert (a.node nodes[idx]!).id idx
-  let mut adjacency : Array (Array Nat) := Array.replicate nodes.size #[]
+  let mut incidence : Array (Array TEdgeId) := Array.replicate nodes.size #[]
   for e in edges do
     let (some s, some t) := ((a.edge e).source, (a.edge e).target) | continue
     if let (some si, some ti) := (idToIndex[(a.node s).id]?, idToIndex[(a.node t).id]?) then
-      adjacency := adjacency.modify si (·.push ti)
-      adjacency := adjacency.modify ti (·.push si)
+      incidence := incidence.modify si (·.push e)
+      incidence := incidence.modify ti (·.push e)
   let mut visited : Array Bool := Array.replicate nodes.size false
   let mut components : Array TGraphId := #[]
   for startIdx in [0:nodes.size] do
     if visited[startIdx]! then continue
-    let mut queue : Array Nat := #[startIdx]
-    let mut head := 0
-    let mut compIndices : Array Nat := #[]
-    visited := visited.set! startIdx true
-    while head < queue.size do
-      let idx := queue[head]!
-      head := head + 1
-      compIndices := compIndices.push idx
-      for neighbor in adjacency[idx]! do
-        if !visited[neighbor]! then
-          visited := visited.set! neighbor true
-          queue := queue.push neighbor
-    let compNodes := compIndices.map (nodes[·]!)
-    let compSet : Std.HashSet TNodeId := compNodes.foldl (·.insert ·) {}
-    let mut compEdges : Array TEdgeId := #[]
-    let mut seenEdges : Std.HashSet TEdgeId := {}
-    for e in edges do
-      let (some s, some t) := ((a.edge e).source, (a.edge e).target) | continue
-      if compSet.contains s && compSet.contains t && !seenEdges.contains e then
-        seenEdges := seenEdges.insert e
-        compEdges := compEdges.push e
+    let (v, compNodes, compEdges) := dfs a nodes idToIndex incidence startIdx (visited, #[], #[])
+    visited := v
     let comp ← MrTreeM.createGraph
     MrTreeM.modifyGraph comp fun c =>
       { c.copyProperties g with nodes := c.nodes ++ compNodes, edges := c.edges ++ compEdges }
@@ -187,7 +203,9 @@ def pack (components : Array TGraphId) : MrTreeM TGraphId := do
       -- Rust `ypos += highest_box + spacing` (the sum first)
       ypos := ypos + (highestBox + spacing)
       highestBox := fl0p0
-    moveGraph (some result) graph (xpos - min.x) (ypos - min.y)
+    -- Java `moveGraph(result, graph, xpos, ypos)`: the box origin is subtracted once (in
+    -- `moveGraph`); elk-rs passes `xpos - min.x` and so subtracts it twice
+    moveGraph (some result) graph xpos ypos
     highestBox := fmax highestBox size.y
     -- Rust `xpos += size.x + spacing`
     xpos := xpos + (size.x + spacing)

@@ -73,6 +73,15 @@ def write_outcomes(path, rows):
 
 def stage_gen(a, seeds, sets):
     for seed in seeds:
+        if "o" in sets:
+            # algorithm specific options of the non-layered algorithms (gen_option_graphs.py)
+            o_dir = os.path.join(a.out, "gen", f"o{seed}")
+            if a.force or not os.path.isdir(o_dir) or len(inputs_of(o_dir)) != a.count:
+                shutil.rmtree(o_dir, ignore_errors=True)
+                subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_option_graphs.py"), o_dir,
+                                str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
+        if not {"s", "v", "d"} & set(sets):
+            continue
         s_dir = os.path.join(a.out, "gen", f"s{seed}")
         if a.force or not os.path.isdir(s_dir) or len(inputs_of(s_dir)) != a.count:
             shutil.rmtree(s_dir, ignore_errors=True)
