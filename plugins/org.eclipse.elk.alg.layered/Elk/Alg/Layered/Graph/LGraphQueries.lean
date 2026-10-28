@@ -92,20 +92,34 @@ def nodeIsInlineEdgeLabel (a : LGraphArena) (n : LNodeId) : Bool :=
   nd.type == .label && !nd.internal.representedLabels.isEmpty &&
     nd.internal.representedLabels.all fun l => (a.label l).props.getD CoreOptions.EDGE_LABELS_INLINE false
 
-/-- `LNode.getDesignation()`: first non-empty label text, else the index in the layer (`-1`). -/
-def nodeDesignation (a : LGraphArena) (n : LNodeId) : String :=
+/-- `LNode.getDesignation()`: first non-empty label text, else `LGraphElement.getDesignation()` —
+the identifier of the node's `ORIGIN` (`ElkGraphTransformer.getOriginIdentifier`, resolved by
+`originIdentifier` because the arena has no access to the ElkGraph; empty counts as none) — else
+the index in the layer (`-1`). -/
+def nodeDesignationWith (a : LGraphArena) (originIdentifier : Origin → Option String) (n : LNodeId) : String :=
   let nd := a.node n
-  match nd.labels[0]? with
-  | some l =>
-    let text := (a.label l).text
-    if !text.isEmpty then text else (a.nodeIndex n).map toString |>.getD "-1"
-  | none => (a.nodeIndex n).map toString |>.getD "-1"
+  let text := match nd.labels[0]? with
+    | some l => (a.label l).text
+    | none => ""
+  if !text.isEmpty then text
+  else match nd.internal.origin.bind originIdentifier with
+    | some id => if id.isEmpty then (a.nodeIndex n).map toString |>.getD "-1" else id
+    | none => (a.nodeIndex n).map toString |>.getD "-1"
+
+/-- `nodeDesignationWith` without origin identifiers: first non-empty label text, else the index
+in the layer (`-1`). -/
+def nodeDesignation (a : LGraphArena) (n : LNodeId) : String :=
+  a.nodeDesignationWith (fun _ => none) n
+
+/-- `LNode.toString()` (designations by `nodeDesignationWith originIdentifier`). -/
+def nodeToStringWith (a : LGraphArena) (originIdentifier : Origin → Option String) (n : LNodeId) : String :=
+  let nd := a.node n
+  let typePart := if nd.type != .normal then s!"({nd.type.name.toLower})" else ""
+  s!"n{typePart}_{a.nodeDesignationWith originIdentifier n}"
 
 /-- `LNode.toString()`: `n_<designation>` with `(<type>)` for dummies. -/
 def nodeToString (a : LGraphArena) (n : LNodeId) : String :=
-  let nd := a.node n
-  let typePart := if nd.type != .normal then s!"({nd.type.name.toLower})" else ""
-  s!"n{typePart}_{a.nodeDesignation n}"
+  a.nodeToStringWith (fun _ => none) n
 
 /-- `LNode.borderToContentAreaCoordinates(horizontal, vertical)`. -/
 def nodeBorderToContentAreaCoordinates (a : LGraphArena) (n : LNodeId) (horizontal vertical : Bool) : LGraphArena :=
@@ -233,11 +247,15 @@ def edgeToString (a : LGraphArena) (e : LEdgeId) : String := Id.run do
 def layerIndex (a : LGraphArena) (l : LayerId) : Option Nat :=
   (a.graph (a.layer l).owner).indexOfLayer l
 
+/-- `Layer.toString()` (node designations by `nodeDesignationWith originIdentifier`). -/
+def layerToStringWith (a : LGraphArena) (originIdentifier : Origin → Option String) (l : LayerId) : String :=
+  let index := (a.layerIndex l).map toString |>.getD "-1"
+  let nodes := ", ".intercalate ((a.layer l).nodes.toList.map (a.nodeToStringWith originIdentifier ·))
+  s!"L_{index}[{nodes}]"
+
 /-- `Layer.toString()`: `L_<index>[nodes]`. -/
 def layerToString (a : LGraphArena) (l : LayerId) : String :=
-  let index := (a.layerIndex l).map toString |>.getD "-1"
-  let nodes := ", ".intercalate ((a.layer l).nodes.toList.map (a.nodeToString ·))
-  s!"L_{index}[{nodes}]"
+  a.layerToStringWith (fun _ => none) l
 
 /-- elk-rs `ArenaSync` pass 2 (`arena_sync.rs`): the incoming edges of every port of the graph
 in *edge discovery order* — nodes of the layers then layerless nodes, their ports in order, each
@@ -274,14 +292,18 @@ def arenaIncomingEdges (a : LGraphArena) (g : LGraphId) : Std.HashMap LPortId (A
 def graphToNodeArray (a : LGraphArena) (g : LGraphId) : Array (Array LNodeId) :=
   (a.graph g).layers.map fun l => (a.layer l).nodes
 
-/-- `LGraph.toString()`. -/
-def graphToString (a : LGraphArena) (g : LGraphId) : String :=
+/-- `LGraph.toString()` (node designations by `nodeDesignationWith originIdentifier`). -/
+def graphToStringWith (a : LGraphArena) (originIdentifier : Origin → Option String) (g : LGraphId) : String :=
   let gr := a.graph g
-  let layerless := ", ".intercalate (gr.layerlessNodes.toList.map (a.nodeToString ·))
-  let layers := ", ".intercalate (gr.layers.toList.map (a.layerToString ·))
+  let layerless := ", ".intercalate (gr.layerlessNodes.toList.map (a.nodeToStringWith originIdentifier ·))
+  let layers := ", ".intercalate (gr.layers.toList.map (a.layerToStringWith originIdentifier ·))
   if gr.layers.isEmpty then s!"G-unlayered[{layerless}]"
   else if gr.layerlessNodes.isEmpty then s!"G-layered[{layers}]"
   else s!"G[layerless[{layerless}], layers[{layers}]]"
+
+/-- `LGraph.toString()`. -/
+def graphToString (a : LGraphArena) (g : LGraphId) : String :=
+  a.graphToStringWith (fun _ => none) g
 
 end LGraphArena
 

@@ -25,6 +25,10 @@ the initial radius (`RADIUS`, or the largest node diagonal if zero) and runs the
 
 The phase factory half of the Rust `RadialLayoutPhases` (`create_phase`) is
 `RadialLayoutPhases.phaseFactory` here, because the phases refer to the enumeration.
+
+A graph without a root (`RadialUtil.findRoot` is `none`) raises Java's
+`IllegalArgumentException("The given graph is not a tree!")`; elk-rs reports it as an
+`UnsupportedConfigurationException` (`docs/robustness-random-graphs.md`).
 -/
 namespace Elk.Alg.Radial
 
@@ -77,7 +81,7 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
     if !((← ElkM.getNode layoutGraph).props.getD RadialOptions.OMIT_NODE_MICRO_LAYOUT false) then
       (← NodeMicroLayout.forGraph layoutGraph).execute
     let some root ← RadialUtil.findRoot layoutGraph
-      | throwUnsupportedConfiguration "The given graph is not a tree!"
+      | throwIllegalArgument "The given graph is not a tree!"
     InternalProperties.setRootNode layoutGraph root
     let mut layoutRadius := ((← ElkM.getNode layoutGraph).props.get RadialOptions.RADIUS).getD 0.0
     if layoutRadius == 0.0 then

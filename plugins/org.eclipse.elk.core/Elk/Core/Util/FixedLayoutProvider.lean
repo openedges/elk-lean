@@ -19,12 +19,14 @@ private def firstEndpointParent (g : ElkGraph) (e : EdgeId) (isSource : Bool) : 
   let shape := if isSource then edge.sources[0]? else edge.targets[0]?
   (shape.bind (ElkGraphUtil.connectableShapeToNode g)).bind fun n => (g.node n).parent
 
-/-- `generateJunctionPoints`. -/
+/-- `generateJunctionPoints`. `ElkUtil.determineJunctionPoints` rejects an edge without exactly
+one section with an `IllegalArgumentException` (Java; elk-rs panics with the same message), e.g.
+an edge without authored bend points under orthogonal routing. -/
 private def generateJunctionPoints (e : EdgeId) : ElkM Unit := do
   let g ← get
-  let jps := match ElkUtil.determineJunctionPoints g e with
-    | .ok c => c
-    | .error _ => #[]
+  let jps ← match ElkUtil.determineJunctionPoints g e with
+    | .ok c => pure c
+    | .error msg => throwIllegalArgument msg
   ElkM.modifyEdge e fun x =>
     { x with props := if jps.isEmpty then x.props.remove CoreOptions.JUNCTION_POINTS else x.props.set CoreOptions.JUNCTION_POINTS jps }
 

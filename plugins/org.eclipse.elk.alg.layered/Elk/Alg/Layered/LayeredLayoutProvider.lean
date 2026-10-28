@@ -36,6 +36,22 @@ def elkLayered : IO ElkLayered :=
   ElkLayered.new Components.ComponentsProcessor.split Components.ComponentsProcessor.combine
     Compound.CompoundGraphPreprocessor.processor Compound.CompoundGraphPostprocessor.processor
 
+/-- Java names the nodes of the child graph in the `UnsupportedGraphException` of
+`ElkLayered.reviewAndCorrectHierarchicalProcessors` by their ElkGraph identifiers, which the
+layered arena does not know: the message is rendered again here with
+`ElkGraphTransformer.getOriginIdentifier` (the arena still holds the state of the failed check).
+Other errors pass unchanged. -/
+private def withHierarchicalProcessorMessage (layeredGraph : LGraphId) (x : LImportM Unit) : LImportM Unit :=
+  tryCatch x fun err => do
+    let prefix_ := s!"{unsupportedGraphExceptionClass}: The hierarchy aware processor "
+    if !(toString err).startsWith prefix_ then throw err
+    let graphs ← liftLayered (ElkLayered.collectAllGraphsBottomUp layeredGraph)
+    let some (graph, strategy) ← liftLayered (ElkLayered.hierarchicalProcessorViolation layeredGraph graphs)
+      | throw err
+    let elkGraph ← liftElk get
+    let child ← liftLayered (LayeredM.withArena (·.graphToStringWith (ElkGraphTransformer.getOriginIdentifier elkGraph) graph))
+    throwUnsupportedGraph (ElkLayered.hierarchicalProcessorMessage strategy child)
+
 /-- `layout(ElkNode, IElkProgressMonitor)`. -/
 def layout (root : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   applyLayeredAlgorithmDefaults root
@@ -46,7 +62,8 @@ def layout (root : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   let run : LImportM Unit := do
     let layeredGraph ← transformer.importGraph root
     if hierarchyHandling == HierarchyHandling.includeChildren then
-      liftLayered (algorithm.doCompoundLayout layeredGraph (some monitor))
+      withHierarchicalProcessorMessage layeredGraph
+        (liftLayered (algorithm.doCompoundLayout layeredGraph (some monitor)))
     else
       liftLayered (algorithm.doLayout layeredGraph (some monitor))
     if !(← monitor.isCanceled) then

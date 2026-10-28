@@ -114,16 +114,33 @@ def collectAllGraphsBottomUp (root : LGraphId) : LayeredM (Array LGraphId) := do
         stack := stack.push nested
   return collected
 
-/-- `reviewAndCorrectHierarchicalProcessors(root, graphs)`: child graphs must use the root's
-crossing minimization strategy; the hierarchical greedy switch type is inherited. -/
-def reviewAndCorrectHierarchicalProcessors (root : LGraphId) (graphs : Array LGraphId) : LayeredM Unit := do
-  let rootGraph ← getGraph root
-  let rootCrossingMinimization := rootGraph.props.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep
-  let rootGreedySwitchType := rootGraph.props.getD LayeredOptions.CROSSING_MINIMIZATION_GREEDY_SWITCH_HIERARCHICAL_TYPE GreedySwitchType.off
+/-- The message of the `UnsupportedGraphException` of `reviewAndCorrectHierarchicalProcessors`
+(Java text; `child` is the child graph's `LGraph.toString()`). -/
+def hierarchicalProcessorMessage (childCrossingMinimization : CrossingMinimizationStrategy) (child : String) : String :=
+  s!"The hierarchy aware processor {ElkEnum.javaName childCrossingMinimization} in child node {child} is only allowed if the root node specifies the same hierarchical processor."
+
+/-- The first of `graphs` whose crossing minimization strategy differs from the root's, with that
+strategy (the graph `reviewAndCorrectHierarchicalProcessors` rejects). -/
+def hierarchicalProcessorViolation (root : LGraphId) (graphs : Array LGraphId) :
+    LayeredM (Option (LGraphId × CrossingMinimizationStrategy)) := do
+  let rootCrossingMinimization := (← getGraph root).props.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep
   for graph in graphs do
     let childCrossingMinimization := (← getGraph graph).props.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep
     if childCrossingMinimization != rootCrossingMinimization then
-      throwUnsupportedConfiguration s!"The hierarchy aware processor {ElkEnum.javaName childCrossingMinimization} in a child graph is only allowed if the root graph uses the same processor."
+      return some (graph, childCrossingMinimization)
+  return none
+
+/-- `reviewAndCorrectHierarchicalProcessors(root, graphs)`: child graphs must use the root's
+crossing minimization strategy (else Java's `UnsupportedGraphException`; elk-rs throws an
+`UnsupportedConfigurationException` with another text); the hierarchical greedy switch type is
+inherited. The arena has no ElkGraph identifiers, so the nodes of the graph in the message fall
+back to their index where Java prints the identifier; `LayeredLayoutProvider.layout` re-renders
+the message with them. -/
+def reviewAndCorrectHierarchicalProcessors (root : LGraphId) (graphs : Array LGraphId) : LayeredM Unit := do
+  if let some (graph, childCrossingMinimization) ← hierarchicalProcessorViolation root graphs then
+    throwUnsupportedGraph (hierarchicalProcessorMessage childCrossingMinimization (← withArena (·.graphToString graph)))
+  let rootGreedySwitchType := (← getGraph root).props.getD LayeredOptions.CROSSING_MINIMIZATION_GREEDY_SWITCH_HIERARCHICAL_TYPE GreedySwitchType.off
+  for graph in graphs do
     setGraphProp graph LayeredOptions.CROSSING_MINIMIZATION_GREEDY_SWITCH_HIERARCHICAL_TYPE rootGreedySwitchType
 
 /-- `hierarchicalLayout(lgraph, monitor)`: runs the processors of all nested graphs in lock
