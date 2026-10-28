@@ -10,10 +10,18 @@ dummies form one in-layer layout unit (`IN_LAYER_LAYOUT_UNIT = node`), north dum
 as in-layer successor and the node gets the south dummies as successors (unless the origin port
 allows switching sides). The dummies become the node's `BARYCENTER_ASSOCIATES`.
 
+Java semantics (elk-rs differs):
+* `sortPortList` runs only for the normal nodes with fixed port sides whose order is not fixed (and
+  no model order strategy is set), like Java's loop; elk-rs runs it for every node before the node
+  type / side check, reordering e.g. the interleaved ports of free nodes;
+* `modelOrderNorthSouthInputReversing` returns what Java's code actually computes:
+  `Lists.reverse(incoming).addAll(outgoing)` inserts every outgoing port at the *front* of the backing
+  `incoming` list, which is returned — the ports without incoming edges in reverse order, then the
+  ports with incoming edges in order (elk-rs: the intended reversed incoming ports, then the others).
+
 Rust behaviour followed here (deviations from Java):
-* `sort_port_list` runs for **every** node whose port constraints do not fix the order (when no
-  model order strategy is set), before the node type / side check; it does not write the ports'
-  `id` fields and does not cache the port sides of nodes with at most one port;
+* `sortPortList` does not write the ports' `id` fields and does not cache the port sides of nodes
+  with at most one port;
 * `origin_port_allows_switch` also returns `false` when the origin port's `PORT_CONSTRAINTS`
   (falling back to its node's) fix the positions;
 * `CROSSING_HINT` is not set on the dummies (elk-rs has no such property);
@@ -71,8 +79,8 @@ def sortPortList (node : LNodeId) : LayeredM Unit := do
   modifyNode node fun n => { n with ports := sorted.map (·.2.1) }
   cachePortSides node
 
-/-- `model_order_north_south_input_reversing(ports)` (Java `modelOrderNorthSouthInputReversing`):
-the ports with incoming edges in reverse order, followed by the others in order. -/
+/-- Java `modelOrderNorthSouthInputReversing(portList, node)`: the ports without incoming edges in
+reverse order, followed by those with incoming edges in order (see the module doc). -/
 def modelOrderNorthSouthInputReversing (ports : Array LPortId) : LayeredM (Array LPortId) := do
   let mut incomingPorts : Array LPortId := #[]
   let mut outgoingPorts : Array LPortId := #[]
@@ -81,7 +89,7 @@ def modelOrderNorthSouthInputReversing (ports : Array LPortId) : LayeredM (Array
       incomingPorts := incomingPorts.push port
     else
       outgoingPorts := outgoingPorts.push port
-  return incomingPorts.reverse ++ outgoingPorts
+  return outgoingPorts.reverse ++ incomingPorts
 
 /-- A `NORTH_SOUTH_PORT` dummy with `FIXED_POS` port constraints (`LNode::new` + type +
 `PORT_CONSTRAINTS`). -/
@@ -261,6 +269,8 @@ private def processNode (layer : LayerId) (node : LNodeId) (pointer : Int) : Lay
   let modelOrderStrategy ← match ← nodeGraph node with
     | some g => pure ((← getGraph g).props.getD LayeredOptions.CONSIDER_MODEL_ORDER_STRATEGY OrderingStrategy.none)
     | none => pure OrderingStrategy.none
+  let graphRef ← nodeGraph node
+  if nodeType != .normal || !portConstraints.isSideFixed then return pointer
   if !portConstraints.isOrderFixed && modelOrderStrategy == .none then
     sortPortList node
   let mut northPorts ← withArena (·.nodePortsBySide node .north)
@@ -270,8 +280,6 @@ private def processNode (layer : LayerId) (node : LNodeId) (pointer : Int) : Lay
   southPorts := southPorts.reverse
   if modelOrderStrategy != .none then
     southPorts ← modelOrderNorthSouthInputReversing southPorts
-  let graphRef ← nodeGraph node
-  if nodeType != .normal || !portConstraints.isSideFixed then return pointer
   let some graph := graphRef | return pointer
   setLayoutUnit node node
   if northPorts.isEmpty && southPorts.isEmpty then return pointer

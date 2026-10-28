@@ -38,7 +38,9 @@ def anchorPort (g : LGraphId) (x y : Float) : LayeredM LPortId := do
 /-- A long edge dummy at `(x, 0)` (size `0 x 0`) whose origin edge has the given bend points. -/
 def addLongEdge (g : LGraphId) (l : LayerId) (x : Float) (bends : Array KVector) (reversed : Bool := false)
     (src : Option LPortId := none) (tgt : Option LPortId := none) : LayeredM LNodeId := do
-  let e ← createEdge { bendPoints := bends, internal := { reversed := reversed } }
+  -- Java reads `ORIGINAL_BENDPOINTS` (the importer sets it only for a non-empty bend point list)
+  let chain : Option (Nat × KVectorChain) := if bends.isEmpty then none else some (0, bends)
+  let e ← createEdge { internal := { reversed := reversed, originalBendpoints := chain } }
   let n ← addN g l x 0 0 0 .longEdge
   modifyNode n fun d => { d with internal := { d.internal with
     origin := some (.lEdge e), longEdgeSource := src, longEdgeTarget := tgt } }
@@ -235,8 +237,10 @@ def longEdgeTests : Suite := suite "layered.p3order.interactive_crossing_minimiz
       let p ← createPort { position := ⟨10, 5⟩, anchor := ⟨2, 3⟩ }
       setPortNode p (some owner)
       addLongEdge g l 5 #[] (src := some p)) 68.0
-  expectPos "hand: zero x distance gives the second point's y (|dx| <= EPSILON)"
-    (← longEdgeY fun g l => addLongEdge g l 10 #[⟨10, 5⟩, ⟨10, 9⟩]) 9.0
+  -- Java divides by the x distance without a guard: 5 + 0 / 0 * 4 = NaN (elk-rs: the second y, 9)
+  match ← longEdgeY fun g l => addLongEdge g l 10 #[⟨10, 5⟩, ⟨10, 9⟩] with
+  | some p => check "Java: zero x distance gives NaN" p.isNaN
+  | none => check "Java: zero x distance gives NaN (position set)" false
   -- fallbacks to the reference point (size 0, y 0 -> centre 0)
   expectPos "hand: fewer than two points falls back to the centre (y 0 + 0/2)"
     (← longEdgeY fun g l => addLongEdge g l 10 #[⟨10, 5⟩]) 0.0
@@ -341,8 +345,9 @@ def constraintTests : Suite := suite "layered.p3order.interactive_crossing_minim
       && InteractiveCrossingMinimizer.compareEntries ⟨⟨0⟩, 1.0, #[]⟩ ⟨⟨1⟩, 1.0, #[⟨0⟩]⟩ == .gt
       && InteractiveCrossingMinimizer.compareEntries ⟨⟨0⟩, 1.0, #[]⟩ ⟨⟨1⟩, 1.0, #[]⟩ == .eq
       && InteractiveCrossingMinimizer.compareEntries ⟨⟨0⟩, 1.0, #[]⟩ ⟨⟨1⟩, 2.0, #[]⟩ == .lt)
-  check "hand: NaN positions compare equal (partial_cmp.unwrap_or(Equal))"
-    (InteractiveCrossingMinimizer.compareEntries ⟨⟨0⟩, 0.0 / 0.0, #[]⟩ ⟨⟨1⟩, 1.0, #[]⟩ == .eq)
+  check "Java: NaN positions are the largest (Double.compare; elk-rs partial_cmp: equal)"
+    (InteractiveCrossingMinimizer.compareEntries ⟨⟨0⟩, 0.0 / 0.0, #[]⟩ ⟨⟨1⟩, 1.0, #[]⟩ == .gt
+      && InteractiveCrossingMinimizer.compareEntries ⟨⟨0⟩, -0.0, #[]⟩ ⟨⟨1⟩, 0.0, #[]⟩ == .lt)
 
 /-! ## Port distribution -/
 

@@ -19,13 +19,12 @@ namespace Elk.Alg.Layered.Intermediate.GreedySwitch
 
 open Elk.Alg.Layered.Graph Elk.Alg.Layered.P3Order Elk.Alg.Layered.P3Order.Counting LayeredM
 
-/-- elk-rs `ParentContext`: the parent graph's current order and port positions and the parent
-node of the graph being swept. -/
+/-- elk-rs `ParentContext`: the parent graph's current order, its (shared) port position array and
+the parent node of the graph being swept. -/
 structure ParentContext where
   parentNodeOrder : Array (Array LNodeId)
-  parentPortPositions : Array Int
+  parentPortPositions : IO.Ref (Array Int)
   parentNode : LNodeId
-  deriving Inhabited
 
 /-- `GreedySwitchHeuristic` (the mutable fields are `IO.Ref`s). -/
 structure GreedySwitchHeuristic where
@@ -33,7 +32,9 @@ structure GreedySwitchHeuristic where
   greedySwitchType : CrossMinType
   /-- The graph being swept. -/
   graph : LGraphId
-  /-- `portPositions` (sized by `initAfterTraversal`). -/
+  /-- `portPositions` (sized by `initAfterTraversal`): one array for the whole run, shared by the
+  in-layer crossing counters of every `SwitchDecider` (Java; their positions survive from one free
+  layer to the next). -/
   portPositions : IO.Ref (Array Int)
   /-- `nPorts`. -/
   nPorts : IO.Ref Nat
@@ -59,7 +60,7 @@ def setDontSweepInto (h : GreedySwitchHeuristic) (dontSweepInto : Bool) : BaseIO
 
 /-- elk-rs `update_parent_context(parent_node_order, parent_port_positions, parent_node)`. -/
 def updateParentContext (h : GreedySwitchHeuristic) (parentNodeOrder : Array (Array LNodeId))
-    (parentPortPositions : Array Int) (parentNode : LNodeId) : BaseIO Unit :=
+    (parentPortPositions : IO.Ref (Array Int)) (parentNode : LNodeId) : BaseIO Unit :=
   h.parentContext.set (some { parentNodeOrder, parentPortPositions, parentNode })
 
 /-- Rust `layer_index_of(node)`: the `id` of the node's layer (set by `initAtLayerLevel`). -/
@@ -92,7 +93,7 @@ private def setUp (h : GreedySwitchHeuristic) (order : Array (Array LNodeId)) (f
           parentLayerIndex, rightMostLayer := freeLayerIndex + 1 == order.size }
       | none => countParentCrossings := false
     | none => countParentCrossings := false
-  some <$> SwitchDecider.new freeLayer crossingMatrixFiller (← h.portPositions.get) parentContext countParentCrossings
+  some <$> SwitchDecider.new freeLayer crossingMatrixFiller h.portPositions parentContext countParentCrossings
 
 /-- `exchangeNodes(indexOne, indexTwo, layerIndex)`. -/
 private def exchangeNodes (order : Array (Array LNodeId)) (layerIndex indexOne indexTwo : Nat) (switchDecider : SwitchDecider) :

@@ -629,13 +629,13 @@ def distributePortsForSideSnap (s : CrossMinSnapshot) (a : LGraphArena) (st : Ba
         let maxB := st.maxBarycenter
         inLayerPortsSnap s { st with inLayerPortIds := #[] } node nodeId layerIndex layerSize inLayer minB maxB
 
-/-- Rust comparator on two barycenters of the same side: `0.0` (no barycenter) first, then
-`partial_cmp` (NaN compares equal). -/
+/-- Java's `sortPorts` comparator on two barycenters of the same side: `0` (no barycenter, also
+`-0.0`) first, then `Float.compare` (NaN largest; elk-rs `partial_cmp`, NaN equal). -/
 def compareBarycenters (b1 b2 : Float) : Ordering :=
   if b1 == floatZero && b2 == floatZero then .eq
   else if b1 == floatZero then .lt
   else if b2 == floatZero then .gt
-  else Float.comparePartial b1 b2
+  else Float.compareJava b1 b2
 
 /-- `sort_ports_snap(node)`: the *captured* port order stably sorted by (side, barycenter).
 Unreachable in elk-rs (`sort_ports` only reaches it while `self.snapshot` is set, but its only
@@ -743,9 +743,11 @@ def distributePortsForIterLock (a : LGraphArena) (st : BarycenterPortDistributor
   if s1 != s2 then compare s1 s2
   else compareBarycenters (bary.get! (asUsize pt.id)) (bary.get! (asUsize qt.id))
 
-/-- `compareBarycenters b1 b2 == .gt` without building an `Ordering`. -/
+/-- `compareBarycenters b1 b2 == .gt` without building an `Ordering` (non-zero values: `b1 > b2`, or a
+NaN `b1` and a number `b2`). -/
 @[inline] def baryGreater (b1 b2 : Float) : Bool :=
-  if b1 == floatZero then false else if b2 == floatZero then true else b1 > b2
+  if b1 == floatZero then false else if b2 == floatZero then true
+  else b1 > b2 || (b1 != b1 && b2 == b2)
 
 /-- `comparePortsBySideAndBarycenter y x == .gt` on the keys (side code, barycenter) of `y` and `x`. -/
 @[inline] def portKeyGreater (sy : UInt8) (by' : Float) (sx : UInt8) (bx : Float) : Bool :=

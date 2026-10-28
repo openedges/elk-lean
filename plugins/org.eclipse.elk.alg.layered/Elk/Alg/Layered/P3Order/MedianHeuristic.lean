@@ -3,14 +3,15 @@ import Elk.Alg.Layered.P3Order.ICrossingMinimizationHeuristic
 import Elk.Core.Util.Random
 import Elk.Core.Util.Sort
 import Elk.Core.Util.Java
+import Elk.Core.Util.JavaSort
 /-!
-# elk-rs `p3order/median_heuristic.rs` (no Java counterpart)
+# `org.eclipse.elk.alg.layered.p3order.MedianHeuristic` (elk-rs `p3order/median_heuristic.rs`)
 
 The median heuristic of `CrossingMinimizationStrategy.MEDIAN_LAYER_SWEEP` (`CrossMinType.MEDIAN`):
 every node of the free layer gets the `WEIGHT` of the median of its neighbours in the reference
 layer (the previous layer forward, the next one backward), nodes without such neighbours the mean
 of the smallest and largest weight seen (which start at `f64::MIN_POSITIVE` and `f64::MAX`, so the
-mean is about `f64::MAX / 2` and those nodes go last), and the layer is sorted stably by weight.
+mean is about `f64::MAX / 2` and those nodes go last), and the layer is sorted by weight.
 The first layer is ordered by random weights (`nextDouble()` per node) and then numbered
 `1, 2, …`.
 
@@ -23,10 +24,13 @@ Random numbers: `setFirstLayerOrder` draws from the caller's generator (`IO.Ref 
 by `toHeuristic`); `minimizeCrossings` draws nothing. The heuristic reports itself deterministic
 (Rust).
 
-Sorting: Rust `stable_sort_by_weight` sorts `(index, node)` with `sort_by` and the comparator
-"`None` weights greater, `partial_cmp`, then the index"; only its `Less` results matter to the
-sort, so two nodes without weight keep their order. `stableSort` with the induced order gives the
-same result.
+Java semantics (elk-rs differs): every sort is `Collections.sort(nodes, weightComparator)` — JDK
+`TimSort` (`javaSortBy`) with Java's comparator: `1` when the first node has no weight (also when
+neither has one — not a consistent order), `-1` when only the second has none, else
+`Double.compareTo`. The extreme weights start at `Double.MIN_VALUE` (`4.9e-324`; elk-rs
+`f64::MIN_POSITIVE`) and `Double.MAX_VALUE` and follow `Math.min`/`Math.max`. A median node without
+weight makes Java throw a `NullPointerException` when its weight is unboxed (elk-rs skips the node);
+reproduced with Java's message.
 -/
 namespace Elk.Alg.Layered.P3Order
 
@@ -41,8 +45,8 @@ namespace MedianHeuristic
 /-- `MedianHeuristic::new()`. -/
 def new : MedianHeuristic := {}
 
-/-- Rust `f64::MIN_POSITIVE` (the smallest positive normal double). -/
-def F64_MIN_POSITIVE : Float := Float.ofBits 0x0010000000000000
+/-- Java `Double.MIN_VALUE` (the smallest positive subnormal double). -/
+def DOUBLE_MIN_VALUE : Float := Float.ofBits 1
 
 /-- `weight_of(node)`. -/
 @[inline] def weightOf (a : LGraphArena) (n : LNodeId) : Option Float := (a.node n).internal.weight
@@ -51,24 +55,24 @@ def F64_MIN_POSITIVE : Float := Float.ofBits 0x0010000000000000
 @[inline] def setWeight (n : LNodeId) (w : Float) : LayeredM Unit :=
   modifyNode n fun x => { x with internal := { x.internal with weight := some w } }
 
-/-- The `is_less` of `stable_sort_by_weight` on `(index, weight)` entries: `weight_cmp` is `Less`
-(a known weight before an unknown one, `partial_cmp`), or `Equal` and the index is smaller. -/
-def entryIsLess (x y : Nat × Option Float) : Bool :=
-  match x.2, y.2 with
-  | none, _ => false
-  | some _, none => true
-  | some w1, some w2 =>
-    match Float.comparePartial w1 w2 with
-    | .lt => true
-    | .gt => false
-    | .eq => x.1 < y.1
+/-- Java `weightComparator(n1, n2)` on the weights (`none`: no `WEIGHT` property). -/
+def weightCompare : Option Float → Option Float → Ordering
+  | none, _ => .gt
+  | some _, none => .lt
+  | some w1, some w2 => Float.compareJava w1 w2
 
-/-- `stable_sort_by_weight(nodes)` with the weights read from the arena. -/
-def stableSortByWeight (a : LGraphArena) (nodes : Array LNodeId) : Array LNodeId :=
-  let entries := nodes.mapIdx fun i n => ((i, weightOf a n), n)
-  let sorted := stableSort entries fun x y =>
-    if entryIsLess x.1 y.1 then .lt else if entryIsLess y.1 x.1 then .gt else .eq
-  sorted.map (·.2)
+/-- `Collections.sort(nodes, weightComparator)` (JDK `TimSort`) with the weights read from the arena;
+`.error` for TimSort's contract violation. -/
+def sortByWeight (a : LGraphArena) (nodes : Array LNodeId) : Except String (Array LNodeId) :=
+  match javaSortBy (nodes.map fun n => (n, weightOf a n)) (fun x y => weightCompare x.2 y.2) with
+  | .ok sorted => .ok (sorted.map (·.1))
+  | .error e => .error e
+
+/-- `sortByWeight` in the layered monad (Java's `IllegalArgumentException` on a contract violation). -/
+def sortByWeightM (nodes : Array LNodeId) : LayeredM (Array LNodeId) := do
+  match sortByWeight (← get) nodes with
+  | .ok sorted => return sorted
+  | .error _ => throw (IO.userError JavaSort.contractViolationError)
 
 /-- Rust `layer_id(node)`: `Layer.id` of the node's layer (`as usize as isize`, i.e. the `i32` id). -/
 @[inline] def layerIdOf (a : LGraphArena) (n : LNodeId) : Option Int :=
@@ -88,29 +92,34 @@ def connectedNodes (a : LGraphArena) (node : LNodeId) (referenceLayer : Int) : A
           connected := connected.push candidate
   return connected
 
+/-- Java's message for unboxing the missing `WEIGHT` of the median node. -/
+def missingWeightError : String :=
+  "java.lang.NullPointerException: Cannot invoke \"java.lang.Double.doubleValue()\" because the return value of " ++
+  "\"org.eclipse.elk.alg.layered.graph.LNode.getProperty(org.eclipse.elk.graph.properties.IProperty)\" is null"
+
 /-- The median step of one node: `none` without neighbours in the reference layer (the node is
 revisited), else the weight of the median `connected[len / 2]` of the neighbours sorted by weight
-(`none` when the median has no weight). -/
-def medianWeight (a : LGraphArena) (node : LNodeId) (referenceLayer : Int) : Option (Option Float) :=
-  let connected := connectedNodes a node referenceLayer
-  if connected.isEmpty then none
-  else
-    let sorted := stableSortByWeight a connected
-    some (sorted[sorted.size / 2]?.bind (weightOf a))
+(Java's `NullPointerException` when the median has no weight). -/
+def medianWeight (node : LNodeId) (referenceLayer : Int) : LayeredM (Option Float) := do
+  let connected := connectedNodes (← get) node referenceLayer
+  if connected.isEmpty then return none
+  let sorted ← sortByWeightM connected
+  match sorted[sorted.size / 2]?.bind (weightOf (← get)) with
+  | some w => return some w
+  | none => throw (IO.userError missingWeightError)
 
 /-- `calculate_medians(nodes, reference_layer)`. -/
 def calculateMedians (nodes : Array LNodeId) (referenceLayer : Int) : LayeredM Unit := do
-  let mut minWeight := F64_MIN_POSITIVE
+  let mut minWeight := DOUBLE_MIN_VALUE
   let mut maxWeight := Float.maxValue
   let mut toRevisit : Array LNodeId := #[]
   for node in nodes do
-    match medianWeight (← get) node referenceLayer with
+    match ← medianWeight node referenceLayer with
     | none => toRevisit := toRevisit.push node
-    | some none => pure ()
-    | some (some weight) =>
+    | some weight =>
       setWeight node weight
-      minWeight := fmin minWeight weight
-      maxWeight := fmax maxWeight weight
+      minWeight := javaMin minWeight weight
+      maxWeight := javaMax maxWeight weight
   let avgWeight := (maxWeight + minWeight) / 2.0
   for node in toRevisit do
     setWeight node avgWeight
@@ -123,8 +132,8 @@ def writeLayer (order : Array (Array LNodeId)) (layerIndex : Nat) (sorted : Arra
       if index < slot.size then slot := slot.set! index sorted[index]
     return slot
 
-/-- `set_first_layer_order(order, forward_sweep, random)`: random weights (`nextDouble()` per
-node, in layer order), a stable sort by weight, then weights `1, 2, …` in the new order. -/
+/-- `setFirstLayerOrder(order, forwardSweep)`: random weights (`nextDouble()` per node, in layer
+order), a sort by weight, then weights `1, 2, …` in the new order. -/
 def setFirstLayerOrder (_h : MedianHeuristic) (order : Array (Array LNodeId)) (forwardSweep : Bool) (random : IO.Ref Random) :
     LayeredM (Array (Array LNodeId) × Bool) := do
   let firstIndex := if forwardSweep then 0 else order.size - 1
@@ -132,22 +141,22 @@ def setFirstLayerOrder (_h : MedianHeuristic) (order : Array (Array LNodeId)) (f
   for node in layer do
     let weight ← random.modifyGet (·.nextDouble)
     setWeight node weight
-  let sorted := stableSortByWeight (← get) layer
+  let sorted ← sortByWeightM layer
   let order := writeLayer order firstIndex sorted
   for h : index in [0:sorted.size] do
     setWeight sorted[index] (index + 1).toFloat
   return (order, false)
 
-/-- `minimize_crossings(order, free_layer_index, forward_sweep, is_first_sweep, random)`: medians
-with respect to the previous (forward) or next layer and a stable sort by weight; nothing happens
-when that layer does not exist. Never reports an improvement. -/
+/-- `minimizeCrossings(order, freeLayerIndex, forwardSweep, isFirstSweep)`: medians with respect to
+the previous (forward) or next layer and a sort by weight; nothing happens when that layer does not
+exist (Java only looks at nodes whose layer id equals the index). Never reports an improvement. -/
 def minimizeCrossings (_h : MedianHeuristic) (order : Array (Array LNodeId)) (freeLayerIndex : Nat)
     (forwardSweep _isFirstSweep : Bool) : LayeredM (Array (Array LNodeId) × Bool) := do
   let referenceLayer : Int := if forwardSweep then (freeLayerIndex : Int) - 1 else (freeLayerIndex : Int) + 1
   if referenceLayer < 0 || referenceLayer >= order.size then return (order, false)
   let freeLayer := order[freeLayerIndex]?.getD #[]
   calculateMedians freeLayer referenceLayer
-  let sorted := stableSortByWeight (← get) freeLayer
+  let sorted ← sortByWeightM freeLayer
   return (writeLayer order freeLayerIndex sorted, false)
 
 /-- The `IInitializable` part (no initialisation). -/

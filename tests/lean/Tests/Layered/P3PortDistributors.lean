@@ -440,7 +440,10 @@ def gMultipleWesternCrossings : LayeredM (Bool × Bool) := do
   let (d, order) ← prepareGreedy g
   let o ← portsOf rightNode
   let improved ← d.distributePortsWhileSweeping order 1 true
-  return (improved, (← portsOf rightNode) == #[o[2]!, o[0]!, o[1]!])
+  -- ELK Java's `GreedyPortDistributorTest.distributePorts_GivenMultipleCrossingsOnWesternSide_RemoveCrossing`
+  -- expects `portsOrderedAs(rightNode, 1, 2, 0)`; elk-rs (which also permutes the slot indices of a
+  -- switch, see `GreedyPortDistributor`) expected `[2, 0, 1]`
+  return (improved, (← portsOf rightNode) == #[o[1]!, o[2]!, o[0]!])
 
 /-- `distribute_ports_crossings_on_eastern_side_removes_them` (and the `FIXED_ORDER` variant
 `distribute_ports_fixed_order_no_change`). -/

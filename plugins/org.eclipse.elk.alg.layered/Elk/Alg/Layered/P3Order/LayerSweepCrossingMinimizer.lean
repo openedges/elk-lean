@@ -357,7 +357,7 @@ def nextBooleanForGraph (_index : Nat) : SweepM Bool := do
 /-- `parent_snapshot_for(index)`: the parent holder's current order and port positions and the
 parent node. -/
 def parentSnapshotFor (s : LayerSweepCrossingMinimizer) (index : Nat) :
-    Option (Array (Array LNodeId) × Array Int × LNodeId) := do
+    Option (Array (Array LNodeId) × IO.Ref (Array Int) × LNodeId) := do
   let holder ← s.graphInfoHolders[index]?
   let parentIndex ← holder.parentGraphIndex
   let parent ← s.graphInfoHolders[parentIndex]?
@@ -466,7 +466,7 @@ partial def sweepReducingCrossings (index : Nat) (forward firstSweep : Bool) : S
     let iN := i.toNat
     let allowFirstSweep ← do
       let h ← holderAt index
-      pure (firstSweep && !h.firstTryWithInitialOrder && !h.secondTryWithInitialOrder)
+      pure (firstSweep && !h.firstTryWithInitialOrder)
     prepareCrossMinimizer index
     let r1 ← minimizeCrossingsOnLayer index iN forward allowFirstSweep
     improved := improved || r1
@@ -531,13 +531,17 @@ def minimizeCrossingsNoCounter (index : Nat) : SweepM Unit := do
     isForwardSweep := !isForwardSweep
   setCurrentlyBestNodeOrders
 
-/-- The start of `minimize_crossings_with_counter`/`_node_port_order_with_counter` after the
-initial-order check: the first layer order (unless the initial order is tried), the first sweep and
-the update of the initial-order flags. Returns the sweep direction used. -/
+/-- The start of `minimizeCrossingsWithCounter`/`…NodePortOrderWithCounter` after the initial-order
+check: the first layer order (unless the initial order is tried), the first sweep and the update of
+the initial-order flag. Java's `FIRST_TRY_WITH_INITIAL_ORDER` and `SECOND_TRY_WITH_INITIAL_ORDER` share
+one property id, so "clear the second try, then move a pending first try to the second" leaves the
+flag `false`: only the first iteration of a `compareDifferentRandomizedLayouts` keeps the initial
+order (elk-rs: separate flags, so its second iteration keeps it too, sweeping backwards). Returns the
+sweep direction used. -/
 def firstSweepWithCounter (index : Nat) (isForwardSweep : Bool) : SweepM Bool := do
   let mut isForwardSweep := isForwardSweep
   let h ← holderAt index
-  let useInitial := (h.firstTryWithInitialOrder || h.secondTryWithInitialOrder) && h.considerModelOrderStrategy != .none
+  let useInitial := h.firstTryWithInitialOrder && h.considerModelOrderStrategy != .none
   if !useInitial then
     prepareCrossMinimizer index
     let _ ← setFirstLayerOrder index isForwardSweep
@@ -545,10 +549,7 @@ def firstSweepWithCounter (index : Nat) (isForwardSweep : Bool) : SweepM Bool :=
   else
     isForwardSweep := h.firstTryWithInitialOrder
   let _ ← sweepReducingCrossings index isForwardSweep true
-  modifyHolder index fun h =>
-    let h := if h.secondTryWithInitialOrder then { h with secondTryWithInitialOrder := false } else h
-    if h.firstTryWithInitialOrder then { h with firstTryWithInitialOrder := false, secondTryWithInitialOrder := true }
-    else h
+  modifyHolder index fun h => { h with firstTryWithInitialOrder := false }
   return isForwardSweep
 
 /-- `minimize_crossings_with_counter(index)`: sweeps in alternating directions while the crossing
@@ -721,6 +722,14 @@ def transferNodeAndPortOrdersToGraph : SweepM Unit := do
     if let some bestSweep ← h.bestSweep then
       bestSweep.transferNodeAndPortOrdersToGraph h.lGraph true h.snapshot
 
+/-- Writes every holder's `FIRST_TRY_WITH_INITIAL_ORDER` back to its graph. Java keeps the flag on
+the `LGraph`: a run that returns early because the initial order has no crossings leaves it `true`,
+and a later run on the same graph (e.g. the greedy switch processor, whose `minimizeCrossingsWithCounter`
+does not set it) reads it; elk-rs starts every run with a cleared flag. -/
+def writeBackFirstTries : SweepM Unit := do
+  for h in (← get).graphInfoHolders do
+    modifyGraph h.lGraph fun g => { g with internal := { g.internal with firstTryWithInitialOrder := h.firstTryWithInitialOrder } }
+
 /-- Writes the shared generators back to their graphs. -/
 def writeBackRandoms : SweepM Unit := do
   for (graph, ref) in (← get).randomRefs do
@@ -748,6 +757,7 @@ def processGraph (graph : LGraphId) (monitor : ProgressMonitor) : SweepM Unit :=
   let method ← chooseMinimizingMethod first
   minimizeCrossings graphsToSweepOn method
   transferNodeAndPortOrdersToGraph
+  writeBackFirstTries
   writeBackRandoms
   monitor.done
 

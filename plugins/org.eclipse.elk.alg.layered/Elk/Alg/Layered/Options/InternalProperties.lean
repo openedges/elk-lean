@@ -213,6 +213,12 @@ structure LEdgeInternals where
   splineEdgeChain : Array LEdgeId := #[]
   /-- `IS_PART_OF_CYCLE` (`partOfCycle`, `false`) as reset on edges by `Tarjan.resetTarjan`. -/
   isPartOfCycle : Bool := false
+  /-- `ORIGINAL_BENDPOINTS` (`originalBendpoints`): the start point, bend points and end point of the
+  imported edge's first section (set by the importer for the interactive crossing minimiser/node
+  placer). Java stores one `KVectorChain` object that edge copies (`copyProperties`, e.g. the long
+  edge segments) share and that `InteractiveCrossingMinimizer.getPos` extends in place; the first
+  component identifies that object (the importing `LEdge`'s index), the second is its initial value. -/
+  originalBendpoints : Option (Nat × KVectorChain) := none
   deriving Inhabited
 
 /-- Internal properties set on `LLabel`s. -/

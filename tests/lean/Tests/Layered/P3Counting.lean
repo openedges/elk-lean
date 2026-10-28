@@ -1521,7 +1521,7 @@ def getDecider (g : LGraphId) (greedyType : CrossMinType) (freeLayerIndex : Nat)
   let order ← nodeArray g
   let nPorts ← countPorts order
   let filler ← CrossingMatrixFiller.new greedyType order freeLayerIndex direction
-  let decider ← SwitchDecider.new ((order[freeLayerIndex]?).getD #[]) filler (Array.replicate nPorts 0) none false
+  let decider ← SwitchDecider.new ((order[freeLayerIndex]?).getD #[]) filler (← IO.mkRef (Array.replicate nPorts 0)) none false
   return (decider, order)
 
 /-- `get_decider_with_parent(graph, parent_graph, parent_node, greedy_type, free_layer_index, direction)`. -/
@@ -1535,10 +1535,10 @@ def getDeciderWithParent (g parentGraph : LGraphId) (parentNode : LNodeId) (gree
   let parentPorts ← countPorts parentNodeOrder
   let parentLayerIndex ← layerIndexOfNode parentNode
   let context : ParentCrossingContext := {
-    parentNodeOrder, parentPortPositions := Array.replicate parentPorts 0, parentLayerIndex,
+    parentNodeOrder, parentPortPositions := ← IO.mkRef (Array.replicate parentPorts 0), parentLayerIndex,
     rightMostLayer := freeLayerIndex + 1 == order.size }
   let filler ← CrossingMatrixFiller.new greedyType order freeLayerIndex direction
-  let decider ← SwitchDecider.new ((order[freeLayerIndex]?).getD #[]) filler (Array.replicate nPorts 0) (some context) true
+  let decider ← SwitchDecider.new ((order[freeLayerIndex]?).getD #[]) filler (← IO.mkRef (Array.replicate nPorts 0)) (some context) true
   return (decider, order)
 
 /-- `nested_graph(node)`: the node's nested graph, created with the test options. -/

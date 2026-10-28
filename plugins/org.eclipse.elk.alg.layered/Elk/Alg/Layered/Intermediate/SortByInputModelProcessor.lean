@@ -1,5 +1,6 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Intermediate.Preserveorder.ModelOrderNodeComparator
+import Elk.Core.Util.JavaSort
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.SortByInputModelProcessor`
 
@@ -17,16 +18,23 @@ layers it is the final order of the previous layer.
 Slots: before phase 3 (`SORT_BY_INPUT_ORDER_OF_MODEL`), after `LongEdgeSplitter` and before
 `NorthSouthPortPreprocessor`.
 
+## Java semantics (elk-rs differs)
+* Ports are sorted like Java's `Collections.sort(node.getPorts(), new ModelOrderPortComparator(..))`:
+  JDK `TimSort` (`javaSortByM`, binary insertion sort below 32 ports) with a fresh comparator per node.
+  The comparator is stateful (transitive relations), so the comparison sequence matters; elk-rs uses
+  the node insertion sort (`insertion_sort_port`).
+* Every comparator copies the previous layer's nodes when it is created. For layer `0` (whose previous
+  layer is the layer itself) the first node comparator sees the unsorted order, the port comparators
+  and the second node comparator see the order after the first sort (elk-rs: the unsorted order for
+  all three).
+
 ## Deviations from Java (Rust is followed)
-* Ports are sorted with the same insertion sort as nodes (`insertion_sort_port`) and one comparator
-  that is reset per node (Java: `Collections.sort` with a new comparator per node).
 * The comparators read the graph options from a private context graph built once per run
   (`build_ordering_context_graph`, here `ModelOrderGraphContext.ofGraph`).
 * The monitor task name is `"Sort By Input Model"` (Java appends the ordering strategy) and nothing
   is logged.
 * `longEdgeTargetNodePreprocessing` sets `LONG_EDGE_TARGET_NODE` only when a target node exists (Java
   also stores `null`).
-* The previous layer of layer `0` is a copy of its unsorted node list (Java uses the layer itself).
 
 ## `TARGET_NODE_MODEL_ORDER` storage
 
@@ -143,8 +151,15 @@ def longEdgeTargetNodePreprocessing (node : LNodeId) : LayeredM (Array (LNodeId 
   setTargetNodeModelOrder node result
   return result
 
+/-- `Collections.sort(ports, comparator)`: JDK `TimSort` with the stateful port comparator (Java's
+`IllegalArgumentException` on a detected contract violation). -/
+def javaSortPortsM (ports : Array LPortId) : PortComparatorM (Array LPortId) := do
+  match ← javaSortByM ports (fun a b => do return compare (← ModelOrderPortComparator.compareM a b) 0) with
+  | .ok sorted => return sorted
+  | .error _ => throw (IO.userError JavaSort.contractViolationError)
+
 /-- Sorts the ports of the nodes of one layer (nodes with `FIXED_ORDER`/`FIXED_POS` port constraints
-are skipped), then caches the port sides. -/
+are skipped; a fresh comparator state per node), then caches the port sides. -/
 def sortPortsOfLayer (nodes : Array LNodeId) (comparator : ModelOrderPortComparator) :
     LayeredM ModelOrderPortComparator := do
   let mut comparator := comparator
@@ -153,7 +168,7 @@ def sortPortsOfLayer (nodes : Array LNodeId) (comparator : ModelOrderPortCompara
     if constraints == .fixedOrder || constraints == .fixedPos then continue
     let longEdgeTargets ← longEdgeTargetNodePreprocessing node
     comparator := comparator.resetForNodeTargetModelOrder (some longEdgeTargets)
-    let (ports, c) ← insertionSortPort (← getNode node).ports comparator
+    let (ports, c) ← (javaSortPortsM (← getNode node).ports).run comparator
     comparator := c
     modifyNode node fun n => { n with ports := ports }
     cachePortSides node
@@ -187,6 +202,10 @@ def run (graph : LGraphId) : LayeredM Unit := do
     nodes := sorted
     prePortsNodeComparator := c
     modifyLayer layer fun l => { l with nodes := nodes }
+    -- Java: the later comparators copy the previous layer when they are created; for layer `0` that is
+    -- the layer itself, now sorted
+    if layerIndex == 0 then
+      previousLayerNodes := nodes
     portComparator := portComparator.resetForPreviousLayerSlice previousLayerNodes
     portComparator ← sortPortsOfLayer nodes portComparator
     postPortsNodeComparator := postPortsNodeComparator.resetForPreviousLayerSlice previousLayerNodes

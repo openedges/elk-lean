@@ -646,8 +646,8 @@ def medianTests : Suite := suite "layered.p3order.median_heuristic" do
   checkEqR "first layer weights renumbered (hand: a 3, b 1, c 2)" (weights.extract 0 3) #[some 3.0, some 1.0, some 2.0]
   checkEqR "median weights (hand: x upper median of [c 2, a 3] = 3, y 1, w median of [1, 2, 3] = 2)"
     #[weights[3]!, weights[4]!, weights[6]!] #[some 3.0, some 1.0, some 2.0]
-  let huge := (Float.maxValue + MedianHeuristic.F64_MIN_POSITIVE) / 2.0
-  checkEqR "unconnected z gets (f64::MAX + f64::MIN_POSITIVE) / 2" weights[5]! (some huge)
+  let huge := (Float.maxValue + MedianHeuristic.DOUBLE_MIN_VALUE) / 2.0
+  checkEqR "unconnected z gets (Double.MAX_VALUE + Double.MIN_VALUE) / 2" weights[5]! (some huge)
   check "median order (hand: [y, w, x, z])" (right == #[rn[1]!, rn[3]!, rn[0]!, rn[2]!])
   check "deterministic and no improvement reported" (!flags)
   let (ln, backward, unchanged) ← runL medianBackward
@@ -659,9 +659,15 @@ def medianTests : Suite := suite "layered.p3order.median_heuristic" do
     let ns ← addNodes {} g l 4
     modifyNode ns[1]! fun n => { n with internal := { n.internal with weight := some 5.0 } }
     modifyNode ns[3]! fun n => { n with internal := { n.internal with weight := some 2.0 } }
-    return (MedianHeuristic.stableSortByWeight (← get) ns == #[ns[3]!, ns[1]!, ns[0]!, ns[2]!])
-  check "stable_sort_by_weight: known weights first, unknown keep their order" sorted
-  checkFloat "f64::MIN_POSITIVE" MedianHeuristic.F64_MIN_POSITIVE 2.2250738585072014e-308 0.0
+    -- Java `weightComparator` with TimSort (binary insertion sort for 4 elements): [n0, n1, n2, n3]
+    -- n1 vs n0 (unweighted) = -1 → [n1, n0]; n2: vs n0 = 1 (n2 unweighted) → after n0; n3 vs n0 = -1,
+    -- vs n1 (5.0 > 2.0) = -1 → [n3, n1, n0, n2]
+    return (MedianHeuristic.sortByWeight (← get) ns |>.toOption) == some #[ns[3]!, ns[1]!, ns[0]!, ns[2]!]
+  check "weightComparator (TimSort): known weights first, unknown keep their order here" sorted
+  checkFloat "Double.MIN_VALUE" MedianHeuristic.DOUBLE_MIN_VALUE 4.9e-324 0.0
+  checkEqR "weightComparator: an unweighted first node is always greater (not a consistent order)"
+    (MedianHeuristic.weightCompare none none, MedianHeuristic.weightCompare none (some 1.0),
+      MedianHeuristic.weightCompare (some 1.0) none) (Ordering.gt, Ordering.gt, Ordering.lt)
 
 /-! ## `SweepCopy` -/
 
@@ -750,7 +756,7 @@ def sweepCopyTests : Suite := suite "layered.p3order.sweep_copy" do
   let (side, _, _) ← runL (sweepNorthSouth .north true false .undefined)
   checkEq "north port with its dummy above stays north" side PortSide.north
   let (side, _, _) ← runL (sweepNorthSouth .north false false .fixedPos)
-  checkEq "FIXED_POS origin: no side switch (Rust)" side PortSide.north
+  checkEq "FIXED_POS origin: side switched too (Java; elk-rs skips it)" side PortSide.south
   let sorted ← runL do
     let g ← newGraph {}
     let l ← makeLayer g
@@ -761,8 +767,8 @@ def sweepCopyTests : Suite := suite "layered.p3order.sweep_copy" do
     modifyPort pn1 fun p => { p with position := ⟨5.0, 0.0⟩ }
     modifyPort pn2 fun p => { p with position := ⟨1.0, 0.0⟩ }
     let a ← get
-    return (SweepCopy.sortPortsCombined a #[pw, pn1, pn2] .fixedPos == #[pn2, pn1, pw],
-      SweepCopy.sortPortsCombined a #[pw, pn1, pn2] .free == #[pn1, pn2, pw])
+    return ((SweepCopy.sortPortsCombined a #[pw, pn1, pn2] .fixedPos).toOption == some #[pn2, pn1, pw],
+      (SweepCopy.sortPortsCombined a #[pw, pn1, pn2] .free).toOption == some #[pn1, pn2, pw])
   check "compare_ports: fixed order sorts by side, then x on the north side" sorted.1
   check "compare_ports: free order sorts by side only" sorted.2
 

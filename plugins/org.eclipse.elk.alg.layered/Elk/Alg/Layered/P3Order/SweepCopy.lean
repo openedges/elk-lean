@@ -1,8 +1,9 @@
 import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.P3Order.CrossMinSnapshot
-import Elk.Core.Util.Sort
-import Elk.Core.Util.Java
+import Elk.Alg.Layered.Intermediate.PortListSorter
+import Elk.Core.Util.JavaSort
+import Elk.Core.Exceptions
 /-!
 # `org.eclipse.elk.alg.layered.p3order.SweepCopy`
 
@@ -29,16 +30,19 @@ ports are replaced by the saved ones (port ids without port are dropped), with
 `setPortConstraints` an order that is not fixed becomes `FIXED_ORDER`, and the layer slot `j` is
 overwritten (or appended). The port side cache is not refreshed (Rust). After a layer, every
 `NORTH_SOUTH_PORT` dummy of it corrects the side of its origin port (a north port whose dummy now
-lies below its node becomes south and vice versa; an explicitly supplied anchor is mirrored),
-and the origin and the dummy are collected (first occurrence order); at the end their ports are
-re-sorted (side, then for fixed orders `PORT_INDEX`/position) and their port sides re-cached.
+lies below its node becomes south and vice versa; an explicitly supplied anchor is mirrored), also
+for `FIXED_POS` origins (Java; elk-rs skips them), and the origin and the dummy are collected
+(first occurrence order); at the end their ports are re-sorted with Java's
+`Collections.sort(ports, PortListSorter.CMP_COMBINED)` — JDK `TimSort` (`javaSortByM`) with the
+`PortListSorter` comparator, which is not a consistent order when only some ports of a side have a
+`PORT_INDEX` and throws `IllegalStateException: Port side is undefined` for `UNDEFINED` sides
+(elk-rs: its stable `sort_by` with `partial_cmp`) — and their port sides re-cached.
 
-## Rust semantics kept where they differ from Java
+## Rust semantics kept where they differ from Java (unobservable on valid input)
 * the node count of a layer is the saved count (Java iterates the graph layer's size);
-* no side correction when the origin has `FIXED_POS` port constraints, and a dummy without layout
-  unit or without ports is skipped (Java would throw);
-* the re-sort uses Rust's `compare_ports` (Java `PortListSorter.CMP_COMBINED`) and visits the
-  nodes in first-occurrence order (Java iterates a `HashSet`).
+* a dummy without layout unit or without ports is skipped (Java would throw);
+* the nodes are re-sorted in first-occurrence order (Java iterates a `HashSet`; the sorts are
+  independent, so the order only decides which of two failing sorts throws first, with the same text).
 `LayeredOptions.ALLOW_NON_FLOW_PORTS_TO_SWITCH_SIDES` is not read here (nor in Rust).
 -/
 namespace Elk.Alg.Layered.P3Order
@@ -94,39 +98,15 @@ def nodeRefs (sc : SweepCopy) : Array (Array LNodeId) :=
 instance : BEq SweepCopy where
   beq x y := x.nodeIndices == y.nodeIndices && x.portOrders == y.portOrders
 
-/-- Rust `compare_ports(p1, p2, constraints)`: by side (ordinal), equal unless the order is fixed,
-then with `FIXED_ORDER` different `PORT_INDEX`es, then the position along the side (`x` north,
-`y` east, reversed `x` south, reversed `y` west; `partial_cmp`). -/
-def comparePorts (a : LGraphArena) (constraints : PortConstraints) (p1 p2 : LPortId) : Ordering :=
-  let pt1 := a.port p1
-  let pt2 := a.port p2
-  let sideCmp := Ord.compare (ElkEnum.ordinal pt1.side) (ElkEnum.ordinal pt2.side)
-  if sideCmp != .eq then sideCmp
-  else if !constraints.isOrderFixed then .eq
-  else
-    let byIndex : Option Ordering :=
-      if constraints == .fixedOrder then
-        match pt1.props.get LayeredOptions.PORT_INDEX, pt2.props.get LayeredOptions.PORT_INDEX with
-        | some i1, some i2 => if i1 != i2 then some (Ord.compare i1 i2) else none
-        | _, _ => none
-      else none
-    match byIndex with
-    | some o => o
-    | none =>
-      match pt1.side with
-      | .north => Float.comparePartial pt1.position.x pt2.position.x
-      | .east => Float.comparePartial pt1.position.y pt2.position.y
-      | .south => Float.comparePartial pt2.position.x pt1.position.x
-      | .west => Float.comparePartial pt2.position.y pt1.position.y
-      | .undefined => .eq
-
-/-- `sort_ports_combined(ports, constraints)`: Rust `sort_by(compare_ports)`; the stable sort is
-given the order induced by `compare_ports(..) == Less` (all `sort_by` looks at). -/
-def sortPortsCombined (a : LGraphArena) (ports : Array LPortId) (constraints : PortConstraints) : Array LPortId :=
-  stableSort ports fun p1 p2 =>
-    if comparePorts a constraints p1 p2 == .lt then .lt
-    else if comparePorts a constraints p2 p1 == .lt then .gt
-    else .eq
+/-- `Collections.sort(ports, PortListSorter.CMP_COMBINED)` for a node with `constraints`: JDK
+`TimSort` with `PortListSorter.comparePortsCombined`; `.error` carries the comparator's
+`PortListSorter.undefinedSideMessage` or TimSort's `JavaSort.contractViolationMessage`. -/
+def sortPortsCombined (a : LGraphArena) (ports : Array LPortId) (constraints : PortConstraints) :
+    Except String (Array LPortId) :=
+  match javaSortByM (m := Except String) ports (Intermediate.PortListSorter.comparePortsCombined a constraints) with
+  | .ok (.ok sorted) => .ok sorted
+  | .ok (.error msg) => .error msg
+  | .error msg => .error msg
 
 /-- `push_unique(list, node)`. -/
 @[inline] def pushUnique (list : Array LNodeId) (n : LNodeId) : Array LNodeId :=
@@ -140,9 +120,7 @@ def assertCorrectPortSides (dummy : LNodeId) : LayeredM (Option LNodeId) := do
   let some origin := d.internal.inLayerLayoutUnit | return none
   let dummyId := d.id
   let o ← getNode origin
-  let originConstraints := o.props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
   let originId := o.id
-  if originConstraints.isPosFixed then return some origin
   let some dummyPort := d.ports[0]? | return none
   let some (.lPort dummyOriginPort) := (← getPort dummyPort).internal.origin | return some origin
   for port in o.ports do
@@ -194,8 +172,11 @@ def applyToLayers (sc : SweepCopy) (layers : Array LayerId) (setPortConstraints 
         updatePortOrder := pushUnique (pushUnique updatePortOrder origin) dummy
   for node in updatePortOrder do
     let constraints ← getNodePropD node LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
-    let sorted := sortPortsCombined (← get) (← getNode node).ports constraints
-    modifyNode node fun x => { x with ports := sorted }
+    match sortPortsCombined (← get) (← getNode node).ports constraints with
+    | .ok sorted => modifyNode node fun x => { x with ports := sorted }
+    | .error msg =>
+      if msg == Intermediate.PortListSorter.undefinedSideMessage then Elk.Core.throwIllegalState msg
+      else throw (IO.userError JavaSort.contractViolationError)
     cachePortSides node
 
 /-- `transfer_node_and_port_orders_to_graph(graph, set_port_constraints, snapshot)` (also

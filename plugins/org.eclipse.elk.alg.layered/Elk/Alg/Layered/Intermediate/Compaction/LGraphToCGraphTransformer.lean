@@ -5,6 +5,7 @@ import Elk.Alg.Layered.Graph
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.Intermediate.Compaction.CompactionMetadata
 import Elk.Core.Util.Sort
+import Elk.Core.Util.JavaSort
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.compaction.LGraphToCGraphTransformer`
 
@@ -24,7 +25,9 @@ of a `CGraph`, and the application of the compacted positions back to the `LGrap
   edges: the north/south target segment), in this creation order (= `segmentId` order);
 * spline routing: every non-straight spline segment of an edge's `SPLINE_ROUTE_START` chain is a
   segment, with a predefined constraint to the next non-straight segment of the chain;
-* the segments are sorted (fuzzy x, then y; stable), merged when they intersect and turned into
+* the segments are sorted like Java's `Collections.sort(verticalSegments)` (JDK `TimSort`,
+  `javaSortBy`, with `VerticalSegment.compareTo`: fuzzy x, then y — not transitive, so TimSort's
+  comparison sequence matters; elk-rs: a stable sort), merged when they intersect and turned into
   `CNode`s (after the node `CNode`s, in merged order); north/south segments join the group of
   their (first) parent node;
 * connection locks (`LEFT_RIGHT_CONNECTION_LOCKING`): a node is locked to the left if it has
@@ -400,7 +403,10 @@ private def addToParentGroup (g : CGraph) (parent : Option CNodeId) (cNode : CNo
 sorts, merges and registers the segments as `CNode`s, then adds the predefined constraints. -/
 def registerSegments (segments : Array VerticalSegment) : TransformM Unit := do
   if segments.isEmpty then return
-  let merged := mergeSegments (stableSort segments VerticalSegment.compareTo)
+  let sorted ← match javaSortBy segments VerticalSegment.compareTo with
+    | .ok sorted => pure sorted
+    | .error _ => throw (IO.userError JavaSort.contractViolationError)
+  let merged := mergeSegments sorted
   modify fun ctx => { ctx with segments := merged }
   let mut segmentIdToCNode : Std.HashMap Nat CNodeId := {}
   for h : segmentIndex in [0:merged.size] do
