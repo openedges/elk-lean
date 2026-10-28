@@ -234,8 +234,24 @@ ELK Java(집합마다 JVM 1개, 모델별 무진행 감시 60초·집합 경보 
 | `T` 1e-6 이내 | 20 | 18 | — | 부동소수점 잡음. |
 
 옵션 기능별 lift는 무작위 생성기가 대부분의 옵션을 그래프 어딘가에 넣기 때문에 1 근처라 정보가 적다(보고서의 layered 단독 표가 더 유용하다).
-다음 라운드 브리프 단위: (1) `NML`(RJ1), (2) `DEF` 알고리즘별 기본값, (3) `SEC` 경로 없는 간선의 섹션, (4) `LNODE` layered 노드/포트,
+다음 라운드 브리프 단위: (1) `NML`(RJ1), (2) `DEF` 알고리즘별 기본값, (3) `SEC` 경로 없는 간선의 섹션(해결, §8.1), (4) `LNODE` layered 노드/포트,
 (5) `LEDGE`/`LPOS` layered 라우팅·배치, (6) `POS:radial`.
+### 8.1 SEC 결과 (SEC, 2026-10-28, 병합 `5662ad5`)
+
+원인은 exporter나 provider가 아니라 layered `ElkGraphLayoutTransferrer`의 elk-rs 전용
+`applyFallbackSections`/`applyFallbackSectionsRecursive`였다. layered 컨테이너와 **모든 자손**(앞서
+box/fixed/rectpacking/radial/force/stress/mrtree로 배치된 자식 포함)의 section 없는 간선에 직선 section을
+붙였고, ELK Java의 `applyLayout`은 `LEdge`가 있는 간선만 적용한다(importer가 거른 계층 간선·inside self
+loop·`NO_LAYOUT` 간선에는 아무것도 쓰지 않음). fallback을 제거하고, 여러 section을 가진 간선의 Java 규칙을
+맞췄다: force/stress/mrtree/vertiflex/spore는 `firstEdgeSection(e, true, true)`의 **첫** section(elk-rs는
+마지막 또는 전부), fixed/random은 Java의 `IllegalStateException`을 그대로 재현, box/rectpacking/
+topdownpacking은 간선 불변, radial은 루트에서 닿는 비계층 트리 간선만. 결과(seed 1~10): SEC 입력
+s 75 → 0, v 1,404 → 0, d 1,409 → 0; 정확 일치 s 912 → 963, v 1,995 → 2,383, d 2,268 → 2,748; 정확 →
+비정확으로 바뀐 입력 0, 코퍼스 출력 변화 0. 테스트 `Tests/Api/Sections.lean`(fixture `tests/fixtures/sections/`).
+남은 관련 항목: layered importer가 `SEPARATE_CHILDREN` 실행의 교차 계층 간선에서 예외를 던지는 문제(Java는
+형제/그래프 간선만 변환하고 나머지는 무시; LNODE), mrtree AVOID_OVERLAP 라우터의 bend(OPT의 `edgeNode`
+기본값과 함께).
+
 ## 9. RJ1: 노드 마이크로 레이아웃의 Java 경로 전환과 노드 크기 검증 (2026-10-28)
 
 ### 8.1 변경

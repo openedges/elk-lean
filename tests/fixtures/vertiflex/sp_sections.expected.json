@@ -1,25 +1,25 @@
 {
   "children": [
     {
-      "height": 20,
+      "height": 20.0,
       "id": "a",
-      "width": 30,
-      "x": 25,
-      "y": 0
+      "width": 30.0,
+      "x": 25.0,
+      "y": 0.0
     },
     {
-      "height": 20,
+      "height": 20.0,
       "id": "b",
-      "width": 40,
-      "x": 0,
-      "y": 90
+      "width": 40.0,
+      "x": 0.0,
+      "y": 90.0
     },
     {
-      "height": 30,
+      "height": 30.0,
       "id": "c",
-      "width": 20,
-      "x": 60,
-      "y": 90
+      "width": 20.0,
+      "x": 60.0,
+      "y": 90.0
     }
   ],
   "edges": [
@@ -30,22 +30,18 @@
         {
           "bendPoints": [
             {
-              "x": 11,
-              "y": 11
-            },
-            {
-              "x": 12,
-              "y": 12
+              "x": 9,
+              "y": 9
             }
           ],
           "endPoint": {
-            "x": 20,
-            "y": 90
+            "x": 20.0,
+            "y": 90.0
           },
-          "id": "s2",
+          "id": "s1",
           "startPoint": {
-            "x": 40,
-            "y": 20
+            "x": 40.0,
+            "y": 20.0
           }
         }
       ],
@@ -68,15 +64,15 @@
             }
           ],
           "endPoint": {
-            "x": 70,
-            "y": 90
+            "x": 70.0,
+            "y": 90.0
           },
           "id": "s3",
           "incomingShape": "a",
           "outgoingShape": "c",
           "startPoint": {
-            "x": 40,
-            "y": 20
+            "x": 40.0,
+            "y": 20.0
           }
         }
       ],
@@ -88,13 +84,13 @@
       ]
     }
   ],
-  "height": 132,
+  "height": 132.0,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "org.eclipse.elk.vertiflex",
     "elk.vertiflex.considerNodeModelOrder": "false"
   },
-  "width": 92,
-  "x": 0,
-  "y": 0
+  "width": 92.0,
+  "x": 0.0,
+  "y": 0.0
 }
