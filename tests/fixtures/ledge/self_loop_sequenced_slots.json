@@ -1,0 +1,95 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "n",
+   "width": 80,
+   "height": 60,
+   "layoutOptions": {
+    "elk.portConstraints": "FIXED_POS",
+    "elk.layered.edgeRouting.selfLoopOrdering": "SEQUENCED"
+   },
+   "ports": [
+    {
+     "id": "np0",
+     "x": 8,
+     "y": 0,
+     "width": 0,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    },
+    {
+     "id": "np1",
+     "x": 20,
+     "y": 0,
+     "width": 0,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    },
+    {
+     "id": "np2",
+     "x": 58,
+     "y": 0,
+     "width": 0,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    },
+    {
+     "id": "np3",
+     "x": 72,
+     "y": 0,
+     "width": 0,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "np0"
+   ],
+   "targets": [
+    "np1"
+   ],
+   "labels": [
+    {
+     "id": "l0",
+     "text": "a",
+     "width": 14,
+     "height": 8
+    }
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "np2"
+   ],
+   "targets": [
+    "np3"
+   ],
+   "labels": [
+    {
+     "id": "l1",
+     "text": "b",
+     "width": 14,
+     "height": 8
+    }
+   ]
+  }
+ ]
+}
