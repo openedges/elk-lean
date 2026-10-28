@@ -1,18 +1,23 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
+import Elk.Core.Util.JavaSort
+import Elk.Core.Exceptions
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.PortListSorter`
 
-Port of elk-rs `intermediate/port_list_sorter.rs`. Sorts the port lists of the layered nodes
-clockwise: with fixed order by side and then by `PORT_INDEX` (`FIXED_ORDER` only) and position;
-with fixed sides by side only, followed by the (Java-bug-compatible) reversal of the south and
-west ranges and, with `PORT_DEGREE` sorting, by the number of non-reversed edges on the east/west
-sides. Afterwards the port sides are cached.
+Port of elk-rs `intermediate/port_list_sorter.rs`, sorting like ELK Java (the result reference).
+Sorts the port lists of the layered nodes clockwise: with fixed order by side and then by
+`PORT_INDEX` (`FIXED_ORDER` only) and position; with fixed sides by side only, followed by the
+(Java-bug-compatible) reversal of the south and west ranges and, with `PORT_DEGREE` sorting, by the
+number of non-reversed edges on the east/west sides. Afterwards the port sides are cached.
 
-All sorts are stable (`stableSort`, the Rust `stable_sort_by` index tie-break). The comparators
-read the arena snapshot taken before the sort (`withArena`). Rust behaviour followed here
-(deviations from Java): positions are compared with `partial_cmp` (`Float.comparePartial`) and an
-undefined port side compares equal instead of throwing.
+Java's `Collections.sort` is a JDK 21 `TimSort` (`javaSortBy`). `CMP_COMBINED` is not a consistent
+order when only some ports of a side have a `PORT_INDEX` (an index pair decides, a missing index
+falls back to the position), and `CMP_PORT_DEGREE_EAST_WEST` answers `0` for ports on different
+sides, so the result depends on TimSort's comparison sequence; the side-only sort is consistent and
+stays `stableSort`. Positions compare with `Double.compare` (`Float.compareJava`), port indices
+with Java `int` subtraction, and two ports of side `UNDEFINED` make `CMP_COMBINED` throw Java's
+`IllegalStateException("Port side is undefined")` (elk-rs: stable sorts, `partial_cmp`, `Equal`).
 
 Note: `compare_port_degree_east_west` returns `Equal` for ports on different sides, which is only
 a consistent order because the ports are grouped by side at that point (the side sort and the
@@ -49,36 +54,48 @@ def comparePortDegreeEastWest (a : LGraphArena) (p1 p2 : LPortId) : Ordering :=
     | .west => compare (realDegree a p1 false) (realDegree a p2 false)
     | _ => .eq
 
-/-- `compare_fixed_order_and_pos(p1, p2, constraints)` (Java `CMP_FIXED_ORDER_AND_FIXED_POS`). -/
-def compareFixedOrderAndPos (a : LGraphArena) (constraints : PortConstraints) (p1 p2 : LPortId) : Ordering :=
+/-- Message of the `IllegalStateException` thrown by `CMP_FIXED_ORDER_AND_FIXED_POS` for two ports
+of side `UNDEFINED`. -/
+def undefinedSideMessage : String := "Port side is undefined"
+
+/-- `compare_fixed_order_and_pos(p1, p2, constraints)` (Java `CMP_FIXED_ORDER_AND_FIXED_POS`): `0`
+for different sides or a port order that is not fixed; with `FIXED_ORDER` by `PORT_INDEX` when both
+ports have one (Java `int` difference); then by position (`Double.compare`; NORTH `x`, EAST `y`,
+SOUTH/WEST reversed). `.error undefinedSideMessage` for side `UNDEFINED` (Java throws). -/
+def compareFixedOrderAndPos (a : LGraphArena) (constraints : PortConstraints) (p1 p2 : LPortId) :
+    Except String Ordering :=
   let pt1 := a.port p1
   let pt2 := a.port p2
   let side1 := pt1.side
-  if side1 != pt2.side || !constraints.isOrderFixed then .eq
+  if side1 != pt2.side || !constraints.isOrderFixed then .ok .eq
   else
     let byIndex : Option Ordering :=
       if constraints == .fixedOrder then
         match pt1.props.get LayeredOptions.PORT_INDEX, pt2.props.get LayeredOptions.PORT_INDEX with
-        | some i1, some i2 => if i1 != i2 then some (compare i1 i2) else none
+        | some i1, some i2 =>
+          let indexDifference := Int.wrap32 (i1 - i2)
+          if indexDifference != 0 then some (compare indexDifference 0) else none
         | _, _ => none
       else none
     match byIndex with
-    | some o => o
+    | some o => .ok o
     | none =>
       let pos1 := pt1.position
       let pos2 := pt2.position
       match side1 with
-      | .north => Float.comparePartial pos1.x pos2.x
-      | .east => Float.comparePartial pos1.y pos2.y
-      | .south => Float.comparePartial pos2.x pos1.x
-      | .west => Float.comparePartial pos2.y pos1.y
-      | .undefined => .eq
+      | .north => .ok (Float.compareJava pos1.x pos2.x)
+      | .east => .ok (Float.compareJava pos1.y pos2.y)
+      | .south => .ok (Float.compareJava pos2.x pos1.x)
+      | .west => .ok (Float.compareJava pos2.y pos1.y)
+      | .undefined => .error undefinedSideMessage
 
-/-- `compare_ports_combined(p1, p2, constraints)` (Java `CMP_COMBINED`). -/
-def comparePortsCombined (a : LGraphArena) (constraints : PortConstraints) (p1 p2 : LPortId) : Ordering :=
+/-- `compare_ports_combined(p1, p2, constraints)` (Java `CMP_COMBINED` =
+`CMP_PORT_SIDE.thenComparing(CMP_FIXED_ORDER_AND_FIXED_POS)`). -/
+def comparePortsCombined (a : LGraphArena) (constraints : PortConstraints) (p1 p2 : LPortId) :
+    Except String Ordering :=
   match comparePortSide a p1 p2 with
   | .eq => compareFixedOrderAndPos a constraints p1 p2
-  | o => o
+  | o => .ok o
 
 /-- `find_port_side_range(ports, side)` (Java `findPortSideRange`), including both Java bugs: the
 loops stop one before the end, and the second loop re-reads the port at `lowIdx`. -/
@@ -112,16 +129,27 @@ def reverseWestAndSouthSide (a : LGraphArena) (ports : Array LPortId) : Array LP
     let (westLow, westHigh) := findPortSideRange a ports .west
     reverseRange ports westLow westHigh
 
-/-- The sorted port list of a node with the given constraints (unchanged when the sides are free). -/
+/-- The sorted port list of a node with the given constraints (unchanged when the sides are free):
+`Collections.sort(ports, CMP_COMBINED)` (TimSort) for a fixed order; for fixed sides the side sort,
+the south/west reversal and, with `PORT_DEGREE`, `Collections.sort(ports, CMP_PORT_DEGREE_EAST_WEST)`.
+`.error` carries the comparator's `undefinedSideMessage` or TimSort's
+`JavaSort.contractViolationMessage`. -/
 def sortedPorts (a : LGraphArena) (ports : Array LPortId) (constraints : PortConstraints)
-    (sortingStrategy : PortSortingStrategy) : Array LPortId :=
+    (sortingStrategy : PortSortingStrategy) : Except String (Array LPortId) :=
   if constraints.isOrderFixed then
-    stableSort ports (comparePortsCombined a constraints)
+    match javaSortByM (m := Except String) ports (comparePortsCombined a constraints) with
+    | .ok (.ok sorted) => .ok sorted
+    | .ok (.error msg) => .error msg
+    | .error msg => .error msg
   else if constraints.isSideFixed then
     let ports := stableSort ports (comparePortSide a)
     let ports := reverseWestAndSouthSide a ports
-    if sortingStrategy == .portDegree then stableSort ports (comparePortDegreeEastWest a) else ports
-  else ports
+    if sortingStrategy == .portDegree then
+      match javaSortBy ports (comparePortDegreeEastWest a) with
+      | .ok sorted => .ok sorted
+      | .error msg => .error msg
+    else .ok ports
+  else .ok ports
 
 /-- `process(graph, monitor)`: the nodes of every layer. -/
 def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
@@ -135,8 +163,11 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       let constraints := nd.props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined
       let ports := nd.ports
       if constraints.isOrderFixed || constraints.isSideFixed then
-        let sorted ← withArena fun a => sortedPorts a ports constraints sortingStrategy
-        modifyNode node fun n => { n with ports := sorted }
+        match ← withArena fun a => sortedPorts a ports constraints sortingStrategy with
+        | .ok sorted => modifyNode node fun n => { n with ports := sorted }
+        | .error msg =>
+          if msg == undefinedSideMessage then Elk.Core.throwIllegalState msg
+          else throw (IO.userError JavaSort.contractViolationError)
       cachePortSides node
   monitor.done
 

@@ -14,8 +14,9 @@ by `Horizontal/VerticalPortPlacementSizeCalculator`). Ports of a side are visite
 `portContexts` (`TreeMultimap`) order.
 
 Deviations from Java (following elk-rs):
-* `FIXED_RATIO` reads `PortContext.portRatioOrPosition` instead of the port's
-  `PORT_RATIO_OR_POSITION` property. elk-rs never sets that field, so it is `0.0` in practice.
+* `FIXED_RATIO` reads `PortContext.portRatioOrPosition`, the port's `PORT_RATIO_OR_POSITION`
+  property read once when the context is created (Java reads it here; elk-rs never sets the field,
+  so its FIXED_RATIO ports end up at `0.0`).
 * `Math.max(0, additional)` is `f64::max` (`fmax`: a NaN operand is ignored).
 * A side without an inside port label cell is skipped (Java would throw a
   `NullPointerException`).

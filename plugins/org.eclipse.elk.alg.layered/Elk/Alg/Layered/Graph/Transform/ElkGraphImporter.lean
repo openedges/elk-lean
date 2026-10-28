@@ -37,18 +37,26 @@ elk-rs behaviour reproduced where it differs from Java (Rust is the oracle):
   edges with `importFlatGraphEdges`; model order indices, `MAX_MODEL_ORDER_NODES` and
   `CB_NUM_MODEL_ORDER_GROUPS` are per level. `NO_LAYOUT` children are skipped before they get a
   model order.
-* `importFlatGraphEdges` imports every contained edge whose end points are laid out (no
-  sibling/graph-connection filter): an edge into a node outside the layout scope throws the elk-rs
-  `UnsupportedGraphException`. Inside self loops of the graph itself are collected from the
-  parent's edges.
+* The edge loop of one hierarchical level (`importFlatGraphEdges`) imports every contained edge
+  whose end points are laid out; an edge into a node outside the layout scope throws (Java's
+  `transformEdge` text, `throwEdgeEndNotFound`). Inside self loops of the graph itself are
+  collected from the parent's edges. The flat import follows Java instead
+  (`importFlatGraphEdgesJava`: only edges between children or between a child and the graph,
+  hierarchy-crossing edges are left to no run without an error).
 * `COMPOUND_NODE` on a node requires children or an actual inside self loop edge.
 * `transformPort` marks `INSIDE_CONNECTIONS` via `ElkGraphAdapters.hasCompoundConnections`;
   `transformEdge` additionally marks the ports of descendant-connecting and inside self-loop edges.
-* `transformEdge` takes the first source/target (no hyperedge check), copies all options
+* `transformEdge` checks Java's `checkEdgeValidity`, takes the first source/target, copies all options
   (junction points included) and sets `NO_LAYOUT = false`, creates node ports with
   `LGraphUtil.createPort(node, none, …)` (target ports in the target node's graph), lazily
   transforms ports missing from `portMap` (e.g. `NO_LAYOUT` ports), and does not import the
   original bend points.
+
+ELK Java followed where elk-rs differs (ELK Java is the result reference):
+* the flat import's edge selection (`importFlatGraphEdgesJava`) and the exception texts of
+  `transformEdge` / `checkEdgeValidity` / `ElkGraphUtil.getSourceNode` (EMF `toString` of the edge);
+* `calculateMinimumGraphSize`: the parent's `DIRECTION`, no fixed-port-label shortcut, and the
+  aliasing of the ElkNode's own `NODE_SIZE_CONSTRAINTS` / `NODE_SIZE_MINIMUM` values.
 
 Not ported: the `ElkTrace` diagnostics (`compound_width`, `import_port_order`,
 `import_edge_selection`, `inside_yo`, `edge_origin_map`), which only print to stderr.
@@ -109,6 +117,59 @@ def withOriginStore (store : IO.Ref OriginStore) : IO ElkGraphImporter := do
 /-- The node of the first shape of an edge end list (`connectable_shape_to_node(shapes[0])`). -/
 private def firstNode (g : ElkGraph) (shapes : Array ConnectableId) : Option NodeId :=
   shapes[0]?.bind (ElkGraphUtil.connectableShapeToNode g)
+
+/-- EMF `ElkNodeImpl.toString()` / `ElkPortImpl.toString()`: `<kind>`, then ` "<identifier>"` (else
+` "<first label text>"` when non-empty), then ` (x,y | width,height)` (Java `Double.toString`). -/
+private def shapeJavaString (g : ElkGraph) (kind : String) (identifier : Option String) (labels : Array LabelId)
+    (x y w h : Float) : String :=
+  let name := match identifier with
+    | some id => if id.isEmpty then none else some id
+    | none => none
+  let name := match name with
+    | some n => some n
+    | none => labels[0]?.bind fun l => let t := (g.label l).text; if t.isEmpty then none else some t
+  let nameStr := match name with
+    | some n => s!" \"{n}\""
+    | none => ""
+  s!"{kind}{nameStr} ({Float.toJavaString x},{Float.toJavaString y} | {Float.toJavaString w},{Float.toJavaString h})"
+
+/-- `toString()` of an edge end (`ElkConnectableShape`). -/
+private def connectableJavaString (g : ElkGraph) : ConnectableId → String
+  | .node n => let nd := g.node n; shapeJavaString g "ElkNode" nd.identifier nd.labels nd.x nd.y nd.width nd.height
+  | .port p => let pt := g.port p; shapeJavaString g "ElkPort" pt.identifier pt.labels pt.x pt.y pt.width pt.height
+
+/-- EMF `ElkEdgeImpl.toString()`: `ElkEdge`, ` "<identifier>"` (else the first non-empty label
+text), then the sources and targets joined by `, ` around ` -> ` (a hyperedge brackets both lists). -/
+def elkEdgeJavaString (g : ElkGraph) (e : EdgeId) : String :=
+  let edge := g.edge e
+  let name := match edge.identifier with
+    | some id => if id.isEmpty then none else some id
+    | none => none
+  let name := match name with
+    | some n => some n
+    | none => edge.labels[0]?.bind fun l => let t := (g.label l).text; if t.isEmpty then none else some t
+  let nameStr := match name with
+    | some n => s!" \"{n}\""
+    | none => ""
+  let hyperedge := !(edge.sources.size <= 1 && edge.targets.size <= 1)
+  let srcs := ", ".intercalate (edge.sources.toList.map (connectableJavaString g))
+  let tgts := ", ".intercalate (edge.targets.toList.map (connectableJavaString g))
+  if hyperedge then s!"ElkEdge{nameStr} [{srcs}] -> [{tgts}]"
+  else s!"ElkEdge{nameStr} {srcs} -> {tgts}"
+
+/-- Java's `UnsupportedGraphException` of `transformEdge` when the source or the target of an edge
+was not transformed (a `NO_LAYOUT` end node, or an end in a part of the hierarchy that another
+layout run handles). -/
+def throwEdgeEndNotFound {α : Type} (elkedge : EdgeId) : LImportM α := do
+  let text ← withElk (elkEdgeJavaString · elkedge)
+  throwUnsupportedGraph s!"The source or the target of edge {text} could not be found. This usually happens when an edge connects a node laid out by ELK Layered to a node in another level of hierarchy laid out by either another instance of ELK Layered or another layout algorithm alltogether. The former can be solved by setting the hierarchyHandling option to INCLUDE_CHILDREN."
+
+/-- Java `checkEdgeValidity(edge)`: one source and one target (`UnsupportedGraphException`). -/
+def checkEdgeValidity (elkedge : EdgeId) : LImportM Unit := do
+  let edge ← elkEdge elkedge
+  if edge.sources.isEmpty then throwUnsupportedGraph "Edges must have a source."
+  else if edge.targets.isEmpty then throwUnsupportedGraph "Edges must have a target."
+  else if !(edge.sources.size <= 1 && edge.targets.size <= 1) then throwUnsupportedGraph "Hyperedges are not supported."
 
 /-- The `GRAPH_PROPERTIES` of an `LGraph`. -/
 @[inline] private def graphProperties (lgraph : LGraphId) : LImportM (EnumSet GraphProperties) := do
@@ -326,33 +387,50 @@ def createLGraph (elkgraph : NodeId) : LImportM LGraphId := do
 private def shouldCalculateMinimumGraphSize (elkgraph : NodeId) : LImportM Bool := do
   return !((← elkNode elkgraph).props.getD LayeredOptions.NODE_SIZE_CONSTRAINTS EnumSet.noneOf).isEmpty
 
-/-- Rust `calculate_minimum_graph_size(elkgraph, lgraph)` (Java `calculateMinimumGraphSize`): for a
-non-root graph with size constraints and non-fixed port labels, `NodeLabelAndSizeCalculator`
-computes (without applying anything, ignoring inside port labels) the minimum size; it is merged
-into `NODE_SIZE_MINIMUM` and `MINIMUM_SIZE` is added to the size constraints. `UNDEFINED` port
-constraints of the ElkNode become `FREE`. -/
+/-- Java `calculateMinimumGraphSize(elkgraph, lgraph)` (Rust `calculate_minimum_graph_size`): for a
+non-root graph with size constraints, `UNDEFINED` port constraints of the ElkNode become `FREE` and
+`NodeLabelAndSizeCalculator.process(adapt(parent), adaptSingleNode(elkgraph), false, true)` computes
+(without applying anything, ignoring inside port labels) the minimum size; it is merged into
+`NODE_SIZE_MINIMUM` (`Math.max`) and `MINIMUM_SIZE` is added to the size constraints.
+
+Java details reproduced (ELK Java is the result reference; elk-rs differs in all three):
+* the label cells are laid out for the parent graph's `DIRECTION` when the parent ElkNode has one
+  (`process` reads `graph.getProperty(DIRECTION)` only if `graph.hasProperty(DIRECTION)`), else
+  horizontally — not for the node's own direction;
+* there is no early return for fixed port label placements;
+* `lgraph.copyProperties(elkgraph)` shares the value objects, so the `EnumSet` that gets
+  `MINIMUM_SIZE` and the `KVector` that gets the minimum are the ElkNode's own when it sets
+  `NODE_SIZE_CONSTRAINTS` / `NODE_SIZE_MINIMUM` explicitly: both are written back to the ElkNode,
+  and every `LNode` later imported from it (the compound node in the parent graph, or the node in
+  the parent's own layout run after a separate child layout) sees them. Without an explicit
+  `NODE_SIZE_MINIMUM` Java stores a fresh default copy on the `LGraph` only. -/
 def calculateMinimumGraphSize (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
-  if (← elkNode elkgraph).parent.isNone then return
+  let some parent := (← elkNode elkgraph).parent | return
   let mut sizeConstraints := (← getGraph lgraph).props.getD LayeredOptions.NODE_SIZE_CONSTRAINTS EnumSet.noneOf
   if sizeConstraints.isEmpty then return
-  -- Java parity guard: fixed port label placement on hierarchical nodes can carry hand-authored
-  -- absolute label coordinates; importer minimums computed from them over-constrain compounds
-  if PortLabelPlacement.isFixed ((← elkNode elkgraph).props.getD CoreOptions.PORT_LABELS_PLACEMENT EnumSet.noneOf) then
-    return
   if (← elkNode elkgraph).props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined == .undefined then
     liftElk (ElkM.setNodeProp elkgraph LayeredOptions.PORT_CONSTRAINTS PortConstraints.free)
   let mut minSize := (← getGraph lgraph).props.getD LayeredOptions.NODE_SIZE_MINIMUM KVector.zero
-  -- Java: NodeLabelAndSizeCalculator.process(graphAdapter, nodeAdapter, false, true), i.e.
-  -- compute-only and ignoring inside port labels
-  let layoutDirection := (← elkNode elkgraph).props.getD CoreOptions.DIRECTION Direction.right
+  -- Java: NodeLabelAndSizeCalculator.process(adapt(parent), adaptSingleNode(elkgraph), false, true),
+  -- i.e. compute-only and ignoring inside port labels; the label cells follow the parent's DIRECTION
+  let parentProps := (← elkNode parent).props
+  let layoutDirection := if parentProps.has CoreOptions.DIRECTION then
+      parentProps.getD CoreOptions.DIRECTION Direction.undefined
+    else Direction.undefined
   let adapters ← ElkGraphAdapters.adaptSingleNode elkgraph
   let calculatedMin ← liftElk (NodeLabelAndSizeCalculator.processWithOptions adapters elkgraph layoutDirection false true)
-  minSize := ⟨fmax minSize.x calculatedMin.x, fmax minSize.y calculatedMin.y⟩
+  minSize := ⟨javaMax calculatedMin.x minSize.x, javaMax calculatedMin.y minSize.y⟩
   sizeConstraints := sizeConstraints.insert .minimumSize
   let finalConstraints := sizeConstraints
   let finalMinSize := minSize
   modifyGraph lgraph fun g => { g with
     props := (g.props.set LayeredOptions.NODE_SIZE_CONSTRAINTS finalConstraints).set LayeredOptions.NODE_SIZE_MINIMUM finalMinSize }
+  -- Java's aliasing: the ElkNode's own EnumSet / KVector were mutated
+  let nodeProps := (← elkNode elkgraph).props
+  if nodeProps.has LayeredOptions.NODE_SIZE_CONSTRAINTS then
+    liftElk (ElkM.setNodeProp elkgraph LayeredOptions.NODE_SIZE_CONSTRAINTS finalConstraints)
+  if nodeProps.has LayeredOptions.NODE_SIZE_MINIMUM then
+    liftElk (ElkM.setNodeProp elkgraph LayeredOptions.NODE_SIZE_MINIMUM finalMinSize)
 
 /-! ## External port sides -/
 
@@ -545,14 +623,13 @@ end ports (first source, first target; edges without one are skipped) with the e
 `COORDINATE_SYSTEM_ORIGIN`; updates `SELF_LOOPS`, `HYPEREDGES`, `END_LABELS`, `CENTER_LABELS` of
 `lgraph`. Throws `UnsupportedGraphException` when an end point is outside the layout scope. -/
 def transformEdge (imp : ElkGraphImporter) (elkedge : EdgeId) (lgraph : LGraphId) : LImportM Unit := do
+  checkEdgeValidity elkedge
   let edge ← elkEdge elkedge
-  let edgeId := edge.identifier.getD "<no-edge-id>"
   let some sourceShape := edge.sources[0]? | return
   let some targetShape := edge.targets[0]? | return
-  let some sourcePort ← resolvePort imp sourceShape .output lgraph
-    | throwUnsupportedGraph s!"The source of edge {edgeId} could not be found in the current layout scope. An edge cannot cross into a different layout algorithm."
-  let some targetPort ← resolvePort imp targetShape .input lgraph
-    | throwUnsupportedGraph s!"The target of edge {edgeId} could not be found in the current layout scope. An edge cannot cross into a different layout algorithm."
+  -- Java throws one exception for a missing source or target (elk-rs: two messages naming the edge id)
+  let some sourcePort ← resolvePort imp sourceShape .output lgraph | throwEdgeEndNotFound elkedge
+  let some targetPort ← resolvePort imp targetShape .input lgraph | throwEdgeEndNotFound elkedge
   let insideSelfLoops := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
   markInsideConnections sourceShape targetShape insideSelfLoops sourcePort targetPort
   let ledge ← LayeredM.createEdge
@@ -714,14 +791,17 @@ private def importParentInsideSelfLoops (imp : ElkGraphImporter) (elkgraph : Nod
     if insideSelfLoopsEnabled && edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false then
       transformEdge imp e lgraph
 
-/-- Rust `import_flat_graph_edges(elkgraph, lgraph)`: the contained edges (edge model order by
-index when needed) whose edge and end nodes are laid out, each placed by `edgeParentLGraph`; then
-the inside self loops of `elkgraph` contained in its parent. -/
+/-- Rust `import_flat_graph_edges(elkgraph, lgraph)`, the edge loop of one level of
+`importHierarchicalGraph` (Java's hierarchical edge loop): the contained edges (edge model order by
+index when needed; Java's `checkEdgeValidity` first) whose edge and end nodes are laid out, each
+placed by `edgeParentLGraph`; then the inside self loops of `elkgraph` contained in its parent. -/
 def importFlatGraphEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
   let graphNode ← elkNode elkgraph
   let needsEdgeModelOrder := needsModelOrderBasedOnParent graphNode.props
   let mut edgeModelOrderIndex : Int := 0
   for e in graphNode.containedEdges do
+    -- Java: hyperedges and edges without an end are rejected before anything else
+    checkEdgeValidity e
     if needsEdgeModelOrder then
       setElementModelOrderForEdge e edgeModelOrderIndex
       edgeModelOrderIndex := edgeModelOrderIndex + 1
@@ -740,10 +820,47 @@ def importFlatGraphEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : 
     transformEdge imp e parentLGraph
   importParentInsideSelfLoops imp elkgraph lgraph
 
-/-- Rust `import_flat_graph(elkgraph, lgraph)`: nodes, then edges. -/
+/-- The edge loop of Java `importFlatGraph(elkgraph, lgraph)`: for every contained edge (edge model
+order by index when needed) `ElkGraphUtil.getSourceNode/getTargetNode` (Java
+`IllegalArgumentException("Passed edge is not 'simple'.")` unless it has exactly one source and one
+target), then the edge is transformed only if it is not `NO_LAYOUT`, not an inside self loop and
+connects two children of `elkgraph` or a child with `elkgraph` itself (exclusive or). Other edges
+(into a child's descendants, or between descendants) belong to no layout run of this graph and are
+left alone without an error; the end nodes' `NO_LAYOUT` is not checked, so an edge to a skipped
+child fails in `transformEdge` (Java's "could not be found" exception). Then the inside self loops
+of `elkgraph` contained in its parent. elk-rs instead imports every contained edge whose ends are
+laid out (placing edges into descendants in their nested graphs) and throws for ends outside the
+layout scope. -/
+def importFlatGraphEdgesJava (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
+  let graphNode ← elkNode elkgraph
+  let needsEdgeModelOrder := needsModelOrderBasedOnParent graphNode.props
+  let mut edgeModelOrderIndex : Int := 0
+  for e in graphNode.containedEdges do
+    if needsEdgeModelOrder then
+      setElementModelOrderForEdge e edgeModelOrderIndex
+      edgeModelOrderIndex := edgeModelOrderIndex + 1
+    let edge ← elkEdge e
+    if edge.sources.size != 1 || edge.targets.size != 1 then
+      throwIllegalArgument "Passed edge is not 'simple'."
+    let some source ← withElk (firstNode · edge.sources) | continue
+    let some target ← withElk (firstNode · edge.targets) | continue
+    let enableInsideSelfLoops := (← elkNode source).props.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
+    let isToBeLaidOut := !edge.props.getD CoreOptions.NO_LAYOUT false
+    let isInsideSelfLoop := enableInsideSelfLoops && (← withElk (ElkGraphUtil.isSelfloop · e)) &&
+      edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
+    let sourceParent := (← elkNode source).parent
+    let targetParent := (← elkNode target).parent
+    let connectsSiblings := sourceParent == some elkgraph && sourceParent == targetParent
+    let connectsToGraph := (sourceParent == some elkgraph && target == elkgraph) !=
+      (targetParent == some elkgraph && source == elkgraph)
+    if isToBeLaidOut && !isInsideSelfLoop && (connectsToGraph || connectsSiblings) then
+      transformEdge imp e lgraph
+  importParentInsideSelfLoops imp elkgraph lgraph
+
+/-- Java `importFlatGraph(elkgraph, lgraph)`: nodes, then `importFlatGraphEdgesJava`. -/
 def importFlatGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
   importFlatGraphNodes imp elkgraph lgraph
-  importFlatGraphEdges imp elkgraph lgraph
+  importFlatGraphEdgesJava imp elkgraph lgraph
 
 /-- Rust `uses_elk_layered` of `import_hierarchical_graph`: no `ALGORITHM`, or one that the layered
 algorithm id ends with (trimmed). -/

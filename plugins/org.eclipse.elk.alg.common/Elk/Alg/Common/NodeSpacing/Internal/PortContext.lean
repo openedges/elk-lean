@@ -11,8 +11,8 @@ handle `port : P` and the label handles, so results can be applied through the a
 
 * `portLabelCell` refers to a label cell in the owning `NodeContext.cells` arena (Java
   `LabelCell portLabelCell`).
-* `portRatioOrPosition` is kept for the fixed-ratio placement like elk-rs, which never sets it
-  (it stays `0.0`).
+* `portRatioOrPosition` is the port's `PORT_RATIO_OR_POSITION`, read once by `PortContextCreator`
+  (Java reads it from the port when placing FIXED_RATIO ports; elk-rs never sets it: `0.0`).
 * Java's `parentNodeContext` back reference is not kept (the node context owns the port
   contexts).
 -/
@@ -57,7 +57,7 @@ structure PortContext (P L : Type) where
   labelSizes : Array KVector := #[]
   /-- Positions of the port labels (extracted from the adapter, for fixed label bounds). -/
   labelPositions : Array KVector := #[]
-  /-- Port ratio or position for fixed-ratio placement (elk-rs never sets it: `0.0`). -/
+  /-- Port ratio or position for fixed-ratio placement (`GraphAdapters.portRatioOrPosition`). -/
   portRatioOrPosition : Float := fl0p0
   deriving Inhabited
 

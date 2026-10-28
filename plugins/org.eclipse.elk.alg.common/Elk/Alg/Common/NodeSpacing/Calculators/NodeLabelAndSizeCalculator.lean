@@ -24,7 +24,6 @@ Two independent paths, both ported from elk-rs (the oracle):
 Oracle facts reproduced on purpose:
 * `processWithOptions` applies the node size and then the port positions, port contexts sorted by
   volatile id and zipped with `NodeAdapter.getPorts()` (the volatile id is the port index).
-* `PortContext.portRatioOrPosition` stays `0.0` (see `PortContextCreator`).
 * The horizontal layout mode of label cells is `!layoutDirection.isVertical` (Java reads the
   parent graph's `DIRECTION` instead).
 * `computeInsideNodeLabelPadding` inherits spacings from the node's parent graph (Java creates its

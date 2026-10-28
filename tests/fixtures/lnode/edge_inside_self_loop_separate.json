@@ -1,0 +1,63 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "s",
+   "width": 80,
+   "height": 60,
+   "layoutOptions": {
+    "elk.insideSelfLoops.activate": "true"
+   },
+   "ports": [
+    {
+     "id": "s0",
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "s1",
+     "width": 4,
+     "height": 4
+    }
+   ],
+   "children": [
+    {
+     "id": "s_a",
+     "width": 20,
+     "height": 20
+    }
+   ]
+  },
+  {
+   "id": "t",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "s0"
+   ],
+   "targets": [
+    "s1"
+   ],
+   "layoutOptions": {
+    "elk.insideSelfLoops.yo": "true"
+   }
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "s"
+   ],
+   "targets": [
+    "t"
+   ]
+  }
+ ]
+}

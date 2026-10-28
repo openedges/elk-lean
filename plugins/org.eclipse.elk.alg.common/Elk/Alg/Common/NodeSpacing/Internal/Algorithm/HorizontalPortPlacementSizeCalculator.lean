@@ -18,9 +18,9 @@ is updated once (`updateInsidePortLabelCells`).
 (difference at most `EQUALITY_TOLERANCE`; elk-rs requires a difference strictly below it).
 
 Deviations from Java (following elk-rs):
-* `FIXED_RATIO` reads `PortContext.portRatioOrPosition` (elk-rs never sets it: `0.0`) instead of
-  the port's `PORT_RATIO_OR_POSITION` property, and sets up the port margins once before the
-  loop (Java calls `setupPortMargins` once per port).
+* `FIXED_RATIO` reads `PortContext.portRatioOrPosition` (the port's `PORT_RATIO_OR_POSITION`, read
+  once when the context is created) and sets up the port margins once before the loop (Java calls
+  `setupPortMargins` once per port).
 * `Math.max` is `f64::max` (`fmax`).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler

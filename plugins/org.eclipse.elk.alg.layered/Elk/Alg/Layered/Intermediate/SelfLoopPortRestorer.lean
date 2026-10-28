@@ -15,10 +15,11 @@ Collections: the Rust `TargetAreas` map `(PortSide, PortSideArea) → Vec` is an
 `side ordinal * 3 + area ordinal` (only looked up by key; un-hiding visits every entry, which is
 order independent); `LoopsByType` keeps the loops of each type in hyper loop order.
 
-Rust/Java differences (Rust followed):
-- one-sided loops sort their ports by `LPort.getNetFlow()` (Java `PortRestorer`:
-  `SelfLoopPort.getSLNetFlow()`); after `SelfLoopPreProcessor` detached the self loops this is
-  the net flow of the port's remaining edges;
+Rust/Java differences:
+- one-sided loops sort their ports by Java's `SelfLoopPort.getSLNetFlow()` (incoming minus outgoing
+  self-loop edges, ELK Java is the result reference); elk-rs sorts by `LPort.getNetFlow()`, which
+  after `SelfLoopPreProcessor` detached the self loops only counts the port's other edges (Rust
+  followed in the rest of this list);
 - with `FIXED_ORDER`/`FIXED_RATIO`/`FIXED_POS` original constraints (unreachable: such ports are
   never hidden) Rust still computes the types and restores the ports (Java does nothing).
 -/
@@ -180,7 +181,7 @@ def computePortListSplitIndex (flows : Array Int) : Nat := Id.run do
   return flows.size / 2
 
 /-- `process_one_side_loops(ordering, loopsByType, areas)`: reversed for `REVERSE_STACKED`; each
-loop's ports (stably sorted by `LPort` net flow) go to the middle of the side of its first port —
+loop's ports (stably sorted by self-loop net flow, Java `getSLNetFlow`) go to the middle of the side of its first port —
 appended (`SEQUENCED`) or split around the split index (prepend / append, stacked). -/
 def processOneSideLoops (a : LGraphArena) (h : SelfLoopHolder) (ordering : SelfLoopOrderingStrategy)
     (loopsByType : LoopsByType) (areas : TargetAreas) : TargetAreas := Id.run do
@@ -193,7 +194,9 @@ def processOneSideLoops (a : LGraphArena) (h : SelfLoopHolder) (ordering : SelfL
       | some p => SelfLoopHolder.portSide a h p
       | none => .undefined
     if side == .undefined then continue
-    let sorted := stableSortByKey (ports.map fun p => (p, SelfLoopHolder.portNetFlow a h p)) (·.2)
+    -- Java sorts by `SelfLoopPort.getSLNetFlow()` (self-loop edges in - out); elk-rs reads the
+    -- `LPort` net flow, which no longer counts the hidden self loops
+    let sorted := stableSortByKey (ports.map fun p => (p, (h.slPort p).slNetFlow)) (·.2)
     let sortedPorts := sorted.map (·.1)
     match ordering with
     | .sequenced =>

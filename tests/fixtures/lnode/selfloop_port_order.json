@@ -1,0 +1,110 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "n0",
+   "width": 43.4,
+   "height": 22.6,
+   "layoutOptions": {
+    "elk.nodeSize.constraints": "PORT_LABELS",
+    "elk.portLabels.placement": "INSIDE NEXT_TO_PORT_IF_POSSIBLE"
+   },
+   "ports": [
+    {
+     "id": "p0",
+     "width": 4,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "EAST"
+     },
+     "labels": [
+      {
+       "id": "p0l0",
+       "text": "label",
+       "width": 24.8,
+       "height": 7.7
+      }
+     ]
+    },
+    {
+     "id": "p1",
+     "width": 4,
+     "height": 8,
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     }
+    },
+    {
+     "id": "p2",
+     "width": 0,
+     "height": 8,
+     "layoutOptions": {
+      "elk.port.side": "WEST"
+     }
+    },
+    {
+     "id": "p3",
+     "width": 12,
+     "height": 12,
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     }
+    },
+    {
+     "id": "p4",
+     "width": 0,
+     "height": 8,
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     }
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "width": 30,
+   "height": 30
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "p1"
+   ],
+   "targets": [
+    "p0"
+   ]
+  },
+  {
+   "id": "e1",
+   "sources": [
+    "p2"
+   ],
+   "targets": [
+    "p3"
+   ]
+  },
+  {
+   "id": "e2",
+   "sources": [
+    "p0"
+   ],
+   "targets": [
+    "p3"
+   ]
+  },
+  {
+   "id": "e3",
+   "sources": [
+    "p4"
+   ],
+   "targets": [
+    "n1"
+   ]
+  }
+ ]
+}
