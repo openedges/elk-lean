@@ -127,14 +127,16 @@ def binomiald (n k : Int) : Except String Float :=
 of the Bezier curve with the given control points. -/
 def getPointOnBezierSegment (t : Float) (controlPoints : Array KVector) : KVector :=
   if controlPoints.isEmpty then KVector.zero
-  else bezierPointFrom t controlPoints (controlPoints.size - 1) 0 0.0 0.0
+  else bezierPointFrom t (1.0 - t) controlPoints (controlPoints.size - 1) 0 0.0 0.0
 where
-  /-- The sum over the control points `j, j + 1, …` (a tail-recursive loop: the sums stay unboxed). -/
-  bezierPointFrom (t : Float) (controlPoints : Array KVector) (n j : Nat) (px py : Float) : KVector :=
+  /-- The sum over the control points `j, j + 1, …` (a tail-recursive loop: the sums stay unboxed;
+  `oneMinusT = 1 - t` is computed once: inside the loop the compiler turns the `1.0` literal into a
+  per-iteration parse). -/
+  bezierPointFrom (t oneMinusT : Float) (controlPoints : Array KVector) (n j : Nat) (px py : Float) : KVector :=
     if h : j < controlPoints.size then
       let p := controlPoints[j]
-      let factor := binomialdU n j * powd (1.0 - t) (Int.ofNat (n - j)) * powd t j
-      bezierPointFrom t controlPoints n (j + 1) (px + p.x * factor) (py + p.y * factor)
+      let factor := binomialdU n j * powd oneMinusT (Int.ofNat (n - j)) * powd t j
+      bezierPointFrom t oneMinusT controlPoints n (j + 1) (px + p.x * factor) (py + p.y * factor)
     else ⟨px, py⟩
   termination_by controlPoints.size - j
 

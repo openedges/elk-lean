@@ -89,16 +89,18 @@ def fromTwo (firstCP secondCP : PolarCP) (newKnot : Float) : PolarCP := Id.run d
   let aScaled := firstCP.cp.scale (secondFactor - newKnot)
   let bScaled := secondCP.cp.scale (newKnot - firstFactor)
   let total := (aScaled + bScaled).scale (1.0 / (secondFactor - firstFactor))
-  let mut polar : Array Float := #[]
-  let mut needsToBeAdded := true
-  for nextKnot in firstCP.polarCoordinate.extract 1 firstCP.polarCoordinate.size do
-    if needsToBeAdded && (nextKnot - newKnot) > NubSpline.EPSILON then
-      polar := polar.push newKnot
-      needsToBeAdded := false
-    polar := polar.push nextKnot
-  if needsToBeAdded then
-    polar := polar.push newKnot
-  return { cp := total, polarCoordinate := polar }
+  -- the polar coordinates without the first one, `newKnot` inserted before the first larger one
+  -- (beyond `EPSILON`), else appended
+  let pc := firstCP.polarCoordinate
+  let i := insertionIndex pc newKnot 1
+  return { cp := total, polarCoordinate := (pc.extract 1 i).push newKnot ++ pc.extract i pc.size }
+where
+  /-- The first index from `i` on whose knot exceeds `newKnot` by more than `EPSILON`, else the size. -/
+  insertionIndex (pc : Array Float) (newKnot : Float) (i : Nat) : Nat :=
+    if h : i < pc.size then
+      if (pc[i] - newKnot) > NubSpline.EPSILON then i else insertionIndex pc newKnot (i + 1)
+    else pc.size
+  termination_by pc.size - i
 
 end PolarCP
 
@@ -107,22 +109,12 @@ namespace NubSpline
 /-- Builds the `PolarCP`s of `kVectors` from the knot vector: the first `dim - 1` knots seed the
 polar coordinate window, which then slides by one knot per control point (shared by the
 constructor, `generateDerivedNUBS` and `generateInvertedNUBS`). -/
-private def polarControlPoints (knots : Array Float) (dim : Nat) (kVectors : Array KVector) : Array PolarCP := Id.run do
-  let mut polar : Array Float := #[]
-  let mut knotIdx := 0
-  for _ in [0:dim - 1] do
-    if let some knot := knots[knotIdx]? then
-      polar := polar.push knot
-      knotIdx := knotIdx + 1
-  let mut result : Array PolarCP := #[]
-  for kVector in kVectors do
-    if let some knot := knots[knotIdx]? then
-      polar := polar.push knot
-      knotIdx := knotIdx + 1
-    result := result.push (PolarCP.new kVector polar)
-    if !polar.isEmpty then
-      polar := polar.extract 1 polar.size
-  return result
+private def polarControlPoints (knots : Array Float) (dim : Nat) (kVectors : Array KVector) : Array PolarCP :=
+  -- the window of control point `k` is `knots[k : k + dim]` (clipped to the knots; one knot for
+  -- `dim = 0`): the seed holds `dim - 1` knots and every control point adds one before and drops one
+  -- after it is created
+  let width := (dim - 1) + 1
+  kVectors.mapIdx fun k kVector => PolarCP.new kVector (knots.extract k (k + width))
 
 /-- `createUniformKnotVector(clamped, size)`: a uniform knot vector (clamped: `dim` leading zeros and
 trailing ones). -/
