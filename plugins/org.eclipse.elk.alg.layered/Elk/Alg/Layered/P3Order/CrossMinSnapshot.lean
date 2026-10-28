@@ -20,8 +20,10 @@ when that range is much larger than the number of elements (nested graphs whose 
 created late).
 
 Lean-only precomputed values (no Rust counterpart; all derived from the captured data):
-`portFlags` (per port id: predecessors, successors, a far end in the owner's layer, side code) and
-`nodeOrderFixed` (per flat node: `PORT_CONSTRAINTS.isOrderFixed` at build time). The crossing
+`portFlags` (per port id: predecessors, successors, a far end in the owner's layer, side code),
+`nodeOrderFixed` (per flat node: `PORT_CONSTRAINTS.isOrderFixed` at build time) and `portEndsOk`
+(per port id: its captured far ends are exactly its live ones, so a count over `endIds` equals the
+live edge loop: every edge has both end points, one captured port per id). The crossing
 minimisation only permutes the ports of a node without nested graph and changes neither port
 ids, port sides, edges nor the `PORT_CONSTRAINTS` of such a node (only the parent node of a nested
 graph gets `FIXED_ORDER` and a rewritten port list), so for these nodes the captured values equal
@@ -141,6 +143,10 @@ structure CrossMinSnapshot where
   endStart : Array Nat := #[0]
   /-- per port id: start of its successors in `endIds`. -/
   endMid : Array Nat := #[]
+  /-- per port id: `1` when the far ends `endIds[endStart[p]:endStart[p + 1]]` are exactly the far ends
+  of the live port's edges (incoming then outgoing): every edge has both end points, and the port and
+  every far end are the captured ports of their ids (Lean only). -/
+  portEndsOk : ByteArray := ByteArray.empty
   /-- per port id: side. -/
   portSides : Array PortSide := #[]
   /-- per port id: flat index of the owner. -/
@@ -161,53 +167,128 @@ structure CrossMinSnapshot where
 
 namespace CrossMinSnapshot
 
+/-- The arrays of the node and port pass of `ofArena` (updated through constructor matches in
+functions that are not inlined, so that every array stays unshared and the builder cell is reused;
+inlined, the loops' join points made every update allocate a new builder). -/
+structure Builder where
+  nodeRefs : Array LNodeId
+  nodeGraphIds : Array Nat
+  nodeLayers : Array Nat
+  nodeTypes : Array NodeType
+  nodeNested : Array Bool
+  nodePortIds : Array (Array Nat)
+  nodeKeys : Array Nat
+  nodeValues : Array Nat
+  portKeys : Array Nat
+  portValues : Array Nat
+  portSides : Array PortSide
+  portOwners : Array Nat
+  portRefs : Array (Option LPortId)
+  portIns : Array (Array Nat)
+  portOuts : Array (Array Nat)
+  /-- Per captured port: its id, whether every edge has both end points, the port, its far end ports
+  (for `portEndsOk`). -/
+  endChecks : Array (Nat × Bool × LPortId × Array LPortId)
+  deriving Inhabited
+
+namespace Builder
+
+/-- A node of layer `layerIndex` with flat index `flat`. -/
+@[noinline] def addNode (b : Builder) (node : LNodeId) (nd : LNode) (layerIndex flat : Nat) : Builder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout, ec⟩ =>
+    ⟨nr.push node, ng.push (toU32 nd.id), nl.push layerIndex, nt.push nd.type, nn.push nd.nestedGraph.isSome, npi,
+      nk.push node.idx, nv.push flat, pk, pv, ps, po, pr, pin, pout, ec⟩
+
+/-- The port ids of the node just added. -/
+@[noinline] def addPortIds (b : Builder) (ids : Array Nat) : Builder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout, ec⟩ =>
+    ⟨nr, ng, nl, nt, nn, npi.push ids, nk, nv, pk, pv, ps, po, pr, pin, pout, ec⟩
+
+/-- A port and its captured id (the `portMap` pair). -/
+@[noinline] def addPortKey (b : Builder) (port : LPortId) (pid : Nat) : Builder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout, ec⟩ =>
+    ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk.push port.idx, pv.push pid, ps, po, pr, pin, pout, ec⟩
+
+/-- `ends[pid] := ends[pid] ++ xs` (`xs` when empty); not inlined, so that `capture` has no join
+point and reuses the builder. -/
+@[noinline] def appendEnds (ends : Array (Array Nat)) (pid : Nat) (xs : Array Nat) : Array (Array Nat) :=
+  ends.modify pid (fun l => if l.isEmpty then xs else l ++ xs)
+
+/-- A captured port `pid < nPorts` of flat node `flat`. -/
+@[noinline] def capture (b : Builder) (pid flat : Nat) (port : LPortId) (side : PortSide) (preds succs : Array Nat)
+    (complete : Bool) (farPorts : Array LPortId) : Builder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout, ec⟩ =>
+    ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps.set! pid side, po.set! pid flat, pr.set! pid (some port),
+      appendEnds pin pid preds, appendEnds pout pid succs, ec.push (pid, complete, port, farPorts)⟩
+
+end Builder
+
+/-- The port loop of `ofArena` over `ports[j:]` of flat node `flat`. -/
+private partial def buildPorts (a : LGraphArena) (nPorts : Nat) (ports : Array LPortId) (j flat : Nat)
+    (portIds : Array Nat) (b : Builder) : Array Nat × Builder :=
+  if h : j < ports.size then
+    let port := ports[j]
+    let pt := a.port port
+    let pid := toU32 pt.id
+    let b := b.addPortKey port pid
+    let portIds := portIds.push pid
+    if pid < nPorts then
+      let predPorts := pt.incomingEdges.filterMap fun e => (a.edge e).source
+      let succPorts := pt.outgoingEdges.filterMap fun e => (a.edge e).target
+      let preds := predPorts.map fun sp => toU32 (a.port sp).id
+      let succs := succPorts.map fun tp => toU32 (a.port tp).id
+      let complete := predPorts.size == pt.incomingEdges.size && succPorts.size == pt.outgoingEdges.size
+      buildPorts a nPorts ports (j + 1) flat portIds (b.capture pid flat port pt.side preds succs complete (predPorts ++ succPorts))
+    else buildPorts a nPorts ports (j + 1) flat portIds b
+  else (portIds, b)
+
+/-- The node loop of `ofArena` over `order[li][k:]` and the following layers (`flat`: the next flat
+index); the number of nodes and the builder. -/
+private partial def buildNodes (a : LGraphArena) (nPorts : Nat) (order : Array (Array LNodeId)) (li k flat : Nat)
+    (b : Builder) : Nat × Builder :=
+  if h : li < order.size then
+    let layer := order[li]
+    if h2 : k < layer.size then
+      let node := layer[k]
+      let nd := a.node node
+      let b := b.addNode node nd li flat
+      let (portIds, b) := buildPorts a nPorts nd.ports 0 flat (Array.emptyWithCapacity nd.ports.size) b
+      buildNodes a nPorts order li (k + 1) (flat + 1) (b.addPortIds portIds)
+    else buildNodes a nPorts order (li + 1) 0 flat b
+  else (flat, b)
+
 /-- `CrossMinSnapshot::build(order, n_ports)` on an arena. -/
 def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : CrossMinSnapshot := Id.run do
-  let mut s : CrossMinSnapshot := {
+  let b0 : Builder := {
+    nodeRefs := #[], nodeGraphIds := #[], nodeLayers := #[], nodeTypes := #[], nodeNested := #[], nodePortIds := #[],
+    nodeKeys := #[], nodeValues := #[], portKeys := #[], portValues := #[]
     portSides := Array.replicate nPorts .undefined, portOwners := Array.replicate nPorts 0,
-    portIns := Array.replicate nPorts #[], portOuts := Array.replicate nPorts #[],
-    portRefs := Array.replicate nPorts none, nPorts := nPorts }
-  let mut nodeKeys : Array Nat := #[]
-  let mut nodeValues : Array Nat := #[]
-  let mut portKeys : Array Nat := #[]
-  let mut portValues : Array Nat := #[]
-  let mut flat := 0
-  for h : layerIndex in [0:order.size] do
-    for node in order[layerIndex] do
-      let nd := a.node node
-      nodeKeys := nodeKeys.push node.idx
-      nodeValues := nodeValues.push flat
-      s := { s with
-        nodeRefs := s.nodeRefs.push node,
-        nodeGraphIds := s.nodeGraphIds.push (toU32 nd.id), nodeLayers := s.nodeLayers.push layerIndex,
-        nodeTypes := s.nodeTypes.push nd.type, nodeNested := s.nodeNested.push nd.nestedGraph.isSome }
-      let mut portIds : Array Nat := #[]
-      for port in nd.ports do
-        let pt := a.port port
-        let pid := toU32 pt.id
-        portKeys := portKeys.push port.idx
-        portValues := portValues.push pid
-        portIds := portIds.push pid
-        if pid < nPorts then
-          let preds := pt.incomingEdges.filterMap fun e => (a.edge e).source.map fun sp => toU32 (a.port sp).id
-          let succs := pt.outgoingEdges.filterMap fun e => (a.edge e).target.map fun tp => toU32 (a.port tp).id
-          let f := flat
-          s := { s with
-            portSides := s.portSides.set! pid pt.side, portOwners := s.portOwners.set! pid f,
-            portRefs := s.portRefs.set! pid (some port),
-            portIns := s.portIns.modify pid (fun l => if l.isEmpty then preds else l ++ preds),
-            portOuts := s.portOuts.modify pid (fun l => if l.isEmpty then succs else l ++ succs) }
-      s := { s with nodePortIds := s.nodePortIds.push portIds }
-      flat := flat + 1
+    portRefs := Array.replicate nPorts none, portIns := Array.replicate nPorts #[], portOuts := Array.replicate nPorts #[]
+    endChecks := #[] }
+  let (flat, b) := buildNodes a nPorts order 0 0 0 b0
+  let nodeKeys := b.nodeKeys
+  let nodeValues := b.nodeValues
+  let portKeys := b.portKeys
+  let portValues := b.portValues
+  let endChecks := b.endChecks
+  let s : CrossMinSnapshot := {
+    nodeRefs := b.nodeRefs, nodeGraphIds := b.nodeGraphIds, nodeLayers := b.nodeLayers, nodeTypes := b.nodeTypes
+    nodeNested := b.nodeNested, nodePortIds := b.nodePortIds, portSides := b.portSides, portOwners := b.portOwners
+    portRefs := b.portRefs, portIns := b.portIns, portOuts := b.portOuts, nPorts := nPorts }
   -- the side masks of the final `port_side_of` values
   let masks := s.nodePortIds.map fun pids =>
     pids.foldl (fun m pid => m ||| sideBit (s.portSides[pid]?.getD .undefined)) (0 : UInt8)
   let hasIn (pid : Nat) : Bool := !(s.portIns[pid]?.getD #[]).isEmpty
   let hasOut (pid : Nat) : Bool := !(s.portOuts[pid]?.getD #[]).isEmpty
   let isNorth (pid : Nat) : Bool := (s.portSides[pid]?.getD .undefined) == .north
-  let inCounts := s.nodePortIds.map fun pids => (pids.filter hasIn).size
-  let northInCounts := s.nodePortIds.map fun pids => (pids.filter fun pid => hasIn pid && isNorth pid).size
-  let outCounts := s.nodePortIds.map fun pids => (pids.filter hasOut).size
+  let inCounts := s.nodePortIds.map fun pids => pids.foldl (fun n pid => if hasIn pid then n + 1 else n) 0
+  let northInCounts := s.nodePortIds.map fun pids =>
+    pids.foldl (fun n pid => if hasIn pid && isNorth pid then n + 1 else n) 0
+  let outCounts := s.nodePortIds.map fun pids => pids.foldl (fun n pid => if hasOut pid then n + 1 else n) 0
   let maxIds := s.nodePortIds.map fun pids => pids.foldl (fun m pid => max m (pid + 1)) 0
   -- Lean-only flags (see the module doc)
   let ownerLayer (pid : Nat) : Nat := s.nodeLayers[s.portOwners[pid]?.getD 0]?.getD 0
@@ -248,7 +329,16 @@ def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : C
     endMid := endMid.push endIds.size
     endIds := endIds ++ (s.portOuts[pid]?.getD #[])
   endStart := endStart.push endIds.size
-  return { s with nNodes := flat, nodeSideMasks := masks, nodeMap := IdIndex.ofPairs nodeKeys nodeValues,
+  -- `portEndsOk`: the far end ids of a port are its live far ends (one captured port per id)
+  let mut endsOk := ByteArray.mk (Array.replicate nPorts 0)
+  for (pid, complete, port, farPorts) in endChecks do
+    let own := (s.portRefs[pid]?).bind id == some port
+    let single := (s.portIns[pid]?.getD #[]).size + (s.portOuts[pid]?.getD #[]).size == farPorts.size
+    let farOk := farPorts.all fun fp =>
+      let fid := toU32 (a.port fp).id
+      fid < nPorts && (s.portRefs[fid]?).bind id == some fp
+    if complete && own && single && farOk then endsOk := endsOk.set! pid 1
+  return { s with nNodes := flat, portEndsOk := endsOk, nodeSideMasks := masks, nodeMap := IdIndex.ofPairs nodeKeys nodeValues,
                   nodeInputCounts := inCounts, nodeNorthInputCounts := northInCounts, nodeOutputCounts := outCounts,
                   nodeMaxPortIds := maxIds, nodeOrderFixed, nodeEndFlags, nodePredCounts := predCounts,
                   nodeSuccCounts := succCounts, portFlags, endIds, endStart, endMid,
@@ -334,6 +424,10 @@ def build (order : Array (Array LNodeId)) (nPorts : Nat) : LayeredM CrossMinSnap
 /-- The `portFlags` of a port id (`0` out of range: no edges, side `UNDEFINED`). -/
 @[inline] def portFlag (s : CrossMinSnapshot) (portId : Nat) : UInt8 :=
   if h : portId < s.portFlags.size then s.portFlags[portId] else 0
+
+/-- Whether the far ends of a port id are its live far ends (`portEndsOk`; `false` out of range). -/
+@[inline] def portEndsOkAt (s : CrossMinSnapshot) (portId : Nat) : Bool :=
+  if h : portId < s.portEndsOk.size then s.portEndsOk[portId] != 0 else false
 
 /-- Whether a flat node's `PORT_CONSTRAINTS` fixed the port order at build time. -/
 @[inline] def nodeOrderFixedAt (s : CrossMinSnapshot) (flatNode : Nat) : Bool :=

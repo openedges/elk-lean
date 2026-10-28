@@ -433,10 +433,74 @@ partial def clearVisitedSnap (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat
     clearVisitedSnap s flats (i + 1) (d.modifyState (s.nodeLayerOf flat) (s.nodeGraphIdOf flat) fun st => { st with visited := false })
   else d
 
-/-- `calcSnap` of the nodes `flats[i:]`. -/
+/-- `alreadyVisited` on a states table. -/
+@[inline] def visitedIn (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Bool :=
+  if h : li < states.size then
+    let row := states[li]
+    if h2 : ni < row.size then
+      match row[ni] with
+      | some st => st.visited
+      | none => false
+    else false
+  else false
+
+/-- The state of a run of `calcSnapRun`: the index of the first node it did not handle, the states and
+the generator's seed. -/
+structure SnapRun where
+  index : Nat
+  states : Array (Array (Option BarycenterState))
+  seed : UInt64
+  deriving Inhabited
+
+/-- `calcSnap` of the nodes `flats[i:]` as long as each is already visited (unchanged) or takes the
+fast branch of `calcSnap` (no far end in its layer, no associates, a state; the caller checked that
+neither the random trace nor a mock sequence is active), on the states and the seed alone (no
+`BarycenterData`/`Random` per node). Stops at the first other node. -/
+partial def calcSnapRun (c : BarycenterContext) (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat)
+    (states : Array (Array (Option BarycenterState))) (seed : UInt64) : SnapRun :=
+  if h : i < flats.size then
+    let flat := flats[i]
+    let li := s.nodeLayerOf flat
+    let ni := s.nodeGraphIdOf flat
+    if visitedIn states li ni then calcSnapRun c s flats (i + 1) states seed
+    else
+      let endsInLayer := s.nodeEndFlag flat &&& (if c.forward then 1 else 2) != 0
+      if !endsInLayer && s.nodeEndFlag flat &&& 4 == 0 && stateExists states li ni then
+        let sum := addPortEndRanks c s (s.nodePorts flat) 0 floatZero
+        let degree : Int := 0 + (if c.forward then s.nodePredCounts[flat]? else s.nodeSuccCounts[flat]?).getD 0
+        if degree > 0 then
+          let seed := (seed * Random.multiplier + Random.addend) &&& Random.mask
+          let raw := Float.toF32 ((seed >>> 24).toUInt32.toNat.toFloat / TWO_POW_24)
+          let ra := RANDOM_AMOUNT
+          let perturbation := Float.toF32 (Float.toF32 (Float.toF32 raw * ra) - Float.toF32 (ra / floatTwo))
+          let summedWeight := sum + perturbation
+          let barycenterValue := summedWeight / Float.ofInt degree
+          calcSnapRun c s flats (i + 1)
+            (BarycenterState.updateIn states li ni fun st =>
+              { st with visited := true, degree, summedWeight, barycenterValue, hasBarycenter := true })
+            seed
+        else
+          calcSnapRun c s flats (i + 1)
+            (BarycenterState.updateIn states li ni fun st =>
+              { st with visited := true, degree, summedWeight := sum, hasBarycenter := false })
+            seed
+      else ⟨i, states, seed⟩
+  else ⟨i, states, seed⟩
+
+/-- `calcSnap` of the nodes `flats[i:]` (runs of nodes taking `calcSnap`'s fast branch in
+`calcSnapRun`). -/
 partial def calcSnapAll (c : BarycenterContext) (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat) (d : BarycenterData) :
     BarycenterData :=
-  if h : i < flats.size then calcSnapAll c s flats (i + 1) (calcSnap c s flats[i] d) else d
+  if h : i < flats.size then
+    if !c.randomTrace && d.random.mockDoubleSequence.isNone then
+      match d with
+      | ⟨states, random, traces⟩ =>
+        let r := calcSnapRun c s flats i states random.seed
+        let d : BarycenterData := ⟨r.states, { random with seed := r.seed }, traces⟩
+        if h2 : r.index < flats.size then calcSnapAll c s flats (r.index + 1) (calcSnap c s flats[r.index] d)
+        else d
+    else calcSnapAll c s flats (i + 1) (calcSnap c s flats[i] d)
+  else d
 
 /-- `calculate_barycenters(nodes, forward, random)`: all `visited` flags of the nodes are cleared,
 then every node's barycenter is computed (snapshot or lock path). -/

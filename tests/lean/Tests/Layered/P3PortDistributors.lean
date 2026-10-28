@@ -21,7 +21,7 @@ namespace Tests.Layered.P3PortDistributors
 open Tests Elk.Graph Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
 open Elk.Alg.Layered.P3Order Elk.Alg.Layered.P3Order.Counting
 open Tests.Layered.P3Counting (Cfg newGraph makeLayer addNode addNodes addPort addPorts connect eastWestEdgeFromTo
-  eastWestEdgeFromPort eastWestEdgeFromNode addInLayerEdge addNorthSouthEdge nodeArray runL)
+  eastWestEdgeFromPort eastWestEdgeFromNode addInLayerEdge addNorthSouthEdge nodeArray runL rnd shuffle)
 open LayeredM
 
 /-! ## Builders -/
@@ -789,8 +789,92 @@ def forsterTests : Suite := suite "layered.p3order.forster_constraint_resolver" 
     modifyLayer l1 fun x => { x with id := 1 }
     discard <| r.processConstraints #[n1])
 
+/-! ## Differential test: `ForsterFast` = `ForsterM` -/
+
+/-- All fields of a barycenter state (float bits). -/
+def stateKey : Option BarycenterState → Option (Nat × UInt64 × Int × UInt64 × Bool × Bool)
+  | none => none
+  | some st => some (st.node.idx, st.summedWeight.toBits, st.degree, st.barycenterValue.toBits, st.hasBarycenter, st.visited)
+
+/-- All fields of a constraint group (float bits). -/
+def groupKey (g : ConstraintGroup) : UInt64 × Int × Array Nat × Array Nat × Array Nat × Nat :=
+  (g.summedWeight.toBits, g.degree, g.nodes.map (·.idx), g.outgoingConstraints, g.incomingConstraints,
+    g.incomingConstraintsCount)
+
+/-- Whether two resolvers have the same state (groups, barycenter states, group table, units). -/
+def sameResolverState (r1 r2 : ForsterConstraintResolver) : BaseIO Bool := do
+  let a1 := (← r1.constraintGroupArena.get).map groupKey
+  let a2 := (← r2.constraintGroupArena.get).map groupKey
+  let s1 := (← r1.barycenterStates.get).map (·.map stateKey)
+  let s2 := (← r2.barycenterStates.get).map (·.map stateKey)
+  let t1 ← r1.constraintGroups.get
+  let t2 ← r2.constraintGroups.get
+  let u1 := (← r1.layoutUnits.get).size
+  let u2 := (← r2.layoutUnits.get).size
+  return a1 == a2 && s1 == s2 && t1 == t2 && u1 == u2
+
+/-- One random layer: north/south dummies in layout units of other nodes, random successor
+constraints (cycles included), random barycenters with unknown ones and `f32` ties, and several
+`process_constraints` calls on random permutations (sometimes without one node) through both
+implementations. Whether results and states agree after every call, and the number of calls that
+merged groups. -/
+def forsterRandomRun (r : IO.Ref Random) : LayeredM (Bool × Nat) := do
+  let n := 2 + (← rnd r 12)
+  let (_, ns) ← forsterGraph n
+  for h : i in [0:ns.size] do
+    if i > 0 && (← rnd r 3) == 0 then
+      let owner := ns[← rnd r i]!
+      setLayoutUnit owner owner
+      setLayoutUnit ns[i] owner
+      if (← rnd r 4) != 0 then modifyNode ns[i] fun x => { x with type := .northSouthPort }
+  for _ in [0:(← rnd r (2 * n + 1))] do
+    let a := ns[← rnd r n]!
+    let b := ns[← rnd r n]!
+    if a != b then
+      modifyNode a fun x => { x with internal := { x.internal with
+        inLayerSuccessorConstraints := x.internal.inLayerSuccessorConstraints.push b } }
+  let between := (← rnd r 2) == 0
+  let order := #[ns]
+  let r1 ← ForsterConstraintResolver.new order between
+  let r2 ← ForsterConstraintResolver.new order between
+  for res in [r1, r2] do
+    res.initAtLayerLevel 0 order
+    for i in [0:n] do
+      res.initAtNodeLevel 0 i order
+  let values : Array Float := #[0.0, 0.5, 1.0, 1.0 + 1e-12, 2.0]
+  let mut same := true
+  let mut merging := 0
+  for _ in [0:4] do
+    let mut barys : Array (Option Float) := #[]
+    for _ in [0:n] do
+      let k ← rnd r (values.size + 1)
+      barys := barys.push values[k]?
+    for res in [r1, r2] do
+      res.barycenterStates.modify fun s => s.modify 0 fun l => l.mapIdx fun i o => o.map fun st => st.setBarycenter (barys[i]?.getD none)
+    let mut perm ← shuffle r ns
+    if (← rnd r 5) == 0 then perm := perm.pop
+    let groupsBefore := (← r1.constraintGroupArena.get).size
+    let out1 ← r1.processConstraints perm
+    let out2 ← r2.processConstraintsPort perm
+    same := same && out1 == out2 && (← sameResolverState r1 r2)
+    if (← r1.constraintGroupArena.get).size > groupsBefore + (if between then perm.size else 0) then
+      merging := merging + 1
+  return (same, merging)
+
+def forsterFastTests : Suite := suite "layered.p3order.forster_fast" do
+  let mut mismatches := 0
+  let mut merging := 0
+  for seed in [0:500] do
+    let r ← IO.mkRef (Random.ofInt seed)
+    let (same, m) ← runL (forsterRandomRun r)
+    if !same then mismatches := mismatches + 1
+    merging := merging + m
+  checkEq "forster fast = port (500 random layers, 2000 calls)" mismatches 0
+  check s!"forster differential calls merge groups ({merging} calls)" (merging > 500)
+
 /-! ## Suites -/
 
-def suites : Array Suite := #[abstractBarycenterTests, handBarycenterTests, greedyTests, createTests, forsterTests]
+def suites : Array Suite := #[abstractBarycenterTests, handBarycenterTests, greedyTests, createTests, forsterTests,
+  forsterFastTests]
 
 end Tests.Layered.P3PortDistributors
