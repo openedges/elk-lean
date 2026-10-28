@@ -7,13 +7,16 @@ import Elk.Alg.Common.NodeSpacing.Calculators.NodeMarginCalculator
 
 Entry points for node size, port and label placement and node margins (elk-rs
 `nodespacing::node_dimension_calculation`). Java's class only forwards to
-`NodeLabelAndSizeCalculator.process(adapter)` and `NodeMarginCalculator.process()`; elk-rs (the
-oracle) replaces the label/size step by two paths, both ported here:
+`NodeLabelAndSizeCalculator.process(adapter)` and `NodeMarginCalculator.process()`; that is
+`calculateLabelAndNodeSizesJava`, which `NodeMicroLayout` uses (ELK Java is the result reference).
+elk-rs replaces the label/size step by two paths, both ported here:
 
-* `calculateLabelAndNodeSizesForElk` (elk-rs `calculate_label_and_node_sizes_for_elk`, used by
-  `NodeMicroLayout`): per node `NodeLabelAndSizeCalculator.processNode` (node size and node labels),
-  then a simplified port label placement (`placePortLabels`) with overlap removal against inside
-  node labels and between constrained labels of one side. Ports are not moved.
+* `calculateLabelAndNodeSizesForElk` (elk-rs `calculate_label_and_node_sizes_for_elk`, elk-rs'
+  `NodeMicroLayout` path; no longer used by `NodeMicroLayout`, kept for its tests): per node
+  `NodeLabelAndSizeCalculator.processNode` (node size and node labels), then a simplified port label
+  placement (`placePortLabels`) with overlap removal against inside node labels and between
+  constrained labels of one side. Ports are not moved. Java has no such path; its results differ
+  (e.g. `PORTS` constraints never size the node, constrained labels are stacked).
 * `calculateLabelAndNodeSizes` (elk-rs `calculate_label_and_node_sizes_with_process_node`, the
   non-ELK branch used by the layered `LabelAndNodeSizeProcessor`): per node the full Java cell
   system pipeline `NodeLabelAndSizeCalculator.process`, preceded by `processNode` for nodes with
@@ -23,9 +26,8 @@ oracle) replaces the label/size step by two paths, both ported here:
 Deviations from elk-rs:
 * elk-rs' `calculate_label_and_node_sizes` downcasts the adapter: an `ElkGraphAdapter` takes the
   ELK path, every other adapter the generic one. The Lean adapters are one record type for all
-  graph models, so `calculateLabelAndNodeSizes` is always the generic path and callers on an
-  `ElkGraph` call `calculateLabelAndNodeSizesForElk` explicitly (as `NodeMicroLayout` does, and as
-  elk-rs' `NodeMicroLayout::execute` does).
+  graph models, so `calculateLabelAndNodeSizes` is always the generic path; `NodeMicroLayout` calls
+  `calculateLabelAndNodeSizesJava` (Java) instead of elk-rs' ELK path.
 * The environment switches `ELK_NODE_DIM_FULL_FOR_FIXED` and `ELK_NODE_DIM_SKIP_FULL_PROCESS` are
   read once at startup into `NodeDimensionFlags.global` (like `ElkTrace.global`); both entry points
   also take the switch as an explicit parameter.
@@ -778,8 +780,9 @@ def calculateLabelAndNodeSizesWith [MonadExcept IO.Error m] (a : GraphAdapters m
 /-- `NodeDimensionCalculation.calculateLabelAndNodeSizes(adapter)`: calculates node sizes, places
 ports and node/port labels of all nodes of the graph (elk-rs non-ELK branch,
 `calculateLabelAndNodeSizesWith a graph NodeDimensionFlags.global.useFullProcess`). Make sure the
-port lists are sorted (`sortPortLists`). For an `ElkGraph` use `calculateLabelAndNodeSizesForElk`
-(elk-rs selects it by downcasting the adapter). -/
+port lists are sorted (`sortPortLists`). Used by the layered `LabelAndNodeSizeProcessor`; Java's
+exact pipeline without the elk-rs `processNode` pre-pass is `calculateLabelAndNodeSizesJava` (elk-rs
+takes `calculateLabelAndNodeSizesForElk` for an `ElkGraph` by downcasting the adapter). -/
 def calculateLabelAndNodeSizes [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (graph : G) : m Unit :=
   calculateLabelAndNodeSizesWith a graph NodeDimensionFlags.global.useFullProcess
 

@@ -1066,6 +1066,28 @@ def applyPortPositions (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L)
       if let some pc := allPortContexts[order.getD k 0]? then
         a.port.setPosition ports[k] pc.portPosition
 
+/-- The result of `processWithOptions` for a node on which the cell system has nothing to do
+(`some` its current size), else `none`: no ports, no labels, fixed size constraints
+(`NodeLabelAndSizeUtilities.areSizeConstraintsFixed`: none or only `PORT_LABELS`) and no
+`COMPUTE_PADDING`. For such a node Java's pipeline keeps the node size (`setNodeWidth` /
+`setNodeHeight` take the current size, `NODE_SIZE_FIXED_GRAPH_SIZE` only takes the maximum with
+it), places nothing and writes the unchanged size back; the only observable effect is the
+`NodeContext` placement validation, which this check performs as well. No Java counterpart (a
+shortcut with the same result; the non-layered algorithms call `NodeMicroLayout` on many plain
+nodes). -/
+def trivialNodeSize? [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N) :
+    m (Option KVector) := do
+  if !(← a.nodePorts node).isEmpty || !(← a.nodeLabels node).isEmpty then return none
+  let props ← a.node.getProps node
+  let ops := a.node
+  let sizeConstraints := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
+  if !hasEffectivelyFixedSizeConstraints sizeConstraints then return none
+  if (ops.getPropertyDFrom props CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty).contains .computePadding then
+    return none
+  NodeContext.validatePlacements (ops.getPropertyDFrom props CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty)
+    (ops.getPropertyDFrom props CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty)
+  return some (← a.node.getSize node)
+
 /-- Java `NodeLabelAndSizeCalculator.process(graph, node, applyStuff, ignoreInsidePortLabels)`
 (elk-rs `process_with_options(node, layout_direction, apply_stuff, ignore_inside_port_labels)`):
 the full 7-phase cell system pipeline. Returns the node size that was (`applyStuff`) or would be
@@ -1076,6 +1098,8 @@ and the node and port label positions are written through the adapters (Java `se
 bound for a hierarchical node's size. Throws `IllegalArgumentException` for ports without side. -/
 def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
     (layoutDirection : Direction) (applyStuff ignoreInsidePortLabels : Bool) : m KVector := do
+  -- nothing to lay out: same result as the pipeline below (see `trivialNodeSize?`)
+  if let some size ← trivialNodeSize? a node then return size
   -- PREPARATORY PREPARATIONS: Create context objects
   let ctx ← NodeContext.new a node
   let ctx ← PortContextCreator.createPortContexts a ctx ignoreInsidePortLabels
