@@ -44,8 +44,10 @@ await init();
 const out = layout_json(JSON.stringify(graph), '{}');
 ```
 
-`js/load-wasm.js`는 npm 패키지(`plugins/org.eclipse.elk.js`)용 Node WASM 폴백 로더 제안본이다(elk-rs
-`load-wasm.js`와 같은 인터페이스, 패키지의 `dist/wasm-node/`를 가리킨다).
+`js/load-wasm.js`는 이 플러그인의 `dist/wasm-node/`를 읽는 Node 로더로 `test/*`가 쓴다. npm 패키지
+(`plugins/org.eclipse.elk.js`)는 같은 인터페이스(elk-rs `load-wasm.js`)의 자체 로더
+`js/load-wasm.js`(Node, 네이티브 애드온이 없을 때의 폴백)·`js/load-wasm.browser.mjs`(브라우저·Web Worker)를
+가지며, `scripts/build_wasm.sh`가 두 빌드를 패키지의 `dist/wasm-node/`·`dist/wasm/`에 복사한다.
 
 ## 구성
 
@@ -96,11 +98,57 @@ Elk의 `lean_unsigned_to_nat(2147483648u)`. 순수 wasm32 빌드에서는 코퍼
 같은 이유로 Lean C에는 `LEAN_EMSCRIPTEN`을 정의하지 않는다(lean.h에서 정적 객체 초기화
 `LEAN_SCALAR_PTR_LITERAL`을 32비트 포인터용으로 바꾸는 것이 유일한 효과).
 
+## `-sMEMORY64=2` 폐기 예고 (결정 노트, 2026-10-28)
+
+emsdk 6.0.13에서 링크할 때 다음 경고가 난다(`tools/build.py`는 성공한 명령의 출력을 보이지 않으므로
+빌드 로그에는 없다):
+
+```
+emcc: warning: MEMORY64=2 is deprecated (under consideration for removal (https://github.com/emscripten-core/emscripten/issues/27952)). Please open a bug if you have a continuing need for this setting [-Wdeprecated]
+```
+
+- 근거: `ChangeLog.md` 6.0.13 "`MEMORY64=2` was marked as deprecated. (#27952)", `tools/settings.py`
+  `DEPRECATED_SETTINGS['MEMORY64=2']` = "under consideration for removal". `-sMEMORY64` 자체도 폐기 예고되어
+  `-m64`/`--target=wasm64`(= `MEMORY64=1`)로 대체된다. 제거 시점은 정해지지 않았고 대체 플래그(낮춤 모드)도
+  없다. 낮춤 자체는 Binaryen 패스(`--memory64-lowering --table64-lowering`)이며 emscripten도 내부에서
+  계속 쓴다(`tools/link.py`의 embind TS 생성 경로).
+- 측정(같은 객체 파일, 링크만 `-sMEMORY64=1`로 바꾼 진짜 wasm64, Node 24.22, realworld 550 모델):
+  바이트 일치 550/550, 하지만 WASM/네이티브 총 시간 비율 **1.95배**(같은 시각 `MEMORY64=2` 1.52배; 공유
+  머신이라 절대값은 기준선 1.34배보다 높다). wasm64는 가드 페이지 대신 명시적 경계 검사를 하므로 느리다.
+  깊은 재귀 한계는 비슷하고(메인 스레드 체인 1,000 통과·2,000 `RangeError`), 2 GB 기본 최대 메모리도 같다.
+  wasm64는 memory64 지원 엔진(Chrome 133+, Firefox 134+, Node 24)만 돌며, Safari 지원은 확인하지 못했다.
+- 대안 검토: (1) `-m64`: 느리고 엔진 제약이 생긴다. (2) Lean C를 32비트 clean하게: Lean 컴파일러
+  (`LCNF/ToImpure.lean`, `ExtractClosed.lean`)의 리터럴 처리 문제라 elk-lean 쪽에서 고칠 수 없다(위
+  "32비트 문제"). (3) `-m64`로 링크한 뒤 직접 `wasm-opt --memory64-lowering --table64-lowering`: JS 글루가
+  wasm64용(BigInt 포인터, `address: 'i64'` 가정)으로 생성되므로 글루 패치가 필요해 지금은 하지 않는다.
+- **결정**: 지금은 유지한다(emsdk `6.0.13` 고정, 동작·성능 변화 없음). emsdk를 올릴 때마다 위 경고와
+  #27952를 확인하고, 실제 제거가 예정되면 (3)을 시험하거나 그때 엔진 지원·성능을 다시 재서 `-m64`로
+  옮긴다.
+
 ## 알려진 제한
 
-- **깊은 재귀**: wasm 프레임은 JS 엔진의 네이티브 스택(Node·Chrome 기본 약 1 MB)을 쓴다. Node 메인
-  스레드 기본값에서 mrtree 체인 깊이 약 500~1000, 중첩 JSON 깊이 약 2000~4000을 넘으면
-  `RangeError: Maximum call stack size exceeded`가 난다(네이티브 CLI는 8 MB 스택으로 처리).
-  `node --stack-size=7000`이면 체인 4000, Worker `resourceLimits.stackSizeMb: 64`이면 32000 이상 통과한다.
-  오류 뒤에도 인스턴스는 계속 쓸 수 있지만 중단된 호출의 객체는 해제되지 않는다(실패 1회당 수 MB).
+- **깊은 재귀**: Lean 생성 C는 곳곳이 재귀다(`Elk.Json.Parser.parseValue` 중첩 단계당,
+  `JsonImporter.transformNode`/`transformEdges` 계층 단계당, `EadesRadial.positionNodes` 트리 단계당,
+  `MrTree.EdgeRouter.sortByFloat`의 특수화되지 않은 `Array.foldl`(`Id` 모나드 bind, 노드당 wasm 프레임 약 5개)).
+  wasm 프레임은 JS 엔진의 네이티브 스택을 쓰므로 Node·Chrome 기본(약 1 MB, `--stack-size=984`)에서
+  중첩 JSON 깊이 약 6,000(compound 계층 약 1,500), mrtree 체인 약 1,500~2,000, radial 체인 약 2,000을 넘으면
+  `RangeError: Maximum call stack size exceeded`가 난다. 오류 뒤에도 인스턴스는 계속 쓸 수 있지만 중단된
+  호출의 객체는 해제되지 않는다(실패 1회당 수 MB). 대책은 npm 패키지의 Worker 모드다(`new ELK({ workerUrl })`가
+  `worker_threads` Worker를 `resourceLimits.stackSizeMb` = `workerStackSizeMb`, 기본 64로 만든다: JSON 깊이
+  256,000, mrtree 체인 32,000 통과). 입력별 표와 네이티브 애드온(스택 초과 시 프로세스 종료)·CLI(Lean `main`이
+  1 GB 스레드에서 돈다) 비교는 `plugins/org.eclipse.elk.js/README.md` "Limits".
+- **브라우저**: JS에서 스택 크기를 정할 수 없다. Chrome 156의 Web Worker는 메인 스레드보다 한계가 낮다(JSON
+  깊이 4,000·mrtree 체인 1,000에서 Worker만 실패). Web Worker는 응답성용이며 깊은 입력은 Node Worker 모드나
+  네이티브가 필요하다.
+- **`-sSTACK_SIZE`(선형 메모리 그림자 스택)는 한계 요인이 아니다**: `-sSTACK_SIZE=65536
+  -sSTACK_OVERFLOW_CHECK=2` 실험 빌드도 2 GB Worker 스택에서 100만 단계 중첩 JSON을 통과했고(`parseValue`는
+  그림자 스택을 쓰지 않음), mrtree 체인만 1,000~2,000 노드에서 `Aborted(stack overflow ...)`가 났다(단계당
+  약 32~64 바이트). 16 MiB면 약 25만 단계 이상으로 256 MB Worker 스택이 닿는 깊이보다 깊다. 기본 빌드
+  (`STACK_OVERFLOW_CHECK=0`, `--stack-first`)에서 그림자 스택이 넘치면 주소가 음수로 감겨 경계 밖 접근
+  트랩(`RuntimeError: memory access out of bounds`)이 된다. `STACK_OVERFLOW_CHECK`/`ASSERTIONS`는 그림자
+  스택 넘침을 진단 메시지로 바꿀 뿐 JS 엔진 스택의 `RangeError`와는 무관하므로 릴리스 빌드에서는 켜지 않는다.
+- **메모리 최대 2 GB**: emscripten 기본 `MAXIMUM_MEMORY`. 포트 5,000개짜리 노드 하나(네이티브 최대 1.1 GB)는
+  `INTERNAL PANIC: out of memory` 후 `ExitStatus: Program terminated with exit(1)`로 끝나고 인스턴스를 다시 쓸 수
+  없다. `-sMAXIMUM_MEMORY=4GB -sINITIAL_MEMORY=32MB` 실험 빌드는 이 그래프를 배치했다(기본 빌드 반영은 parity·
+  성능 확인 후 TODO).
 - 파일 시스템 API(Lean `IO.FS`)는 emscripten MEMFS 위에서만 동작한다(elk-lean API는 쓰지 않음).
