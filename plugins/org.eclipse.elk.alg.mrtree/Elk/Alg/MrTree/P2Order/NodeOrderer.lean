@@ -30,6 +30,11 @@ inner nodes are reordered accordingly (`replace_outgoing_edges`, which also rebu
 All sorts use consistent integer comparators, so `stableSort` equals Rust's `sort_by`. Rust sorts
 the slice of the caller in place; the Lean recursion returns the reordered level instead.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.MrTree.P2Order
 
 open Elk.Core.Alg Elk.Core.Util Elk.Alg.MrTree Elk.Alg.MrTree.Graph Elk.Alg.MrTree.Options
@@ -61,7 +66,7 @@ def reorderEdges (a : TArena) (parent : TNodeId) (children : Array TNodeId) : Ar
 /-- `order_level_fan_descendants(current_level, monitor)`: returns the sorted level. -/
 partial def orderLevelFanDescendants (weighting : OrderWeighting) (currentLevel : Array TNodeId)
     (monitor : ProgressMonitor) : MrTreeM (Array TNodeId) := do
-  discard <| monitor.begin "Processor arrange level" 1.0
+  discard <| monitor.begin "Processor arrange level" fl1p0
   let a ← get
   let keyed := currentLevel.map fun n => (n, sortKey weighting (a.node n))
   let sorted := stableSort keyed fun x y => compare x.2 y.2
@@ -86,7 +91,7 @@ partial def orderLevelFanDescendants (weighting : OrderWeighting) (currentLevel 
       pos := pos + 1
       let children := (← MrTreeM.getNode parent).children
       let children ← orderLevelFanDescendants weighting children
-        (← monitor.subTask ((1.0 : Float).toF32 / (Float.ofNat size).toF32).toF32)
+        (← monitor.subTask ((fl1p0 : Float).toF32 / (Float.ofNat size).toF32).toF32)
       let a ← get
       let children := stableSort children fun x y =>
         compare (a.node y).internal.position (a.node x).internal.position
@@ -165,7 +170,7 @@ def constraintSlots (a : TArena) (currentLevel : Array TNodeId) : Array (Option 
 /-- `order_level_constraint(current_level, monitor)`. -/
 partial def orderLevelConstraint (debug : Bool) (currentLevel : Array TNodeId) (monitor : ProgressMonitor) :
     MrTreeM Unit := do
-  discard <| monitor.begin "Processor arrange level" 1.0
+  discard <| monitor.begin "Processor arrange level" fl1p0
   if debug then monitor.log "OrderLevelConstraint!"
   let sortedNodes := constraintSlots (← get) currentLevel
   for index in [0:sortedNodes.size] do
@@ -176,7 +181,7 @@ partial def orderLevelConstraint (debug : Bool) (currentLevel : Array TNodeId) (
   for parent in inners do
     let children := (← MrTreeM.getNode parent).children
     orderLevelConstraint debug children
-      (← monitor.subTask ((1.0 : Float).toF32 / (Float.ofNat size).toF32).toF32)
+      (← monitor.subTask ((fl1p0 : Float).toF32 / (Float.ofNat size).toF32).toF32)
     let a ← get
     let children := stableSort children fun x y =>
       compare (a.node x).internal.position (a.node y).internal.position

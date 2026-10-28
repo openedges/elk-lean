@@ -7,6 +7,12 @@ import Elk.Core.Options
 Keeps the layout given by `elk.position` / `elk.bendPoints` and only resizes
 the parent (unless `nodeSize.fixedGraphSize`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Core.Util
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options
@@ -61,10 +67,10 @@ private def processEdge (e : EdgeId) : ElkM KVector := do
 
 /-- `FixedLayoutProvider.layout`. -/
 def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
-  let _ ← monitor.begin "Fixed Layout" 1.0
+  let _ ← monitor.begin "Fixed Layout" fl1p0
   let edgeRouting := (← ElkM.getNode layoutGraph).props.getD CoreOptions.EDGE_ROUTING .undefined
-  let mut maxx := 0.0
-  let mut maxy := 0.0
+  let mut maxx := fl0p0
+  let mut maxy := fl0p0
   let children := (← ElkM.getNode layoutGraph).children
   for n in children do
     if let some pos := (← ElkM.getNode n).props.get? FixedLayouterOptions.POSITION then
@@ -72,7 +78,7 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       let constraints := (← ElkM.getNode n).props.getD FixedLayouterOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
       if constraints.contains .minimumSize then
         if let some minSize := (← ElkM.getNode n).props.get FixedLayouterOptions.NODE_SIZE_MINIMUM then
-          if minSize.x > 0.0 && minSize.y > 0.0 then
+          if minSize.x > fl0p0 && minSize.y > fl0p0 then
             let _ ← ElkUtil.resizeNodeWith n minSize.x minSize.y true true
     let node ← ElkM.getNode n
     let (nodeX, nodeY) := (node.x, node.y)

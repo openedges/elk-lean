@@ -8,6 +8,11 @@ and a minimum length (`delta`).
 `NEdgeBuilder.create` and `NEdge.reverse` modify the incident nodes and are
 therefore defined in `Elk.Alg.Common.NetworkSimplex.NGraph`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NetworkSimplex
 
 /-- `NEdge`: an edge in the graph processed by the `NetworkSimplex` algorithm. -/
@@ -23,7 +28,7 @@ structure NEdge (ο : Type) where
   /-- `NEdge.target` (Rust `Weak<Mutex<NNode>>`). -/
   target : NNodeId := default
   /-- `NEdge.weight`. -/
-  weight : Float := 0.0
+  weight : Float := fl0p0
   /-- `NEdge.delta`: the minimum length of this edge. -/
   delta : Int := 1
   /-- `NEdge.treeEdge`: whether the edge is part of the spanning tree (never

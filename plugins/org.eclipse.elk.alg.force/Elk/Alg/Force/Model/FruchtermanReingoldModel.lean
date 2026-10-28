@@ -20,6 +20,15 @@ Iteration structure of one iteration (Rust order):
    least 0);
 3. displacements are bounded by `dispBound` and added to the positions.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p001 : Float := 0.001
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+private def fl80p0 : Float := 80.0
+
 namespace Elk.Alg.Force.Model
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Force.Graph Elk.Alg.Force.Options
@@ -32,9 +41,9 @@ def FR_ZERO_FACTOR : Float := 100.0
 /-- elk-rs `FruchtermanReingoldModel`: temperature, its decrement per iteration and the ideal edge
 length `k`. -/
 structure FruchtermanReingoldModel where
-  temperature : Float := 0.0
-  threshold : Float := 0.0
-  k : Float := 0.0
+  temperature : Float := fl0p0
+  threshold : Float := fl0p0
+  k : Float := fl0p0
 
 namespace FruchtermanReingoldModel
 
@@ -48,19 +57,19 @@ def attractive (d k : Float) : Float := d * d / k
 /-- `initialize_model`: temperature (0.001), threshold (`temperature / iterations`) and `k`
 (`sqrt(area / (2 n)) * spacing * 0.01`, `spacing` = `SPACING_NODE_NODE`). -/
 def initializeModel (g : FGraph) : FruchtermanReingoldModel := Id.run do
-  let temperature := g.props.getD ForceOptions.TEMPERATURE 0.001
+  let temperature := g.props.getD ForceOptions.TEMPERATURE fl0p001
   let iterations := g.props.getD ForceOptions.ITERATIONS 300
   let threshold := if iterations > 0 then temperature / Float.ofInt iterations else temperature
   let n := g.nodes.size.toFloat
-  let mut totalWidth := 0.0
-  let mut totalHeight := 0.0
+  let mut totalWidth := fl0p0
+  let mut totalHeight := fl0p0
   for nid in g.nodes do
     totalWidth := totalWidth + (g.arena.nodeSize[nid.idx]!).x
     totalHeight := totalHeight + (g.arena.nodeSize[nid.idx]!).y
   let area := totalWidth * totalHeight
-  let spacing := g.props.getD ForceOptions.SPACING_NODE_NODE 80.0
+  let spacing := g.props.getD ForceOptions.SPACING_NODE_NODE fl80p0
   let c := spacing * FR_SPACING_FACTOR
-  let k := if n > 0.0 then Float.sqrt (area / (2.0 * n)) * c else 0.0
+  let k := if n > fl0p0 then Float.sqrt (area / (fl2p0 * n)) * c else fl0p0
   return { temperature, threshold, k }
 
 /-- Particle data extracted from the arena for the flat-array loops. -/
@@ -85,7 +94,7 @@ private def extractFlat (g : FGraph) : Flat := Id.run do
   for j in [0:n] do
     let mut row := FloatArray.emptyWithCapacity n
     for i in [0:n] do
-      row := row.push (if i == j then 0.0 else Float.ofInt (g.getConnection particles[i]! particles[j]!))
+      row := row.push (if i == j then fl0p0 else Float.ofInt (g.getConnection particles[i]! particles[j]!))
     connections := connections.push row
   return { particles, radii, priorities, connections }
 
@@ -248,7 +257,7 @@ private partial def forceRows (px py radii priorities : FloatArray) (connections
 
 /-- `FruchtermanReingoldModel::layout(graph, monitor)` (the flat-array version of elk-rs). -/
 def layout (monitor : ProgressMonitor) : FM Unit := do
-  let _ ← monitor.begin "Component Layout" 1.0
+  let _ ← monitor.begin "Component Layout" fl1p0
   let base ← AbstractForceModel.initializeBase
   let mut st := initializeModel (← get)
   let flat := extractFlat (← get)
@@ -263,11 +272,11 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
   let mut px := px0
   let mut py := py0
   let dispBound := base.dispBound
-  let zero : Float := 0.0
+  let zero : Float := fl0p0
   let mut random := base.random
-  let mut dx := FloatArray.mk (Array.replicate n 0.0)
-  let mut dy := FloatArray.mk (Array.replicate n 0.0)
-  while st.temperature > 0.0 && !(← monitor.isCanceled) do
+  let mut dx := FloatArray.mk (Array.replicate n fl0p0)
+  let mut dy := FloatArray.mk (Array.replicate n fl0p0)
+  while st.temperature > fl0p0 && !(← monitor.isCanceled) do
     if refresh then
       -- write positions back for the label / bend point refresh
       modify (writePositions · particles px py)
@@ -313,8 +322,8 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
           else
             let mut separated := false
             while !separated do
-              let (nu', r1) := wiggle ⟨px.get! stop, py.get! stop⟩ random 1.0
-              let (nv, r2) := wiggle ⟨px.get! v, py.get! v⟩ r1 1.0
+              let (nu', r1) := wiggle ⟨px.get! stop, py.get! stop⟩ random fl1p0
+              let (nv, r2) := wiggle ⟨px.get! v, py.get! v⟩ r1 fl1p0
               random := r2
               px := px.set! stop nu'.x
               py := py.set! stop nu'.y

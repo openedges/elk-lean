@@ -17,6 +17,13 @@ Rust deviations from Java kept: `setLocation` moves the block rows by `row.x + (
 `averageHeight` when the block has no children (Java computes `NaN`); `add_child_in_new_row`
 starts at the block's y when the block has no rows (Java throws).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.RectPacking.Util
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math
@@ -40,8 +47,8 @@ private def adjustSizeAdd (b : BlockId) (rect : NodeId) : RectPackingM Unit := d
   modifyBlock b fun blk => Id.run do
     let lastRowWidth := match blk.rows.back? with
       | some r => r.width
-      | none => 0.0
-    let spacing := if blk.children.size == 1 then 0.0 else blk.nodeNodeSpacing
+      | none => fl0p0
+    let spacing := if blk.children.size == 1 then fl0p0 else blk.nodeNodeSpacing
     let mut blk := blk
     blk := { blk with smallestRectWidth := fmin blk.smallestRectWidth rectWidth }
     blk := { blk with width := fmax blk.width lastRowWidth }
@@ -50,14 +57,14 @@ private def adjustSizeAdd (b : BlockId) (rect : NodeId) : RectPackingM Unit := d
     blk := { blk with maxHeight := blk.maxHeight + (rectHeight + spacing) }
     blk := { blk with minHeight := fmax blk.minHeight rectHeight }
     let mut totalHeight : Float :=
-      if !blk.rows.isEmpty then (blk.rows.size - 1).toFloat * blk.nodeNodeSpacing else 0.0
+      if !blk.rows.isEmpty then (blk.rows.size - 1).toFloat * blk.nodeNodeSpacing else fl0p0
     for row in blk.rows do
       totalHeight := totalHeight + row.height
     blk := { blk with height := totalHeight }
     let childCount := blk.children.size.toFloat
-    if childCount > 0.0 then
+    if childCount > fl0p0 then
       blk := { blk with averageHeight :=
-        blk.maxHeight / childCount - blk.nodeNodeSpacing * ((childCount - 1.0) / childCount) }
+        blk.maxHeight / childCount - blk.nodeNodeSpacing * ((childCount - fl1p0) / childCount) }
     return blk
   notifyParent b
 
@@ -89,8 +96,8 @@ spacing is added for every row with index > 0 of the original row list) and the
 min/max/smallest values from the children. -/
 private def adjustSizeAfterRemove (b : BlockId) : RectPackingM Unit := do
   let blk ← getBlock b
-  let mut newWidth : Float := 0.0
-  let mut newHeight : Float := 0.0
+  let mut newWidth : Float := fl0p0
+  let mut newHeight : Float := fl0p0
   let mut kept : Array BlockRow := #[]
   let mut index := 0
   for row in blk.rows do
@@ -98,12 +105,12 @@ private def adjustSizeAfterRemove (b : BlockId) : RectPackingM Unit := do
       pure ()
     else
       newWidth := fmax newWidth row.width
-      newHeight := newHeight + (row.height + (if index > 0 then blk.nodeNodeSpacing else 0.0))
+      newHeight := newHeight + (row.height + (if index > 0 then blk.nodeNodeSpacing else fl0p0))
       kept := kept.push row
     index := index + 1
-  let mut minWidth : Float := 0.0
-  let mut minHeight : Float := 0.0
-  let mut maxHeight : Float := 0.0
+  let mut minWidth : Float := fl0p0
+  let mut minHeight : Float := fl0p0
+  let mut maxHeight : Float := fl0p0
   let mut smallestRectHeight := Float.posInf
   let mut smallestRectWidth := Float.posInf
   for rect in blk.children do
@@ -115,8 +122,8 @@ private def adjustSizeAfterRemove (b : BlockId) : RectPackingM Unit := do
     maxHeight := maxHeight + (n.height + blk.nodeNodeSpacing)
   let childCount := blk.children.size.toFloat
   let averageHeight :=
-    if childCount > 0.0 then
-      maxHeight / childCount - blk.nodeNodeSpacing * ((childCount - 1.0) / childCount)
+    if childCount > fl0p0 then
+      maxHeight / childCount - blk.nodeNodeSpacing * ((childCount - fl1p0) / childCount)
     else blk.averageHeight
   setBlock b { blk with rows := kept, height := newHeight, width := newWidth, minWidth, minHeight,
                         maxHeight, smallestRectHeight, smallestRectWidth, averageHeight }
@@ -156,14 +163,14 @@ private def boundsLoop (g : ElkGraph) (children : Array NodeId) (nns width : Flo
     let n := g.node children[i]
     let rectWidth := n.width
     let rectHeight := n.height
-    let newRow := currentX + rectWidth + (if index > 0 then nns else 0.0) > width && maxHeightInRow > 0.0
-    let currentX := if newRow then 0.0 else currentX
+    let newRow := currentX + rectWidth + (if index > 0 then nns else fl0p0) > width && maxHeightInRow > fl0p0
+    let currentX := if newRow then fl0p0 else currentX
     let currentWidth := if newRow then fmax currentWidth widthInRow else currentWidth
     let currentHeight := if newRow then currentHeight + (maxHeightInRow + nns) else currentHeight
-    let maxHeightInRow := if newRow then 0.0 else maxHeightInRow
-    let widthInRow := if newRow then 0.0 else widthInRow
+    let maxHeightInRow := if newRow then fl0p0 else maxHeightInRow
+    let widthInRow := if newRow then fl0p0 else widthInRow
     let index := if newRow then 0 else index
-    let spacing := if index > 0 then nns else 0.0
+    let spacing := if index > 0 then nns else fl0p0
     boundsLoop g children nns width (i + 1) (index + 1) (currentX + (rectWidth + spacing))
       currentWidth currentHeight (fmax maxHeightInRow rectHeight) (widthInRow + (rectWidth + spacing))
   else (fmax currentWidth widthInRow, currentHeight + maxHeightInRow)
@@ -187,24 +194,24 @@ private def placeLoop (g : ElkGraph) (children : Array NodeId) (bx nns width : F
     let n := g.node rect
     let rectWidth := n.width
     let rectHeight := n.height
-    let newRow := currentX + rectWidth + (if index > 0 then nns else 0.0) > width && maxHeightInRow > 0.0
-    let currentX := if newRow then 0.0 else currentX
+    let newRow := currentX + rectWidth + (if index > 0 then nns else fl0p0) > width && maxHeightInRow > fl0p0
+    let currentX := if newRow then fl0p0 else currentX
     let currentY := if newRow then currentY + (maxHeightInRow + nns) else currentY
     let currentWidth := if newRow then fmax currentWidth widthInRow else currentWidth
     let currentHeight := if newRow then currentHeight + (maxHeightInRow + nns) else currentHeight
-    let maxHeightInRow := if newRow then 0.0 else maxHeightInRow
-    let widthInRow := if newRow then 0.0 else widthInRow
+    let maxHeightInRow := if newRow then fl0p0 else maxHeightInRow
+    let widthInRow := if newRow then fl0p0 else widthInRow
     let row := if newRow then row + 1 else row
     let rows := if newRow then rows.push (BlockRow.new bx currentY nns) else rows
     let index := if newRow then 0 else index
-    let spacing := if index > 0 then nns else 0.0
+    let spacing := if index > 0 then nns else fl0p0
     let widthInRow := widthInRow + (rectWidth + spacing)
     let maxHeightInRow := fmax maxHeightInRow rectHeight
     -- `BlockRow.addRectangle rows[row] rect`
     let (g, rows) :=
       if row < rows.size then
         let r := rows[row]!
-        let offset := if r.rects.isEmpty then 0.0 else r.nodeNodeSpacing
+        let offset := if r.rects.isEmpty then fl0p0 else r.nodeNodeSpacing
         let rx := r.x + r.width + offset
         let ry := r.y
         let g := g.modifyNode rect fun n => { n with x := rx, y := ry }
@@ -247,18 +254,18 @@ def fitsInWidthHeight (blk : Block) (width height : Float) : ElkM Bool := do
 /-- The size `(width, height)` of the children of the block value laid out in `width` (the bounds
 of `place_rects_in_internal(width, false)`, nothing moves). -/
 @[inline] def boundsIn (g : ElkGraph) (blk : Block) (width : Float) : Float × Float :=
-  boundsLoop g blk.children blk.nodeNodeSpacing width 0 0 0.0 0.0 0.0 0.0 0.0
+  boundsLoop g blk.children blk.nodeNodeSpacing width 0 0 fl0p0 fl0p0 fl0p0 fl0p0 fl0p0
 
 /-- The binary search loop of `width_for_target_height` (pure, on the graph value: the layout of a
 copy moves nothing). -/
 private partial def searchWidth (g : ElkGraph) (blk : Block) (height upperBound lowerBound viableWidth
     newWidth : Float) : Float :=
-  if lowerBound + 1.0 < upperBound then
+  if lowerBound + fl1p0 < upperBound then
     let (w, h) := boundsIn g blk newWidth
     if w <= newWidth && h <= height then
-      searchWidth g blk height newWidth lowerBound newWidth ((newWidth - lowerBound) / 2.0 + lowerBound)
+      searchWidth g blk height newWidth lowerBound newWidth ((newWidth - lowerBound) / fl2p0 + lowerBound)
     else
-      searchWidth g blk height upperBound newWidth viableWidth ((upperBound - newWidth) / 2.0 + newWidth)
+      searchWidth g blk height upperBound newWidth viableWidth ((upperBound - newWidth) / fl2p0 + newWidth)
   else viableWidth
 
 /-- `width_for_target_height(height)`: the smallest width (binary search between `minWidth` and

@@ -36,6 +36,12 @@ Rust indexes `children[0]` of a non-leaf node without children (only possible if
 parents in the treeified graph, e.g. after a `BFS` treeification); that panics in Rust and throws
 `IndexOutOfBoundsException` here.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.MrTree.P3Place
 
 open Elk.Core.Alg Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Alg.MrTree Elk.Alg.MrTree.Graph
@@ -69,10 +75,10 @@ def build (a : TArena) (root : TNodeId) (isVertical : Bool) : TreeSoA := Id.run 
   let mut childrenVec : Array (Array Nat) := #[#[]]
   let mut parentVec : Array (Option Nat) := #[none]
   let mut isLeafVec : Array Bool := #[true]
-  let mut halfWidthVec : Array Float := #[0.0]
-  let mut halfSizeXVec : Array Float := #[0.0]
-  let mut halfSizeYVec : Array Float := #[0.0]
-  let mut fullDimVec : Array Float := #[0.0]
+  let mut halfWidthVec : Array Float := #[fl0p0]
+  let mut halfSizeXVec : Array Float := #[fl0p0]
+  let mut halfSizeYVec : Array Float := #[fl0p0]
+  let mut fullDimVec : Array Float := #[fl0p0]
   let mut levelRanges : Array (Nat × Nat) := #[]
   let mut levelStart := 0
   let mut levelEnd := 1
@@ -81,9 +87,9 @@ def build (a : TArena) (root : TNodeId) (isVertical : Bool) : TreeSoA := Id.run 
     for idx in [levelStart:levelEnd] do
       let node := a.node nodes[idx]!
       let size := node.size
-      halfWidthVec := halfWidthVec.set! idx (if isVertical then size.x / 2.0 else size.y / 2.0)
-      halfSizeXVec := halfSizeXVec.set! idx (size.x / 2.0)
-      halfSizeYVec := halfSizeYVec.set! idx (size.y / 2.0)
+      halfWidthVec := halfWidthVec.set! idx (if isVertical then size.x / fl2p0 else size.y / fl2p0)
+      halfSizeXVec := halfSizeXVec.set! idx (size.x / fl2p0)
+      halfSizeYVec := halfSizeYVec.set! idx (size.y / fl2p0)
       fullDimVec := fullDimVec.set! idx (if isVertical then size.y else size.x)
       let childRefs := node.directChildren
       isLeafVec := isLeafVec.set! idx childRefs.isEmpty
@@ -96,21 +102,21 @@ def build (a : TArena) (root : TNodeId) (isVertical : Bool) : TreeSoA := Id.run 
           childrenVec := childrenVec.push #[]
           parentVec := parentVec.push (some idx)
           isLeafVec := isLeafVec.push true
-          halfWidthVec := halfWidthVec.push 0.0
-          halfSizeXVec := halfSizeXVec.push 0.0
-          halfSizeYVec := halfSizeYVec.push 0.0
-          fullDimVec := fullDimVec.push 0.0
+          halfWidthVec := halfWidthVec.push fl0p0
+          halfSizeXVec := halfSizeXVec.push fl0p0
+          halfSizeYVec := halfSizeYVec.push fl0p0
+          fullDimVec := fullDimVec.push fl0p0
           childIndices := childIndices.push ci
       childrenVec := childrenVec.set! idx childIndices
     levelStart := levelEnd
     levelEnd := nodes.size
   let n := nodes.size
-  let mut levelheight : Array Float := Array.replicate n 0.0
+  let mut levelheight : Array Float := Array.replicate n fl0p0
   let mut leftSibling : Array (Option Nat) := Array.replicate n none
   let mut leftNeighbor : Array (Option Nat) := Array.replicate n none
   let mut rightSibling : Array (Option Nat) := Array.replicate n none
   for (start, stop) in levelRanges do
-    let mut height : Float := 0.0
+    let mut height : Float := fl0p0
     for i in [start:stop] do
       height := fmax height fullDimVec[i]!
     let mut prev : Option Nat := none
@@ -124,8 +130,8 @@ def build (a : TArena) (root : TNodeId) (isVertical : Bool) : TreeSoA := Id.run 
       prev := some idx
   return { nodes, children := childrenVec, parent := parentVec, leftSibling, leftNeighbor,
            rightSibling, isLeaf := isLeafVec, halfWidth := halfWidthVec, halfSizeX := halfSizeXVec,
-           halfSizeY := halfSizeYVec, levelheight, prelim := Array.replicate n 0.0,
-           modifier := Array.replicate n 0.0 }
+           halfSizeY := halfSizeYVec, levelheight, prelim := Array.replicate n fl0p0,
+           modifier := Array.replicate n fl0p0 }
 
 /-- `mean_node_width(left, right)`. -/
 @[inline] def meanNodeWidth (soa : TreeSoA) (left right : Nat) : Float :=

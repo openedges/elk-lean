@@ -32,6 +32,13 @@ once) is a performance device; sizes do not change in this phase, so the live si
 This module also hosts the factories `AnnulusWedgeCriteria.create` and
 `RadialTranslationStrategy.create` (the factory halves of the Rust option enums).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial.P1Position
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Alg.Radial.Options Elk.Alg.Radial.Sorting
@@ -66,26 +73,26 @@ successors. -/
 partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option IRadialSorter)
     (successorCache : Std.HashMap NodeId (Array NodeId)) (leafCache : Std.HashMap NodeId Float)
     (currentRadius minAlpha maxAlpha optimalOffset : Float) : RadialM Unit := do
-  let alphaPoint := (minAlpha + maxAlpha) / 2.0 + optimalOffset
+  let alphaPoint := (minAlpha + maxAlpha) / fl2p0 + optimalOffset
   let xPos := currentRadius * Float.cos alphaPoint
   let yPos := currentRadius * Float.sin alphaPoint
   RadialUtil.centerNodesOnRadi node xPos yPos
-  let numberOfLeafs := (leafCache.get? node).getD 1.0
+  let numberOfLeafs := (leafCache.get? node).getD fl1p0
   let ratio :=
-    if (currentRadius + radius).abs < Float.epsilon then 1.0
+    if (currentRadius + radius).abs < Float.epsilon then fl1p0
     else clampUnit (currentRadius / (currentRadius + radius))
-  let tau := 2.0 * Float.acos ratio
+  let tau := fl2p0 * Float.acos ratio
   let (s, alpha0) :=
-    if tau < maxAlpha - minAlpha then (tau / numberOfLeafs, (minAlpha + maxAlpha - tau) / 2.0)
+    if tau < maxAlpha - minAlpha then (tau / numberOfLeafs, (minAlpha + maxAlpha - tau) / fl2p0)
     else ((maxAlpha - minAlpha) / numberOfLeafs, minAlpha)
   let mut alpha := alpha0
   let mut successors ← match successorCache.get? node with
     | some cached => pure cached
     | none => RadialUtil.getSuccessors node
   if let some sorter := sorter then
-    successors ← sorter.sortForParent successors node root (currentRadius == 0.0)
+    successors ← sorter.sortForParent successors node root (currentRadius == fl0p0)
   for child in successors do
-    let numberOfChildLeafs := (leafCache.get? child).getD 1.0
+    let numberOfChildLeafs := (leafCache.get? child).getD fl1p0
     positionNodes child root radius sorter successorCache leafCache (currentRadius + radius) alpha
       (alpha + s * numberOfChildLeafs) optimalOffset
     alpha := alpha + s * numberOfChildLeafs
@@ -94,17 +101,17 @@ partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option
 def translate (root : NodeId) (radius : Float) (sorter : Option IRadialSorter)
     (optimizer : Option IEvaluation) : RadialM Unit := do
   let (successorCache, leafCache) ← RadialUtil.buildTreeCaches root
-  let mut optimalOffset := 0.0
+  let mut optimalOffset := fl0p0
   let mut optimalValue := Float.maxValue
   if let some optimizer := optimizer then
     for i in [0:CIRCLE_DEGREES] do
       let offset := i.toFloat * DEGREE_TO_RAD
-      positionNodes root root radius sorter successorCache leafCache 0.0 0.0 (2.0 * Float.pi) offset
+      positionNodes root root radius sorter successorCache leafCache fl0p0 fl0p0 (fl2p0 * Float.pi) offset
       let translatedValue ← optimizer.evaluate root
       if translatedValue < optimalValue then
         optimalOffset := offset
         optimalValue := translatedValue
-  positionNodes root root radius sorter successorCache leafCache 0.0 0.0 (2.0 * Float.pi) optimalOffset
+  positionNodes root root radius sorter successorCache leafCache fl0p0 fl0p0 (fl2p0 * Float.pi) optimalOffset
 
 /-- `process(graph, progress_monitor)`. -/
 def process (graph : NodeId) (monitor : ProgressMonitor) : RadialM Unit := do

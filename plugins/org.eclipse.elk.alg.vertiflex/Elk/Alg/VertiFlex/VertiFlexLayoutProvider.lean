@@ -22,6 +22,12 @@ vertical constraints are consistent, runs the phases and sets the graph size.
 Rust reports the three failures with `panic!("{}", UnsupportedConfigurationException::new(..))`;
 they are thrown as `org.eclipse.elk.core.UnsupportedConfigurationException` here.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.VertiFlex
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Core.Options Elk.Alg.Common.NodeSpacing
@@ -61,7 +67,7 @@ partial def checkVerticalConstraintValidity (root : NodeId) (currentMinConstrain
     let some child ← VertiFlexUtil.edgeTargetNode edge | continue
     let childNode ← ElkM.getNode child
     if childNode.props.has VertiFlexOptions.VERTICAL_CONSTRAINT then
-      let childConstraint := (childNode.props.get VertiFlexOptions.VERTICAL_CONSTRAINT).getD 0.0
+      let childConstraint := (childNode.props.get VertiFlexOptions.VERTICAL_CONSTRAINT).getD fl0p0
       let childMargin := childNode.props.getD CoreOptions.MARGINS {}
       if newMinConstraint > childConstraint + childMargin.top then
         let identifier := childNode.identifier.getD "<unknown>"
@@ -92,7 +98,7 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
     let algorithm ← assembleAlgorithm layoutGraph
     let _ ← monitor.begin "Tree layout" algorithm.size.toFloat
     let props := (← ElkM.getNode layoutGraph).props
-    let nodeNodeSpacing := props.getD CoreOptions.SPACING_NODE_NODE 0.0
+    let nodeNodeSpacing := props.getD CoreOptions.SPACING_NODE_NODE fl0p0
     let omitMicro := props.getD VertiFlexOptions.OMIT_NODE_MICRO_LAYOUT false
     if !omitMicro then
       (← NodeMicroLayout.forGraph layoutGraph).execute
@@ -103,14 +109,14 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       let numberOfParents ← ElkM.withGraph fun g => (ElkGraphUtil.allIncomingEdges g child).size
       if numberOfParents > 1 then
         throwUnsupportedConfiguration "The given graph is not an acyclic tree!"
-      ElkM.modifyNode child fun n => { n with x := 0.0, y := 0.0 }
-    checkVerticalConstraintValidity root 0.0 nodeNodeSpacing
+      ElkM.modifyNode child fun n => { n with x := fl0p0, y := fl0p0 }
+    checkVerticalConstraintValidity root fl0p0 nodeNodeSpacing
     let mut index : Int := 0
     for node in children do
       VertiFlexM.modifyProps node fun p => { p with nodeModelOrder := some index }
       index := index + 1
     for processor in algorithm do
-      let sub ← monitor.subTask 1.0
+      let sub ← monitor.subTask fl1p0
       processor.process layoutGraph sub
     setGraphSize layoutGraph
     monitor.done

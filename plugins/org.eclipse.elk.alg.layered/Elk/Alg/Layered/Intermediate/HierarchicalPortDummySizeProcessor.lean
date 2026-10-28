@@ -11,6 +11,11 @@ ports of each dummy are moved to its new right border and its alignment is set t
 Precondition: a layered graph with north/south external port dummies (replaced by
 `HierarchicalPortConstraintProcessor`). Slot: before phase 4.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Alg.Layered
@@ -22,7 +27,7 @@ namespace HierarchicalPortDummySizeProcessor
 def setWidths (nodes : Array LNodeId) (topDown : Bool) (delta : Float) : LayeredM Unit := do
   if nodes.isEmpty then return
   -- Rust `nodes.len().saturating_sub(1)`: `Nat` subtraction saturates the same way
-  let mut currentWidth := if topDown then 0.0 else delta * (nodes.size - 1).toFloat
+  let mut currentWidth := if topDown then fl0p0 else delta * (nodes.size - 1).toFloat
   let step := if topDown then delta else -delta
   for node in nodes do
     let width := currentWidth

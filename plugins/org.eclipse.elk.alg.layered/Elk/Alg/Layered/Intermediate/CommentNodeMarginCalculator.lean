@@ -11,6 +11,11 @@ them) is wider than the node, the left/right margins are raised to half the prot
 The spacings are read like elk-rs `Spacings::get_individual_or_default_with_graph`: the node's individual
 spacing, else the processed graph's value (stored or default), else the property default.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Core.Math Elk.Alg.Layered
@@ -64,7 +69,7 @@ def processComments (graph : LGraphId) (node : LNodeId) : LayeredM Unit := do
     let m := { m with top := m.top + topExtraMargin, bottom := m.bottom + bottomExtraMargin }
     let maxCommentWidth := fmax topWidth bottomWidth
     let m := if maxCommentWidth > nodeWidth then
-        let protrusion := (maxCommentWidth - nodeWidth) / 2.0
+        let protrusion := (maxCommentWidth - nodeWidth) / fl2p0
         { m with left := fmax m.left protrusion, right := fmax m.right protrusion }
       else m
     { n with margin := m }

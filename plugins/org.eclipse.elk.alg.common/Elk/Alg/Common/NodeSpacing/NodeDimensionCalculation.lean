@@ -33,6 +33,14 @@ Deviations from elk-rs:
 * The ELK and generic port label passes share one implementation (`placePortLabels`); their
   differences are the fields of `PortLabelVariant`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p01 : Float := 0.01
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing
 
 open Elk Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -169,8 +177,8 @@ def initialYCursor (side : PortSide) (labelCount : Nat) (relation : LabelPlaceme
     match relation with
     | .belowOrRight => portHeight + gapV
     | .aboveOrLeft => -totalLabelHeight - gapV
-    | .centered => (portHeight - totalLabelHeight) / 2.0
-  else 0.0
+    | .centered => (portHeight - totalLabelHeight) / fl2p0
+  else fl0p0
 
 /-! ### Port label entries and stacking -/
 
@@ -252,14 +260,14 @@ def avoidNodeLabelOverlap (a : GraphAdapters m G N P L E) (node : N) (port : P) 
   let mut labelPos := labelPos
   match ← a.portSide port with
   | .east | .west | .undefined =>
-    let labelCenter := labelRect.y + labelRect.height / 2.0
-    let nodeCenter := nodeLabelBounds.y + nodeLabelBounds.height / 2.0
+    let labelCenter := labelRect.y + labelRect.height / fl2p0
+    let nodeCenter := nodeLabelBounds.y + nodeLabelBounds.height / fl2p0
     let newAbsY := if labelCenter <= nodeCenter then nodeLabelBounds.y - labelSize.y - gapV
       else nodeLabelBounds.y + nodeLabelBounds.height + gapV
     labelPos := { labelPos with y := newAbsY - portPos.y }
   | .north | .south =>
-    let labelCenter := labelRect.x + labelRect.width / 2.0
-    let nodeCenter := nodeLabelBounds.x + nodeLabelBounds.width / 2.0
+    let labelCenter := labelRect.x + labelRect.width / fl2p0
+    let nodeCenter := nodeLabelBounds.x + nodeLabelBounds.width / fl2p0
     let newAbsX := if labelCenter <= nodeCenter then nodeLabelBounds.x - labelSize.x - gapH
       else nodeLabelBounds.x + nodeLabelBounds.width + gapH
     labelPos := { labelPos with x := newAbsX - portPos.x }
@@ -309,7 +317,7 @@ def computeStackStartCoordinate (a : GraphAdapters m G N P L E) (entries : Array
 /-- Stable order of `keys` by `partial_cmp().unwrap_or(Equal)` (elk-rs `sort_by` on the entries;
 the indices are sorted because the entry type has no `Inhabited` instance). -/
 private def sortedOrder (keys : Array Float) : Array Nat :=
-  stableSort (Array.range keys.size) fun i j => Float.comparePartial (keys.getD i 0.0) (keys.getD j 0.0)
+  stableSort (Array.range keys.size) fun i j => Float.comparePartial (keys.getD i fl0p0) (keys.getD j fl0p0)
 
 /-- The `loop` of elk-rs `stack_horizontal_side_labels`: moves the label down (positive direction)
 or up past every placed rectangle it overlaps (gaps included) until it overlaps none. -/
@@ -478,7 +486,7 @@ private def placeLabelsOfPort (a : GraphAdapters m G N P L E) (node : N) (port :
     (relation : LabelPlacementRelation) (s : PassSettings) (v : PortLabelVariant m P L) (entries : SideEntries P L) :
     m (SideEntries P L) := do
   let portSize ← a.port.getSize port
-  let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET 0.0
+  let portBorderOffset ← a.port.getPropertyD port CoreOptions.PORT_BORDER_OFFSET fl0p0
   let padding ← a.getPadding node
   let labelBorderOffset := match side with
     | .north => padding.top + s.gapV
@@ -488,15 +496,15 @@ private def placeLabelsOfPort (a : GraphAdapters m G N P L E) (node : N) (port :
   let labels ← a.portLabels port
   let labelCount := labels.size
   -- Rust's `Sum for f64` starts at -0.0
-  let mut totalLabelHeight : Float := -0.0
+  let mut totalLabelHeight : Float := -fl0p0
   if labelCount > 1 && (side == .east || side == .west || side == .undefined) then
     for label in labels do
       totalLabelHeight := totalLabelHeight + (← a.label.getSize label).y
   else
-    totalLabelHeight := 0.0
+    totalLabelHeight := fl0p0
   let mut yCursor := initialYCursor side labelCount relation portSize.y totalLabelHeight s.gapV
   -- Java parity (generic path): INSIDE labels do not include the port border offset
-  let borderOffset := if v.ignoreInsideBorderOffset && s.insideLabelPlacement then 0.0 else portBorderOffset
+  let borderOffset := if v.ignoreInsideBorderOffset && s.insideLabelPlacement then fl0p0 else portBorderOffset
   let mut entries := entries
   for label in labels do
     let labelPos ← a.label.getPosition label
@@ -563,8 +571,8 @@ def placePortLabels (a : GraphAdapters m G N P L E) (node : N) (placement : Enum
     alwaysOtherSameSide := placement.contains .alwaysOtherSameSide
     spaceEfficient := placement.contains .spaceEfficient
     stackLabelOverlaps := sizeConstraints.contains .portLabels
-    gapH := ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_HORIZONTAL 1.0
-    gapV := ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_VERTICAL 1.0
+    gapH := ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_HORIZONTAL fl1p0
+    gapV := ← a.node.getPropertyD node CoreOptions.SPACING_LABEL_PORT_VERTICAL fl1p0
     nodeLabelBounds := ← insideNodeLabelBounds a node }
   let nodeWidth := (← a.node.getSize node).x
   -- Per-side port counts for the label placement relation
@@ -722,7 +730,7 @@ def needsProcessNodeForFixedPortLabels (a : GraphAdapters m G N P L E) (node : N
   for port in ← a.nodePorts node do
     for label in ← a.portLabels port do
       let pos ← a.label.getPosition label
-      if pos.x.abs > 0.01 || pos.y.abs > 0.01 then return true
+      if pos.x.abs > fl0p01 || pos.y.abs > fl0p01 then return true
   return false
 
 /-- elk-rs `calculate_label_and_node_sizes_with_process_node(adapter)` (the non-ELK branch of

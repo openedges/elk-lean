@@ -20,6 +20,11 @@ The Rust struct fields `left_contour` / `right_contour` (`HashMap` from wedge pa
 outermost node of every level) are `IO.Ref` tables in the `Context`; `sorter` is shared by all
 sorting calls like the Rust `Option<Box<dyn IRadialSorter>>`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Radial.Intermediate.Compaction
 
 open Elk.Graph Elk.Core.Options Elk.Alg.Radial.Options Elk.Alg.Radial.Sorting
@@ -108,7 +113,7 @@ def compact (graph : NodeId) : RadialM Unit := do
   let mut base : AbstractRadiusExtensionCompaction := {}
   if let some stepSize := props.get RadialOptions.COMPACTION_STEP_SIZE then
     base := { base with compactionStep := stepSize }
-  base := { base with spacing := (props.get CoreOptions.SPACING_NODE_NODE).getD 0.0 }
+  base := { base with spacing := (props.get CoreOptions.SPACING_NODE_NODE).getD fl0p0 }
   let ctx : Context :=
     { base, sorter, leftContour := ← IO.mkRef {}, rightContour := ← IO.mkRef {} }
   let mut successors ← RadialUtil.getNextLevelNodes #[root]

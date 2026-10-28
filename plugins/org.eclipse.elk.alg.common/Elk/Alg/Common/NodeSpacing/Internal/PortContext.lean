@@ -16,6 +16,11 @@ handle `port : P` and the label handles, so results can be applied through the a
 * Java's `parentNodeContext` back reference is not kept (the node context owns the port
   contexts).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -53,7 +58,7 @@ structure PortContext (P L : Type) where
   /-- Positions of the port labels (extracted from the adapter, for fixed label bounds). -/
   labelPositions : Array KVector := #[]
   /-- Port ratio or position for fixed-ratio placement (elk-rs never sets it: `0.0`). -/
-  portRatioOrPosition : Float := 0.0
+  portRatioOrPosition : Float := fl0p0
   deriving Inhabited
 
 namespace PortContext

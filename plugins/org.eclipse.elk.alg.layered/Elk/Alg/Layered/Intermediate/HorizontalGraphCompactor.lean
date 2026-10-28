@@ -30,6 +30,11 @@ Spline routes are read from the graph's spline segment table (`splineRouteAccess
 `SPLINE_ROUTE_START` ids of `LEdgeInternals.splineRouteStart` index
 `LGraphInternals.splineSegments`; moved bounding boxes are written back there).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Options Elk.Alg.Common.Compaction.OneD
@@ -112,7 +117,7 @@ def process (splines : SplineRouteAccess) (graph : LGraphId) (monitor : Progress
   if strategy == .none then return
   let edgeRouting := (props.get LayeredOptions.EDGE_ROUTING).getD .undefined
   if edgeRouting != .orthogonal && edgeRouting != .splines then return
-  let _ ← monitor.begin "Horizontal Compaction" 1.0
+  let _ ← monitor.begin "Horizontal Compaction" fl1p0
   let spacings := (← getGraph graph).internal.spacings
   let constraintStrategy := (props.get LayeredOptions.COMPACTION_POST_COMPACTION_CONSTRAINTS).getD .scanline
   let ctx ← CompactionContext.transform graph edgeRouting splines

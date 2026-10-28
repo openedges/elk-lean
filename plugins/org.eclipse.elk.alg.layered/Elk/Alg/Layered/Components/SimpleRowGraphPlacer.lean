@@ -8,6 +8,13 @@ Port of `combine_simple_row`, `sort_components_by_priority`, `component_priority
 priority (or by model order), breaking rows at
 `max(widest component, sqrt(total area) * aspect ratio)`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p6 : Float := 1.6
+private def fl20p0 : Float := 20.0
+
 namespace Elk.Alg.Layered.Components
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -59,20 +66,20 @@ def sortComponentsByPriority (components : Array LGraphId) (target : LGraphId) :
 offsets every component (plus its own offset, which is reset) and sets the target size. -/
 def placeComponentsInRows (components : Array LGraphId) (target : LGraphId) (maxRowWidth componentSpacing : Float) :
     LayeredM Unit := do
-  let mut xpos := 0.0
-  let mut ypos := 0.0
-  let mut highestBox := 0.0
+  let mut xpos := fl0p0
+  let mut ypos := fl0p0
+  let mut highestBox := fl0p0
   let mut broadestRow := componentSpacing
   for component in components do
     let g ← getGraph component
     let sizeX := g.size.x
     let sizeY := g.size.y
     if xpos + sizeX > maxRowWidth then
-      xpos := 0.0
+      xpos := fl0p0
       ypos := ypos + (highestBox + componentSpacing)
-      highestBox := 0.0
+      highestBox := fl0p0
     offsetGraph component (xpos + g.offset.x) (ypos + g.offset.y)
-    modifyGraph component fun x => { x with offset := ⟨0.0, 0.0⟩ }
+    modifyGraph component fun x => { x with offset := ⟨fl0p0, fl0p0⟩ }
     broadestRow := fmax broadestRow (xpos + sizeX)
     highestBox := fmax highestBox sizeY
     xpos := xpos + (sizeX + componentSpacing)
@@ -92,10 +99,10 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   if let some first := ordered[0]? then
     copyProperties target first
   let tg ← getGraph target
-  let aspectRatio := tg.props.getD LayeredOptions.ASPECT_RATIO 1.6
-  let componentSpacing := tg.props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT 20.0
-  let mut maxRowWidth := 0.0
-  let mut totalArea := 0.0
+  let aspectRatio := tg.props.getD LayeredOptions.ASPECT_RATIO fl1p6
+  let componentSpacing := tg.props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT fl20p0
+  let mut maxRowWidth := fl0p0
+  let mut totalArea := fl0p0
   for component in ordered do
     let size := (← getGraph component).size
     maxRowWidth := fmax maxRowWidth size.x
@@ -104,7 +111,7 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   placeComponentsInRows ordered target maxRowWidth componentSpacing
   maybeCompactComponents ordered target false
   for component in ordered do
-    moveGraph target component 0.0 0.0
+    moveGraph target component fl0p0 fl0p0
 
 end SimpleRowGraphPlacer
 

@@ -19,6 +19,13 @@ The Rust functions lock one node and read its properties through `get_property`/
 the Lean helpers read the `LNode` value (`props`, `internal`) and the arena. Every `f64`
 expression keeps the Rust operand order; `f64::max`/`min` are `fmax`/`fmin`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.LabelAndNodeSize
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -57,7 +64,7 @@ def portAlignmentForSide (nd : LNode) (side : PortSide) : PortAlignment :=
   | none => (nd.props.get CoreOptions.PORT_ALIGNMENT_DEFAULT).getD .distributed
 
 /-- `PORT_BORDER_OFFSET` of a port (`0` when not set). -/
-@[inline] def portBorderOffset (pt : LPort) : Float := pt.props.getD CoreOptions.PORT_BORDER_OFFSET 0.0
+@[inline] def portBorderOffset (pt : LPort) : Float := pt.props.getD CoreOptions.PORT_BORDER_OFFSET fl0p0
 
 /-- Rust `node_has_non_zero_border_offset(node)`: some port has `|PORT_BORDER_OFFSET| > EPSILON`. -/
 def nodeHasNonZeroBorderOffset (node : LNodeId) : LayeredM Bool := do
@@ -107,22 +114,22 @@ border (`adjust_ports_on_side`), WEST/EAST ports are centred vertically outside 
 def placeInsideSelfLoopPorts (node : LNodeId) (width height : Float) : LayeredM Unit := do
   adjustPortsOnSide node .north width height
   adjustPortsOnSide node .south width height
-  let centerY := height / 2.0
+  let centerY := height / fl2p0
   let westPorts ← withArena (·.nodePortSideView node .west)
   for port in westPorts do
-    modifyPort port fun pt => { pt with position := ⟨-pt.size.x, centerY - pt.size.y / 2.0⟩ }
+    modifyPort port fun pt => { pt with position := ⟨-pt.size.x, centerY - pt.size.y / fl2p0⟩ }
   let eastPorts ← withArena (·.nodePortSideView node .east)
   for port in eastPorts do
-    modifyPort port fun pt => { pt with position := ⟨width, centerY - pt.size.y / 2.0⟩ }
+    modifyPort port fun pt => { pt with position := ⟨width, centerY - pt.size.y / fl2p0⟩ }
 
 /-! ## Node margin -/
 
 /-- The margin accumulator of Rust `update_node_margin` (`include_rect` closure). -/
 structure MarginAccumulator where
-  top : Float := 0.0
-  right : Float := 0.0
-  bottom : Float := 0.0
-  left : Float := 0.0
+  top : Float := fl0p0
+  right : Float := fl0p0
+  bottom : Float := fl0p0
+  left : Float := fl0p0
 
 /-- Rust `include_rect(x, y, width, height)` of `update_node_margin`. -/
 def MarginAccumulator.includeRect (m : MarginAccumulator) (nodeWidth nodeHeight x y width height : Float) :
@@ -268,13 +275,13 @@ def setupHorizontalPortMargins (contexts : Array PortPlacementContext) (s : Port
   let mut contexts ← contexts.mapM fun ctx => horizontalContextMargin ctx s portLabelSpacingHorizontal
   if s.portLabelsOutside && !contexts.isEmpty then
     let rightmost := contexts.size - 1
-    contexts := contexts.modify 0 fun c => { c with margin := { c.margin with left := 0.0 } }
-    contexts := contexts.modify rightmost fun c => { c with margin := { c.margin with right := 0.0 } }
+    contexts := contexts.modify 0 fun c => { c with margin := { c.margin with left := fl0p0 } }
+    contexts := contexts.modify rightmost fun c => { c with margin := { c.margin with right := fl0p0 } }
     if spaceEfficientLabels && !(contexts[0]?.map (·.labelsNextToPort)).getD false then
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with right := 0.0 } }
+      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with right := fl0p0 } }
   if s.uniformPortSpacing && !contexts.isEmpty then
-    let mut maxLeft := 0.0
-    let mut maxRight := 0.0
+    let mut maxLeft := fl0p0
+    let mut maxRight := fl0p0
     for ctx in contexts do
       maxLeft := fmax maxLeft ctx.margin.left
       maxRight := fmax maxRight ctx.margin.right
@@ -282,8 +289,8 @@ def setupHorizontalPortMargins (contexts : Array PortPlacementContext) (s : Port
     contexts := contexts.map fun c => { c with margin := { c.margin with left := l, right := r } }
     if s.portLabelsOutside then
       let rightmost := contexts.size - 1
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with left := 0.0 } }
-      contexts := contexts.modify rightmost fun c => { c with margin := { c.margin with right := 0.0 } }
+      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with left := fl0p0 } }
+      contexts := contexts.modify rightmost fun c => { c with margin := { c.margin with right := fl0p0 } }
   return contexts
 
 /-- Vertical per-context margin of `setup_vertical_port_margins` (first loop body). -/
@@ -327,13 +334,13 @@ def setupVerticalPortMargins (contexts : Array PortPlacementContext) (s : PortMa
   let mut contexts ← contexts.mapM fun ctx => verticalContextMargin ctx s portLabelSpacingVertical
   if s.portLabelsOutside && !contexts.isEmpty then
     let bottommost := contexts.size - 1
-    contexts := contexts.modify 0 fun c => { c with margin := { c.margin with top := 0.0 } }
-    contexts := contexts.modify bottommost fun c => { c with margin := { c.margin with bottom := 0.0 } }
+    contexts := contexts.modify 0 fun c => { c with margin := { c.margin with top := fl0p0 } }
+    contexts := contexts.modify bottommost fun c => { c with margin := { c.margin with bottom := fl0p0 } }
     if spaceEfficientLabels && !(contexts[0]?.map (·.labelsNextToPort)).getD false then
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with bottom := 0.0 } }
+      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with bottom := fl0p0 } }
   if s.uniformPortSpacing && !contexts.isEmpty then
-    let mut maxTop := 0.0
-    let mut maxBottom := 0.0
+    let mut maxTop := fl0p0
+    let mut maxBottom := fl0p0
     for ctx in contexts do
       maxTop := fmax maxTop ctx.margin.top
       maxBottom := fmax maxBottom ctx.margin.bottom
@@ -341,8 +348,8 @@ def setupVerticalPortMargins (contexts : Array PortPlacementContext) (s : PortMa
     contexts := contexts.map fun c => { c with margin := { c.margin with top := t, bottom := b } }
     if s.portLabelsOutside then
       let bottommost := contexts.size - 1
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with top := 0.0 } }
-      contexts := contexts.modify bottommost fun c => { c with margin := { c.margin with bottom := 0.0 } }
+      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with top := fl0p0 } }
+      contexts := contexts.modify bottommost fun c => { c with margin := { c.margin with bottom := fl0p0 } }
   return contexts
 
 /-- The start/end surrounding spacing along a side (Rust inline `match side` of
@@ -362,14 +369,14 @@ def surroundingForSide (side : PortSide) (surrounding : ElkMargin) (labelPortSpa
   match side with
   | .north | .south => (m.left, m.right)
   | .east | .west => (m.top, m.bottom)
-  | .undefined => (0.0, 0.0)
+  | .undefined => (fl0p0, fl0p0)
 
 /-- The port size along the side. -/
 @[inline] def axisSizeAlongSide (side : PortSide) (size : KVector) : Float :=
   match side with
   | .north | .south => size.x
   | .east | .west => size.y
-  | .undefined => 0.0
+  | .undefined => fl0p0
 
 /-- Rust `ordered_ports` of `place_ports_on_side`: WEST ports with CENTER alignment and a fixed
 order are rotated right by one; other WEST and all SOUTH ports are reversed (Java
@@ -414,9 +421,9 @@ private def sidePlacementSettings (nd : LNode) (side : PortSide) (graphPortSpaci
     sizeOptions := nd.props.getD CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
     portLabelPlacement := nd.props.getD CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
     portLabelsTreatAsGroup := nd.props.getD CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
-    labelLabelSpacing := propertyWithGraphDefault nd CoreOptions.SPACING_LABEL_LABEL 0.0
-    labelPortSpacingHorizontal := propertyWithGraphDefault nd CoreOptions.SPACING_LABEL_PORT_HORIZONTAL 0.0
-    labelPortSpacingVertical := propertyWithGraphDefault nd CoreOptions.SPACING_LABEL_PORT_VERTICAL 0.0
+    labelLabelSpacing := propertyWithGraphDefault nd CoreOptions.SPACING_LABEL_LABEL fl0p0
+    labelPortSpacingHorizontal := propertyWithGraphDefault nd CoreOptions.SPACING_LABEL_PORT_HORIZONTAL fl0p0
+    labelPortSpacingVertical := propertyWithGraphDefault nd CoreOptions.SPACING_LABEL_PORT_VERTICAL fl0p0
     nodeIsCompound := nd.internal.compoundNode }
 
 /-- The placement contexts of the ordered ports (Rust `contexts` of `place_ports_on_side`). -/
@@ -442,33 +449,33 @@ def sideStartAndSpacing (alignment : PortAlignment) (count : Nat) (placementSize
   let mut placementSize := placementSize
   if (alignment == .distributed || alignment == .justified) && count == 1 then
     if alignment == .distributed then
-      placementSize := placementSize - 2.0 * portSpacing
+      placementSize := placementSize - fl2p0 * portSpacing
     alignment := .center
   let mut currentPos := surroundingStart
   let mut spaceBetweenPorts := portSpacing
   if availableSpace < placementSize && !portsOverhang then
     if alignment == .distributed then
-      spaceBetweenPorts := spaceBetweenPorts + (availableSpace - placementSize) / (count.toFloat + 1.0)
+      spaceBetweenPorts := spaceBetweenPorts + (availableSpace - placementSize) / (count.toFloat + fl1p0)
       currentPos := currentPos + spaceBetweenPorts
     else if count > 1 then
-      spaceBetweenPorts := spaceBetweenPorts + (availableSpace - placementSize) / (count.toFloat - 1.0)
+      spaceBetweenPorts := spaceBetweenPorts + (availableSpace - placementSize) / (count.toFloat - fl1p0)
   else
     if availableSpace < placementSize && (alignment == .distributed || alignment == .justified) then
       if alignment == .distributed then
-        placementSize := placementSize - 2.0 * portSpacing
+        placementSize := placementSize - fl2p0 * portSpacing
       alignment := .center
     match alignment with
     | .begin => pure ()
-    | .center => currentPos := currentPos + (availableSpace - placementSize) / 2.0
+    | .center => currentPos := currentPos + (availableSpace - placementSize) / fl2p0
     | .«end» => currentPos := currentPos + (availableSpace - placementSize)
     | .distributed =>
-      let additional := (availableSpace - placementSize) / (count.toFloat + 1.0)
-      spaceBetweenPorts := spaceBetweenPorts + fmax additional 0.0
+      let additional := (availableSpace - placementSize) / (count.toFloat + fl1p0)
+      spaceBetweenPorts := spaceBetweenPorts + fmax additional fl0p0
       currentPos := currentPos + spaceBetweenPorts
     | .justified =>
       if count > 1 then
-        let additional := (availableSpace - placementSize) / (count.toFloat - 1.0)
-        spaceBetweenPorts := spaceBetweenPorts + fmax additional 0.0
+        let additional := (availableSpace - placementSize) / (count.toFloat - fl1p0)
+        spaceBetweenPorts := spaceBetweenPorts + fmax additional fl0p0
   return (currentPos, spaceBetweenPorts)
 
 /-- Rust `place_ports_on_side(node, side, width, height, graph_port_spacing,
@@ -507,7 +514,7 @@ def placePortsOnSide (node : LNodeId) (side : PortSide) (width height graphPortS
     | .east | .west => contexts ← setupVerticalPortMargins contexts settings st.labelPortSpacingVertical
     | .undefined => pure ()
   let portsOverhang := st.sizeOptions.contains .portsOverhang
-  let mut placementSize := 0.0
+  let mut placementSize := fl0p0
   for index in [0:contexts.size] do
     let some ctx := contexts[index]? | continue
     let portSize := (← getPort ctx.port).size
@@ -517,7 +524,7 @@ def placePortsOnSide (node : LNodeId) (side : PortSide) (width height graphPortS
     if index + 1 < contexts.size then
       placementSize := placementSize + st.portSpacing
   if st.alignment == .distributed then
-    placementSize := placementSize + 2.0 * st.portSpacing
+    placementSize := placementSize + fl2p0 * st.portSpacing
   let availableSpace := length - surroundingStart - surroundingEnd
   let (start, spaceBetweenPorts) := sideStartAndSpacing st.alignment count placementSize availableSpace
     surroundingStart st.portSpacing portsOverhang

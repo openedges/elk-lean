@@ -10,6 +10,11 @@ Two Rust primitives without a Lean counterpart are reproduced here: `fmodRust` (
 the exact C `fmod`) and `formatFixed1` (Rust `format!("{:.1}", x)`: exact decimal rounding, ties
 to even).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P5Edges.Splines
 
 open Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -61,7 +66,7 @@ private def scaledTenthsHalfEven (m : Nat) (e : Int) : Nat :=
 (the minus sign is kept for `-0.0` and small negative values; `NaN`, `inf`, `-inf`). -/
 def formatFixed1 (x : Float) : String :=
   if x.isNaN then "NaN"
-  else if x.isInf then (if x > 0.0 then "inf" else "-inf")
+  else if x.isInf then (if x > fl0p0 then "inf" else "-inf")
   else
     let bits := x.toBits
     let negative := (bits >>> 63) == 1

@@ -36,6 +36,12 @@ ignored.
 Rust keeps hash maps from pointer-derived origin ids to `ElkGraph` elements; here the origin is the
 typed `ElkGraph` id, so the maps are not needed.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.MrTree
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -61,8 +67,8 @@ def importGraphPure (g : ElkGraph) (elkgraph : NodeId) : TArena × TGraphId := I
     a := a'.modifyNode tn fun n =>
       { n with
         props := n.props.copyFrom elknode.props
-        position := ⟨elknode.x + elknode.width / 2.0, elknode.y + elknode.height / 2.0⟩
-        size := ⟨fmax elknode.width 1.0, fmax elknode.height 1.0⟩
+        position := ⟨elknode.x + elknode.width / fl2p0, elknode.y + elknode.height / fl2p0⟩
+        size := ⟨fmax elknode.width fl1p0, fmax elknode.height fl1p0⟩
         internal.origin := some (.elkNode child) }
     elemMap := elemMap.insert child tn
   let mut seen : Std.HashSet EdgeId := {}
@@ -96,10 +102,10 @@ def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
   let mut maxY := Float.minValue
   for node in graph.nodes do
     let n := a.node node
-    minX := fmin minX (n.position.x - n.size.x / 2.0)
-    minY := fmin minY (n.position.y - n.size.y / 2.0)
-    maxX := fmax maxX (n.position.x + n.size.x / 2.0)
-    maxY := fmax maxY (n.position.y + n.size.y / 2.0)
+    minX := fmin minX (n.position.x - n.size.x / fl2p0)
+    minY := fmin minY (n.position.y - n.size.y / fl2p0)
+    maxX := fmax maxX (n.position.x + n.size.x / fl2p0)
+    maxY := fmax maxY (n.position.y + n.size.y / fl2p0)
   let padding := ((← ElkM.getNode root).props.get MrTreeOptions.PADDING).getD {}
   for node in graph.nodes do
     let n := a.node node
@@ -114,8 +120,8 @@ def applyLayout (a : TArena) (tgraph : TGraphId) : ElkM Unit := do
       let (some s, some t) := (te.source, te.target) | continue
       let sn := a.node s
       let tn := a.node t
-      bendPoints := #[⟨sn.position.x + sn.size.x / 2.0, sn.position.y + sn.size.y / 2.0⟩,
-        ⟨tn.position.x + tn.size.x / 2.0, tn.position.y + tn.size.y / 2.0⟩]
+      bendPoints := #[⟨sn.position.x + sn.size.x / fl2p0, sn.position.y + sn.size.y / fl2p0⟩,
+        ⟨tn.position.x + tn.size.x / fl2p0, tn.position.y + tn.size.y / fl2p0⟩]
     let edgeSection ← match (← ElkM.getEdge elkEdge).sections[0]? with
       | some s => pure s
       | none => ElkM.createSection (some elkEdge)

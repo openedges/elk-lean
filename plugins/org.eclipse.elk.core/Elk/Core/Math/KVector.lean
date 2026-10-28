@@ -7,6 +7,12 @@ Immutable two-dimensional vector. The Java class mutates in place
 (`v.add(w)` returns `v`); the Lean port is value based, so every
 "mutating" method returns the new vector and callers rebind.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Core.Math
 
 open Elk.Core.Util
@@ -76,9 +82,9 @@ def scaleToLength (v : KVector) (l : Float) : KVector := (v.normalize).scale l
 /-- `toRadians`: the angle of the vector in `[0, 2π)`. -/
 def toRadians (v : KVector) : Float :=
   let l := v.length
-  if v.x >= 0.0 && v.y >= 0.0 then Float.asin (v.y / l)
-  else if v.x < 0.0 then Float.pi - Float.asin (v.y / l)
-  else 2.0 * Float.pi + Float.asin (v.y / l)
+  if v.x >= fl0p0 && v.y >= fl0p0 then Float.asin (v.y / l)
+  else if v.x < fl0p0 then Float.pi - Float.asin (v.y / l)
+  else fl2p0 * Float.pi + Float.asin (v.y / l)
 
 def toDegrees (v : KVector) : Float := Float.toDegrees v.toRadians
 

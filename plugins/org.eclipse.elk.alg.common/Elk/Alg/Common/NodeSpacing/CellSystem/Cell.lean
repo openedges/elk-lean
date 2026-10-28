@@ -26,6 +26,11 @@ therefore sees the same cell, exactly like the Java object references.
 * All functions are pure (`CellArena L → … → CellArena L`); invalid ids read as a default
   atomic cell and writes to invalid ids are ignored (no panics).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NodeSpacing.CellSystem
 
 open Elk Elk.Core.Math
@@ -50,7 +55,7 @@ structure LabelCellData (L : Type) where
   /-- `verticalAlignment` (default `CENTER`). -/
   verticalAlignment : VerticalLabelAlignment := .center
   /-- `gap` between two consecutive labels. -/
-  gap : Float := 0.0
+  gap : Float := fl0p0
   /-- `labels`: label handle and the label size read when it was added. -/
   labels : Array (L × KVector) := #[]
   /-- `minimumContentAreaSize`: space needed to place the labels (without padding). -/

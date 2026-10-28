@@ -7,6 +7,11 @@ Spacing values per pair of node types, pre-resolved from the graph's properties.
 the node-based lookups take the node's type and property map, so this module does not
 depend on the graph arena (the `LGraph` internals hold a `Spacings`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Options
 
 open Elk.Graph Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -125,7 +130,7 @@ private def precalculated : Spacings × Array (Property Float) :=
 option id in table order. -/
 private def cacheGraphValues (s : Spacings) (distinct : Array (Property Float)) (graphProps : PropertyMap) :
     Spacings :=
-  { s with graphPropertyValues := distinct.map fun p => (p.key.id, (graphProps.get p).getD 0.0) }
+  { s with graphPropertyValues := distinct.map fun p => (p.key.id, (graphProps.get p).getD fl0p0) }
 
 /-- `graph_spacing_value(property)`: the cached graph value, else the option default. -/
 def graphSpacingValue (s : Spacings) (p : Property Float) : Float :=

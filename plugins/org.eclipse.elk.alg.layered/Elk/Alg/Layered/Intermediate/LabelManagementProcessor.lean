@@ -30,6 +30,12 @@ TODO(core-labels): resolve the graph's `LabelManagementOptions.LABEL_MANAGER` to
 `labelManagerOf` once the core label manager can be stored as a typed value (JSON inputs never carry
 a label manager, so the parity pipeline is unaffected).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -86,7 +92,7 @@ def doManageAttachedCommentLabels (labelManager : LabelManager) (commentNodes : 
   for commentNode in commentNodes do
     let labels := (← getNode commentNode).labels
     if labels.isEmpty then continue
-    let _ ← doManageLabels labelManager labels minWidthNodeLabels 0.0 verticalLayout
+    let _ ← doManageLabels labelManager labels minWidthNodeLabels fl0p0 verticalLayout
 
 /-- Rust `manage_non_center_labels(graph, manager, label_label_spacing, vertical)`: labels of `NORMAL`
 nodes, of their ports and of their attached comments, and the labels of every node's outgoing edges
@@ -108,7 +114,7 @@ def manageNonCenterLabels (graph : LGraphId) (labelManager : LabelManager) (labe
         doManageAttachedCommentLabels labelManager nd.internal.bottomComments MIN_WIDTH_NODE_LABELS verticalLayout
       for edge in outgoingEdges do
         let labels := (← getEdge edge).labels
-        let _ ← doManageLabels labelManager labels MIN_WIDTH_EDGE_LABELS 0.0 verticalLayout
+        let _ ← doManageLabels labelManager labels MIN_WIDTH_EDGE_LABELS fl0p0 verticalLayout
 
 /-- Rust `manage_center_labels(graph, manager, edge_label_spacing, label_label_spacing, direction,
 vertical)`: per layer the target width is `max(MIN_WIDTH_EDGE_LABELS, widest NORMAL node)`; each label
@@ -125,8 +131,8 @@ def manageCenterLabels (graph : LGraphId) (labelManager : LabelManager) (edgeLab
       if nd.type != .label then continue
       let connectedEdges ← withArena (·.nodeConnectedEdges node)
       let edgeThickness ← match connectedEdges[0]? with
-        | some e => pure ((← getEdge e).props.getD CoreOptions.EDGE_THICKNESS 1.0)
-        | none => pure 1.0
+        | some e => pure ((← getEdge e).props.getD CoreOptions.EDGE_THICKNESS fl1p0)
+        | none => pure fl1p0
       let labels := if nd.internal.representedLabels.isEmpty then nd.labels else nd.internal.representedLabels
       let required ← doManageLabels labelManager labels maxWidth labelLabelSpacing verticalLayout
       modifyNode node fun n => { n with size := ⟨required.x, required.y + edgeThickness + edgeLabelSpacing⟩ }

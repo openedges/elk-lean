@@ -38,6 +38,11 @@ Rust reference semantics reproduced explicitly:
   additional blocks that a caller keeps mutably borrowed in Rust can be listed in
   `RectPackingArena.borrowedBlocks` to reproduce the deferral.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.Util
 
 open Elk.Graph Elk.Core.Util
@@ -62,8 +67,8 @@ inside a block. A plain value owned by its `Block`. -/
 structure BlockRow where
   x : Float
   y : Float
-  width : Float := 0.0
-  height : Float := 0.0
+  width : Float := fl0p0
+  height : Float := fl0p0
   nodeNodeSpacing : Float
   /-- `rects`: the rectangles (child nodes of the laid-out graph) in the row. -/
   rects : Array NodeId := #[]
@@ -73,22 +78,22 @@ structure BlockRow where
 placed in block rows. -/
 structure Block where
   smallestRectWidth : Float := Float.posInf
-  minWidth : Float := 0.0
-  width : Float := 0.0
-  minHeight : Float := 0.0
+  minWidth : Float := fl0p0
+  width : Float := fl0p0
+  minHeight : Float := fl0p0
   smallestRectHeight : Float := Float.posInf
-  averageHeight : Float := 0.0
-  maxHeight : Float := 0.0
-  height : Float := 0.0
+  averageHeight : Float := fl0p0
+  maxHeight : Float := fl0p0
+  height : Float := fl0p0
   children : Array NodeId := #[]
   rows : Array BlockRow := #[]
-  x : Float := 0.0
-  y : Float := 0.0
+  x : Float := fl0p0
+  y : Float := fl0p0
   /-- `parent_row` (`Weak`): see `Block.parentRowOf` for the liveness check. -/
   parentRow : Option RectRowId := none
   /-- `stack` (`Weak`): see `Block.stackOf` for the liveness check. -/
   stack : Option BlockStackId := none
-  nodeNodeSpacing : Float := 0.0
+  nodeNodeSpacing : Float := fl0p0
   fixed : Bool := false
   positionFixed : Bool := false
   deriving Inhabited, Repr
@@ -99,8 +104,8 @@ structure BlockStack where
   blocks : Array BlockId := #[]
   x : Float
   y : Float
-  width : Float := 0.0
-  height : Float := 0.0
+  width : Float := fl0p0
+  height : Float := fl0p0
   nodeNodeSpacing : Float
   /-- `false` once Rust would have dropped the last `Rc` (see the module doc). -/
   alive : Bool := true
@@ -108,13 +113,13 @@ structure BlockStack where
 
 /-- `org.eclipse.elk.alg.rectpacking.util.RectRow` (Rust `rect_row.rs`): a row of blocks. -/
 structure RectRow where
-  height : Float := 0.0
-  width : Float := 0.0
+  height : Float := fl0p0
+  width : Float := fl0p0
   y : Float
   nodeNodeSpacing : Float
   children : Array BlockId := #[]
   stacks : Array BlockStackId := #[]
-  potentialAdditionalWidthToGetLastBlock : Float := 0.0
+  potentialAdditionalWidthToGetLastBlock : Float := fl0p0
   /-- `false` once Rust would have dropped the last `Rc` (see the module doc). -/
   alive : Bool := true
   deriving Inhabited, Repr
@@ -205,16 +210,16 @@ def notifyAboutNodeChange (row : RectRowId) (lockedChildFallback : Option (Float
   let r := a.rows[row.idx]!
   let (hasFallback, fallbackWidth, fallbackHeight) := match lockedChildFallback with
     | some (w, h) => (true, w, h)
-    | none => (false, 0.0, 0.0)
+    | none => (false, fl0p0, fl0p0)
   let (hasSelf, selfIdx) := match self? with
     | some b => (true, b.idx)
     | none => (false, 0)
   let res := notifyLoop a.blocks r.children a.borrowedBlocks hasSelf selfIdx r.nodeNodeSpacing 0
-    hasFallback fallbackWidth fallbackHeight 0.0 Float.negInf
+    hasFallback fallbackWidth fallbackHeight fl0p0 Float.negInf
   match res with
   | none => return
   | some (totalStackWidth, newMaxHeight) =>
-    let newMaxHeight := if newMaxHeight == Float.negInf then 0.0 else newMaxHeight
+    let newMaxHeight := if newMaxHeight == Float.negInf then fl0p0 else newMaxHeight
     modifyRow row fun x => { x with width := totalStackWidth, height := newMaxHeight }
 where
   /-- The child loop (tail recursive, unboxed state; the arena is not modified while it runs).
@@ -224,7 +229,7 @@ where
       (totalStackWidth newMaxHeight : Float) : Option (Float × Float) :=
     if h : index < children.size then
       let child := children[index]
-      let spacing := if index > 0 then nodeNodeSpacing else 0.0
+      let spacing := if index > 0 then nodeNodeSpacing else fl0p0
       if (hasSelf && child.idx == selfIdx) || borrowed.contains child then
         if hasFallback then
           notifyLoop blocks children borrowed hasSelf selfIdx nodeNodeSpacing (index + 1) false

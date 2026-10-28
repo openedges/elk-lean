@@ -7,6 +7,11 @@ Serialises an `ElkGraph` arena to the ELK JSON format (`ElkGraphJson.forGraph(..
 Layout option values are written as strings in their Java `toString` form;
 enum constants are resolved through the metadata registry.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Json
 
 open Elk Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Core.Data
@@ -174,10 +179,10 @@ private def transferShapeLayout (x y w h : Float) (obj : Value) : ExportM Value 
   let opts := (← get).opts
   let mut obj := obj
   if !opts.omitLayout then
-    if !opts.omitZeroPositions || x != 0.0 then obj := obj.set "x" (.ofFloat x)
-    if !opts.omitZeroPositions || y != 0.0 then obj := obj.set "y" (.ofFloat y)
-  if !opts.omitZeroDimension || w != 0.0 then obj := obj.set "width" (.ofFloat w)
-  if !opts.omitZeroDimension || h != 0.0 then obj := obj.set "height" (.ofFloat h)
+    if !opts.omitZeroPositions || x != fl0p0 then obj := obj.set "x" (.ofFloat x)
+    if !opts.omitZeroPositions || y != fl0p0 then obj := obj.set "y" (.ofFloat y)
+  if !opts.omitZeroDimension || w != fl0p0 then obj := obj.set "width" (.ofFloat w)
+  if !opts.omitZeroDimension || h != fl0p0 then obj := obj.set "height" (.ofFloat h)
   return obj
 
 private def pointObject (x y : Float) : Value := .obj #[("x", .ofFloat x), ("y", .ofFloat y)]

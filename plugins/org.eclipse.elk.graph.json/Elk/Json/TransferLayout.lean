@@ -8,6 +8,11 @@ compaction and port-shift corrections are ported from elk-rs verbatim; they
 keep the JSON output of special cases (inside self loops, zero-size ports)
 identical to Java ELK (see HISTORY.md for the follow-up).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Json
 
 open Elk Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Core.Data
@@ -151,11 +156,11 @@ def recordCoordinateModes (el : ElementId) : ImportM Unit := do
 once), so the per-shape records below return plain floats and enum values. -/
 
 @[inline] private def tableGX (t : TransferTables) : ElementId → Float
-  | .edge _ => 0.0
+  | .edge _ => fl0p0
   | el => t.globalX.get! (t.index el)
 
 @[inline] private def tableGY (t : TransferTables) : ElementId → Float
-  | .edge _ => 0.0
+  | .edge _ => fl0p0
   | el => t.globalY.get! (t.index el)
 
 /-- `coordinateModes`' shape mode: the element's own mode unless it is `INHERIT` (or unset), then
@@ -212,14 +217,14 @@ subtracts the original parent's (`PARENT`). `err`: `1` "Edge has no container.",
 original parent." (thrown at the first adjustment, like the reference). -/
 structure EdgeAdjust where
   kind : UInt8 := 0
-  cx : Float := 0.0
-  cy : Float := 0.0
-  ox : Float := 0.0
-  oy : Float := 0.0
+  cx : Float := fl0p0
+  cy : Float := fl0p0
+  ox : Float := fl0p0
+  oy : Float := fl0p0
   /-- Self loop of a compacted node: x values right of `sourceX + 1e-9` move left by `delta`. -/
   selfLoop : Bool := false
-  sourceX : Float := 0.0
-  delta : Float := 0.0
+  sourceX : Float := fl0p0
+  delta : Float := fl0p0
   err : UInt8 := 0
 
 /-- `EdgeAdjust` of an edge (no state change; the values it reads are fixed during the edge's
@@ -431,7 +436,7 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
     modAt path (·.set Key.height (.ofFloatElk FOUR))
   if hasPortsAndPortLabelsSizeConstraints && portConstraints == .fixedOrder then
     if let some compensated ← recomputeFixedOrderVerticalPortSurroundingHeight n then
-      let current := (((← objectAt path).get? Key.height).bind (·.getFloat?)).getD 0.0
+      let current := (((← objectAt path).get? Key.height).bind (·.getFloat?)).getD fl0p0
       if compensated > current + EPS9 then
         modAt path (·.set Key.height (.ofFloatElk compensated))
 
@@ -570,7 +575,7 @@ def recomputeCompactedParentWidthCandidate (parentObj : Value) : Option Float :=
     if !child.isObj then continue
     let some x := (child.get? Key.x).bind (·.getFloat?) | continue
     let some width := (child.get? Key.width).bind (·.getFloat?) | continue
-    maxChildRight := fmax maxChildRight (x + width + 12.0)
+    maxChildRight := fmax maxChildRight (x + width + TWELVE)
   if !maxChildRight.isFinite then return none
   let childSpanCandidate := maxChildRight
   let mut edgeMaxX := Float.negInf
@@ -614,7 +619,7 @@ def fixParentWidthsForCompactedPassthroughNodes : ImportM Unit := do
     if hasPorts then continue
     let some candidate := recomputeCompactedParentWidthCandidate parentObj | continue
     let some current := (parentObj.get? Key.width).bind (·.getFloat?) | continue
-    if candidate > 0.0 && candidate + EPS9 < current then
+    if candidate > fl0p0 && candidate + EPS9 < current then
       modAt path (·.set Key.width (.ofFloatElk candidate))
 
 /-- `fix_parent_heights_for_compacted_vertical_nodes`. -/
@@ -635,20 +640,20 @@ def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
       let some y := (child.get? Key.y).bind (·.getFloat?) | continue
       let childPath := childPrefix ++ #[.idx i]
       let childKey := (st.nodePath.findIdx? fun p => p == some childPath).map (⟨·⟩ : Nat → NodeId)
-      let delta := (childKey.bind fun k => st.compactedVerticalNodeYDelta.get? k).getD 0.0
+      let delta := (childKey.bind fun k => st.compactedVerticalNodeYDelta.get? k).getD fl0p0
       ordered := ordered.push (i, y, delta)
     let sortedChildren := stableSort ordered (fun a b => Float.comparePartial a.2.1 b.2.1)
-    let mut cumulative := 0.0
-    let mut total := 0.0
+    let mut cumulative := fl0p0
+    let mut total := fl0p0
     for (i, originalY, delta) in sortedChildren do
       if cumulative.abs > EPS9 then
         modAt (childPrefix ++ #[.idx i]) (·.set Key.y (.ofFloatElk (originalY - cumulative)))
-      if delta > 0.0 then
+      if delta > fl0p0 then
         cumulative := cumulative + delta
         total := total + delta
-    if total > 0.0 then
+    if total > fl0p0 then
       if let some current := (parentObj.get? Key.height).bind (·.getFloat?) then
-        modAt path (·.set Key.height (.ofFloatElk (fmax (current - total) 0.0)))
+        modAt path (·.set Key.height (.ofFloatElk (fmax (current - total) fl0p0)))
 
 /-- `transfer_nodes_and_ports`: stack based traversal (children pushed in order, popped last-first). -/
 def transferNodesAndPorts (root : NodeId) : ImportM Unit := do

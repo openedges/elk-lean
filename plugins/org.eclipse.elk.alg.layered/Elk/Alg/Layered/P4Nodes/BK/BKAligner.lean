@@ -9,6 +9,11 @@ Köpf node placer. For documentation see `BKNodePlacer`.
 Both steps take the layout by value and return the updated layout (the arrays are updated in
 place while the layout is unshared).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P4Nodes.BK
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -74,7 +79,7 @@ def verticalAlignment (ctx : BKContext) (ni : NeighborhoodInformation) (markedEd
       let id := ctx.nodeId n
       bal := { bal with root := bal.root.set! id id }
       bal := { bal with align := bal.align.set! id id }
-      bal := bal.setInnerShift id 0.0
+      bal := bal.setInnerShift id fl0p0
   let some hdir := bal.hdir
     | throw (IO.userError "java.lang.IllegalStateException: BK aligner requires a horizontal direction")
   let some vdir := bal.vdir
@@ -198,7 +203,7 @@ def insideBlockShift (ctx : BKContext) (bal : BKAlignedLayout) : IO BKAlignedLay
       IO.eprintln s!"bk-inner: root={rootId}({ctx.designation rootNode}) start hdir={hdirDebug hdir}"
     let spaceAbove := ctx.marginTop rootNode
     let spaceBelow := ctx.sizeY rootNode + ctx.marginBottom rootNode
-    innerShift := innerShift.set! rootId 0.0
+    innerShift := innerShift.set! rootId fl0p0
     let (innerShift', spaceAbove, spaceBelow) ←
       shiftBlockNodes ctx hdir rootId maxSteps bal innerShift rootId 0 spaceAbove spaceBelow
     innerShift ← applySpaceAbove ctx rootId maxSteps bal spaceAbove innerShift' rootId 0

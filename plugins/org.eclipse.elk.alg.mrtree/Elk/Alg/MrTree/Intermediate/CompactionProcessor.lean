@@ -28,6 +28,13 @@ arena reads (the cached positions do not change while the constraints are comput
 Deviation: Rust converts `TREE_LEVEL` with `as usize` in `set_up_levels`; a negative level would wrap
 to a huge index. The Lean port clamps it to 0 (`Int.toNat`), like `LevelCoordinatesProcessor`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl4p0 : Float := 4.0
+
 namespace Elk.Alg.MrTree.Intermediate
 
 open Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Alg.MrTree Elk.Alg.MrTree.Graph Elk.Alg.MrTree.Options
@@ -149,17 +156,17 @@ private def behind (direction : Direction) (spacing : Float) (size pos otherSize
 
 /-- `CompactionProcessor::process`. -/
 def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
-  discard <| monitor.begin "Process compaction" 1.0
+  discard <| monitor.begin "Process compaction" fl1p0
   let g ← MrTreeM.getGraph graph
   let enabled := (g.props.get MrTreeOptions.COMPACTION).getD false
   let direction := (g.props.get MrTreeOptions.DIRECTION).getD .undefined
-  let nodeNodeSpacing := (g.props.get MrTreeOptions.SPACING_NODE_NODE).getD 0.0
+  let nodeNodeSpacing := (g.props.get MrTreeOptions.SPACING_NODE_NODE).getD fl0p0
   let routingMode := (g.props.get MrTreeOptions.EDGE_ROUTING_MODE).getD .avoidOverlap
   if !enabled then
     monitor.done
     return
   let levels := setUpLevels (← get) graph direction
-  computeNodeConstraints graph (nodeNodeSpacing / 4.0)
+  computeNodeConstraints graph (nodeNodeSpacing / fl4p0)
   let a ← get
   let nodes := (a.graph graph).nodes
   let dirVec := TreeUtil.getDirectionVector direction
@@ -173,8 +180,8 @@ def process (graph : TGraphId) (monitor : ProgressMonitor) : MrTreeM Unit := do
     let a ← get
     let dependent := getLowestDependentNode a node direction
     let parent := TreeUtil.getLowestParent a node direction
-    let mut newPos := 0.0
-    let mut newPosSize := 0.0
+    let mut newPos := fl0p0
+    let mut newPosSize := fl0p0
     if let some dep := dependent then
       if let some par := parent then
         let d := a.node dep

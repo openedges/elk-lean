@@ -8,6 +8,11 @@ import Elk.Core.Util.ElkTrace
 wrappers, nothing is cached: every call reads the arena. Volatile ids live in
 per-adapter `IO.Ref` arrays indexed by element id, so each `adapt` starts from 0.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Core.Util.Adapters
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options
@@ -50,7 +55,7 @@ private def setVol (r : IO.Ref (Array Int)) (i : Nat) (v : Int) : ElkM Unit :=
 
 /-- `PORT_BORDER_OFFSET` is read through a proxy property with default `0.0`. -/
 private def offsetOverride (k : PropKey) : Option PropValue :=
-  if k == CoreOptions.PORT_BORDER_OFFSET.key then some (.double 0.0) else none
+  if k == CoreOptions.PORT_BORDER_OFFSET.key then some (.double fl0p0) else none
 
 private def nodeOps (vol : IO.Ref (Array Int)) : ElementOps ElkM NodeId where
   getSize n := do

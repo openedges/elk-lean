@@ -11,6 +11,12 @@ successor of the root to its `POSITION` property, shifted by the root) that inte
 Parity quirk kept from the Rust port (and Java): the root center is computed as
 `(x + width / 2, x + width / 2)`, i.e. the y component also uses `x` and `width`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Radial.Intermediate.Optimization
 
 open Elk.Graph Elk.Core.Options
@@ -37,14 +43,14 @@ def isCrossing (d1 d2 : NodeCrossingData) : Bool :=
 def evaluate (rootNode : NodeId) : ElkM Float := do
   let g ← get
   let r := g.node rootNode
-  let rootX := r.x + r.width / 2.0
-  let rootY := r.x + r.width / 2.0
+  let rootX := r.x + r.width / fl2p0
+  let rootY := r.x + r.width / fl2p0
   let nodes := RadialUtil.successorsPure g rootNode
   let nodeData : Array NodeCrossingData := nodes.map fun node =>
     let n := g.node node
-    let cx := n.x + n.width / 2.0
-    let cy := n.y + n.height / 2.0
-    let pos := (n.props.get CoreOptions.POSITION).getD ⟨0.0, 0.0⟩
+    let cx := n.x + n.width / fl2p0
+    let cy := n.y + n.height / fl2p0
+    let pos := (n.props.get CoreOptions.POSITION).getD ⟨fl0p0, fl0p0⟩
     (cx, cy, pos.x + rootX, pos.y + rootY)
   let mut crossings : Nat := 0
   for i in [0:nodeData.size] do

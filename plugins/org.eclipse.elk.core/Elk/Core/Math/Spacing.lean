@@ -5,6 +5,11 @@ import Elk.Core.Util.Java
 Four-sided spacings. `ElkPadding` and `ElkMargin` are distinct types (they are
 distinct layout option types) with identical structure.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Core.Math
 
 open Elk.Core.Util
@@ -44,10 +49,10 @@ def parseSpacing (s : String) : Except String (Float × Float × Float × Float)
   if body.isEmpty then throw "The given string does not contain any numbers."
   let tokens := ((body.replace ";" ",").splitOn ",").map (·.trimAscii.toString)
   let tokens := tokens.filter (!·.isEmpty)
-  let mut top := 0.0
-  let mut right := 0.0
-  let mut bottom := 0.0
-  let mut left := 0.0
+  let mut top := fl0p0
+  let mut right := fl0p0
+  let mut bottom := fl0p0
+  let mut left := fl0p0
   if tokens.any (·.any (· == '=')) then
     for tok in tokens do
       match tok.splitOn "=" with

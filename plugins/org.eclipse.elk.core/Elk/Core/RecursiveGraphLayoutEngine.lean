@@ -11,6 +11,15 @@ Lays out a compound graph bottom-up: resolves the algorithm of every node
 registered `LayoutProvider` for every hierarchy level, honouring
 `elk.hierarchyHandling` (INCLUDE_CHILDREN), inside self loops and top-down layout.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl150p0 : Float := 150.0
+private def fl1p0 : Float := 1.0
+private def fl1p414 : Float := 1.414
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Core
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Core.Data Elk.Core.Validation
@@ -106,8 +115,8 @@ private def setNodeDimensionsWithPadding (n : NodeId) (size : KVector) (padding 
 /-- `applyTopdownLayout`. -/
 def applyTopdownLayout (layoutNode : NodeId) (children : Array NodeId) (data : LayoutAlgorithmData)
     (nodeCount : Nat) (monitor : ProgressMonitor) : ElkM Unit := do
-  let topdownMonitor ← monitor.subTask 1.0
-  let _ ← topdownMonitor.begin "Topdown Layout" 1.0
+  let topdownMonitor ← monitor.subTask fl1p0
+  let _ ← topdownMonitor.begin "Topdown Layout" fl1p0
   let some nodeType := (← ElkM.getNode layoutNode).props.get CoreOptions.TOPDOWN_NODE_TYPE
     | throwUnsupportedConfiguration "Top-down layout node type has not been assigned."
   if nodeType == .hierarchicalNode || nodeType == .rootNode then
@@ -130,8 +139,8 @@ def applyTopdownLayout (layoutNode : NodeId) (children : Array NodeId) (data : L
         let size := (TopdownSizeApproximator.getSize approximator (← get) child).getD {}
         setNodeDimensionsWithPadding child size padding
       | none =>
-        let width := childNode.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH 150.0
-        let aspectRatio := childNode.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO 1.414
+        let width := childNode.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_WIDTH fl150p0
+        let aspectRatio := childNode.props.getD CoreOptions.TOPDOWN_HIERARCHICAL_NODE_ASPECT_RATIO fl1p414
         setNodeDimensionsWithPadding child ⟨width, width / aspectRatio⟩ padding
   let node ← ElkM.getNode layoutNode
   let padding := node.props.getD CoreOptions.PADDING {}
@@ -148,39 +157,39 @@ def applyTopdownLayout (layoutNode : NodeId) (children : Array NodeId) (data : L
   if nodeType == .rootNode then
     ElkUtil.computeChildAreaDimensions layoutNode
     let node ← ElkM.getNode layoutNode
-    let caw := node.props.getD CoreOptions.CHILD_AREA_WIDTH 0.0
-    let cah := node.props.getD CoreOptions.CHILD_AREA_HEIGHT 0.0
+    let caw := node.props.getD CoreOptions.CHILD_AREA_WIDTH fl0p0
+    let cah := node.props.getD CoreOptions.CHILD_AREA_HEIGHT fl0p0
     ElkM.modifyNode layoutNode fun nd => { nd with
       width := padding.left + caw + padding.right, height := padding.top + cah + padding.bottom }
   let algorithmId := (← ElkM.getNode layoutNode).props.getD CoreOptions.ALGORITHM ""
   topdownMonitor.log s!"Executed layout algorithm: {algorithmId} on node"
   if nodeType == .hierarchicalNode then
-    if childAreaAvailableWidth < 0.0 || childAreaAvailableHeight < 0.0 then
+    if childAreaAvailableWidth < fl0p0 || childAreaAvailableHeight < fl0p0 then
       throwUnsupportedConfiguration "The size defined by the parent parallel node is too small for the space provided by the paddings of the child hierarchical node."
     let node ← ElkM.getNode layoutNode
     if !(node.props.has CoreOptions.CHILD_AREA_WIDTH || node.props.has CoreOptions.CHILD_AREA_HEIGHT) then
       ElkUtil.computeChildAreaDimensions layoutNode
     let node ← ElkM.getNode layoutNode
-    let desiredW := node.props.getD CoreOptions.CHILD_AREA_WIDTH 0.0
-    let desiredH := node.props.getD CoreOptions.CHILD_AREA_HEIGHT 0.0
+    let desiredW := node.props.getD CoreOptions.CHILD_AREA_WIDTH fl0p0
+    let desiredH := node.props.getD CoreOptions.CHILD_AREA_HEIGHT fl0p0
     topdownMonitor.log s!"Desired Child Area: ({Float.toRustDisplay desiredW}|{Float.toRustDisplay desiredH})"
     let scaleFactorX := childAreaAvailableWidth / desiredW
     let scaleFactorY := childAreaAvailableHeight / desiredH
-    let scaleCap := node.props.getD CoreOptions.TOPDOWN_SCALE_CAP 1.0
+    let scaleCap := node.props.getD CoreOptions.TOPDOWN_SCALE_CAP fl1p0
     let scaleFactor := fmin (fmin scaleFactorX scaleFactorY) scaleCap
     ElkM.setNodeProp layoutNode CoreOptions.TOPDOWN_SCALE_FACTOR scaleFactor
     topdownMonitor.log s!"Local Scale Factor (X|Y): ({Float.toRustDisplay scaleFactorX}|{Float.toRustDisplay scaleFactorY})"
     let contentAlignment := node.props.getD CoreOptions.CONTENT_ALIGNMENT ContentAlignment.topLeft
-    let mut alignmentShiftX := 0.0
-    let mut alignmentShiftY := 0.0
+    let mut alignmentShiftX := fl0p0
+    let mut alignmentShiftY := fl0p0
     if scaleFactor < scaleFactorX then
       if contentAlignment.contains .hCenter then
-        alignmentShiftX := (childAreaAvailableWidth / 2.0 - (desiredW * scaleFactor) / 2.0) / scaleFactor
+        alignmentShiftX := (childAreaAvailableWidth / fl2p0 - (desiredW * scaleFactor) / fl2p0) / scaleFactor
       else if contentAlignment.contains .hRight then
         alignmentShiftX := (childAreaAvailableWidth - desiredW * scaleFactor) / scaleFactor
     if scaleFactor < scaleFactorY then
       if contentAlignment.contains .vCenter then
-        alignmentShiftY := (childAreaAvailableHeight / 2.0 - (desiredH * scaleFactor) / 2.0) / scaleFactor
+        alignmentShiftY := (childAreaAvailableHeight / fl2p0 - (desiredH * scaleFactor) / fl2p0) / scaleFactor
       else if contentAlignment.contains .vBottom then
         alignmentShiftY := (childAreaAvailableHeight - desiredH * scaleFactor) / scaleFactor
     let xShift := alignmentShiftX + (padding.left / scaleFactor - padding.left)
@@ -238,7 +247,7 @@ partial def layoutRecursively (layoutNode : NodeId) (monitor : ProgressMonitor) 
       let algorithmSwitch := nd.props.has CoreOptions.ALGORITHM &&
         ((← getResolvedAlgorithm n).map (· != algorithmData)).getD false
       if stopHierarchy || algorithmSwitch then
-        let subMonitor ← monitor.subTask 1.0
+        let subMonitor ← monitor.subTask fl1p0
         let childLoops ← layoutRecursively n subMonitor
         childrenInsideSelfLoops := childrenInsideSelfLoops ++ childLoops
         ElkM.setNodeProp n CoreOptions.HIERARCHY_HANDLING .separateChildren
@@ -250,7 +259,7 @@ partial def layoutRecursively (layoutNode : NodeId) (monitor : ProgressMonitor) 
     if topdownLayout then
       applyTopdownLayout layoutNode children algorithmData nodeCount monitor
     for child in children do
-      let subMonitor ← monitor.subTask 1.0
+      let subMonitor ← monitor.subTask fl1p0
       let childLoops ← layoutRecursively child subMonitor
       childrenInsideSelfLoops := childrenInsideSelfLoops ++ childLoops
       ElkUtil.applyConfiguredNodeScaling child

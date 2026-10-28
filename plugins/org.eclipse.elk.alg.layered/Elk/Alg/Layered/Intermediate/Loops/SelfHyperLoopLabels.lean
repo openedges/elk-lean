@@ -11,6 +11,12 @@ Rust/Java difference (Rust followed): Java reads the layout direction and the la
 in the constructor; Rust creates the labels with `horizontal = true`, spacing `0.0` and lets
 `SelfLoopPreProcessor` set both afterwards (each setter recalculates the size).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Loops
 
 open Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -37,7 +43,7 @@ structure SelfHyperLoopLabels where
   /-- `getAlignmentReferenceSLPort()`. -/
   alignmentReferenceSLPort : Option SelfLoopPortId := none
   /-- `labelLabelSpacing` (Rust default `0.0`). -/
-  labelLabelSpacing : Float := 0.0
+  labelLabelSpacing : Float := fl0p0
   /-- `layoutDirectionHorizontal` (Rust default `true`). -/
   layoutDirectionHorizontal : Bool := true
   deriving Inhabited, Repr
@@ -96,7 +102,7 @@ def placementForHorizontalLayout (l : SelfHyperLoopLabels) (offset : KVector) (s
     let labelX :=
       if l.alignment == .left || l.side == .east then x
       else if l.alignment == .right || l.side == .west then x + l.size.x - s.x
-      else x + (l.size.x - s.x) / 2.0
+      else x + (l.size.x - s.x) / fl2p0
     result := result.push (label, ⟨labelX + offset.x, y + offset.y⟩)
     y := y + (s.y + l.labelLabelSpacing)
   return result

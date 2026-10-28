@@ -4,6 +4,12 @@ import Elk.Alg.RectPacking.Util.RectPackingArena
 
 Port of `util/drawing_util.rs` (elk-rs): scale measure and drawing dimensions.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.RectPacking.Util
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math
@@ -14,23 +20,23 @@ namespace DrawingUtil
 /-- `compute_scale_measure(width, height, desired_aspect_ratio)`:
 `min(desired_aspect_ratio / width, 1 / height)` (Rust `f64::min`). -/
 @[inline] def computeScaleMeasure (width height desiredAspectRatio : Float) : Float :=
-  fmin (desiredAspectRatio / width) (1.0 / height)
+  fmin (desiredAspectRatio / width) (fl1p0 / height)
 
 /-- `reset_coordinates(nodes)`: moves every node to `(0, 0)`. -/
 def resetCoordinates (nodes : Array NodeId) : ElkM Unit := do
   for n in nodes do
-    ElkM.modifyNode n fun x => { x with x := 0.0, y := 0.0 }
+    ElkM.modifyNode n fun x => { x with x := fl0p0, y := fl0p0 }
 
 /-- `calculate_dimensions(rows, node_node_spacing)`: maximum row width and the summed row heights
 plus spacing between the rows. -/
 def calculateDimensions (rows : Array RectRowId) (nodeNodeSpacing : Float) : RectPackingM KVector := do
-  let mut maxWidth : Float := 0.0
-  let mut newHeight : Float := 0.0
+  let mut maxWidth : Float := fl0p0
+  let mut newHeight : Float := fl0p0
   let mut index := 0
   for row in rows do
     let r ← getRow row
     maxWidth := fmax maxWidth r.width
-    newHeight := newHeight + (r.height + (if index > 0 then nodeNodeSpacing else 0.0))
+    newHeight := newHeight + (r.height + (if index > 0 then nodeNodeSpacing else fl0p0))
     index := index + 1
   return ⟨maxWidth, newHeight⟩
 

@@ -28,6 +28,12 @@ Deviations from Java (following elk-rs): the constructor does not throw for inva
 `PORT_LABELS_PLACEMENT` / `NODE_LABELS_PLACEMENT` values (elk-rs has no such check), and
 `portAlignment*` / `nodeSizeMinimum` are read once at construction.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal
 
 open Elk Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -150,17 +156,17 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
     | some g => some <$> a.graph.getProps g
     | none => pure none
   let nodeLabelsPadding := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.NODE_LABELS_PADDING).getD {}
-  let nodeLabelSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_NODE).getD 0.0
+  let nodeLabelSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_NODE).getD fl0p0
   let labelLabelSpacing :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_LABEL).getD 0.0
-  let portPortSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORT_PORT).getD 0.0
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_LABEL).getD fl0p0
+  let portPortSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORT_PORT).getD fl0p0
   let portLabelSpacingHorizontal :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD 0.0
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD fl0p0
   let portLabelSpacingVertical :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD 0.0
+    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD fl0p0
   let surroundingPortMargins :=
     (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
-  let labelCellSpacing := 2.0 * labelLabelSpacing
+  let labelCellSpacing := fl2p0 * labelLabelSpacing
   -- Port alignment per side
   let portAlignmentDefault := ops.getPropertyDFrom props CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
   let sideAlignment (p : Property PortAlignment) : Option PortAlignment :=
@@ -177,8 +183,8 @@ def new {m : Type → Type} [Monad m] {G E : Type} (a : GraphAdapters m G N P L 
     | none => false
   -- Create main cells (the others will be created later by the algorithm phases)
   let symmetry := !sizeOptions.contains .asymmetrical
-  let (cells, nodeContainer) := (CellArena.empty : CellArena L).createStrip .vertical symmetry 0.0
-  let (cells, middleRow) := cells.createStrip .horizontal symmetry 0.0
+  let (cells, nodeContainer) := (CellArena.empty : CellArena L).createStrip .vertical symmetry fl0p0
+  let (cells, middleRow) := cells.createStrip .horizontal symmetry fl0p0
   let cells := cells.setCell nodeContainer .center (some middleRow)
   return {
     node, nodeSize, treatAsCompoundNode, sizeConstraints, sizeOptions, portConstraints,

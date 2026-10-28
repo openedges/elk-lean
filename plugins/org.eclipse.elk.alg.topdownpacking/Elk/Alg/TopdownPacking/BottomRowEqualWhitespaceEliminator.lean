@@ -11,6 +11,12 @@ Port of `bottom_row_equal_whitespace_eliminator.rs` (elk-rs): phase 2 of topdown
 Distributes the horizontal whitespace of every row equally among the row's nodes (widening
 them), then the vertical whitespace below the last row among the nodes.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.TopdownPacking
 
 open Elk.Graph Elk.Core.Alg Elk.Core.Util Elk.Core.Options
@@ -19,10 +25,10 @@ namespace BottomRowEqualWhitespaceEliminator
 
 /-- `process(layout_graph, progress_monitor)`: the whitespace elimination phase. -/
 def process (_layoutGraph : GridElkNode) (monitor : ProgressMonitor) : GridM Unit := do
-  let _ ← monitor.begin "Whitespace elimination" 1.0
+  let _ ← monitor.begin "Whitespace elimination" fl1p0
   let wrapper ← get
   monitor.log s!"Whitespace elimination began for node {← wrapper.identifier}"
-  if (← wrapper.width) == 0.0 || wrapper.cols == 0 then
+  if (← wrapper.width) == fl0p0 || wrapper.cols == 0 then
     monitor.log "Parent node has no width, skipping phase"
     monitor.done
     return
@@ -43,8 +49,8 @@ def process (_layoutGraph : GridElkNode) (monitor : ProgressMonitor) : GridM Uni
     if rightBorder + padding.right < layoutWidth then
       monitor.log s!"Eliminate white space in row {rowIndex}"
       let extraSpace := layoutWidth - (rightBorder + padding.right)
-      let extraSpacePerNode := extraSpace / (lastIndex.toFloat + 1.0)
-      let mut accumulatedShift := 0.0
+      let extraSpacePerNode := extraSpace / (lastIndex.toFloat + fl1p0)
+      let mut accumulatedShift := fl0p0
       for item in row.take (lastIndex + 1) do
         if let some n := item then
           ElkM.modifyNode n fun nd => { nd with x := nd.x + accumulatedShift }
@@ -59,8 +65,8 @@ def process (_layoutGraph : GridElkNode) (monitor : ProgressMonitor) : GridM Uni
   let bottomBorder := ln.y + ln.height
   let layoutHeight ← wrapper.height
   let extraSpace := layoutHeight - (bottomBorder + padding.bottom)
-  let extraSpacePerNode := extraSpace / (col.size.toFloat + 1.0)
-  let mut accumulatedShift := 0.0
+  let extraSpacePerNode := extraSpace / (col.size.toFloat + fl1p0)
+  let mut accumulatedShift := fl0p0
   monitor.log "Eliminate vertical white space"
   if bottomBorder + padding.bottom < layoutHeight then
     for rowIndex in [0:wrapper.rows] do

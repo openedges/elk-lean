@@ -10,6 +10,13 @@ Packs the children of a node into rows (`SIMPLE`) or recursively grouped
 boxes (`GROUP_DEC`, `GROUP_INC`, `GROUP_MIXED`). Groups form a tree held in
 an arena (`BoxM` state) instead of `Rc<RefCell<Group>>`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Core.Util
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options
@@ -34,7 +41,7 @@ abbrev BoxM := StateT (Array Group) ElkM
 @[inline] private def modGroup (i : Nat) (f : Group → Group) : BoxM Unit := modify (·.modifyIn i f)
 
 private def newNodeGroup (n : NodeId) : BoxM Nat := do
-  ElkM.modifyNode n fun nd => { nd with x := 0.0, y := 0.0 }
+  ElkM.modifyNode n fun nd => { nd with x := fl0p0, y := fl0p0 }
   let gs ← get
   set (gs.push { node := some n })
   return gs.size
@@ -101,8 +108,8 @@ private def areaStdDevGroups (groups : Array Nat) (mean : Float) : BoxM Float :=
 partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPadding)
     (minTotalWidth minTotalHeight : Float) (expandNodes : Bool) (aspectRatio : Float) : BoxM KVector := do
   let groups := (← getGroup group).groups
-  let mut maxRowWidth := 0.0
-  let mut totalArea := 0.0
+  let mut maxRowWidth := fl0p0
+  let mut totalArea := fl0p0
   for gi in groups do
     if let some n := (← getGroup gi).node then
       let _ ← ElkUtil.resizeNode n
@@ -112,12 +119,12 @@ partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPad
     totalArea := totalArea + w * h
   let mean := totalArea / groups.size.toFloat
   let stddev ← areaStdDevGroups groups mean
-  let sdInfluence := 1.0
+  let sdInfluence := fl1p0
   totalArea := totalArea + groups.size.toFloat * sdInfluence * stddev
   maxRowWidth := fmax maxRowWidth (Float.sqrt (totalArea * aspectRatio)) + padding.left
   let mut xpos := padding.left
   let mut ypos := padding.top
-  let mut highestBox := 0.0
+  let mut highestBox := fl0p0
   let mut broadestRow := padding.left + padding.right
   let mut rowIndices : Array Nat := #[0]
   let mut rowHeights : Array Float := #[]
@@ -137,7 +144,7 @@ partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPad
         bottoms := #[]
       xpos := padding.left
       ypos := ypos + (highestBox + minSpacing)
-      highestBox := 0.0
+      highestBox := fl0p0
       broadestRow := fmax broadestRow (padding.left + padding.right + w)
     bottoms := bottoms.push gi
     groupTranslate gi xpos ypos
@@ -162,11 +169,11 @@ partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPad
     let mut rowHeightPos := 0
     let mut nextRowIndex := rowIndices[rowIdxPos]?.getD groups.size
     rowIdxPos := rowIdxPos + 1
-    let mut rowHeight := 0.0
+    let mut rowHeight := fl0p0
     for h : index in [0:groups.size] do
       if index == nextRowIndex then
         xpos := padding.left
-        rowHeight := rowHeights[rowHeightPos]?.getD 0.0
+        rowHeight := rowHeights[rowHeightPos]?.getD fl0p0
         rowHeightPos := rowHeightPos + 1
         nextRowIndex := rowIndices[rowIdxPos]?.getD groups.size
         rowIdxPos := rowIdxPos + 1
@@ -176,7 +183,7 @@ partial def placeInnerBoxes (group : Nat) (minSpacing : Float) (padding : ElkPad
         let newWidth := broadestRow - xpos - padding.right
         let oldWidth ← groupWidth gi
         groupSetWidth gi newWidth
-        groupTranslateInnerNodes gi ((newWidth - oldWidth) / 2.0) 0.0
+        groupTranslateInnerNodes gi ((newWidth - oldWidth) / fl2p0) fl0p0
       xpos := xpos + ((← groupWidth gi) + minSpacing)
   return ⟨broadestRow, totalHeight⟩
 
@@ -190,21 +197,21 @@ partial def mergeAndPlaceDec (groups : Array Nat) (objSpacing minWidth minHeight
   let mut toBePlaced : Array Nat := #[]
   let mut maybeGroup : Array Nat := #[]
   let mut boxToBeat : Option Nat := none
-  let mut collectedArea := 0.0
+  let mut collectedArea := fl0p0
   while head < queue.size do
     let gi := queue[head]!
     head := head + 1
     let boxArea ← groupArea gi
     let beatArea ← match boxToBeat with
       | some b => groupArea b
-      | none => pure 0.0
-    if boxToBeat.isNone || beatArea / 2.0 < boxArea then
+      | none => pure fl0p0
+    if boxToBeat.isNone || beatArea / fl2p0 < boxArea then
       boxToBeat := some gi
       toBePlaced := toBePlaced.push gi
     else
       collectedArea := collectedArea + boxArea
       maybeGroup := maybeGroup.push gi
-      if maybeGroup.size > 1 && (collectedArea > beatArea / 2.0 || head >= queue.size) then
+      if maybeGroup.size > 1 && (collectedArea > beatArea / fl2p0 || head >= queue.size) then
         let inner ← newGroups maybeGroup
         let beat := boxToBeat.get!
         let innerAspectRatio := (← groupWidth beat) / (← groupHeight beat)
@@ -212,13 +219,13 @@ partial def mergeAndPlaceDec (groups : Array Nat) (objSpacing minWidth minHeight
         modGroup inner fun gr => { gr with size := groupSize }
         boxToBeat := some inner
         toBePlaced := toBePlaced.push inner
-        collectedArea := 0.0
+        collectedArea := fl0p0
         maybeGroup := #[]
   return toBePlaced ++ maybeGroup
 
 /-- `mergeAndPlaceMixed` (min-heap by (area, seq) emulated with a sorted array). -/
 partial def mergeAndPlaceMixed (groups : Array Nat) (objSpacing minWidth minHeight : Float) (expandNodes : Bool) : BoxM (Array Nat) := do
-  let mut cumArea : Array Float := Array.replicate groups.size 0.0
+  let mut cumArea : Array Float := Array.replicate groups.size fl0p0
   let mut heap : Array (Float × Nat × Nat) := #[]   -- (area, seq, group), ascending
   let insert (h : Array (Float × Nat × Nat)) (e : Float × Nat × Nat) : Array (Float × Nat × Nat) := Id.run do
     let mut i := 0
@@ -232,9 +239,9 @@ partial def mergeAndPlaceMixed (groups : Array Nat) (objSpacing minWidth minHeig
   let mut toBePlaced : Array Nat := #[]
   while !heap.isEmpty do
     let (boxArea, _, boxGroup) := heap[0]!
-    if index > 1 && boxArea / 2.0 > cumArea[0]! then
+    if index > 1 && boxArea / fl2p0 > cumArea[0]! then
       let mut anIndex := 0
-      while anIndex < toBePlaced.size - 1 && boxArea / 2.0 > cumArea[anIndex]! do anIndex := anIndex + 1
+      while anIndex < toBePlaced.size - 1 && boxArea / fl2p0 > cumArea[anIndex]! do anIndex := anIndex + 1
       let selected := toBePlaced.extract 0 (anIndex + 1)
       let inner ← newGroups selected
       let innerAspectRatio := (← groupWidth boxGroup) / (← groupHeight boxGroup)
@@ -247,7 +254,7 @@ partial def mergeAndPlaceMixed (groups : Array Nat) (objSpacing minWidth minHeig
         seq := seq + 1
       toBePlaced := #[]
       index := 0
-      cumArea := Array.replicate groups.size 0.0
+      cumArea := Array.replicate groups.size fl0p0
     else
       let (area, _, gi) := heap[0]!
       heap := heap.eraseIdx! 0
@@ -263,10 +270,10 @@ partial def mergeAndPlaceInc (groups : Array Nat) (objSpacing minWidth minHeight
   for gi in groups do keyed := keyed.push (gi, ← groupArea gi)
   let sorted := (stableSort keyed (fun a b => Float.comparePartial a.2 b.2)).map (·.1)
   let mut toBePlaced : Array Nat := #[]
-  let mut commonArea := 0.0
+  let mut commonArea := fl0p0
   for gi in sorted do
     let area ← groupArea gi
-    if !toBePlaced.isEmpty && area > commonArea * 2.0 then
+    if !toBePlaced.isEmpty && area > commonArea * fl2p0 then
       let merged ← newGroups toBePlaced
       let innerAspectRatio := (← groupWidth gi) / (← groupHeight gi)
       let groupSize ← placeInnerBoxes merged objSpacing {} minWidth minHeight expandNodes innerAspectRatio
@@ -333,8 +340,8 @@ private def areaStdDev (boxes : Array NodeId) (mean : Float) : ElkM Float := do
 /-- `placeBoxes(sortedBoxes, ...)`. -/
 def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding : ElkPadding)
     (minTotalWidth minTotalHeight : Float) (expandNodes : Bool) (aspectRatio : Float) : ElkM KVector := do
-  let mut maxRowWidth := 0.0
-  let mut totalArea := 0.0
+  let mut maxRowWidth := fl0p0
+  let mut totalArea := fl0p0
   for b in sortedBoxes do
     let _ ← ElkUtil.resizeNode b
     let nd ← ElkM.getNode b
@@ -348,7 +355,7 @@ def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding 
   maxRowWidth := fmax maxRowWidth (Float.sqrt (totalArea * aspectRatio)) + padding.left
   let mut xpos := padding.left
   let mut ypos := padding.top
-  let mut highestBox := 0.0
+  let mut highestBox := fl0p0
   let mut broadestRow := padding.left + padding.right
   let mut rowIndices : Array Nat := #[0]
   let mut rowHeights : Array Float := #[]
@@ -361,7 +368,7 @@ def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding 
         rowIndices := rowIndices.push index
       xpos := padding.left
       ypos := ypos + (highestBox + minSpacing)
-      highestBox := 0.0
+      highestBox := fl0p0
       broadestRow := fmax broadestRow (padding.left + padding.right + nd.width)
     let xp := xpos
     let yp := ypos
@@ -382,11 +389,11 @@ def placeBoxesSorted (sortedBoxes : Array NodeId) (minSpacing : Float) (padding 
     let mut rowHeightPos := 0
     let mut nextRowIndex := rowIndices[rowIdxPos]?.getD sortedBoxes.size
     rowIdxPos := rowIdxPos + 1
-    let mut rowHeight := 0.0
+    let mut rowHeight := fl0p0
     for h : index in [0:sortedBoxes.size] do
       if index == nextRowIndex then
         xpos := padding.left
-        rowHeight := rowHeights[rowHeightPos]?.getD 0.0
+        rowHeight := rowHeights[rowHeightPos]?.getD fl0p0
         rowHeightPos := rowHeightPos + 1
         nextRowIndex := rowIndices[rowIdxPos]?.getD sortedBoxes.size
         rowIdxPos := rowIdxPos + 1

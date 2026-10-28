@@ -11,6 +11,13 @@ the compound pre- and post-processors are injected (`ElkLayered.new`) so that th
 not depend on their packages; processors are kept per graph instead of in `PROCESSORS`.
 Phase-step traces are recorded after every root-graph processor (`TraceRecorder`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Core.Alg
@@ -65,12 +72,12 @@ def resizeGraphNoReally (lgraph : LGraphId) (oldSize newSize : KVector) : Layere
   let graphProperties := gr.internal.graphProperties
   if newSize.x > oldSize.x then
     if contentAlignment.contains .hCenter then
-      modifyGraph lgraph fun g => { g with offset := { g.offset with x := g.offset.x + (newSize.x - oldSize.x) / 2.0 } }
+      modifyGraph lgraph fun g => { g with offset := { g.offset with x := g.offset.x + (newSize.x - oldSize.x) / fl2p0 } }
     else if contentAlignment.contains .hRight then
       modifyGraph lgraph fun g => { g with offset := { g.offset with x := g.offset.x + (newSize.x - oldSize.x) } }
   if newSize.y > oldSize.y then
     if contentAlignment.contains .vCenter then
-      modifyGraph lgraph fun g => { g with offset := { g.offset with y := g.offset.y + (newSize.y - oldSize.y) / 2.0 } }
+      modifyGraph lgraph fun g => { g with offset := { g.offset with y := g.offset.y + (newSize.y - oldSize.y) / fl2p0 } }
     else if contentAlignment.contains .vBottom then
       modifyGraph lgraph fun g => { g with offset := { g.offset with y := g.offset.y + (newSize.y - oldSize.y) } }
   if graphProperties.contains .externalPorts && (newSize.x > oldSize.x || newSize.y > oldSize.y) then
@@ -95,8 +102,8 @@ def resizeGraph (lgraph : LGraphId) : LayeredM Unit := do
   if sizeConstraints.contains .minimumSize then
     let mut minSize := minSize0
     if sizeOptions.contains .defaultMinimumSize then
-      if minSize.x <= 0.0 then minSize := { minSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
-      if minSize.y <= 0.0 then minSize := { minSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
+      if minSize.x <= fl0p0 then minSize := { minSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
+      if minSize.y <= fl0p0 then minSize := { minSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
     adjustedSize := ⟨fmax adjustedSize.x minSize.x, fmax adjustedSize.y minSize.y⟩
   if !fixedGraphSize then
     resizeGraphNoReally lgraph calculatedSize adjustedSize
@@ -201,13 +208,13 @@ def doLayout (e : ElkLayered) (lgraph : LGraphId) (monitor : Option ProgressMoni
 compound post-processing. -/
 def doCompoundLayoutWithMonitor (e : ElkLayered) (lgraph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   withTraceScope (do
-    let _ ← monitor.begin "Layered layout" 2.0
-    let preMonitor ← monitor.subTask 1.0
+    let _ ← monitor.begin "Layered layout" fl2p0
+    let preMonitor ← monitor.subTask fl1p0
     e.compoundGraphPreprocessor.process lgraph preMonitor
     TraceRecorder.recordSnapshotForRoot (← get) lgraph "CompoundGraphPreprocessor"
-    let layoutMonitor ← monitor.subTask 1.0
+    let layoutMonitor ← monitor.subTask fl1p0
     e.hierarchicalLayout lgraph layoutMonitor
-    let postMonitor ← monitor.subTask 1.0
+    let postMonitor ← monitor.subTask fl1p0
     e.compoundGraphPostprocessor.process lgraph postMonitor
     TraceRecorder.recordSnapshotForRoot (← get) lgraph "CompoundGraphPostprocessor"
     monitor.done)

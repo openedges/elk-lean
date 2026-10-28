@@ -19,6 +19,11 @@ the children of the node are shifted towards it one by one in child order,
 each shift seeing the shifts done before. SVG debug output is not ported
 (TODO(debug)).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.Spore
 
 open Elk.Core.Util Elk.Core.Math Elk.Alg.Common
@@ -42,11 +47,11 @@ def minUnderlapWithSubtree (root : Node) (tree : Tree Node) (currentMinUnderlap 
   for _h : child in tree.children do
     let c := child.node
     if root.touches c then
-      if (fc c.rect.x (root.rect.x + root.rect.width) f == 0 && compactionVector.x < 0.0)
-          || (fc (c.rect.x + c.rect.width) root.rect.x f == 0 && compactionVector.x > 0.0)
-          || (fc c.rect.y (root.rect.y + root.rect.height) f == 0 && compactionVector.y < 0.0)
-          || (fc (c.rect.y + c.rect.height) root.rect.y f == 0 && compactionVector.y > 0.0) then
-        minUnderlap := 0.0
+      if (fc c.rect.x (root.rect.x + root.rect.width) f == 0 && compactionVector.x < fl0p0)
+          || (fc (c.rect.x + c.rect.width) root.rect.x f == 0 && compactionVector.x > fl0p0)
+          || (fc c.rect.y (root.rect.y + root.rect.height) f == 0 && compactionVector.y < fl0p0)
+          || (fc (c.rect.y + c.rect.height) root.rect.y f == 0 && compactionVector.y > fl0p0) then
+        minUnderlap := fl0p0
         break
     else
       minUnderlap := fmin minUnderlap (root.distance c compactionVector)
@@ -81,12 +86,12 @@ def initialCompactionVector (parent child : Node) (orthogonal : Bool) : KVector 
     let rt := parent.rect
     let rc := child.rect
     if cv.x.abs >= cv.y.abs then
-      cv := { cv with y := 0.0 }
+      cv := { cv with y := fl0p0 }
       if rc.y + rc.height > rt.y && rc.y < rt.y + rt.height then
         let dist := fmax (rt.x - (rc.x + rc.width)) (rc.x - (rt.x + rt.width))
         cv := cv.scaleToLength dist
     else
-      cv := { cv with x := 0.0 }
+      cv := { cv with x := fl0p0 }
       if rc.x + rc.width > rt.x && rc.x < rt.x + rt.width then
         let dist := fmax (rt.y - (rc.y + rc.height)) (rc.y - (rt.y + rt.height))
         cv := cv.scaleToLength dist

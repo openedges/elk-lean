@@ -13,6 +13,12 @@ simple class name plus `routeSelfLoops`, and the edge-routing specific part of t
 overridden by `PolylineSelfLoopRouter` and `SplineSelfLoopRouter`). `SelfLoopRouter.routerFor` picks
 the router by `EdgeRouting` (Java `routerForGraph`, Rust `modify_bend_points`' match).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl10p0 : Float := 10.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Alg.Layered.Graph
@@ -24,11 +30,11 @@ Rust/Java difference (Rust followed): Java reads them per node with
 `LGraphUtil.getIndividualOrInherited`; Rust reads them once from the graph. -/
 structure SelfLoopRoutingSpacings where
   /-- `edge_edge_distance`. -/
-  edgeEdge : Float := 10.0
+  edgeEdge : Float := fl10p0
   /-- `edge_label_distance`. -/
-  edgeLabel : Float := 2.0
+  edgeLabel : Float := fl2p0
   /-- `node_self_loop_distance`. -/
-  nodeSelfLoop : Float := 10.0
+  nodeSelfLoop : Float := fl10p0
   deriving Inhabited, Repr
 
 /-- The arguments of the Rust `modify_bend_points` (Java `modifyBendPoints(slEdge, routingDirection,

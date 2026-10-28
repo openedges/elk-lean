@@ -16,6 +16,13 @@ Algorithms run in `FM := StateRefT FGraph IO`; the pure operations below take an
 The geometry helpers (`edgeSourcePoint`, `distributeBendpoints`, `refreshLabelPosition`, ...) only touch
 the arena and are defined on `FArena` so that updates stay in place.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p5 : Float := 0.5
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Force.Graph
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Force.Options
@@ -79,21 +86,21 @@ def refreshLabelPosition (a : FArena) (l : FLabelId) : FArena := Id.run do
   let tgt := a.nodePosition[t.idx]!
   let size := a.labelSize[l.idx]!
   if placeInline then
-    let srcToTgt := (tgt - src).scale 0.5
-    let toLabelCenter := size.scale 0.5
+    let srcToTgt := (tgt - src).scale fl0p5
+    let toLabelCenter := size.scale fl0p5
     let newPos := (src + srcToTgt) - toLabelCenter
     return { a with labelPosition := a.labelPosition.set! l.idx newPos }
-  let spacing := (a.edgeProperties[e.idx]!).getD ForceOptions.SPACING_EDGE_LABEL 0.0
+  let spacing := (a.edgeProperties[e.idx]!).getD ForceOptions.SPACING_EDGE_LABEL fl0p0
   let pos : KVector :=
     if src.x >= tgt.x then
       if src.y >= tgt.y then
-        ⟨tgt.x + ((src.x - tgt.x) / 2.0) + spacing, tgt.y + ((src.y - tgt.y) / 2.0) - spacing - size.y⟩
+        ⟨tgt.x + ((src.x - tgt.x) / fl2p0) + spacing, tgt.y + ((src.y - tgt.y) / fl2p0) - spacing - size.y⟩
       else
-        ⟨tgt.x + ((src.x - tgt.x) / 2.0) + spacing, src.y + ((tgt.y - src.y) / 2.0) + spacing⟩
+        ⟨tgt.x + ((src.x - tgt.x) / fl2p0) + spacing, src.y + ((tgt.y - src.y) / fl2p0) + spacing⟩
     else if src.y >= tgt.y then
-      ⟨src.x + ((tgt.x - src.x) / 2.0) + spacing, tgt.y + ((src.y - tgt.y) / 2.0) + spacing⟩
+      ⟨src.x + ((tgt.x - src.x) / fl2p0) + spacing, tgt.y + ((src.y - tgt.y) / fl2p0) + spacing⟩
     else
-      ⟨src.x + ((tgt.x - src.x) / 2.0) + spacing, src.y + ((tgt.y - src.y) / 2.0) - spacing - size.y⟩
+      ⟨src.x + ((tgt.x - src.x) / fl2p0) + spacing, src.y + ((tgt.y - src.y) / fl2p0) - spacing - size.y⟩
   return { a with labelPosition := a.labelPosition.set! l.idx pos }
 
 end FArena

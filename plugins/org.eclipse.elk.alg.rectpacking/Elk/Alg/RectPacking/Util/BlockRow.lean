@@ -8,6 +8,11 @@ takes the row and returns the updated row, while the rectangle geometry (`ElkNod
 updated in `ElkM`. Float operations follow the Rust evaluation order (`a += b + c` is
 `a + (b + c)`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.Util
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math
@@ -20,7 +25,7 @@ def new (x y nodeNodeSpacing : Float) : BlockRow := { x, y, nodeNodeSpacing }
 /-- `add_rectangle(rect)`: places the rectangle right of the last one (spacing unless the row is
 empty) at the row's y and grows the row. Rust returns `true`; the updated row is returned here. -/
 def addRectangle (row : BlockRow) (rect : NodeId) : ElkM BlockRow := do
-  let offset := if row.rects.isEmpty then 0.0 else row.nodeNodeSpacing
+  let offset := if row.rects.isEmpty then fl0p0 else row.nodeNodeSpacing
   ElkM.modifyNode rect fun n => { n with x := row.x + row.width + offset }
   ElkM.modifyNode rect fun n => { n with y := row.y }
   let n ← ElkM.getNode rect
@@ -54,7 +59,7 @@ evenly over the rectangles (shifting the i-th by `i * w`), moves them down by
 their content (`ElkUtil::translate(rect, new_size, old_size)`). -/
 def expand (row : BlockRow) (widthForRow additionalHeightForRow : Float) (index : Nat) : ElkM BlockRow := do
   let additionalWidthForRect :=
-    if row.rects.isEmpty then 0.0 else (widthForRow - row.width) / row.rects.size.toFloat
+    if row.rects.isEmpty then fl0p0 else (widthForRow - row.width) / row.rects.size.toFloat
   let row := { row with height := row.height + additionalHeightForRow, width := widthForRow }
   let mut i := 0
   for rect in row.rects do

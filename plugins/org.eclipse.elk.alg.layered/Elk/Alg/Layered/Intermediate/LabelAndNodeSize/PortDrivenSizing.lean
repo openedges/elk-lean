@@ -9,6 +9,13 @@ The node sizing part of the "Phase 1: Port placement" helper group of elk-rs
 They grow (or, when allowed, shrink) a node so that its ports and inside port labels fit, before
 the ports are placed by `placePortsOnSide`. No Java counterpart (elk-rs phase-2 workaround).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate.LabelAndNodeSize
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -57,23 +64,23 @@ def requiredAxisLengthForSide (a : LGraphArena) (node : LNodeId) (side : PortSid
     (graphPortsSurrounding : ElkMargin) (includeFixedLabelMargins : Bool) : Float := Id.run do
   let nd := a.node node
   let ports := a.nodePortSideView node side
-  if ports.isEmpty then return 0.0
+  if ports.isEmpty then return fl0p0
   let count := ports.size
   let alignment := portAlignmentForSide nd side
   let portSpacing := propertyWithGraphDefault nd CoreOptions.SPACING_PORT_PORT graphPortSpacing
   let surroundingSpacing := propertyWithGraphDefault nd CoreOptions.SPACING_PORTS_SURROUNDING graphPortsSurrounding
-  let labelPortSpacingVertical := nd.props.getD CoreOptions.SPACING_LABEL_PORT_VERTICAL 1.0
+  let labelPortSpacingVertical := nd.props.getD CoreOptions.SPACING_LABEL_PORT_VERTICAL fl1p0
   let (surroundingStart, surroundingEnd) := surroundingForSide side surroundingSpacing labelPortSpacingVertical
-  let mut base := fmax surroundingStart 0.0 + fmax surroundingEnd 0.0
+  let mut base := fmax surroundingStart fl0p0 + fmax surroundingEnd fl0p0
   for port in ports do
     let pt := a.port port
     let axisSize := axisSizeAlongSide side pt.size
     let extent := if !includeFixedLabelMargins then axisSize else portExtentWithLabels a side pt axisSize
     base := base + extent
   if count > 1 then
-    base := base + fmax portSpacing 0.0 * (count.toFloat - 1.0)
+    base := base + fmax portSpacing fl0p0 * (count.toFloat - fl1p0)
   match alignment with
-  | .distributed => return base + 2.0 * fmax portSpacing 0.0
+  | .distributed => return base + fl2p0 * fmax portSpacing fl0p0
   | _ => return base
 
 /-- Rust `required_inside_port_axis_for_side(node, side, graph_port_spacing,
@@ -84,21 +91,21 @@ def requiredInsidePortAxisForSide (a : LGraphArena) (node : LNodeId) (side : Por
     (graphPortsSurrounding : ElkMargin) : Float := Id.run do
   let nd := a.node node
   let ports := a.nodePortSideView node side
-  if ports.isEmpty then return 0.0
-  let portSpacing := fmax (propertyWithGraphDefault nd CoreOptions.SPACING_PORT_PORT graphPortSpacing) 0.0
+  if ports.isEmpty then return fl0p0
+  let portSpacing := fmax (propertyWithGraphDefault nd CoreOptions.SPACING_PORT_PORT graphPortSpacing) fl0p0
   let surroundingSpacing := propertyWithGraphDefault nd CoreOptions.SPACING_PORTS_SURROUNDING graphPortsSurrounding
-  let labelPortSpacingVertical := nd.props.getD CoreOptions.SPACING_LABEL_PORT_VERTICAL 1.0
+  let labelPortSpacingVertical := nd.props.getD CoreOptions.SPACING_LABEL_PORT_VERTICAL fl1p0
   let (surroundingStart, surroundingEnd) := surroundingForSide side surroundingSpacing labelPortSpacingVertical
-  let mut required := fmax surroundingStart 0.0 + fmax surroundingEnd 0.0
+  let mut required := fmax surroundingStart fl0p0 + fmax surroundingEnd fl0p0
   for port in ports do
     let pt := a.port port
-    let labelExtent := pt.labels.foldl (fun acc l => fmax acc (axisSizeAlongSide side (a.label l).size)) 0.0
+    let labelExtent := pt.labels.foldl (fun acc l => fmax acc (axisSizeAlongSide side (a.label l).size)) fl0p0
     let axisSize := axisSizeAlongSide side pt.size
     required := required + fmax axisSize labelExtent
   if ports.size > 1 then
-    required := required + portSpacing * (ports.size.toFloat - 1.0)
+    required := required + portSpacing * (ports.size.toFloat - fl1p0)
     if portAlignmentForSide nd side == .distributed then
-      required := required + 2.0 * portSpacing
+      required := required + fl2p0 * portSpacing
   return required
 
 /-- Applies a new node size when it differs from the old one by more than `EPSILON` in either
@@ -112,7 +119,7 @@ private def applyAdjustedSize (node : LNodeId) (nodeSize adjusted : KVector) : L
 replace the size, otherwise the size only grows. -/
 @[inline] def adjustSize (nodeSize : KVector) (requiredWidth requiredHeight : Float) (shrink : Bool) : KVector :=
   if shrink then
-    ⟨if requiredWidth > 0.0 then requiredWidth else nodeSize.x, if requiredHeight > 0.0 then requiredHeight else nodeSize.y⟩
+    ⟨if requiredWidth > fl0p0 then requiredWidth else nodeSize.x, if requiredHeight > fl0p0 then requiredHeight else nodeSize.y⟩
   else
     ⟨fmax nodeSize.x requiredWidth, fmax nodeSize.y requiredHeight⟩
 
@@ -133,18 +140,18 @@ def enforcePortDrivenMinimumSize (node : LNodeId) (nodeSize : KVector) (graphPor
 
 /-- The per-side maxima collected by `enforce_inside_port_label_minimum_size`. -/
 private structure InsideLabelStats where
-  maxWest : Float := 0.0
-  maxEast : Float := 0.0
-  maxNorth : Float := 0.0
-  maxSouth : Float := 0.0
+  maxWest : Float := fl0p0
+  maxEast : Float := fl0p0
+  maxNorth : Float := fl0p0
+  maxSouth : Float := fl0p0
   hasEastWestLabels : Bool := false
   hasNorthSouthLabels : Bool := false
-  maxLabelHeightWest : Float := 0.0
-  maxLabelHeightEast : Float := 0.0
-  maxPortHeightWest : Float := 0.0
-  maxPortHeightEast : Float := 0.0
-  westPortTotalHeight : Float := 0.0
-  eastPortTotalHeight : Float := 0.0
+  maxLabelHeightWest : Float := fl0p0
+  maxLabelHeightEast : Float := fl0p0
+  maxPortHeightWest : Float := fl0p0
+  maxPortHeightEast : Float := fl0p0
+  westPortTotalHeight : Float := fl0p0
+  eastPortTotalHeight : Float := fl0p0
   westPortCount : Nat := 0
   eastPortCount : Nat := 0
 
@@ -181,9 +188,9 @@ private def insideLabelStats (a : LGraphArena) (ports : Array LPortId) : InsideL
 @[inline] private def sideRequiredHeight (count : Nat) (totalHeight maxLabelHeight maxPortHeight
     labelGapVertical : Float) : Float :=
   if count > 0 then
-    let requiredGap := fmax (maxLabelHeight + labelGapVertical - maxPortHeight) 0.0
-    totalHeight + (count.toFloat + 1.0) * requiredGap
-  else 0.0
+    let requiredGap := fmax (maxLabelHeight + labelGapVertical - maxPortHeight) fl0p0
+    totalHeight + (count.toFloat + fl1p0) * requiredGap
+  else fl0p0
 
 /-- Rust `enforce_inside_port_label_minimum_size(node, node_size, graph_port_spacing,
 graph_ports_surrounding, allow_shrink)`: for INSIDE port labels, the size that fits the widest
@@ -200,19 +207,19 @@ def enforceInsidePortLabelMinimumSize (node : LNodeId) (nodeSize : KVector) (gra
   if !placement.contains .inside then return nodeSize
   let sizeConstraints := nd.props.getD CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
   let padding := nd.padding
-  let labelGapHorizontal := nd.props.getD CoreOptions.SPACING_LABEL_PORT_HORIZONTAL 1.0
-  let labelGapVertical := nd.props.getD CoreOptions.SPACING_LABEL_PORT_VERTICAL 1.0
+  let labelGapHorizontal := nd.props.getD CoreOptions.SPACING_LABEL_PORT_HORIZONTAL fl1p0
+  let labelGapVertical := nd.props.getD CoreOptions.SPACING_LABEL_PORT_VERTICAL fl1p0
   let keepCurrentSizeOnShrink := sizeConstraints.contains .nodeLabels
   let req := fun side => requiredInsidePortAxisForSide a node side graphPortSpacing graphPortsSurrounding
   let requiredWidthFromPortLayout := fmax (req .north) (req .south)
   let requiredHeightFromPortLayout := fmax (req .east) (req .west)
   let s := insideLabelStats a nd.ports
-  if s.maxWest == 0.0 && s.maxEast == 0.0 && s.maxNorth == 0.0 && s.maxSouth == 0.0 then return nodeSize
-  let requiredWidth := padding.left + padding.right + 2.0 * labelGapHorizontal + s.maxWest + s.maxEast
-  let northSouthHeight := 2.0 * labelGapVertical + s.maxNorth + s.maxSouth
+  if s.maxWest == fl0p0 && s.maxEast == fl0p0 && s.maxNorth == fl0p0 && s.maxSouth == fl0p0 then return nodeSize
+  let requiredWidth := padding.left + padding.right + fl2p0 * labelGapHorizontal + s.maxWest + s.maxEast
+  let northSouthHeight := fl2p0 * labelGapVertical + s.maxNorth + s.maxSouth
   -- Java parity: inside N/S labels reserve symmetric strips above and below the content area
   let northSouthAdditiveHeight :=
-    if s.hasNorthSouthLabels then 2.0 * (labelGapVertical + fmax s.maxNorth s.maxSouth) else 0.0
+    if s.hasNorthSouthLabels then fl2p0 * (labelGapVertical + fmax s.maxNorth s.maxSouth) else fl0p0
   let westRequiredHeight := sideRequiredHeight s.westPortCount s.westPortTotalHeight s.maxLabelHeightWest
     s.maxPortHeightWest labelGapVertical
   let eastRequiredHeight := sideRequiredHeight s.eastPortCount s.eastPortTotalHeight s.maxLabelHeightEast
@@ -236,8 +243,8 @@ def applyInsideNorthSouthLabelPostResizeAdjustments (node : LNodeId) (initialSiz
   let deltaHeight := nodeSize.y - initialSize.y
   if deltaWidth.abs ≤ Float.epsilon && deltaHeight.abs ≤ Float.epsilon then return
   let nd ← getNode node
-  let labelShiftX := if deltaWidth.abs > Float.epsilon then deltaWidth / 2.0 else 0.0
-  let labelShiftY := if hasInsideNorthSouthPortLabels && deltaHeight > Float.epsilon then deltaHeight / 2.0 else 0.0
+  let labelShiftX := if deltaWidth.abs > Float.epsilon then deltaWidth / fl2p0 else fl0p0
+  let labelShiftY := if hasInsideNorthSouthPortLabels && deltaHeight > Float.epsilon then deltaHeight / fl2p0 else fl0p0
   if labelShiftX.abs > Float.epsilon || labelShiftY.abs > Float.epsilon then
     for label in nd.labels do
       modifyLabel label fun l => { l with position := ⟨l.position.x + labelShiftX, l.position.y + labelShiftY⟩ }
@@ -247,6 +254,6 @@ def applyInsideNorthSouthLabelPostResizeAdjustments (node : LNodeId) (initialSiz
     if pt.side != .north && pt.side != .south then continue
     let portWidth := pt.size.x
     for label in pt.labels do
-      modifyLabel label fun l => { l with position := { l.position with x := (portWidth - l.size.x) / 2.0 } }
+      modifyLabel label fun l => { l with position := { l.position with x := (portWidth - l.size.x) / fl2p0 } }
 
 end Elk.Alg.Layered.Intermediate.LabelAndNodeSize

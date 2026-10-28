@@ -26,6 +26,15 @@ Deviations:
 * `createIdentifier` cannot use pointer addresses; it assigns the decimal string of
   `4 * idx + kind` (node 0, edge 1, port 2, label 3), unique within one graph.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl0p5 : Float := 0.5
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+private def fl4p0 : Float := 4.0
+
 namespace Elk.Core.Util
 
 open Elk Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Data Elk.Core.Validation
@@ -47,24 +56,24 @@ def calcPortSide (g : ElkGraph) (port : PortId) (direction : Direction) : PortSi
   let n := g.node parent
   let nodeWidth := n.width
   let nodeHeight := n.height
-  if nodeWidth <= 0.0 && nodeHeight <= 0.0 then return .undefined
+  if nodeWidth <= fl0p0 && nodeHeight <= fl0p0 then return .undefined
   let xpos := p.x
   let ypos := p.y
   let portWidth := p.width
   let portHeight := p.height
   match direction with
   | .left | .right =>
-    if xpos < 0.0 then return .west
+    if xpos < fl0p0 then return .west
     else if xpos + portWidth > nodeWidth then return .east
   | .up | .down =>
-    if ypos < 0.0 then return .north
+    if ypos < fl0p0 then return .north
     else if ypos + portHeight > nodeHeight then return .south
   | .undefined => pure ()
-  let widthPercent := (xpos + portWidth / 2.0) / nodeWidth
-  let heightPercent := (ypos + portHeight / 2.0) / nodeHeight
-  if widthPercent + heightPercent <= 1.0 && widthPercent - heightPercent <= 0.0 then return .west
-  else if widthPercent + heightPercent >= 1.0 && widthPercent - heightPercent >= 0.0 then return .east
-  else if heightPercent < 0.5 then return .north
+  let widthPercent := (xpos + portWidth / fl2p0) / nodeWidth
+  let heightPercent := (ypos + portHeight / fl2p0) / nodeHeight
+  if widthPercent + heightPercent <= fl1p0 && widthPercent - heightPercent <= fl0p0 then return .west
+  else if widthPercent + heightPercent >= fl1p0 && widthPercent - heightPercent >= fl0p0 then return .east
+  else if heightPercent < fl0p5 then return .north
   else return .south
 
 /-- `ElkUtil.calcPortOffset(port, side)`: the offset of the port from the parent's border. -/
@@ -106,8 +115,8 @@ def effectiveMinSizeConstraintFor (g : ElkGraph) (node : NodeId) : KVector := Id
   if sizeConstraint.contains .minimumSize then
     let mut minSize := minSizeRaw
     if sizeOptions.contains .defaultMinimumSize then
-      if minSize.x <= 0.0 then minSize := { minSize with x := DEFAULT_MIN_WIDTH }
-      if minSize.y <= 0.0 then minSize := { minSize with y := DEFAULT_MIN_HEIGHT }
+      if minSize.x <= fl0p0 then minSize := { minSize with x := DEFAULT_MIN_WIDTH }
+      if minSize.y <= fl0p0 then minSize := { minSize with y := DEFAULT_MIN_HEIGHT }
     return minSize
   else
     return KVector.zero
@@ -355,14 +364,14 @@ private def resizeNodePortSizes (g : ElkGraph) (node : NodeId) : ElkGraph × Flo
   let portConstraints := (n.props.get CoreOptions.PORT_CONSTRAINTS).getD .undefined
   let ports := n.ports
   let mut g := g
-  let mut newWidth := 0.0
-  let mut newHeight := 0.0
+  let mut newWidth := fl0p0
+  let mut newHeight := fl0p0
   if sizeConstraint.contains .ports then
     let direction := portDirection g node
-    let mut minNorth := 2.0
-    let mut minEast := 2.0
-    let mut minSouth := 2.0
-    let mut minWest := 2.0
+    let mut minNorth := fl2p0
+    let mut minEast := fl2p0
+    let mut minSouth := fl2p0
+    let mut minWest := fl2p0
     for port in ports do
       let p := g.port port
       let (g', portSide) := ensurePortSide g port direction
@@ -376,10 +385,10 @@ private def resizeNodePortSizes (g : ElkGraph) (node : NodeId) : ElkGraph × Flo
         | .undefined => pure ()
       else
         match portSide with
-        | .north => minNorth := minNorth + p.width + 2.0
-        | .east => minEast := minEast + p.height + 2.0
-        | .south => minSouth := minSouth + p.width + 2.0
-        | .west => minWest := minWest + p.height + 2.0
+        | .north => minNorth := minNorth + p.width + fl2p0
+        | .east => minEast := minEast + p.height + fl2p0
+        | .south => minSouth := minSouth + p.width + fl2p0
+        | .west => minWest := minWest + p.height + fl2p0
         | .undefined => pure ()
     newWidth := fmax minNorth minSouth
     newHeight := fmax minEast minWest
@@ -397,8 +406,8 @@ def resizeNodeWith (g : ElkGraph) (node : NodeId) (newWidth newHeight : Float)
   if newWidth > newSize.x then newSize := { newSize with x := newWidth }
   if newHeight > newSize.y then newSize := { newSize with y := newHeight }
   -- a collapsed axis has no scale; keep its port coordinates until placement
-  let widthRatio := if oldSize.x == 0.0 then 1.0 else newSize.x / oldSize.x
-  let heightRatio := if oldSize.y == 0.0 then 1.0 else newSize.y / oldSize.y
+  let widthRatio := if oldSize.x == fl0p0 then fl1p0 else newSize.x / oldSize.x
+  let heightRatio := if oldSize.y == fl0p0 then fl1p0 else newSize.y / oldSize.y
   let widthDiff := newSize.x - oldSize.x
   let heightDiff := newSize.y - oldSize.y
   let mut g := g
@@ -419,17 +428,17 @@ def resizeNodeWith (g : ElkGraph) (node : NodeId) (newWidth newHeight : Float)
         | .undefined => p
   g := g.modifyNode node fun x => { x with width := newSize.x, height := newSize.y }
   -- relative label placement is undefined on a collapsed rectangle
-  if moveLabels && oldSize.x != 0.0 && oldSize.y != 0.0 then
+  if moveLabels && oldSize.x != fl0p0 && oldSize.y != fl0p0 then
     for l in (g.node node).labels do
       g := g.modifyLabel l fun lab => Id.run do
-        let midx := lab.x + lab.width / 2.0
-        let midy := lab.y + lab.height / 2.0
+        let midx := lab.x + lab.width / fl2p0
+        let midy := lab.y + lab.height / fl2p0
         let widthPercent := midx / oldSize.x
         let heightPercent := midy / oldSize.y
-        if widthPercent + heightPercent >= 1.0 then
-          if widthPercent - heightPercent > 0.0 && midy >= 0.0 then
+        if widthPercent + heightPercent >= fl1p0 then
+          if widthPercent - heightPercent > fl0p0 && midy >= fl0p0 then
             return { lab with x := lab.x + widthDiff, y := lab.y + heightDiff * heightPercent }
-          else if widthPercent - heightPercent < 0.0 && midx >= 0.0 then
+          else if widthPercent - heightPercent < fl0p0 && midx >= fl0p0 then
             return { lab with x := lab.x + widthDiff * widthPercent, y := lab.y + heightDiff }
         return lab
   g := g.setNodeProp node CoreOptions.NODE_SIZE_CONSTRAINTS SizeConstraint.fixed
@@ -551,13 +560,13 @@ def translateNode (g : ElkGraph) (parent : NodeId) (xoffset yoffset : Float) : E
 node according to its `CONTENT_ALIGNMENT`. -/
 def translateNodeWithSizes (g : ElkGraph) (parent : NodeId) (newSize oldSize : KVector) : ElkGraph := Id.run do
   let contentAlignment := ((g.node parent).props.get CoreOptions.CONTENT_ALIGNMENT).getD ContentAlignment.topLeft
-  let mut xTranslate := 0.0
-  let mut yTranslate := 0.0
+  let mut xTranslate := fl0p0
+  let mut yTranslate := fl0p0
   if newSize.x > oldSize.x then
-    if contentAlignment.contains .hCenter then xTranslate := (newSize.x - oldSize.x) / 2.0
+    if contentAlignment.contains .hCenter then xTranslate := (newSize.x - oldSize.x) / fl2p0
     else if contentAlignment.contains .hRight then xTranslate := newSize.x - oldSize.x
   if newSize.y > oldSize.y then
-    if contentAlignment.contains .vCenter then yTranslate := (newSize.y - oldSize.y) / 2.0
+    if contentAlignment.contains .vCenter then yTranslate := (newSize.y - oldSize.y) / fl2p0
     else if contentAlignment.contains .vBottom then yTranslate := newSize.y - oldSize.y
   return translateNode g parent xTranslate yTranslate
 
@@ -589,8 +598,8 @@ def configureNodeWithDefaultValues (g : ElkGraph) (node : NodeId) : ElkGraph := 
   let n := g.node node
   let sizeConstraint := (n.props.get CoreOptions.NODE_SIZE_CONSTRAINTS).getD SizeConstraint.fixed
   let mut g := g
-  if sizeConstraint == SizeConstraint.fixed && n.width == 0.0 && n.height == 0.0 then
-    g := g.modifyNode node fun x => { x with width := DEFAULT_MIN_WIDTH * 4.0, height := DEFAULT_MIN_HEIGHT * 4.0 }
+  if sizeConstraint == SizeConstraint.fixed && n.width == fl0p0 && n.height == fl0p0 then
+    g := g.modifyNode node fun x => { x with width := DEFAULT_MIN_WIDTH * fl4p0, height := DEFAULT_MIN_HEIGHT * fl4p0 }
   g := ensureLabel g (.node node)
   let placement := ((g.node node).props.get CoreOptions.NODE_LABELS_PLACEMENT).getD NodeLabelPlacement.fixed
   if placement == NodeLabelPlacement.fixed then
@@ -600,8 +609,8 @@ def configureNodeWithDefaultValues (g : ElkGraph) (node : NodeId) : ElkGraph := 
 /-- Pure `ElkUtil.configureWithDefaultValues(ElkPort)`. -/
 def configurePortWithDefaultValues (g : ElkGraph) (port : PortId) : ElkGraph :=
   let p := g.port port
-  let g := if p.width == 0.0 && p.height == 0.0 then
-      g.modifyPort port fun x => { x with width := DEFAULT_MIN_WIDTH / 4.0, height := DEFAULT_MIN_HEIGHT / 4.0 }
+  let g := if p.width == fl0p0 && p.height == fl0p0 then
+      g.modifyPort port fun x => { x with width := DEFAULT_MIN_WIDTH / fl4p0, height := DEFAULT_MIN_HEIGHT / fl4p0 }
     else g
   ensureLabel g (.port port)
 

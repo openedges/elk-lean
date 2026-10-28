@@ -30,6 +30,12 @@ constraints or group references of removed nodes) are never read before the next
 The pointer-keyed Rust maps (`node_locks`, `Spacing.individual`) are master-indexed arrays;
 the per-call lock snapshot (`frozen`) is indexed by projection ids.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Components.Compaction
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Common.Compaction.OneD
@@ -149,7 +155,7 @@ other nodes the default; the spacing of a pair is the `f64::min` of both. Built 
 (`isPlaceholder` is master-indexed). -/
 def spacingsFor (isPlaceholder : Array Bool) (m : Membership) (default : Float) : SpacingsHandler :=
   let flags := m.nodes.map fun n => isPlaceholder[n.idx]?.getD false
-  let sp : CNodeId → Float := fun n => if flags[n.idx]?.getD false then 1.0 else default
+  let sp : CNodeId → Float := fun n => if flags[n.idx]?.getD false then fl1p0 else default
   ⟨fun _ a b => fmin (sp a) (sp b), fun _ a b => fmin (sp a) (sp b)⟩
 
 /-- The compaction state: master graph, current membership and the compactor (whose `cGraph`
@@ -190,7 +196,7 @@ end Packer
 
 /-- Rust `reset_deltas(graph)` on the projection. -/
 def resetDeltas (g : CGraph) : CGraph :=
-  { g with cGroups := g.cGroups.map fun grp => { grp with delta := 0.0, deltaNormalized := 0.0 } }
+  { g with cGroups := g.cGroups.map fun grp => { grp with delta := fl0p0, deltaNormalized := fl0p0 } }
 
 /-- Sum of `|delta_normalized|` over the groups of the projection (Rust `.map(abs).sum()`). -/
 def deltaSum (g : CGraph) : Float :=
@@ -217,7 +223,7 @@ def compactPass (p : Packer) (extensions : Array PackExtension) (topLeft : KVect
       p := { p with master }
   p := p.rebuild
   let mut c := p.compactor.calculateGroupOffsets
-  let mut delta := 0.0
+  let mut delta := fl0p0
   if isHorizontal then
     c ← c.forceConstraintsRecalculation
   else
@@ -261,10 +267,10 @@ def compactPass (p : Packer) (extensions : Array PackExtension) (topLeft : KVect
       p := { p with master := p.master.modifyCNode ext.node fun n =>
         let rect := n.hitbox
         let rect := match ext.side with
-          | .west => { rect with x := topLeft.x, width := fmax (rect.width + movement) 1.0 }
-          | .east => { rect with x := rect.x + movement, width := fmax (rect.width - movement) 1.0 }
-          | .north => { rect with y := topLeft.y, height := fmax (rect.height + movement) 1.0 }
-          | .south => { rect with y := rect.y + movement, height := fmax (rect.height - movement) 1.0 }
+          | .west => { rect with x := topLeft.x, width := fmax (rect.width + movement) fl1p0 }
+          | .east => { rect with x := rect.x + movement, width := fmax (rect.width - movement) fl1p0 }
+          | .north => { rect with y := topLeft.y, height := fmax (rect.height + movement) fl1p0 }
+          | .south => { rect with y := rect.y + movement, height := fmax (rect.height - movement) fl1p0 }
           | .undefined => rect
         { n with hitbox := rect } }
     else

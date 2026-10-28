@@ -6,6 +6,11 @@ Port of `util/rect_row.rs` (elk-rs): a row of blocks (and of the block stacks bu
 The row data lives in the `RectPackingArena`; the methods take a `RectRowId`.
 `RectRow.new`, `RectRow.notifyAboutNodeChange` and `RectRow.drop` are defined in the arena module.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.Util
 
 open Elk.Graph Elk.Core.Util
@@ -72,7 +77,7 @@ def addBlock (row : RectRowId) (b : BlockId) : RectPackingM Unit := do
   let blk ← getBlock b
   modifyRow row fun r =>
     { r with height := fmax r.height blk.height
-             width := r.width + (blk.width + (if r.children.isEmpty then 0.0 else r.nodeNodeSpacing))
+             width := r.width + (blk.width + (if r.children.isEmpty then fl0p0 else r.nodeNodeSpacing))
              children := r.children.push b }
 
 /-- `remove_block(block)`: removes every occurrence of the block, shrinks the width by the block
@@ -82,11 +87,11 @@ def removeBlock (row : RectRowId) (b : BlockId) : RectPackingM Unit := do
   let blockWidth := (← getBlock b).width
   modifyRow row fun r => { r with children := r.children.filter (· != b) }
   let r ← getRow row
-  let width := r.width - (blockWidth + (if r.children.isEmpty then 0.0 else r.nodeNodeSpacing))
+  let width := r.width - (blockWidth + (if r.children.isEmpty then fl0p0 else r.nodeNodeSpacing))
   let mut newMaxHeight := Float.minValue
   for c in r.children do
     newMaxHeight := fmax newMaxHeight (← getBlock c).height
-  if newMaxHeight == Float.minValue then newMaxHeight := 0.0
+  if newMaxHeight == Float.minValue then newMaxHeight := fl0p0
   modifyRow row fun x => { x with width, height := newMaxHeight }
 
 /-- `set_y(y)`: moves every stack (not the blocks outside stacks) by the change of y. -/

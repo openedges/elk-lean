@@ -15,6 +15,12 @@ Rust mutates the caller's rectangles through raw pointers. The Lean remover
 copies the rectangles in `addRectangle` and `removeOverlaps` returns the
 updated rectangles in insertion order together with the strip size.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl5p0 : Float := 5.0
+
 namespace Elk.Alg.Common.Overlaps
 
 open Elk.Core.Util Elk.Core.Math
@@ -24,11 +30,11 @@ structure RectangleStripOverlapRemover where
   /-- The direction in which overlaps are removed. -/
   overlapRemovalDirection : OverlapRemovalDirection
   /-- Vertical gap (default 5). -/
-  gapVertical : Float := 5.0
+  gapVertical : Float := fl5p0
   /-- Horizontal gap (default 5). -/
-  gapHorizontal : Float := 5.0
+  gapHorizontal : Float := fl5p0
   /-- Coordinate of the first rectangle encountered along the direction (default 0). -/
-  startCoordinate : Float := 0.0
+  startCoordinate : Float := fl0p0
   /-- The strategy (`none` = greedy). -/
   overlapRemovalStrategy : Option IRectangleStripOverlapRemovalStrategy := none
   /-- The rectangle nodes in insertion order (sorted by `removeOverlaps`). -/

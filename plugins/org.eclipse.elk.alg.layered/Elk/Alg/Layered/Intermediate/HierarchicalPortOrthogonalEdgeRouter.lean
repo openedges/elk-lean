@@ -55,6 +55,13 @@ before the layers are collected and thus always shows `0` sizes.
 
 Precondition: a layered graph after phase 5 (orthogonal routing). Slot: after phase 5.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -74,10 +81,10 @@ starting at `SPACING_LABEL_PORT_VERTICAL`, centred on the dummy. -/
 private def placeInsideLabels (labels : Array LLabelId) (dummyWidth portPosX spacingVertical labelLabelSpacing : Float) :
     LayeredM Unit := do
   let mut currentY := spacingVertical
-  let xCenterRelative := dummyWidth / 2.0 - portPosX
+  let xCenterRelative := dummyWidth / fl2p0 - portPosX
   for label in labels do
     let y := currentY
-    modifyLabel label fun l => { l with position := ⟨xCenterRelative - l.size.x / 2.0, y⟩ }
+    modifyLabel label fun l => { l with position := ⟨xCenterRelative - l.size.x / fl2p0, y⟩ }
     currentY := currentY + ((← getLabel label).size.y + labelLabelSpacing)
 
 /-- `restoreDummy(dummy, graph)` (Rust `restore_dummy`): flips the side of the dummy's port
@@ -95,9 +102,9 @@ def restoreDummy (dummy : LNodeId) (graph : LGraphId) : LayeredM Unit := do
   let gr ← getGraph graph
   let sizeConstraints := (gr.props.get LayeredOptions.NODE_SIZE_CONSTRAINTS).getD EnumSet.noneOf
   if !sizeConstraints.contains .portLabels then return
-  let portLabelSpacingHorizontal := (nd.props.get LayeredOptions.SPACING_LABEL_PORT_HORIZONTAL).getD 0.0
-  let portLabelSpacingVertical := (nd.props.get LayeredOptions.SPACING_LABEL_PORT_VERTICAL).getD 0.0
-  let labelLabelSpacing := (nd.props.get LayeredOptions.SPACING_LABEL_LABEL).getD 0.0
+  let portLabelSpacingHorizontal := (nd.props.get LayeredOptions.SPACING_LABEL_PORT_HORIZONTAL).getD fl0p0
+  let portLabelSpacingVertical := (nd.props.get LayeredOptions.SPACING_LABEL_PORT_VERTICAL).getD fl0p0
+  let labelLabelSpacing := (nd.props.get LayeredOptions.SPACING_LABEL_LABEL).getD fl0p0
   let portLabelPlacement := (gr.props.get CoreOptions.PORT_LABELS_PLACEMENT).getD PortLabelPlacement.outsideSet
   let pt ← getPort dummyPort
   if portLabelPlacement.contains .inside then
@@ -161,9 +168,9 @@ def calculateNorthSouthDummyPositions (dummy : LNodeId) : LayeredM Unit := do
   let some dummyPort := (← getNode dummy).ports[0]? | return
   let connectedPorts ← withArena (·.portConnectedPorts dummyPort)
   if connectedPorts.isEmpty then
-    modifyNode dummy fun x => { x with position := { x.position with x := 0.0 } }
+    modifyNode dummy fun x => { x with position := { x.position with x := fl0p0 } }
     return
-  let mut posSum := 0.0
+  let mut posSum := fl0p0
   for port in connectedPorts do
     let pt ← getPort port
     if let some owner := pt.owner then
@@ -197,14 +204,14 @@ right so that consecutive dummies keep `SPACING_PORT_PORT` between their margins
 to contain them. -/
 def assignAscendingCoordinates (dummies : Array LNodeId) (graph : LGraphId) : LayeredM Unit := do
   let some first := dummies[0]? | return
-  let spacing := ((← getGraph graph).props.get LayeredOptions.SPACING_PORT_PORT).getD 0.0
+  let spacing := ((← getGraph graph).props.get LayeredOptions.SPACING_PORT_PORT).getD fl0p0
   let f ← getNode first
   let mut nextValid := f.position.x + f.size.x + f.margin.right + spacing
   for i in [1:dummies.size] do
     let dummy := dummies[i]!
     let nd ← getNode dummy
     let delta := nd.position.x - nd.margin.left - nextValid
-    if delta < 0.0 then
+    if delta < fl0p0 then
       modifyNode dummy fun n => { n with position := { n.position with x := n.position.x - delta } }
     let currentPos := (← getNode dummy).position.x
     let sizeX := nd.size.x
@@ -316,8 +323,8 @@ routing ("extnorth") from the sources of the northern dummies' edges starting at
 `northern_ext_port_edge_routing_height`. -/
 def routeEdges (graph : LGraphId) (northSouthDummies : Array LNodeId) : LayeredM Float := do
   let gr ← getGraph graph
-  let nodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE).getD 0.0
-  let edgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE).getD 0.0
+  let nodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE).getD fl0p0
+  let edgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE).getD fl0p0
   if ElkTrace.global.hierPortOrtho then
     -- Rust prints the (still empty) set sizes
     IO.eprintln (s!"[hier-port-ortho] route_edges prep north(src=0,tgt=0) south(src=0,tgt=0) " ++
@@ -325,13 +332,13 @@ def routeEdges (graph : LGraphId) (northSouthDummies : Array LNodeId) : LayeredM
       (← traceGeometry graph))
   let (northernSourceLayer, northernTargetLayer) ← collectRoutingLayers northSouthDummies .north
   let (southernSourceLayer, southernTargetLayer) ← collectRoutingLayers northSouthDummies .south
-  let mut northernHeight := 0.0
+  let mut northernHeight := fl0p0
   if !northernSourceLayer.isEmpty then
     let routingGenerator := OrthogonalRoutingGenerator.new .southToNorth edgeSpacing (some "extnorth")
     let startPos := -nodeSpacing - (← getGraph graph).offset.y
     let slots ← routingGenerator.routeEdges graph northernSourceLayer 0 northernTargetLayer startPos
     if slots > 0 then
-      let h := nodeSpacing + (slots.toFloat - 1.0) * edgeSpacing
+      let h := nodeSpacing + (slots.toFloat - fl1p0) * edgeSpacing
       northernHeight := h
       modifyGraph graph fun g => { g with
         offset := { g.offset with y := g.offset.y + h }
@@ -345,7 +352,7 @@ def routeEdges (graph : LGraphId) (northSouthDummies : Array LNodeId) : LayeredM
     let startPos := g.size.y + nodeSpacing - g.offset.y
     let slots ← routingGenerator.routeEdges graph southernSourceLayer 0 southernTargetLayer startPos
     if slots > 0 then
-      let h := nodeSpacing + (slots.toFloat - 1.0) * edgeSpacing
+      let h := nodeSpacing + (slots.toFloat - fl1p0) * edgeSpacing
       modifyGraph graph fun g => { g with size := { g.size with y := g.size.y + h } }
     if ElkTrace.global.hierPortOrtho then
       IO.eprintln s!"[hier-port-ortho] south slots={slots} {← traceGeometry graph}"
@@ -433,7 +440,7 @@ def fixCoordinatesForLayer (layer : LayerId) (constraints : PortConstraints) (gr
       let x := -offset.x - padding.left
       modifyNode node fun n => { n with position := { n.position with x := x } }
     | _ => pure ()
-    let mut requiredHeight := 0.0
+    let mut requiredHeight := fl0p0
     if extSide == .east || extSide == .west then
       let y? : Option Float :=
         if constraints == .fixedRatio then some (graphActualSize.y * nd.internal.portRatioOrPosition - portAnchor.y)

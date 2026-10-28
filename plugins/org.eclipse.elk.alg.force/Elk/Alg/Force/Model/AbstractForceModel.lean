@@ -22,6 +22,13 @@ happens in a local array (starting from the arena displacement, which is zero).
 
 `wiggle` delegates to `Elk.Core.Math.KVector.wiggle` (Rust/Java rounding `x + (r * a - a / 2)`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Force.Model
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Alg.Force.Graph Elk.Alg.Force.Options
@@ -32,7 +39,7 @@ def DISP_BOUND_FACTOR : Float := 16.0
 /-- elk-rs `AbstractForceModel`: the random generator of the layout and the displacement bound. -/
 structure AbstractForceModel where
   random : Random := {}
-  dispBound : Float := 0.0
+  dispBound : Float := fl0p0
 
 /-- `KVector::wiggle(random, amount)` (`Elk.Core.Math.KVector.wiggle`, Rust/Java rounding
 `x + (r * amount - amount / 2)`). -/
@@ -109,20 +116,20 @@ partial def avoidSamePosition (random : Random) (u v : FParticleId) : FM Random 
           | return random
         let uVec := KVector.fromPoints us ut
         let orthogonalU : KVector :=
-          if uVec.length > 0.0 then
-            ⟨(uVec.x / uVec.length) * 2.0, (-(uVec.y / uVec.length)) * 2.0⟩
+          if uVec.length > fl0p0 then
+            ⟨(uVec.x / uVec.length) * fl2p0, (-(uVec.y / uVec.length)) * fl2p0⟩
           else {}
         let vVec := KVector.fromPoints vs vt
         let orthogonalV : KVector :=
-          if vVec.length > 0.0 then
-            ⟨(vVec.x / vVec.length) * 2.0, (-(vVec.y / vVec.length)) * 2.0⟩
+          if vVec.length > fl0p0 then
+            ⟨(vVec.x / vVec.length) * fl2p0, (-(vVec.y / vVec.length)) * fl2p0⟩
           else {}
         let moved := (pu + orthogonalU) + orthogonalV
         modify fun g => { g with arena := g.arena.setParticlePosition u moved }
         triedForBendpoints := true
     if !triedForBendpoints then
-      let (pu', r1) := wiggle pu random 1.0
-      let (pv', r2) := wiggle pv r1 1.0
+      let (pu', r1) := wiggle pu random fl1p0
+      let (pv', r2) := wiggle pv r1 fl1p0
       random := r2
       modify fun g => { g with arena := (g.arena.setParticlePosition u pu').setParticlePosition v pv' }
   return random

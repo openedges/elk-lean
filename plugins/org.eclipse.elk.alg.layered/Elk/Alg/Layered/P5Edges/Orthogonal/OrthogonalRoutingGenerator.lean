@@ -35,6 +35,11 @@ that read the arena and thread only what they change (`SegmentGraph` updates are
 `HyperEdgeSegmentDependency`); `topologicalNumbering` keeps slots and weights in local arrays;
 `minimumDifference` sorts a `FloatArray` by the `total_cmp` key.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P5Edges.Orthogonal
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -51,7 +56,7 @@ structure OrthogonalRoutingGenerator where
   /-- `conflict_threshold` (`CONFLICT_THRESHOLD_FACTOR * edgeSpacing`). -/
   conflictThreshold : Float
   /-- `critical_conflict_threshold`. -/
-  criticalConflictThreshold : Float := 0.0
+  criticalConflictThreshold : Float := fl0p0
   /-- `debug_prefix` (only used by the `ELK_TRACE_ORTHO` output). -/
   debugPrefix : Option String := none
 
@@ -464,7 +469,7 @@ def traceSegments (gen : OrthogonalRoutingGenerator) (label : String) (g : Segme
       let nodeName := match pt.owner with
         | some n => a.nodeDesignation n
         | none => "?"
-      let anchor := ((a.portAbsoluteAnchor p).map (·.y)).getD 0.0
+      let anchor := ((a.portAbsoluteAnchor p).map (·.y)).getD fl0p0
       s!"{nodeName}:{pt.side}@{Float.toRustDisplay anchor}"
     IO.eprintln (s!"  seg#{idx} slot={seg.routingSlot} start={Float.toRustDisplay seg.startPosition} " ++
       s!"end={Float.toRustDisplay seg.endPosition} incoming={showCoords seg.incomingConnectionCoordinates} " ++

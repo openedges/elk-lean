@@ -11,6 +11,12 @@ The Java `getApproximate*` methods were not ported by elk-rs and are omitted.
 Option reads follow Rust `get_property(..).unwrap_or(..)`: the stored value, else the property
 default, else the Rust fallback (`ASPECT_RATIO` has no default, fallback `1.0`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
 open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -103,23 +109,23 @@ def initCutAllowed (graph : LGraphId) (layers : Array LayerId) : LayeredM (Array
 def new (graph : LGraphId) : LayeredM GraphStats := do
   let gr ← getGraph graph
   let direction := (gr.props.get LayeredOptions.DIRECTION).getD .undefined
-  let aspectRatio := (gr.props.get LayeredOptions.ASPECT_RATIO).getD 1.0
-  let correction := (gr.props.get LayeredOptions.WRAPPING_CORRECTION_FACTOR).getD 1.0
+  let aspectRatio := (gr.props.get LayeredOptions.ASPECT_RATIO).getD fl1p0
+  let correction := (gr.props.get LayeredOptions.WRAPPING_CORRECTION_FACTOR).getD fl1p0
   let dar := match direction with
     | .left | .right | .undefined => aspectRatio * correction
-    | _ => 1.0 / (aspectRatio * correction)
-  let spacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD 0.0
-  let inLayerSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE).getD 0.0
+    | _ => fl1p0 / (aspectRatio * correction)
+  let spacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD fl0p0
+  let inLayerSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE).getD fl0p0
   let layers := gr.layers
   let mut widths : Array Float := #[]
   let mut heights : Array Float := #[]
   for layer in layers do
     widths := widths.push (← determineLayerWidth layer spacing)
     heights := heights.push (← determineLayerHeight layer inLayerSpacing)
-  let maxWidth := if widths.isEmpty then 0.0 else widths.foldl fmax widths[0]!
-  let maxHeight := if heights.isEmpty then 0.0 else heights.foldl fmax heights[0]!
+  let maxWidth := if widths.isEmpty then fl0p0 else widths.foldl fmax widths[0]!
+  let maxHeight := if heights.isEmpty then fl0p0 else heights.foldl fmax heights[0]!
   -- Rust `iter().sum()` (neutral element `-0.0`)
-  let sumWidth := widths.foldl (· + ·) (-0.0)
+  let sumWidth := widths.foldl (· + ·) (-fl0p0)
   let cutsAllowed ← initCutAllowed graph layers
   return { dar, longestPath := layers.size, maxWidth, maxHeight, sumWidth, widths, heights, cutsAllowed }
 

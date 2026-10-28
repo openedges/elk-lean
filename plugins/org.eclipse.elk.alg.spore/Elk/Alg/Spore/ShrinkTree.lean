@@ -10,6 +10,11 @@ the positions of the tree nodes back to the vertices.
 Rust quirk kept: when the monitor is canceled between two processors, `shrink` returns at once
 without `sync_vertices_from_tree` and without `done`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Spore
 
 open Elk Elk.Core.Alg Elk.Core.Util Elk.Alg.Spore.Graph Elk.Alg.Spore.Options
@@ -39,7 +44,7 @@ def shrink (st : ShrinkTree) (graph : Graph) (monitor : ProgressMonitor) : IO Gr
   if graph.vertices.size > 1 then
     for processor in algorithm do
       if ← monitor.isCanceled then return graph
-      let sub ← monitor.subTask 1.0
+      let sub ← monitor.subTask fl1p0
       let ((), g) ← SporeM.run (processor.process () sub) graph
       graph := g
   graph := graph.syncVerticesFromTree

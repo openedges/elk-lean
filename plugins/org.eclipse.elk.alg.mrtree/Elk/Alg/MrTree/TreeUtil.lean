@@ -17,6 +17,12 @@ by identity), skip edges inside one tree level, deduplicate and sort by the x co
 end point (`partial_cmp`, stable); `getLowestParent` takes the parent whose centre has the largest
 projection on the direction vector (first one on ties).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.MrTree
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Alg.MrTree.Graph Elk.Alg.MrTree.Options
@@ -77,7 +83,7 @@ private def levelEdges (a : TArena) (node : TNodeId) (g : TGraphId) (incoming : 
       let other := if incoming then (a.edge e).source else (a.edge e).target
       match other with
       | some n => (a.node n).position.x
-      | none => 0.0
+      | none => fl0p0
     return stableSort result fun x y => Float.comparePartial (otherX x) (otherX y)
 
 /-- `get_all_incoming_edges(node, graph)`: edges of the graph into a node with the same `id` that
@@ -198,7 +204,7 @@ def getLowestParent (a : TArena) (node : TNodeId) (direction : Direction) : Opti
   let mut best : Option (Float × TNodeId) := none
   for p in parents do
     let pn := a.node p
-    let center : KVector := ⟨pn.position.x + pn.size.x / 2.0, pn.position.y + pn.size.y / 2.0⟩
+    let center : KVector := ⟨pn.position.x + pn.size.x / fl2p0, pn.position.y + pn.size.y / fl2p0⟩
     let score := center.dotProduct dirVec
     let replace : Bool := match best with
       | some (bestScore, _) => score > bestScore

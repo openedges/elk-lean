@@ -28,6 +28,11 @@ that represents no labels is only joined and removed (Java would fail).
 
 Dummies are joined with `LongEdgeJoiner.joinAt` (elk-rs `LongEdgeJoiner::join_at`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -97,7 +102,7 @@ def placeLabelsForHorizontalLayout (labels : Array LLabelId) (labelPos : KVector
   let mut pos := labelPos
   for label in labels do
     let lb ← getLabel label
-    let x := pos.x + (labelSpace.x - lb.size.x) / 2.0
+    let x := pos.x + (labelSpace.x - lb.size.x) / fl2p0
     let y := pos.y
     modifyLabel label fun l => { l with position := ⟨x, y⟩ }
     pos := { pos with y := pos.y + (lb.size.y + labelSpacing) }
@@ -110,7 +115,7 @@ def placeVerticalLabel (label : LLabelId) (labelPos : KVector) (labelSpacing : F
   let lb ← getLabel label
   let x := labelPos.x
   let y :=
-    if inline then labelPos.y + (labelSpace.y - lb.size.y) / 2.0
+    if inline then labelPos.y + (labelSpace.y - lb.size.y) / fl2p0
     else if leftAligned then labelPos.y
     else labelPos.y + labelSpace.y - lb.size.y
   modifyLabel label fun l => { l with position := ⟨x, y⟩ }

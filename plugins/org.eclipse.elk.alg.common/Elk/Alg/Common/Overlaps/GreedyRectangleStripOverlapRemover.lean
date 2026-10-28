@@ -8,6 +8,11 @@ Removes rectangle overlaps by greedily choosing the smallest y position that
 won't cause overlaps. Fast algorithm, but not necessarily optimal in terms of
 resulting rectangle strip size (elk-rs `GreedyRectangleStripOverlapRemover`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.Overlaps
 
 open Elk.Core.Util
@@ -21,14 +26,14 @@ def removeOverlaps (_horizontalGap verticalGap : Float) (nodes : Array Rectangle
     Array RectangleNode × Float := Id.run do
   let mut nodes := nodes
   let mut alreadyPlaced : Array Bool := Array.replicate nodes.size false
-  let mut stripSize : Float := 0.0
+  let mut stripSize : Float := fl0p0
   for nodeIndex in [0:nodes.size] do
     let some node := nodes[nodeIndex]? | continue
     let currHeight := node.rectangle.height
     let keyed : Array (Nat × Float) := node.overlappingNodes.map fun i =>
-      (i, (nodes[i]?.map (·.rectangle.y)).getD 0.0)
+      (i, (nodes[i]?.map (·.rectangle.y)).getD fl0p0)
     let overlaps := (stableSort keyed fun a b => Float.compareTotal a.2 b.2).map (·.1)
-    let mut yPos := 0.0
+    let mut yPos := fl0p0
     for overlapIndex in overlaps do
       if !(alreadyPlaced[overlapIndex]?.getD false) then continue
       let some other := nodes[overlapIndex]? | continue

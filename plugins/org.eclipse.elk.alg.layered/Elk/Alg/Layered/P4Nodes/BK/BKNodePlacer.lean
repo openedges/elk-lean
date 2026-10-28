@@ -29,6 +29,12 @@ Rust deviations from Java that are followed: the balanced layout's `min`/`max` s
 (Java `Integer.MAX_VALUE`/`MIN_VALUE`), `f64::min/max`, the class debug output keyed by sink id.
 The `ELK_TRACE_BK*` diagnostics are printed to stderr like elk-rs (`{:.3}` via `fmt3`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.P4Nodes.BK
 
 open Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Core.Alg Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -140,7 +146,7 @@ values of its shifted positions (inner shifts included; the balanced inner shift
 def createBalancedLayout (ctx : BKContext) (layouts : Array BKAlignedLayout) : BKAlignedLayout := Id.run do
   let noOfLayouts := layouts.size
   let mut balanced := BKAlignedLayout.new ctx.nodeCount none none
-  let mut width : Array Float := Array.replicate noOfLayouts 0.0
+  let mut width : Array Float := Array.replicate noOfLayouts fl0p0
   let mut mn : Array Float := Array.replicate noOfLayouts Float.posInf
   let mut mx : Array Float := Array.replicate noOfLayouts Float.negInf
   let mut minWidthLayout := 0
@@ -154,7 +160,7 @@ def createBalancedLayout (ctx : BKContext) (layouts : Array BKAlignedLayout) : B
         let nodePos := layout.yOf id + layout.innerShiftOf id
         mn := mn.set! i (fmin mn[i]! nodePos)
         mx := mx.set! i (fmax mx[i]! (nodePos + ctx.sizeY n))
-  let mut shift : Array Float := Array.replicate noOfLayouts 0.0
+  let mut shift : Array Float := Array.replicate noOfLayouts fl0p0
   for i in [0:noOfLayouts] do
     if layouts[i]!.vdir == some .down then
       shift := shift.set! i (mn[minWidthLayout]! - mn[i]!)
@@ -168,10 +174,10 @@ def createBalancedLayout (ctx : BKContext) (layouts : Array BKAlignedLayout) : B
         layout.yOf id + layout.innerShiftOf id + shift[i]!
       let calculated := stableSort calculated Float.comparePartial
       if noOfLayouts ≥ 3 then
-        balanced := balanced.setY id ((calculated[1]! + calculated[2]!) / 2.0)
+        balanced := balanced.setY id ((calculated[1]! + calculated[2]!) / fl2p0)
       else if noOfLayouts > 0 then
         balanced := balanced.setY id calculated[noOfLayouts / 2]!
-      balanced := balanced.setInnerShift id 0.0
+      balanced := balanced.setInnerShift id fl0p0
   return balanced
 
 /-- `checkOrderConstraint(layeredGraph, bal)`: whether all nodes are placed in the order of

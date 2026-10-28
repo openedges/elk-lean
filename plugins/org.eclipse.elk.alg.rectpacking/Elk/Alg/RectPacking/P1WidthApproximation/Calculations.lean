@@ -6,6 +6,11 @@ import Elk.Alg.RectPacking.Util.DrawingData
 Port of `p1widthapproximation/calculations.rs` (elk-rs): geometry helpers of the width
 approximation. They only read the rectangles, so they are pure functions of the `ElkGraph`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.P1WidthApproximation
 
 open Elk.Graph Elk.Core.Util Elk.Alg.RectPacking.Util
@@ -110,13 +115,13 @@ private def closestScan (a b : FloatArray) (hab : a.size = b.size) (v last spaci
 rectangle). -/
 @[inline] def calculateYForLprSoA (x : Float) (placed : PlacedRects) (lastPlacedY nodeNodeSpacing : Float) :
     Float :=
-  closestScan placed.right placed.bottom placed.hsize x lastPlacedY nodeNodeSpacing 0.0
+  closestScan placed.right placed.bottom placed.hsize x lastPlacedY nodeNodeSpacing fl0p0
 
 /-- `calculate_x_for_lpb` on the placed rectangle borders (`lastPlacedX`: x of the last placed
 rectangle). -/
 @[inline] def calculateXForLpbSoA (y : Float) (placed : PlacedRects) (lastPlacedX nodeNodeSpacing : Float) :
     Float :=
-  closestScan placed.bottom placed.right placed.hsize.symm y lastPlacedX nodeNodeSpacing 0.0
+  closestScan placed.bottom placed.right placed.hsize.symm y lastPlacedX nodeNodeSpacing fl0p0
 
 /-- `(calculate_y_for_lpr(x, ..), calculate_x_for_lpb(y, ..))` over the placed rectangle borders
 (`lastPlacedX`/`lastPlacedY`: position of the last placed rectangle). -/

@@ -13,6 +13,13 @@ out sector by sector and the groups are placed diagonally one after the other.
 `placeComponentGroup` takes the group's `getComponents(sides)` lookup as a function so that it
 serves `ComponentGroup` and `ModelOrderComponentGroup` (Rust trait `ComponentGroupLike`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p6 : Float := 1.6
+private def fl20p0 : Float := 20.0
+
 namespace Elk.Alg.Layered.Components
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -23,47 +30,47 @@ namespace ComponentGroupGraphPlacer
 /-- Rust `place_components_horizontally(components, spacing)`: places the components next to
 each other; returns the occupied size (spacing included where something was placed). -/
 def placeComponentsHorizontally (components : Array LGraphId) (spacing : Float) : LayeredM KVector := do
-  let mut size : KVector := ⟨0.0, 0.0⟩
+  let mut size : KVector := ⟨fl0p0, fl0p0⟩
   for component in components do
-    offsetGraph component size.x 0.0
+    offsetGraph component size.x fl0p0
     let cs := (← getGraph component).size
     size := ⟨size.x + (cs.x + spacing), fmax size.y cs.y⟩
-  if size.y > 0.0 then size := { size with y := size.y + spacing }
+  if size.y > fl0p0 then size := { size with y := size.y + spacing }
   return size
 
 /-- Rust `place_components_vertically(components, spacing)`: places the components below each
 other. -/
 def placeComponentsVertically (components : Array LGraphId) (spacing : Float) : LayeredM KVector := do
-  let mut size : KVector := ⟨0.0, 0.0⟩
+  let mut size : KVector := ⟨fl0p0, fl0p0⟩
   for component in components do
-    offsetGraph component 0.0 size.y
+    offsetGraph component fl0p0 size.y
     let cs := (← getGraph component).size
     size := ⟨fmax size.x cs.x, size.y + (cs.y + spacing)⟩
-  if size.x > 0.0 then size := { size with x := size.x + spacing }
+  if size.x > fl0p0 then size := { size with x := size.x + spacing }
   return size
 
 /-- Rust `place_components_in_rows_group(components, spacing)`: the row placement of the
 unconnected (`c` sector) components, using the first component's `ASPECT_RATIO`. -/
 def placeComponentsInRowsGroup (components : Array LGraphId) (spacing : Float) : LayeredM KVector := do
-  let some first := components[0]? | return ⟨0.0, 0.0⟩
-  let mut maxRowWidth := 0.0
-  let mut totalArea := 0.0
+  let some first := components[0]? | return ⟨fl0p0, fl0p0⟩
+  let mut maxRowWidth := fl0p0
+  let mut totalArea := fl0p0
   for component in components do
     let size := (← getGraph component).size
     maxRowWidth := fmax maxRowWidth size.x
     totalArea := totalArea + size.x * size.y
-  let aspectRatio := (← getGraph first).props.getD LayeredOptions.ASPECT_RATIO 1.6
+  let aspectRatio := (← getGraph first).props.getD LayeredOptions.ASPECT_RATIO fl1p6
   maxRowWidth := fmax maxRowWidth (Float.sqrt totalArea * aspectRatio)
-  let mut xpos := 0.0
-  let mut ypos := 0.0
-  let mut highestBox := 0.0
+  let mut xpos := fl0p0
+  let mut ypos := fl0p0
+  let mut highestBox := fl0p0
   let mut broadestRow := spacing
   for component in components do
     let size := (← getGraph component).size
     if xpos + size.x > maxRowWidth then
-      xpos := 0.0
+      xpos := fl0p0
       ypos := ypos + (highestBox + spacing)
-      highestBox := 0.0
+      highestBox := fl0p0
     offsetGraph component xpos ypos
     broadestRow := fmax broadestRow (xpos + size.x)
     highestBox := fmax highestBox size.y
@@ -128,13 +135,13 @@ def addComponentToGroups (groups : Array ComponentGroup) (component : LGraphId) 
 def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit := do
   clearLayerlessNodes target
   let some first := components[0]? | do
-    modifyGraph target fun g => { g with size := ⟨0.0, 0.0⟩ }
+    modifyGraph target fun g => { g with size := ⟨fl0p0, fl0p0⟩ }
   copyProperties target first
   let mut groups : Array ComponentGroup := #[]
   for component in components do
     groups ← addComponentToGroups groups component
-  let componentSpacing := (← getGraph first).props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT 20.0
-  let mut offset : KVector := ⟨0.0, 0.0⟩
+  let componentSpacing := (← getGraph first).props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT fl20p0
+  let mut offset : KVector := ⟨fl0p0, fl0p0⟩
   for group in groups do
     let groupSize ← placeComponentGroup group.componentsFor componentSpacing
     offsetGraphs group.components offset.x offset.y
@@ -143,7 +150,7 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   modifyGraph target fun g => { g with size := finalSize }
   maybeCompactComponents components target true
   for group in groups do
-    moveGraphs target group.components 0.0 0.0
+    moveGraphs target group.components fl0p0 fl0p0
 
 end ComponentGroupGraphPlacer
 

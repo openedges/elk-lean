@@ -11,6 +11,11 @@ Port of `p1widthapproximation/area_approximation.rs` (elk-rs): the greedy first 
 places the rectangles one by one at the best of four candidate positions (right of / below the
 last placed rectangle, right of / below the whole drawing) and returns the resulting drawing.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.P1WidthApproximation
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math Elk.Alg.RectPacking.Util Elk.Alg.RectPacking.Options
@@ -89,13 +94,13 @@ def calcValuesForOptSoA (self : AreaApproximation) (g : ElkGraph) (option : Draw
     (nodeNodeSpacing : Float) : DrawingData :=
   let lp := g.node lastPlaced
   let shifted :=
-    if !self.lpShift then 0.0
+    if !self.lpShift then fl0p0
     else match option with
       | .candidatePositionLastPlacedRight =>
         Calculations.calculateYForLprSoA (lp.x + lp.width + nodeNodeSpacing) placedRects lp.y nodeNodeSpacing
       | .candidatePositionLastPlacedBelow =>
         Calculations.calculateXForLpbSoA (lp.y + lp.height + nodeNodeSpacing) placedRects lp.x nodeNodeSpacing
-      | _ => 0.0
+      | _ => fl0p0
   self.calcValuesForOptWith g option toPlace lastPlaced drawing shifted nodeNodeSpacing
 
 /-- `calc_values_for_opt(option, to_place, last_placed, drawing, placed_rects,
@@ -163,7 +168,7 @@ def approxBoundingBox (self : AreaApproximation) (rectangles : Array NodeId) (no
     (padding : ElkPadding) : ElkM DrawingData := do
   let some firstRect := rectangles[0]?
     | throw (IO.userError "java.lang.IllegalStateException: at least one rectangle needed")
-  ElkM.modifyNode firstRect fun n => { n with x := 0.0, y := 0.0 }
+  ElkM.modifyNode firstRect fun n => { n with x := fl0p0, y := fl0p0 }
   let first ← ElkM.getNode firstRect
   -- the geometry of the placed rectangles (they do not move again in this loop)
   let mut placedRects : Calculations.PlacedRects := ({} : Calculations.PlacedRects).push
@@ -178,15 +183,15 @@ def approxBoundingBox (self : AreaApproximation) (rectangles : Array NodeId) (no
       if self.lpShift then
         Calculations.calculateLprAndLpbSoA (lp.x + lp.width + nodeNodeSpacing)
           (lp.y + lp.height + nodeNodeSpacing) placedRects lp.x lp.y nodeNodeSpacing
-      else (0.0, 0.0)
+      else (fl0p0, fl0p0)
     let opt1 := self.calcValuesForOptWith g .candidatePositionLastPlacedRight toPlace lastPlaced
       currentValues lprY nodeNodeSpacing
     let opt2 := self.calcValuesForOptWith g .candidatePositionLastPlacedBelow toPlace lastPlaced
       currentValues lpbX nodeNodeSpacing
     let opt3 := self.calcValuesForOptWith g .candidatePositionWholeDrawingRight toPlace lastPlaced
-      currentValues 0.0 nodeNodeSpacing
+      currentValues fl0p0 nodeNodeSpacing
     let opt4 := self.calcValuesForOptWith g .candidatePositionWholeDrawingBelow toPlace lastPlaced
-      currentValues 0.0 nodeNodeSpacing
+      currentValues fl0p0 nodeNodeSpacing
     let bestOpt ← match self.findBestCandidate g opt1 opt2 opt3 opt4 toPlace lastPlaced padding with
       | .ok d => pure d
       | .error msg => throw (IO.userError msg)

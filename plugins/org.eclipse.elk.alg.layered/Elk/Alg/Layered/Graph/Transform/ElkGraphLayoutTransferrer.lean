@@ -44,6 +44,12 @@ Deviations from the Rust code:
   the moved positions are seen by the edges processed afterwards); the arena is therefore
   threaded through the recursion locally and the final arena is discarded.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Layered.Graph.Transform
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -142,18 +148,18 @@ private def applyContentAlignmentOffset (a : LGraphArena) (lgraph : LGraphId) (o
   let mut minSize := gr.props.getD LayeredOptions.NODE_SIZE_MINIMUM KVector.zero
   let sizeOptions := gr.props.getD CoreOptions.NODE_SIZE_OPTIONS EnumSet.noneOf
   if sizeOptions.contains .defaultMinimumSize then
-    if minSize.x <= 0.0 then minSize := { minSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
-    if minSize.y <= 0.0 then minSize := { minSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
+    if minSize.x <= fl0p0 then minSize := { minSize with x := ElkUtil.DEFAULT_MIN_WIDTH }
+    if minSize.y <= fl0p0 then minSize := { minSize with y := ElkUtil.DEFAULT_MIN_HEIGHT }
   let actualSize : KVector := ⟨fmax calculatedSize.x minSize.x, fmax calculatedSize.y minSize.y⟩
   let mut offset := offset
   if actualSize.x > calculatedSize.x then
     if contentAlignment.contains .hCenter then
-      offset := { offset with x := offset.x + (actualSize.x - calculatedSize.x) / 2.0 }
+      offset := { offset with x := offset.x + (actualSize.x - calculatedSize.x) / fl2p0 }
     else if contentAlignment.contains .hRight then
       offset := { offset with x := offset.x + (actualSize.x - calculatedSize.x) }
   if actualSize.y > calculatedSize.y then
     if contentAlignment.contains .vCenter then
-      offset := { offset with y := offset.y + (actualSize.y - calculatedSize.y) / 2.0 }
+      offset := { offset with y := offset.y + (actualSize.y - calculatedSize.y) / fl2p0 }
     else if contentAlignment.contains .vBottom then
       offset := { offset with y := offset.y + (actualSize.y - calculatedSize.y) }
   return offset
@@ -250,7 +256,7 @@ private def firstEdgeSection (e : EdgeId) : ElkM SectionId := do
   match sections[0]? with
   | some first =>
     ElkM.modifySection first fun s =>
-      { s with bendPoints := #[], startX := 0.0, startY := 0.0, endX := 0.0, endY := 0.0 }
+      { s with bendPoints := #[], startX := fl0p0, startY := fl0p0, endX := fl0p0, endY := fl0p0 }
     for s in sections.extract 1 sections.size do
       ElkM.modifySection s fun x => { x with parent := none }
     ElkM.modifyEdge e fun x => { x with sections := #[first] }
@@ -272,7 +278,7 @@ private def applyEdgeLayout (a : LGraphArena) (ledge : LEdgeId) (originId : Edge
       match (← ElkM.getEdge elkEdge).sections[0]? with
       | some s =>
         let sec ← ElkM.getSection s
-        pure (sec.startX != 0.0 || sec.startY != 0.0 || sec.endX != 0.0 || sec.endY != 0.0)
+        pure (sec.startX != fl0p0 || sec.startY != fl0p0 || sec.endX != fl0p0 || sec.endY != fl0p0)
       | none => pure false)
     if alreadyHasGeometry then return
   let hierarchicalOffset := calculateHierarchicalOffset a ledge
@@ -358,18 +364,18 @@ private def fallbackAnchorForPort (g : ElkGraph) (port : PortId) (container : No
     let nodeWidth := (g.node parent).width
     let side : PortSide :=
       if side == .undefined then
-        if pt.x <= 0.0 then .west
+        if pt.x <= fl0p0 then .west
         else if pt.x + pt.width >= nodeWidth then .east
-        else if pt.y <= 0.0 then .north
+        else if pt.y <= fl0p0 then .north
         else .south
       else side
     let onContainer := parent == container
     let (anchorX, anchorY) : Float × Float := match side with
-      | .west => (if onContainer then pt.x + pt.width else pt.x, pt.y + pt.height / 2.0)
-      | .east => (if onContainer then pt.x else pt.x + pt.width, pt.y + pt.height / 2.0)
-      | .north => (pt.x + pt.width / 2.0, if onContainer then pt.y + pt.height else pt.y)
-      | .south => (pt.x + pt.width / 2.0, if onContainer then pt.y else pt.y + pt.height)
-      | .undefined => (pt.x + pt.width / 2.0, pt.y + pt.height / 2.0)
+      | .west => (if onContainer then pt.x + pt.width else pt.x, pt.y + pt.height / fl2p0)
+      | .east => (if onContainer then pt.x else pt.x + pt.width, pt.y + pt.height / fl2p0)
+      | .north => (pt.x + pt.width / fl2p0, if onContainer then pt.y + pt.height else pt.y)
+      | .south => (pt.x + pt.width / fl2p0, if onContainer then pt.y else pt.y + pt.height)
+      | .undefined => (pt.x + pt.width / fl2p0, pt.y + pt.height / fl2p0)
     (ElkUtil.absolutePosition g (.node parent)).map fun parentAbs =>
       ⟨parentAbs.x + anchorX - containerAbs.x, parentAbs.y + anchorY - containerAbs.y⟩
 

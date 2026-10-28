@@ -35,6 +35,11 @@ followed with a visited set (no endless loops on cyclic chains); the minimum spa
 `max(2 * SPACING_EDGE_NODE_BETWEEN_LAYERS, SPACING_NODE_NODE_BETWEEN_LAYERS)` of the processed graph.
 The `ELK_TRACE_LABEL_DUMMY_SWITCHER` debug output is omitted.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.Intermediate
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered
@@ -71,7 +76,7 @@ structure State where
   /-- `layers`: the graph's layers (copy taken at the start). -/
   layers : Array LayerId := #[]
   /-- `min_space_between_layers`. -/
-  minSpaceBetweenLayers : Float := 0.0
+  minSpaceBetweenLayers : Float := fl0p0
 
 /-- Processor-local monad. -/
 abbrev SwitcherM := StateT State LayeredM

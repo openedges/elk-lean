@@ -15,6 +15,11 @@ Notes on elk-rs:
 * elk-rs `apply_stuff` is inlined in `process_with_options` (node size, then port positions by
   volatile-id order); `applyStuff` applies through the stored port handles, which is equivalent.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -116,15 +121,15 @@ def setupNodePaddingForPortsWithOffset (ctx : NodeContext N P L) : NodeContext N
   let mut padding := ctx.cells.padding ctx.nodeContainer
   for pc in ctx.allPortContexts do
     -- If the port extends into the node, ensure the inside port space is enough
-    if pc.hasPortBorderOffset && pc.portBorderOffset < 0.0 then
+    if pc.hasPortBorderOffset && pc.portBorderOffset < fl0p0 then
       padding := growForBorderOffset padding pc.portSide pc.portBorderOffset
     if isFixed then
       -- Compute the maximum inside part across all labels
-      let mut maxInsidePart := 0.0
+      let mut maxInsidePart := fl0p0
       for (labelPos, labelSize) in pc.labelPositions.zip pc.labelSizes do
         let inside := ElkUtil.computeInsidePart labelPos labelSize pc.portSize pc.portBorderOffset pc.portSide
         maxInsidePart := fmax maxInsidePart inside
-      if maxInsidePart > 0.0 then
+      if maxInsidePart > fl0p0 then
         padding := growForInsidePart padding pc.portSide maxInsidePart pc.portBorderOffset symmetry
   return ctx.modifyCells (·.setPadding ctx.nodeContainer padding)
 

@@ -23,6 +23,13 @@ Deviations from Java (following elk-rs):
   the tolerance).
 * `Math.max` is `f64::max` (`fmax`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -78,7 +85,7 @@ private def calculateHorizontalNodeSizeRequiredByFixedPosPorts (ctx : NodeContex
 satisfies the given spacing between the two ratios multiplied by that width (`0` if the ratios
 are (nearly) equal). -/
 def minSizeRequiredToRespectSpacing (spacing firstRatio secondRatio : Float) : Float :=
-  if (firstRatio - secondRatio).abs < EQUALITY_TOLERANCE then 0.0
+  if (firstRatio - secondRatio).abs < EQUALITY_TOLERANCE then fl0p0
   else spacing / (secondRatio - firstRatio)
 
 /-! ### Port margins -/
@@ -154,7 +161,7 @@ private def setupPortMargins (ctx : NodeContext N P L) (portSide : PortSide) : N
         match pcs[0]? with
         | some first =>
           if spaceEfficientPortLabels && !first.labelsNextToPort then
-            pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with right := 0.0 } }
+            pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with right := fl0p0 } }
           else pcs
         | none => pcs
     else ctx
@@ -187,12 +194,12 @@ private def calculateHorizontalNodeSizeRequiredByFixedRatioPorts (ctx : NodeCont
     NodeContext N P L := Id.run do
   if (ctx.portContextsOf portSide).isEmpty then
     return updateInsidePortLabelCells ctx portSide fun cs c =>
-      cs.modifyPadding c fun p => { p with left := 0.0, right := 0.0 }
+      cs.modifyPadding c fun p => { p with left := fl0p0, right := fl0p0 }
   let portLabelsInside := ctx.portLabelsPlacement.contains .inside
   let mut ctx := ctx
   if ctx.sizeConstraints.contains .portLabels then
     ctx := setupPortMargins ctx portSide
-  let mut minWidth := 0.0
+  let mut minWidth := fl0p0
   let surroundingLeft := ctx.surroundingPortMargins.left
   let surroundingRight := ctx.surroundingPortMargins.right
   let portPortSpacing := ctx.portPortSpacing
@@ -206,19 +213,19 @@ private def calculateHorizontalNodeSizeRequiredByFixedRatioPorts (ctx : NodeCont
       minWidth := fmax minWidth (minSizeRequiredToRespectSpacing requiredSpace prevRatio ratio)
     | none =>
       -- First port: respect the left surrounding port margin
-      if surroundingLeft > 0.0 then
-        minWidth := fmax minWidth (minSizeRequiredToRespectSpacing (surroundingLeft + pc.portMargin.left) 0.0 ratio)
+      if surroundingLeft > fl0p0 then
+        minWidth := fmax minWidth (minSizeRequiredToRespectSpacing (surroundingLeft + pc.portMargin.left) fl0p0 ratio)
     previous := some (ratio, pc.portSize.x, pc.portMargin.right)
   -- Right surrounding port margin
   if let some (prevRatio, prevWidth, prevMarginRight) := previous then
-    if surroundingRight > 0.0 then
+    if surroundingRight > fl0p0 then
       let mut requiredSpace := prevWidth + surroundingRight
       if portLabelsInside then
         requiredSpace := requiredSpace + prevMarginRight
-      minWidth := fmax minWidth (minSizeRequiredToRespectSpacing requiredSpace prevRatio 1.0)
+      minWidth := fmax minWidth (minSizeRequiredToRespectSpacing requiredSpace prevRatio fl1p0)
   -- Set the cell size and remove the left padding
   return updateInsidePortLabelCells ctx portSide fun cs c =>
-    (cs.modifyPadding c fun p => { p with left := 0.0 }).modifyMinimumContentAreaSize c
+    (cs.modifyPadding c fun p => { p with left := fl0p0 }).modifyMinimumContentAreaSize c
       fun s => { s with x := minWidth }
 
 /-- `calculateHorizontalNodeSizeRequiredByFreePorts(nodeContext, portSide)`: the padding is the
@@ -229,7 +236,7 @@ private def calculateHorizontalNodeSizeRequiredByFreePorts (ctx : NodeContext N 
     NodeContext N P L := Id.run do
   if (ctx.portContextsOf portSide).isEmpty then
     return updateInsidePortLabelCells ctx portSide fun cs c =>
-      cs.modifyPadding c fun p => { p with left := 0.0, right := 0.0 }
+      cs.modifyPadding c fun p => { p with left := fl0p0, right := fl0p0 }
   -- Set the padding to match the surrounding port space
   let surrLeft := ctx.surroundingPortMargins.left
   let surrRight := ctx.surroundingPortMargins.right
@@ -239,7 +246,7 @@ private def calculateHorizontalNodeSizeRequiredByFreePorts (ctx : NodeContext N 
     ctx := setupPortMargins ctx portSide
   let mut width := portWidthPlusPortPortSpacing ctx portSide
   if ctx.getPortAlignment portSide == .distributed then
-    width := width + 2.0 * ctx.portPortSpacing
+    width := width + fl2p0 * ctx.portPortSpacing
   -- Set the cell size
   return updateInsidePortLabelCells ctx portSide fun cs c =>
     cs.modifyMinimumContentAreaSize c fun s => { s with x := width }

@@ -27,6 +27,11 @@ targetSide)`, `addEdge`, `anchorY`) live with the router in `SplineEdgeRouter.le
 - `edge_information: FxHashMap<edge, EdgeInformation>` (lookup only) → an insertion-ordered
   association array, see `edgeInformationOf`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P5Edges.Splines
 
 open Elk.Core.Math Elk.Core.Util Elk.Alg.Layered.Graph
@@ -37,9 +42,9 @@ elk_enum SideToProcess := left right
 /-- `SplineSegment.EdgeInformation`: per-edge values captured during edge routing. -/
 structure EdgeInformation where
   /-- `startY`: anchor y of the source port (`anchorY`). -/
-  startY : Float := 0.0
+  startY : Float := fl0p0
   /-- `endY`: anchor y of the target port. -/
-  endY : Float := 0.0
+  endY : Float := fl0p0
   /-- `normalSourceNode`: the source node is `NORMAL` or `BREAKING_POINT`. -/
   normalSourceNode : Bool := false
   /-- `normalTargetNode`. -/
@@ -99,7 +104,7 @@ structure SplineSegment where
   /-- `isWestOfInitialLayer`. -/
   isWestOfInitialLayer : Bool := false
   /-- `xDelta`: offset of the vertical segments when the layer gap exceeds the required spacing. -/
-  xDelta : Float := 0.0
+  xDelta : Float := fl0p0
   /-- `sourcePort` (set by `getSplinePath`). -/
   sourcePort : Option LPortId := none
   /-- `targetPort` (set by `getSplinePath`). -/
@@ -115,11 +120,11 @@ structure SplineSegment where
   /-- `inverseOrder`: control points must be read backwards (wrapping). -/
   inverseOrder : Bool := false
   /-- `hyperEdgeTopYPos`. -/
-  hyperEdgeTopYPos : Float := 0.0
+  hyperEdgeTopYPos : Float := fl0p0
   /-- `hyperEdgeBottomYPos`. -/
-  hyperEdgeBottomYPos : Float := 0.0
+  hyperEdgeBottomYPos : Float := fl0p0
   /-- `centerControlPointY`. -/
-  centerControlPointY : Float := 0.0
+  centerControlPointY : Float := fl0p0
   /-- `edgeInformation`: per represented edge, in insertion order. -/
   edgeInformation : Array (LEdgeId × EdgeInformation) := #[]
   deriving Inhabited, Repr

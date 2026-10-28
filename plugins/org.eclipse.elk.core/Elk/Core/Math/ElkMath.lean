@@ -19,6 +19,13 @@ Port of the elk-rs `elk_math.rs`. Differences to the Rust API:
 * fixed-size Rust arrays are `Array` values of the same length;
 * `f32` arithmetic is emulated with `Float.toF32` after every operation.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Core.Math
 
 open Elk.Core.Util
@@ -113,8 +120,8 @@ partial def binomiall (n k : Int) : Except String Int := do
 
 /-- Unchecked `binomiald` for `0 ≤ k ≤ n`. -/
 private def binomialdU (n k : Int) : Float :=
-  if k == 0 || k == n then 1.0
-  else if n == 0 then 0.0
+  if k == 0 || k == n then fl1p0
+  else if n == 0 then fl0p0
   else factdU n / (factdU k * factdU (n - k))
 
 /-- `ElkMath.binomiald(int, int)`: binomial coefficient as a double. -/
@@ -194,8 +201,8 @@ def bezier (c : Array KVector) (degree : Nat) (t : Float) :
     let prev := p[i - 1]!
     let mut row : Array KVector := #[]
     for j in [0:degree + 1 - i] do
-      row := row.push ⟨(1.0 - t) * prev[j]!.x + t * prev[j + 1]!.x,
-                       (1.0 - t) * prev[j]!.y + t * prev[j + 1]!.y⟩
+      row := row.push ⟨(fl1p0 - t) * prev[j]!.x + t * prev[j + 1]!.x,
+                       (fl1p0 - t) * prev[j]!.y + t * prev[j + 1]!.y⟩
     p := p.push row
   let mut left : Array KVector := #[]
   let mut right : Array KVector := #[]
@@ -221,7 +228,7 @@ def convertToBezierForm (v : Array KVector) (pa : KVector) : Array KVector := Id
     cdTable := cdTable.push r
   let mut w : Array KVector := #[]
   for i in [0:W_DEGREE + 1] do
-    w := w.push ⟨i.toFloat / W_DEGREE.toFloat, 0.0⟩
+    w := w.push ⟨i.toFloat / W_DEGREE.toFloat, fl0p0⟩
   let n := DEGREE
   let m := DEGREE - 1
   for k in [0:n + m + 1] do
@@ -236,10 +243,10 @@ def convertToBezierForm (v : Array KVector) (pa : KVector) : Array KVector := Id
 /-- Private `crossingCount(v, degree)`: number of sign changes of the y-coordinates. -/
 def crossingCount (v : Array KVector) (degree : Nat) : Nat := Id.run do
   let mut nCrossings := 0
-  let mut sign : Int := if v[0]!.y < 0.0 then -1 else 1
+  let mut sign : Int := if v[0]!.y < fl0p0 then -1 else 1
   let mut oldSign := sign
   for i in [1:degree + 1] do
-    sign := if v[i]!.y < 0.0 then -1 else 1
+    sign := if v[i]!.y < fl0p0 then -1 else 1
     if sign != oldSign then nCrossings := nCrossings + 1
     oldSign := sign
   return nCrossings
@@ -250,34 +257,34 @@ def controlPolygonFlatEnough (v : Array KVector) (degree : Nat) : Bool := Id.run
   let b := v[degree]!.x - v[0]!.x
   let c := v[0]!.x * v[degree]!.y - v[degree]!.x * v[0]!.y
   let abSquared := a * a + b * b
-  let mut distance : Array Float := Array.replicate (W_DEGREE + 1) 0.0
+  let mut distance : Array Float := Array.replicate (W_DEGREE + 1) fl0p0
   for i in [1:degree] do
     let mut di := a * v[i]!.x + b * v[i]!.y + c
-    if di > 0.0 then di := (di * di) / abSquared
-    if di < 0.0 then di := -((di * di) / abSquared)
+    if di > fl0p0 then di := (di * di) / abSquared
+    if di < fl0p0 then di := -((di * di) / abSquared)
     distance := distance.set! i di
-  let mut maxAbove := 0.0
-  let mut maxBelow := 0.0
+  let mut maxAbove := fl0p0
+  let mut maxBelow := fl0p0
   for i in [1:degree] do
     let value := distance[i]!
-    if value < 0.0 then maxBelow := fmin maxBelow value
-    if value > 0.0 then maxAbove := fmax maxAbove value
-  let a1 := 0.0
-  let b1 := 1.0
-  let c1 := 0.0
+    if value < fl0p0 then maxBelow := fmin maxBelow value
+    if value > fl0p0 then maxAbove := fmax maxAbove value
+  let a1 := fl0p0
+  let b1 := fl1p0
+  let c1 := fl0p0
   let a2 := a
   let b2 := b
   let c2 := c + maxAbove
   let det := a1 * b2 - a2 * b1
-  let dInv := 1.0 / det
+  let dInv := fl1p0 / det
   let intercept1 := (b1 * c2 - b2 * c1) * dInv
   let c2' := c + maxBelow
   let det' := a1 * b2 - a2 * b1
-  let dInv' := 1.0 / det'
+  let dInv' := fl1p0 / det'
   let intercept2 := (b1 * c2' - b2 * c1) * dInv'
   let leftIntercept := fmin intercept1 intercept2
   let rightIntercept := fmax intercept1 intercept2
-  let error := (rightIntercept - leftIntercept) / 2.0
+  let error := (rightIntercept - leftIntercept) / fl2p0
   return error < EPSILON
 
 /-- Private `computeXIntercept(v, degree)`. -/

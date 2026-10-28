@@ -15,6 +15,11 @@ Deviations:
   counterpart either); callers set the alignments with `setHorizontalAlignment` /
   `setVerticalAlignment` (see `NodeLabelLocation.horizontalAlignment`).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl2p0 : Float := 2.0
+
 namespace Elk.Alg.Common.NodeSpacing.CellSystem
 
 open Elk Elk.Core.Math Elk.Core.Util
@@ -51,7 +56,7 @@ def horizontalModePositions (d : LabelCellData L) (cellRect : ElkRectangle) (pad
     (sizes : Array KVector) : Array KVector := Id.run do
   let mut yPos := cellRect.y
   if d.verticalAlignment == .center then
-    yPos := yPos + (cellRect.height - d.minimumContentAreaSize.y) / 2.0
+    yPos := yPos + (cellRect.height - d.minimumContentAreaSize.y) / fl2p0
   else if d.verticalAlignment == .bottom then
     yPos := yPos + (cellRect.height - d.minimumContentAreaSize.y)
   let mut result : Array KVector := Array.mkEmpty sizes.size
@@ -60,7 +65,7 @@ def horizontalModePositions (d : LabelCellData L) (cellRect : ElkRectangle) (pad
     yPos := yPos + (labelSize.y + d.gap)
     let x := match d.horizontalAlignment with
       | .left => cellRect.x + padding.left
-      | .center => cellRect.x + padding.left + (cellRect.width - labelSize.x) / 2.0
+      | .center => cellRect.x + padding.left + (cellRect.width - labelSize.x) / fl2p0
       | .right => cellRect.x + cellRect.width - padding.right - labelSize.x
     result := result.push ⟨x, y⟩
   return result
@@ -70,7 +75,7 @@ def verticalModePositions (d : LabelCellData L) (cellRect : ElkRectangle) (paddi
     (sizes : Array KVector) : Array KVector := Id.run do
   let mut xPos := cellRect.x
   if d.horizontalAlignment == .center then
-    xPos := xPos + (cellRect.width - d.minimumContentAreaSize.x) / 2.0
+    xPos := xPos + (cellRect.width - d.minimumContentAreaSize.x) / fl2p0
   else if d.horizontalAlignment == .right then
     xPos := xPos + (cellRect.width - d.minimumContentAreaSize.x)
   let mut result : Array KVector := Array.mkEmpty sizes.size
@@ -79,7 +84,7 @@ def verticalModePositions (d : LabelCellData L) (cellRect : ElkRectangle) (paddi
     xPos := xPos + (labelSize.x + d.gap)
     let y := match d.verticalAlignment with
       | .top => cellRect.y + padding.top
-      | .center => cellRect.y + padding.top + (cellRect.height - labelSize.y) / 2.0
+      | .center => cellRect.y + padding.top + (cellRect.height - labelSize.y) / fl2p0
       | .bottom => cellRect.y + cellRect.height - padding.bottom - labelSize.y
     result := result.push ⟨x, y⟩
   return result

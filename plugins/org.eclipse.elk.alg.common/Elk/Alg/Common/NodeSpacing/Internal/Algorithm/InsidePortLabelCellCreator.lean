@@ -11,6 +11,11 @@ elk-rs keeps two copies of every cell (one in the cell tree, one in `inside_port
 applies each update to both; here both places hold the same `CellId`, so every update is applied
 once to the shared arena cell (all of them are idempotent assignments, so the result is the same).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
 open Elk Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -41,8 +46,8 @@ def setupNorthOrSouthPortLabelCell (ctx : NodeContext N P L) (portSide : PortSid
     ctx.modifyCells (·.modifyPadding cell fun p =>
       -- A negative port label spacing must not become a padding (it would enlarge the node)
       let p := match portSide with
-        | .north => if spacing >= 0.0 then { p with top := spacing } else p
-        | .south => if spacing >= 0.0 then { p with bottom := spacing } else p
+        | .north => if spacing >= fl0p0 then { p with top := spacing } else p
+        | .south => if spacing >= fl0p0 then { p with bottom := spacing } else p
         | _ => p
       { p with left := margins.left, right := margins.right })
 

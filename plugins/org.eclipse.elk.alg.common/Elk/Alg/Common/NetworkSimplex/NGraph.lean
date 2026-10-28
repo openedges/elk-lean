@@ -22,6 +22,11 @@ Representation (see `PORTING.md` §14):
 Also defined here because they need the graph: `NNodeBuilder.create`,
 `NEdgeBuilder.create`/`tryCreate` and `NEdge.reverse`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NetworkSimplex
 
 /-- `NGraph`: a graph structure used by the `NetworkSimplex` algorithm. -/
@@ -120,7 +125,7 @@ def createArtificialRootAndConnect {ο : Type} (g : NGraph ο) (nodesToConnect :
   let mut g := g
   for n in nodesToConnect do
     -- `NEdge.of().delta(0).weight(0).source(root).target(n).create()`: the root is new, so never a self-loop
-    let (g', _) := g.addEdge { delta := 0, weight := 0.0, source := root, target := n }
+    let (g', _) := g.addEdge { delta := 0, weight := fl0p0, source := root, target := n }
     g := g'
   return (g, root)
 

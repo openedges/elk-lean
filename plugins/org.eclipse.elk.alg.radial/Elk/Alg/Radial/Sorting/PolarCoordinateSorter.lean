@@ -26,6 +26,11 @@ The state of the Rust struct (`id_sorter: Option<IDSorter>`) is an `IO.Ref Bool`
 This module also hosts `SortingStrategy.create`, the factory half of the Rust
 `sorting_strategy.rs`.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Radial.Sorting
 
 open Elk.Graph Elk.Core.Options Elk.Core.Util Elk.Alg.Radial.Options
@@ -51,9 +56,9 @@ def sortWithOffset (nodes : Array NodeId) (offset : Float) : ElkM (Array NodeId)
   let mut arcs : Array Float := #[]
   for node in nodes do
     let n ← ElkM.getNode node
-    let position := (n.props.get CoreOptions.POSITION).getD ⟨0.0, 0.0⟩
+    let position := (n.props.get CoreOptions.POSITION).getD ⟨fl0p0, fl0p0⟩
     let arc := Float.atan2 position.y position.x
-    let arc := if arc < 0.0 then arc + RadialUtil.TWO_PI else arc
+    let arc := if arc < fl0p0 then arc + RadialUtil.TWO_PI else arc
     let arc := arc + offset
     let arc := if arc > RadialUtil.TWO_PI then arc - RadialUtil.TWO_PI else arc
     arcs := arcs.push arc
@@ -82,7 +87,7 @@ partial def setIdForNodes (nodes : Array NodeId) (idOffset : Int) : ElkM Int := 
     else if arc <= DEGREE_315 && arc > DEGREE_225 then
       nodeSuccessors ← sortWithOffset nodeSuccessors DEGREE_270
     else if arc <= DEGREE_225 && arc > DEGREE_135 then
-      nodeSuccessors ← sortWithOffset nodeSuccessors 0.0
+      nodeSuccessors ← sortWithOffset nodeSuccessors fl0p0
     else if arc <= DEGREE_135 then
       nodeSuccessors ← sortWithOffset nodeSuccessors DEGREE_90
     nextLayerId ← setIdForNodes nodeSuccessors nextLayerId

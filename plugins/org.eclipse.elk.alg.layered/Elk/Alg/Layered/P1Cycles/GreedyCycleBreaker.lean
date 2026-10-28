@@ -25,6 +25,11 @@ Debug hooks of elk-rs are ported: `ELK_DEBUG_CYCLE_RANDOM_PREFETCH` (discard `n`
 `nextInt(2)`), `ELK_DEBUG_CYCLE_FORCE_REVERSE_ORIGINS` (reverse exactly the edges whose ElkEdge
 origin index is listed), `ELK_TRACE_CYCLE_CHOICES` / `ELK_TRACE_CYCLE_REVERSALS` (stderr lines).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.P1Cycles
 
 open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph
@@ -328,7 +333,7 @@ def run (graph : LGraphId) : GreedyM Unit := do
 def create (preferModelOrder : Bool) : LayeredPhase :=
   { name := if preferModelOrder then "GreedyModelOrderCycleBreaker" else "GreedyCycleBreaker"
     process := fun graph monitor => do
-      let _ ← monitor.begin "Greedy cycle removal" 1.0
+      let _ ← monitor.begin "Greedy cycle removal" fl1p0
       let _ ← (run graph).run { preferModelOrder := preferModelOrder }
       monitor.done
     getLayoutProcessorConfiguration := fun _ => pure (some intermediateProcessingConfiguration) }

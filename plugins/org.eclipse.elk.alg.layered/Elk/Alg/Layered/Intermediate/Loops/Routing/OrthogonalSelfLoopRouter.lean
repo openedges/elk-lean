@@ -31,6 +31,12 @@ node; the label lanes and positions differ accordingly.
 Deviation: the `ELK_TRACE_INSIDE_YO` line prints the arena edge index instead of the Rust edge
 pointer.
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+private def fl1p0 : Float := 1.0
+
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 
 open Elk.Graph Elk.Core.Math Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
@@ -82,17 +88,17 @@ def computeRoutingSlotPositions (routingSlotCount : Array Int) (loops : Array Se
   let mut positions : SlotPositions := Array.replicate PORT_SIDE_COUNT #[]
   for side in sides do
     let count := (max (routingSlotCount.getD (ElkEnum.ordinal side) 0) 0).toNat
-    positions := positions.set! (ElkEnum.ordinal side) (Array.replicate count 0.0)
+    positions := positions.set! (ElkEnum.ordinal side) (Array.replicate count fl0p0)
   positions := initializeMaxLabelHeight positions loops .north
   positions := initializeMaxLabelHeight positions loops .south
   for side in sides do
     let sideIdx := ElkEnum.ordinal side
     let mut sidePositions := positions[sideIdx]!
     let mut currPos := baselinePosition side nodeSize margin sp.nodeSelfLoop
-    let factor : Float := if side == .north || side == .west then -1.0 else 1.0
+    let factor : Float := if side == .north || side == .west then -fl1p0 else fl1p0
     for i in [0:sidePositions.size] do
       let mut largestLabelSize := sidePositions[i]!
-      if largestLabelSize > 0.0 then largestLabelSize := largestLabelSize + sp.edgeLabel
+      if largestLabelSize > fl0p0 then largestLabelSize := largestLabelSize + sp.edgeLabel
       sidePositions := sidePositions.set! i currPos
       currPos := currPos + factor * (largestLabelSize + sp.edgeEdge)
     positions := positions.set! sideIdx sidePositions

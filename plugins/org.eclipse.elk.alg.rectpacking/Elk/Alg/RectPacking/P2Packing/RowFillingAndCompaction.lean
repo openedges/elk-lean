@@ -20,6 +20,11 @@ Rust deviations from Java kept:
 * The special case of a single row skips rows without stacks / stacks without blocks (Java would
   throw).
 -/
+/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
+shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
+evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.RectPacking.P2Packing
 
 open Elk.Graph Elk.Core.Util Elk.Core.Math Elk.Core.Alg
@@ -31,9 +36,9 @@ structure RowFillingAndCompaction where
   aspectRatio : Float
   nodeNodeSpacing : Float
   potentialRowWidthDecreaseMin : Float := Float.posInf
-  potentialRowWidthDecreaseMax : Float := 0.0
+  potentialRowWidthDecreaseMax : Float := fl0p0
   potentialRowWidthIncreaseMin : Float := Float.posInf
-  potentialRowWidthIncreaseMax : Float := 0.0
+  potentialRowWidthIncreaseMax : Float := fl0p0
   deriving Inhabited, Repr
 
 namespace RowFillingAndCompaction
@@ -45,14 +50,14 @@ def new (aspectRatio nodeNodeSpacing : Float) : RowFillingAndCompaction := { asp
 stack height) and width (stack widths plus spacing). -/
 def adjustWidthAndHeight (self : RowFillingAndCompaction) (row : RectRowId) : RectPackingM Unit := do
   let stacks := (← getRow row).stacks
-  let mut maxHeight : Float := 0.0
-  let mut maxWidth : Float := 0.0
+  let mut maxHeight : Float := fl0p0
+  let mut maxWidth : Float := fl0p0
   let mut index := 0
   for stack in stacks do
     BlockStack.updateDimension stack
     let st ← getStack stack
     maxHeight := fmax maxHeight st.height
-    maxWidth := maxWidth + (st.width + (if index > 0 then self.nodeNodeSpacing else 0.0))
+    maxWidth := maxWidth + (st.width + (if index > 0 then self.nodeNodeSpacing else fl0p0))
     index := index + 1
   RectRow.setHeight row maxHeight
   RectRow.setWidth row maxWidth
@@ -65,9 +70,9 @@ def start (self : RowFillingAndCompaction) (_rectangles : Array NodeId) (_monito
   let mut self := self
   let nns := self.nodeNodeSpacing
   let props := (← ElkM.getNode layoutGraph).props
-  let targetWidth := (props.get InternalProperties.TARGET_WIDTH).getD 0.0
-  let minWidth := (props.get InternalProperties.MIN_WIDTH).getD 0.0
-  let minHeight := (props.get InternalProperties.MIN_HEIGHT).getD 0.0
+  let targetWidth := (props.get InternalProperties.TARGET_WIDTH).getD fl0p0
+  let minWidth := (props.get InternalProperties.MIN_WIDTH).getD fl0p0
+  let minHeight := (props.get InternalProperties.MIN_HEIGHT).getD fl0p0
   let rectangles := (← ElkM.getNode layoutGraph).children
   DrawingUtil.resetCoordinates rectangles
   let mut rows ← InitialPlacement.place rectangles targetWidth nns
@@ -104,7 +109,7 @@ def start (self : RowFillingAndCompaction) (_rectangles : Array NodeId) (_monito
         let stacks := (← getRow currentRow).stacks
         if let some lastStack := stacks.back? then
           let lastStackWidth := (← getStack lastStack).width
-          let spacing := if stacks.size <= 1 then 0.0 else nns
+          let spacing := if stacks.size <= 1 then fl0p0 else nns
           let decreaseValue := lastStackWidth + spacing
           self := { self with potentialRowWidthDecreaseMax := fmax self.potentialRowWidthDecreaseMax decreaseValue }
           self := { self with potentialRowWidthDecreaseMin := fmin self.potentialRowWidthDecreaseMax decreaseValue }
