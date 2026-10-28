@@ -487,6 +487,395 @@ def processConstraints (c : ForsterCtx) (constraintsBetweenNonDummies : Bool) (n
 
 end ForsterM
 
+/-! ## Allocation-free `process_constraints` (Lean only)
+
+`ForsterM.processConstraints` is the line-by-line port; `ForsterFast.processConstraints` computes
+exactly the same: the same reads and writes of the group arena, the barycenter states and the group
+table in the same order (so the same groups are created with the same ids and contents, the same
+fields are left behind on the groups, and the same barycenters are written), the same result, and on
+a missing constraint group the same state at the failure. It threads the three tables through tail
+recursive loops instead of `ExceptT String (StateM ForsterData)`, reads groups and barycenters
+without `Option`s (a missing barycenter reads `0.0` where the port reads `getD 0.0`), evaluates
+`group_barycenter` only where its value is used (it is a pure read) and once per active group in
+`find_violated_constraint` (nothing is written there), and only copies an outgoing list in
+`handle_violated_constraint` when it contains one of the merged groups (`removeGroup` then changes
+it). The differential test `forster fast = port` compares both on random constraint layers. -/
+
+namespace ForsterFast
+
+/-- The constraint group arena. -/
+abbrev Arena := Array ConstraintGroup
+
+/-- `barycenter_states[layer][node id]`. -/
+abbrev States := Array (Array (Option BarycenterState))
+
+/-- `constraint_groups[layer][node id]`. -/
+abbrev Table := Array (Array (Option Nat))
+
+/-- `group_of(node)` as `group id + 1` (`0`: no group, where `ForsterM.groupOf` throws). -/
+@[inline] def groupIdx (c : ForsterCtx) (table : Table) (n : LNodeId) : Nat :=
+  let li := c.layerIndex n
+  let ni := c.nodeId n
+  if h : li < table.size then
+    let row := table[li]
+    if h2 : ni < row.size then
+      match row[ni] with
+      | some g => g + 1
+      | none => 0
+    else 0
+  else 0
+
+/-- Whether a node type is `NORMAL` (a `match`, not the derived `BEq`). -/
+@[inline] def isNormal : NodeType → Bool
+  | .normal => true
+  | _ => false
+
+/-- `ConstraintGroup.singleNode` of group `gid` (`default` for a missing or empty group). -/
+@[inline] def singleNodeOf (arena : Arena) (gid : Nat) : LNodeId :=
+  if h : gid < arena.size then
+    let nodes := arena[gid].nodes
+    if h2 : 0 < nodes.size then nodes[0] else default
+  else default
+
+/-- `nodeBarycenter(node).getD 0.0`. -/
+@[inline] def nodeBaryD (c : ForsterCtx) (states : States) (n : LNodeId) : Float :=
+  let li := c.layerIndex n
+  let ni := c.nodeId n
+  if h : li < states.size then
+    let row := states[li]
+    if h2 : ni < row.size then
+      match row[ni] with
+      | some st => if st.hasBarycenter then st.barycenterValue else floatZero
+      | none => floatZero
+    else floatZero
+  else floatZero
+
+/-- Whether `nodeBarycenter(node)` is `some`. -/
+@[inline] def nodeBaryKnown (c : ForsterCtx) (states : States) (n : LNodeId) : Bool :=
+  BarycenterState.knownIn states (c.layerIndex n) (c.nodeId n)
+
+/-- `groupBarycenter(gid).getD 0.0` (a missing group reads `0.0`). -/
+@[inline] def groupBaryD (c : ForsterCtx) (arena : Arena) (states : States) (gid : Nat) : Float :=
+  if gid < arena.size then nodeBaryD c states (singleNodeOf arena gid) else floatZero
+
+/-- Whether `groupBarycenter(gid)` is `some`. -/
+@[inline] def groupBaryKnown (c : ForsterCtx) (arena : Arena) (states : States) (gid : Nat) : Bool :=
+  gid < arena.size && nodeBaryKnown c states (singleNodeOf arena gid)
+
+/-- `setNodeBarycenter(node, known ? some value : none)`. -/
+@[inline] def setNodeBary (c : ForsterCtx) (states : States) (n : LNodeId) (known : Bool) (value : Float) : States :=
+  BarycenterState.updateIn states (c.layerIndex n) (c.nodeId n) fun st =>
+    if known then { st with barycenterValue := value, hasBarycenter := true } else { st with hasBarycenter := false }
+
+/-- `setNodeBary` for the nodes `nodes[i:]`. -/
+partial def setNodesBary (c : ForsterCtx) (nodes : Array LNodeId) (i : Nat) (known : Bool) (value : Float)
+    (states : States) : States :=
+  if h : i < nodes.size then setNodesBary c nodes (i + 1) known value (setNodeBary c states nodes[i] known value)
+  else states
+
+/-- `addConstraint(from, to)`. -/
+@[inline] def addConstraint (arena : Arena) (fromGroup toGroup : Nat) : Arena :=
+  let arena := arena.modifyIn fromGroup fun g => { g with outgoingConstraints := g.outgoingConstraints.push toGroup }
+  arena.modifyIn toGroup fun g => { g with incomingConstraintsCount := g.incomingConstraintsCount + 1 }
+
+/-- The arena and whether no `group_of` failed (the arena is the state at the failure otherwise). -/
+structure ArenaOk where
+  arena : Arena
+  ok : Bool
+  deriving Inhabited
+
+/-! ### `build_constraints_graph` -/
+
+/-- The reset loop: no outgoing constraints and no incoming count for the groups `groups[i:]`. -/
+partial def resetOutgoing (groups : Array Nat) (i : Nat) (arena : Arena) : Arena :=
+  if h : i < groups.size then
+    resetOutgoing groups (i + 1) (arena.modifyIn groups[i] fun g =>
+      { g with outgoingConstraints := #[], incomingConstraintsCount := 0 })
+  else arena
+
+/-- The successor loop of group `gid` over `succs[k:]`. -/
+partial def addSuccessors (c : ForsterCtx) (table : Table) (onlyNormal : Bool) (gid : Nat) (succs : Array LNodeId)
+    (k : Nat) (arena : Arena) : ArenaOk :=
+  if h : k < succs.size then
+    let s := succs[k]
+    if onlyNormal && !isNormal (c.nodeType s) then addSuccessors c table onlyNormal gid succs (k + 1) arena
+    else
+      let sg := groupIdx c table s
+      if sg == 0 then ⟨arena, false⟩
+      else addSuccessors c table onlyNormal gid succs (k + 1) (addConstraint arena gid (sg - 1))
+  else ⟨arena, true⟩
+
+/-- The inner loop of `addLayoutUnitConstraints` (`groupOf lastUnitNode`, then `groupOf
+currentUnitNode`, for every current unit node `cur[k:]`). -/
+partial def addUnitInner (c : ForsterCtx) (table : Table) (lastUnitNode : LNodeId) (cur : Array LNodeId) (k : Nat)
+    (arena : Arena) : ArenaOk :=
+  if h : k < cur.size then
+    let lg := groupIdx c table lastUnitNode
+    if lg == 0 then ⟨arena, false⟩
+    else
+      let cg := groupIdx c table cur[k]
+      if cg == 0 then ⟨arena, false⟩
+      else addUnitInner c table lastUnitNode cur (k + 1) (addConstraint arena (lg - 1) (cg - 1))
+  else ⟨arena, true⟩
+
+/-- `addLayoutUnitConstraints` over the last unit's nodes `last[j:]`. -/
+partial def addUnitOuter (c : ForsterCtx) (table : Table) (last cur : Array LNodeId) (j : Nat) (arena : Arena) : ArenaOk :=
+  if h : j < last.size then
+    let r := addUnitInner c table last[j] cur 0 arena
+    if r.ok then addUnitOuter c table last cur (j + 1) r.arena else r
+  else ⟨arena, true⟩
+
+/-- The main loop of `build_constraints_graph` over `groups[i:]` (`hasLast`/`last`: the last
+non-dummy node). -/
+partial def buildLoop (c : ForsterCtx) (table : Table) (units : Std.HashMap LNodeId (Array LNodeId))
+    (onlyNormal : Bool) (groups : Array Nat) (i : Nat) (hasLast : Bool) (last : LNodeId) (arena : Arena) : ArenaOk :=
+  if h : i < groups.size then
+    let gid := groups[i]
+    if gid < arena.size then
+      let node := singleNodeOf arena gid
+      let normal := isNormal (c.nodeType node)
+      if onlyNormal && !normal then buildLoop c table units onlyNormal groups (i + 1) hasLast last arena
+      else
+        let r := addSuccessors c table onlyNormal gid (c.arena.node node).internal.inLayerSuccessorConstraints 0 arena
+        if !r.ok then r
+        else if !onlyNormal && normal then
+          if hasLast then
+            let r2 := addUnitOuter c table (units.getD last #[]) (units.getD node #[]) 0 r.arena
+            if r2.ok then buildLoop c table units onlyNormal groups (i + 1) true node r2.arena else r2
+          else buildLoop c table units onlyNormal groups (i + 1) true node r.arena
+        else buildLoop c table units onlyNormal groups (i + 1) hasLast last r.arena
+    else buildLoop c table units onlyNormal groups (i + 1) hasLast last arena
+  else ⟨arena, true⟩
+
+/-- `build_constraints_graph(groups, only_between_normal_nodes)`. -/
+def buildConstraintsGraph (c : ForsterCtx) (table : Table) (units : Std.HashMap LNodeId (Array LNodeId))
+    (groups : Array Nat) (onlyNormal : Bool) (arena : Arena) : ArenaOk :=
+  buildLoop c table units onlyNormal groups 0 false default (resetOutgoing groups 0 arena)
+
+/-! ### `find_violated_constraint` -/
+
+/-- The result of `find_violated_constraint`: the arena and, when `found`, the pair. -/
+structure Found where
+  arena : Arena
+  found : Bool
+  first : Nat
+  second : Nat
+  deriving Inhabited
+
+/-- The reset loop: empty incoming lists, the sources with outgoing constraints are activated. -/
+partial def findReset (groups : Array Nat) (i : Nat) (active : Array Nat) (arena : Arena) : Arena × Array Nat :=
+  if h : i < groups.size then
+    let gid := groups[i]
+    if h2 : gid < arena.size then
+      let g := arena[gid]
+      let source := !g.outgoingConstraints.isEmpty && g.incomingConstraintsCount == 0
+      let arena := arena.modifyIn gid fun x => { x with incomingConstraints := #[] }
+      findReset groups (i + 1) (if source then active.push gid else active) arena
+    else findReset groups (i + 1) active arena
+  else (arena, active)
+
+/-- The predecessor loop of an active group (barycenter `groupBary`) over `incoming[k:]`: the first
+violating predecessor `+ 1`, else `0`. -/
+partial def findViolatingPred (c : ForsterCtx) (arena : Arena) (states : States) (groups : Array Nat) (gid : Nat)
+    (groupBary : Float) (incoming : Array Nat) (k : Nat) : Nat :=
+  if h : k < incoming.size then
+    let pred := incoming[k]
+    let predBary := groupBaryD c arena states pred
+    let violated := if predBary.toF32 == groupBary.toF32 then
+        ForsterM.lastIndexOf groups pred > ForsterM.lastIndexOf groups gid
+      else predBary > groupBary
+    if violated then pred + 1 else findViolatingPred c arena states groups gid groupBary incoming (k + 1)
+  else 0
+
+/-- The FIFO traversal: the successor loop of group `gid` over `outgoing[k:]`, then the next active
+group `active[head]`. -/
+partial def findLoop (c : ForsterCtx) (states : States) (groups : Array Nat) (active : Array Nat) (head gid : Nat)
+    (outgoing : Array Nat) (k : Nat) (arena : Arena) : Found :=
+  if h : k < outgoing.size then
+    let succ := outgoing[k]
+    let incomingCount := if h2 : succ < arena.size then arena[succ].incomingConstraintsCount else 0
+    let listLen := if h2 : succ < arena.size then arena[succ].incomingConstraints.size + 1 else 0
+    let arena := arena.modifyIn succ fun x => { x with incomingConstraints := x.incomingConstraints.insertIdxIfInBounds 0 gid }
+    findLoop c states groups (if incomingCount == listLen then active.push succ else active) head gid outgoing (k + 1) arena
+  else if h : head < active.size then
+    let g := active[head]
+    let incoming := if h2 : g < arena.size then arena[g].incomingConstraints else #[]
+    let p := if incoming.isEmpty then 0
+      else findViolatingPred c arena states groups g (groupBaryD c arena states g) incoming 0
+    if p != 0 then ⟨arena, true, p - 1, g⟩
+    else
+      let outgoing := if h2 : g < arena.size then arena[g].outgoingConstraints else #[]
+      findLoop c states groups active (head + 1) g outgoing 0 arena
+  else ⟨arena, false, 0, 0⟩
+
+/-- `find_violated_constraint(groups)`. -/
+def findViolatedConstraint (c : ForsterCtx) (states : States) (groups : Array Nat) (arena : Arena) : Found :=
+  let (arena, active) := findReset groups 0 #[] arena
+  findLoop c states groups active 0 0 #[] 0 arena
+
+/-! ### `handle_violated_constraint` -/
+
+/-- The index of the first `target` in `xs[i:]` (`xs.size` when absent). -/
+partial def indexOfFrom (xs : Array Nat) (target i : Nat) : Nat :=
+  if h : i < xs.size then (if xs[i] == target then i else indexOfFrom xs target (i + 1)) else xs.size
+
+/-- The candidate loop of `mergedOutgoing` over `outgoing2[k:]`. -/
+partial def mergeCandidates (group1 : Nat) (outgoing2 : Array Nat) (k : Nat) (outgoing : Array Nat) (arena : Arena) :
+    Array Nat × Arena :=
+  if h : k < outgoing2.size then
+    let cand := outgoing2[k]
+    if cand == group1 then mergeCandidates group1 outgoing2 (k + 1) outgoing arena
+    else if outgoing.contains cand then
+      mergeCandidates group1 outgoing2 (k + 1) outgoing
+        (arena.modifyIn cand fun x => { x with incomingConstraintsCount := x.incomingConstraintsCount - 1 })
+    else mergeCandidates group1 outgoing2 (k + 1) (outgoing.push cand) arena
+  else (outgoing, arena)
+
+/-- `mergedOutgoing(group1, group2, outgoing1, outgoing2)`. -/
+def mergedOutgoing (group1 group2 : Nat) (outgoing1 outgoing2 : Array Nat) (arena : Arena) : Array Nat × Arena :=
+  if !outgoing1.isEmpty then mergeCandidates group1 outgoing2 0 (removeGroup outgoing1 group2).1 arena
+  else if !outgoing2.isEmpty then ((removeGroup outgoing2 group1).1, arena)
+  else (#[], arena)
+
+/-- The arena and barycenter states after a merge, and the new group's id. -/
+structure Merged where
+  arena : Arena
+  states : States
+  newGroup : Nat
+  deriving Inhabited
+
+/-- `merge_groups(group1, group2)`. -/
+def mergeGroups (c : ForsterCtx) (group1 group2 : Nat) (arena : Arena) (states : States) : Merged :=
+  let g1 : ConstraintGroup := arena[group1]?.getD {}
+  let g2 : ConstraintGroup := arena[group2]?.getD {}
+  let (outgoing, arena) := mergedOutgoing group1 group2 g1.outgoingConstraints g2.outgoingConstraints arena
+  let nodes := g1.nodes ++ g2.nodes
+  let summedWeight := g1.summedWeight + g2.summedWeight
+  let degree := g1.degree + g2.degree
+  -- the barycenter (`b1`/`b2` are read after `mergedOutgoing`, which only changes counts)
+  let (known, value) :=
+    if degree > 0 then (true, summedWeight / Float.ofInt degree)
+    else
+      let k1 := groupBaryKnown c arena states group1
+      let k2 := groupBaryKnown c arena states group2
+      if k1 && k2 then (true, (groupBaryD c arena states group1 + groupBaryD c arena states group2) / floatTwo)
+      else if k1 then (true, groupBaryD c arena states group1)
+      else if k2 then (true, groupBaryD c arena states group2)
+      else (false, floatZero)
+  let newGroup : ConstraintGroup := { ConstraintGroup.newWithNodes nodes with summedWeight, degree, outgoingConstraints := outgoing }
+  let newId := arena.size
+  let arena := arena.push newGroup
+  ⟨arena, setNodesBary c nodes 0 known value states, newId⟩
+
+/-- The group loop of `handle_violated_constraint` from `groups[index]` on. -/
+partial def handleLoop (c : ForsterCtx) (states : States) (first second newGroup : Nat) (newBary : Float)
+    (inserted : Bool) (index : Nat) (groups : Array Nat) (arena : Arena) : Array Nat × Arena :=
+  if h : index < groups.size then
+    let gid := groups[index]
+    if gid == first || gid == second then
+      handleLoop c states first second newGroup newBary inserted index (groups.eraseIdxIfInBounds index) arena
+    else if !inserted && groupBaryD c arena states gid > newBary then
+      handleLoop c states first second newGroup newBary true index (groups.insertIdxIfInBounds index newGroup) arena
+    else
+      let og := if h2 : gid < arena.size then arena[gid].outgoingConstraints else #[]
+      let i1 := indexOfFrom og first 0
+      if !og.isEmpty && (i1 < og.size || og.contains second) then
+        -- `removeGroup` of both merged groups: the list is taken out of the group first
+        let arena := arena.modifyIn gid fun x => { x with outgoingConstraints := #[] }
+        let og1 := if i1 < og.size then og.eraseIdxIfInBounds i1 else og
+        let i2 := indexOfFrom og1 second 0
+        let og2 := if i2 < og1.size then og1.eraseIdxIfInBounds i2 else og1
+        let arena := arena.modifyIn gid fun x => { x with outgoingConstraints := og2.push newGroup }
+        let arena := arena.modifyIn newGroup fun x => { x with incomingConstraintsCount := x.incomingConstraintsCount + 1 }
+        handleLoop c states first second newGroup newBary inserted (index + 1) groups arena
+      else handleLoop c states first second newGroup newBary inserted (index + 1) groups arena
+  else ((if inserted then groups else groups.push newGroup), arena)
+
+/-! ### `process_constraints` -/
+
+/-- The tables of one `process_constraints` call. -/
+structure Tables where
+  arena : Arena
+  states : States
+  table : Table
+  deriving Inhabited
+
+/-- The violation loop of `process_constraints_internal`. -/
+partial def resolveLoop (c : ForsterCtx) (groups : Array Nat) (arena : Arena) (states : States) :
+    Array Nat × Arena × States :=
+  let f := findViolatedConstraint c states groups arena
+  if f.found then
+    let m := mergeGroups c f.first f.second f.arena states
+    let newBary := groupBaryD c m.arena m.states m.newGroup
+    let (groups, arena) := handleLoop c m.states f.first f.second m.newGroup newBary false 0 groups m.arena
+    resolveLoop c groups arena m.states
+  else (groups, f.arena, states)
+
+/-- The `group_of` of the nodes `nodes[i:]` pushed onto `out` (`none` when one is missing). -/
+partial def groupsOf (c : ForsterCtx) (table : Table) (nodes : Array LNodeId) (i : Nat) (out : Array Nat) :
+    Option (Array Nat) :=
+  if h : i < nodes.size then
+    let g := groupIdx c table nodes[i]
+    if g == 0 then none else groupsOf c table nodes (i + 1) (out.push (g - 1))
+  else some out
+
+/-- The result loop of `process_constraints_internal`: the groups' nodes in order; the barycenter of
+a multi-node group is written to its nodes. -/
+partial def collectResult (c : ForsterCtx) (groups : Array Nat) (i : Nat) (arena : Arena) (out : Array LNodeId)
+    (states : States) : Array LNodeId × States :=
+  if h : i < groups.size then
+    let gid := groups[i]
+    let groupNodes := if h2 : gid < arena.size then arena[gid].nodes else #[]
+    if h3 : groupNodes.size = 1 then
+      collectResult c groups (i + 1) arena (out.push groupNodes[0]) states
+    else
+      let known := groupBaryKnown c arena states gid
+      let value := groupBaryD c arena states gid
+      collectResult c groups (i + 1) arena (out ++ groupNodes) (setNodesBary c groupNodes 0 known value states)
+  else (out, states)
+
+/-- `process_constraints_internal(nodes, only_between_normal_nodes)`: the result (`none` after a
+missing constraint group) and the tables. -/
+def processConstraintsInternal (c : ForsterCtx) (units : Std.HashMap LNodeId (Array LNodeId)) (nodes : Array LNodeId)
+    (onlyNormal : Bool) (t : Tables) : Option (Array LNodeId) × Tables :=
+  match t with
+  | ⟨arena, states, table⟩ =>
+    match groupsOf c table nodes 0 (Array.emptyWithCapacity nodes.size) with
+    | none => (none, ⟨arena, states, table⟩)
+    | some groups =>
+      let b := buildConstraintsGraph c table units groups onlyNormal arena
+      if !b.ok then (none, ⟨b.arena, states, table⟩)
+      else
+        let (groups, arena, states) := resolveLoop c groups b.arena states
+        let (result, states) := collectResult c groups 0 arena (Array.emptyWithCapacity nodes.size) states
+        (some result, ⟨arena, states, table⟩)
+
+/-- `init_node_level(node, false)` for the nodes `nodes[i:]`: a fresh single-node group each. -/
+partial def reinitNodes (c : ForsterCtx) (nodes : Array LNodeId) (i : Nat) (arena : Arena) (table : Table) : Arena × Table :=
+  if h : i < nodes.size then
+    let node := nodes[i]
+    let li := c.layerIndex node
+    let ni := c.nodeId node
+    if li < table.size then
+      let gid := arena.size
+      reinitNodes c nodes (i + 1) (arena.push (ConstraintGroup.new node))
+        (table.modify li fun l => (growTo l (ni + 1) none).setIfInBounds ni (some gid))
+    else reinitNodes c nodes (i + 1) arena table
+  else (arena, table)
+
+/-- `process_constraints(nodes)` (see `ForsterM.processConstraints`). -/
+def processConstraints (c : ForsterCtx) (units : Std.HashMap LNodeId (Array LNodeId)) (constraintsBetweenNonDummies : Bool)
+    (nodes : Array LNodeId) (t : Tables) : Option (Array LNodeId) × Tables :=
+  if constraintsBetweenNonDummies then
+    match processConstraintsInternal c units nodes true t with
+    | (none, t) => (none, t)
+    | (some nodes, ⟨arena, states, table⟩) =>
+      let (arena, table) := reinitNodes c nodes 0 arena table
+      processConstraintsInternal c units nodes false ⟨arena, states, table⟩
+  else processConstraintsInternal c units nodes false t
+
+end ForsterFast
+
 /-- `ForsterConstraintResolver`: mutable state behind `IO.Ref`s (shared with the barycenter
 heuristic, which reads/writes `barycenterStates`). -/
 structure ForsterConstraintResolver where
@@ -561,12 +950,37 @@ def unconstrained (c : ForsterCtx) (groups : Array (Array (Option Nat))) (units 
 /-- `process_constraints(nodes)`: the reordered nodes (Rust rewrites the vector in place); the
 group barycenters are written to the nodes' states. Without constraints (`unconstrained`) the
 passes are skipped; with `constraintsBetweenNonDummies` the groups are still re-initialised
-between them (`init_node_level(node, false)`), as in Rust. -/
+between them (`init_node_level(node, false)`), as in Rust. The passes run in `ForsterFast` (the
+same reads and writes as `ForsterM.processConstraints`; the state is written back before a missing
+constraint group is rethrown, like `runM`). -/
 def processConstraints (r : ForsterConstraintResolver) (nodes : Array LNodeId) : LayeredM (Array LNodeId) := do
   let c : ForsterCtx := { arena := ← get, snapshot := ← r.snapshot.get }
-  let groups ← r.constraintGroups.get
   let units ← r.layoutUnits.get
-  if unconstrained c groups units nodes then
+  if unconstrained c (← r.constraintGroups.get) units nodes then
+    if r.constraintsBetweenNonDummies then
+      r.runM fun c => do
+        for node in nodes do
+          ForsterM.initNodeLevel c node false
+        return nodes
+    else return nodes
+  else
+    let t : ForsterFast.Tables := {
+      arena := ← r.constraintGroupArena.swap #[], states := ← r.barycenterStates.swap #[]
+      table := ← r.constraintGroups.swap #[] }
+    let (result, t) := ForsterFast.processConstraints c units r.constraintsBetweenNonDummies nodes t
+    r.constraintGroupArena.set t.arena
+    r.barycenterStates.set t.states
+    r.constraintGroups.set t.table
+    match result with
+    | some v => return v
+    | none => throw (IO.userError "java.lang.IllegalStateException: constraint group missing")
+
+/-- `process_constraints(nodes)` with the line-by-line port `ForsterM.processConstraints` (the
+reference of the differential test). -/
+def processConstraintsPort (r : ForsterConstraintResolver) (nodes : Array LNodeId) : LayeredM (Array LNodeId) := do
+  let c : ForsterCtx := { arena := ← get, snapshot := ← r.snapshot.get }
+  let units ← r.layoutUnits.get
+  if unconstrained c (← r.constraintGroups.get) units nodes then
     if r.constraintsBetweenNonDummies then
       r.runM fun c => do
         for node in nodes do
