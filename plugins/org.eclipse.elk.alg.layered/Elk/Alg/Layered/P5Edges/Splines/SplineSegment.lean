@@ -20,8 +20,10 @@ targetSide)`, `addEdge`, `anchorY`) live with the router in `SplineEdgeRouter.le
 - Rust `SplineSegmentRef` (`Arc<Mutex<SplineSegment>>`) → `SplineSegmentId` indexing a segment
   table (`Array SplineSegment`): the router's table while routing, persisted per graph for the
   later processors (see `SplineEdgeRouter`).
-- Rust `DependencyRef` → `DependencyId` indexing the router-local `Array Dependency`; `outgoing`/
-  `incoming` hold these ids (they are only meaningful while the router runs).
+- Rust `DependencyRef` → `DependencyId` (creation number); the router keeps the `Dependency` fields
+  (`source`, `target`, `weight`) of a layer gap in arrays while it ranks the gap
+  (`SplineEdgeRouter.GapDeps`), `outgoing`/`incoming` hold the ids (they are only meaningful while
+  the router runs).
 - Rust `Vec<LPortRef>`/`Vec<LEdgeRef>` with `insert_unique_port`/`add_edge` (Java `HashSet`s):
   insertion-ordered arrays without duplicates (Rust order).
 - `edge_information: FxHashMap<edge, EdgeInformation>` (lookup only) → an insertion-ordered
@@ -57,18 +59,12 @@ structure SplineSegmentId where
 
 instance : ToString SplineSegmentId := ⟨fun i => s!"S{i.idx}"⟩
 
-/-- Id of a `Dependency` in the router's dependency table (Rust `DependencyRef`). -/
+/-- Id of a `SplineEdgeRouter.Dependency` (Rust `DependencyRef`): its creation number in the router
+run. A dependency (`source` must lie left of `target`; `weight` counts the crossings saved by that
+order) is stored in the arrays of `SplineEdgeRouter.GapDeps`. -/
 structure DependencyId where
   idx : Nat
   deriving BEq, Hashable, Repr, Inhabited, DecidableEq, Ord
-
-/-- `SplineEdgeRouter.Dependency`: `source` must lie left of `target`; `weight` counts the crossings
-saved by that order. -/
-structure Dependency where
-  source : SplineSegmentId
-  target : SplineSegmentId
-  weight : Int
-  deriving Inhabited, BEq, Repr
 
 /-- `SplineSegment`. Field names follow Java (`hyperEdgeTopYPos`, …). -/
 structure SplineSegment where
