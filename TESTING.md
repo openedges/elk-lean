@@ -107,6 +107,18 @@ review and with a reference binary and `cmp` the `--pretty --sort-keys` outputs 
 time limit: with seed 7, `g0054.json` makes both elk-lean and the elk-rs oracle loop, see
 `HISTORY.md`).
 
+Sorting algorithms (exact ports whose comparison order matters for inconsistent or throwing
+comparators):
+
+| Item | Reference | Tool |
+|------|-----------|------|
+| `Elk.Core.Util.JavaSort` (`javaSortBy`, OpenJDK 21 `java.util.TimSort`) | JDK 21 `Collections.sort`: 13,767 cases (sizes 0..5,000, 13 comparator kinds incl. random/asymmetric/constant, throwing at the k-th call and on an "undefined" element), identical outcome (sorted / `IllegalArgumentException` / comparator exception), comparator call sequence and permutation | `sh scripts/run_timsort_diff.sh [out_dir]` (javac + `lake test -- --suite core.util.JavaSort.full`); 627-case subset in `lake test` (`tests/fixtures/timsort/cases.jsonl`, regenerate with `--fixture`) |
+| `Elk.Core.Util.RustSort` (`rustSortBy`, Rust 1.97.1 driftsort) | Rust 1.97.1 `slice::sort_by` (10,984 cases, see `HISTORY.md` C1) | fixture subset in `lake test` (`tests/fixtures/rustsort/cases.json`) |
+
+`ELK_TIMSORT_BENCH=1 lake test -- --suite core.util.JavaSort.bench` prints `javaSortBy` vs
+`stableSort` timings on 1k / 100k `Float` keys. `lake test -- --suite <prefix>` runs only the
+suites whose name starts with `<prefix>`.
+
 ### C. Metadata equivalence
 
 `elk algorithms|options|categories` output compared with the elk-rs
