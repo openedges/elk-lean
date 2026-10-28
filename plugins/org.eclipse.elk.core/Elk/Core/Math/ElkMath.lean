@@ -61,19 +61,17 @@ def factl (x : Int) : Except String Int :=
   else
     return FACT_TABLE[x.toNat]!
 
+/-- The squaring loop of `powd` (`while exp > 0`): a tail-recursive function so that `result` and
+`base` stay unboxed. -/
+private partial def powdLoop (result base : Float) (exp : Nat) : Float :=
+  if exp == 0 then result
+  else if exp % 2 == 0 then powdLoop result (base * base) (exp / 2)
+  else powdLoop (result * base) base (exp - 1)
+
 /-- `ElkMath.powd(double, int)`: integer power by squaring. -/
-def powd (a : Float) (b : Int) : Float := Id.run do
-  let mut result := 1.0
-  let mut base := a
-  let mut exp : Int := if b >= 0 then b else -b
-  while exp > 0 do
-    if Int.tmod exp 2 == 0 then
-      base := base * base
-      exp := Int.tdiv exp 2
-    else
-      result := result * base
-      exp := exp - 1
-  return if b < 0 then 1.0 / result else result
+def powd (a : Float) (b : Int) : Float :=
+  let result := powdLoop 1.0 a b.natAbs
+  if b < 0 then 1.0 / result else result
 
 /-- `ElkMath.powf(float, int)`: integer power by squaring in single precision. -/
 def powf (a : Float) (b : Int) : Float := Id.run do
@@ -127,29 +125,34 @@ def binomiald (n k : Int) : Except String Float :=
 
 /-- `ElkMath.getPointOnBezierSegment(t, controlPoints)`: point at parameter `t`
 of the Bezier curve with the given control points. -/
-def getPointOnBezierSegment (t : Float) (controlPoints : Array KVector) : KVector := Id.run do
-  if controlPoints.isEmpty then return KVector.zero
-  let n := controlPoints.size - 1
-  let mut px := 0.0
-  let mut py := 0.0
-  for j in [0:controlPoints.size] do
-    let p := controlPoints[j]!
-    let factor := binomialdU n j * powd (1.0 - t) (Int.ofNat (n - j)) * powd t j
-    px := px + p.x * factor
-    py := py + p.y * factor
-  return ⟨px, py⟩
+def getPointOnBezierSegment (t : Float) (controlPoints : Array KVector) : KVector :=
+  if controlPoints.isEmpty then KVector.zero
+  else bezierPointFrom t (1.0 - t) controlPoints (controlPoints.size - 1) 0 0.0 0.0
+where
+  /-- The sum over the control points `j, j + 1, …` (a tail-recursive loop: the sums stay unboxed;
+  `oneMinusT = 1 - t` is computed once: inside the loop the compiler turns the `1.0` literal into a
+  per-iteration parse). -/
+  bezierPointFrom (t oneMinusT : Float) (controlPoints : Array KVector) (n j : Nat) (px py : Float) : KVector :=
+    if h : j < controlPoints.size then
+      let p := controlPoints[j]
+      let factor := binomialdU n j * powd oneMinusT (Int.ofNat (n - j)) * powd t j
+      bezierPointFrom t oneMinusT controlPoints n (j + 1) (px + p.x * factor) (py + p.y * factor)
+    else ⟨px, py⟩
+  termination_by controlPoints.size - j
 
 /-- `ElkMath.approximateBezierSegment(resultSize, controlPoints)`. -/
 def approximateBezierSegment (resultSize : Nat) (controlPoints : Array KVector) : Array KVector :=
-  Id.run do
-    if resultSize == 0 || controlPoints.isEmpty then return #[]
-    let mut result : Array KVector := Array.mkEmpty resultSize
-    let dt := 1.0 / resultSize.toFloat
-    let mut t := 0.0
-    for _ in [0:resultSize] do
-      t := t + dt
-      result := result.push (getPointOnBezierSegment t controlPoints)
-    return result
+  if resultSize == 0 || controlPoints.isEmpty then #[]
+  else approximateFrom controlPoints (1.0 / resultSize.toFloat) resultSize 0.0 (Array.mkEmpty resultSize)
+where
+  /-- The remaining `k` points from parameter `t + dt` on (a tail-recursive loop: `t` stays unboxed). -/
+  approximateFrom (controlPoints : Array KVector) (dt : Float) (k : Nat) (t : Float) (result : Array KVector) :
+      Array KVector :=
+    match k with
+    | 0 => result
+    | k + 1 =>
+      let t := t + dt
+      approximateFrom controlPoints dt k t (result.push (getPointOnBezierSegment t controlPoints))
 
 /-- `ElkMath.approximateBezierSegment(controlPoints)`: uses `size + 1` points. -/
 def approximateBezierSegmentDefault (controlPoints : Array KVector) : Array KVector :=
