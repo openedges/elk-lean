@@ -104,9 +104,9 @@ def intersectDir (pt1 pt2 : KVector) (dirPt1 dirPt2 : Float) : Option KVector :=
   let pt2Dir := KVector.fromAngle dirPt2 + pt2
   intersect pt1 pt1Dir pt2 pt2Dir
 
-/-- `innerAngle(vec1, vec2)` (Rust `inner_angle_vec`): the angle between two vectors. -/
+/-- `innerAngle(vec1, vec2)` (Rust `inner_angle_vec`): the angle between two vectors (`Math.acos`). -/
 def innerAngleVec (vec1 vec2 : KVector) : Float :=
-  Float.acos ((vec1.x * vec2.x + vec1.y * vec2.y) / (vec1.length * vec2.length))
+  javaAcos ((vec1.x * vec2.x + vec1.y * vec2.y) / (vec1.length * vec2.length))
 
 /-- `innerAngle(dir1, dir2)`: `|dir1 - dir2| % PI`. -/
 def innerAngle (dir1 dir2 : Float) : Float :=
@@ -132,7 +132,7 @@ def lengthToOrthogonal (direction : Float) (point : KVector) : Float := Id.run d
   if angle > HALF_PI then
     factor := -1.0
     angle := angle - QUATER_PI
-  return factor * Float.cos angle * point.length
+  return factor * javaCos angle * point.length
 
 /-- `portSideToDirection(side)`: the outward direction (radians) of a port side. -/
 def portSideToDirection (side : PortSide) : Float :=

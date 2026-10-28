@@ -34,11 +34,11 @@ def modifyBendPoints : BendPointModifier := fun m => Id.run do
       let firstBp := bendPoints[i]!
       let secondBp := bendPoints[i + 1]!
       splinePoints := splinePoints.push firstBp
-      -- midpoint offset away from the node
-      let direction := SplinesMath.portSideToDirection currSide
+      -- midpoint offset away from the node (`new KVector(direction)`: `Math.cos`, `Math.sin`)
+      let direction := KVector.fromAngle (SplinesMath.portSideToDirection currSide)
       let mid : KVector :=
-        ⟨(firstBp.x + secondBp.x) * fl0p5 + direction.cos * m.edgeLabelDistance,
-         (firstBp.y + secondBp.y) * fl0p5 + direction.sin * m.edgeLabelDistance⟩
+        ⟨(firstBp.x + secondBp.x) * fl0p5 + direction.x * m.edgeLabelDistance,
+         (firstBp.y + secondBp.y) * fl0p5 + direction.y * m.edgeLabelDistance⟩
       splinePoints := splinePoints.push mid
       currSide := if m.clockwise then currSide.right else currSide.left
     splinePoints := splinePoints.push bendPoints[bendPoints.size - 1]!

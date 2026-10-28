@@ -104,15 +104,18 @@ def compareByMark (a b : HyperEdgeSegment) : Ordering := compare a.mark b.mark
 /-- Loop of `insertSorted` from index `idx` (tail recursive). -/
 private partial def insertSortedFrom (list : Array Float) (value : Float) (idx : Nat) : Array Float :=
   if h : idx < list.size then
-    let existing := list[idx]
-    if (existing - value).abs < Float.epsilon then list
-    else if existing > value then list.insertIdx! idx value
+    -- Java `double next = listIter.next().floatValue()`
+    let next := list[idx].toF32
+    if next == value then list
+    else if next > value then list.insertIdx! idx value
     else insertSortedFrom list value (idx + 1)
   else list.push value
 
-/-- Rust `insert_sorted(list, value)`: inserts `value` before the first larger element; nothing is
-inserted when an element differs from `value` by less than `f64::EPSILON`. (Java compares the
-`float` value of the elements with `==`; elk-rs uses this `f64` epsilon test.) -/
+/-- `insertSorted(list, value)`: inserts `value` before the first element whose `float` value is
+larger; nothing is inserted when an element's `float` value equals `value` (Java compares
+`Double.floatValue()` of the elements with the `double`, so a coordinate that is not a `float` is
+inserted again: two ports at `-60.2` give two entries, which counts in the crossing weights of the
+dependencies). elk-rs used an `f64::EPSILON` test instead. -/
 def insertSorted (list : Array Float) (value : Float) : Array Float :=
   insertSortedFrom list value 0
 

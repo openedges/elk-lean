@@ -44,22 +44,21 @@ def findPortIndices (a : LGraphArena) (n : LNodeId) : Array (Option (Nat × Nat)
   indices := indices.set! (ElkEnum.ordinal currentSide) (some (firstIndex, currentIndex))
   return indices
 
-/-- `LNode.getPortSideView(side)`: the cached index range when valid, else a filtered copy. -/
+/-- `LNode.getPortSideView(side)`: `ports.subList(first, last)` of the `[first, last)` range of `side`
+in the port side cache (`cachePortSides()`, set by `PortListSorter` and `SweepCopy`), or in a fresh
+`findPortIndices()` without a cache. Like Java the range is not re-validated: ports added after
+caching (e.g. north/south ports) shift the view, which then holds ports of other sides or misses
+ports of `side`; without a cache only the last run of `side` counts. (elk-rs fell back to filtering
+by side when the cached range was stale. Java's `subList` throws for a range beyond the current port
+list; such a range is clamped here.) -/
 def nodePortSideView (a : LGraphArena) (n : LNodeId) (side : PortSide) : Array LPortId :=
   let nd := a.node n
-  let indices := if nd.portSidesCached then
-      match nd.portSideIndices with
-      | some idx => some idx
-      | none => some (a.findPortIndices n)
-    else none
-  let fromCache : Option (Array LPortId) := do
-    let idx ← indices
-    let (first, last) ← (idx[ElkEnum.ordinal side]?).bind id
-    let slice := nd.ports.extract first last
-    if slice.all (fun p => (a.port p).side == side) then some slice else none
-  match fromCache with
-  | some s => s
-  | none => nd.ports.filter fun p => (a.port p).side == side
+  let indices := match nd.portSidesCached, nd.portSideIndices with
+    | true, some idx => idx
+    | _, _ => a.findPortIndices n
+  match (indices[ElkEnum.ordinal side]?).bind id with
+  | some (first, last) => nd.ports.extract first last
+  | none => #[]
 
 /-- `LNode.getPorts(PortType, PortSide)`. -/
 def nodePortsByTypeAndSide (a : LGraphArena) (n : LNodeId) (portType : PortType) (side : PortSide) : Array LPortId :=

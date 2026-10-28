@@ -63,7 +63,7 @@ overhang of fixed labels), the port spacings, and two more spacings for DISTRIBU
 def requiredAxisLengthForSide (a : LGraphArena) (node : LNodeId) (side : PortSide) (graphPortSpacing : Float)
     (graphPortsSurrounding : ElkMargin) (includeFixedLabelMargins : Bool) : Float := Id.run do
   let nd := a.node node
-  let ports := a.nodePortSideView node side
+  let ports := a.nodePortsBySide node side
   if ports.isEmpty then return fl0p0
   let count := ports.size
   let alignment := portAlignmentForSide nd side
@@ -90,7 +90,7 @@ than one port. -/
 def requiredInsidePortAxisForSide (a : LGraphArena) (node : LNodeId) (side : PortSide) (graphPortSpacing : Float)
     (graphPortsSurrounding : ElkMargin) : Float := Id.run do
   let nd := a.node node
-  let ports := a.nodePortSideView node side
+  let ports := a.nodePortsBySide node side
   if ports.isEmpty then return fl0p0
   let portSpacing := fmax (propertyWithGraphDefault nd CoreOptions.SPACING_PORT_PORT graphPortSpacing) fl0p0
   let surroundingSpacing := propertyWithGraphDefault nd CoreOptions.SPACING_PORTS_SURROUNDING graphPortsSurrounding

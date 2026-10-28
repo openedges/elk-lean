@@ -359,8 +359,8 @@ private def transformFixedOrderNode (node : LNodeId) : NspM NodeRep := do
   let nodeSizeEdge ← createNEdge sizeWeight (f64AsI32 minHeight.ceil) topLeft bottomLeft
   if nf == .nodeSizeWhereSpacePermits then
     modify fun s => { s with flexibleWhereSpacePermitsEdges := s.flexibleWhereSpacePermitsEdges.push nodeSizeEdge }
-  let westPorts ← withArena (·.nodePortsBySide node .west)
-  let eastPorts ← withArena (·.nodePortsBySide node .east)
+  let westPorts ← withArena (·.nodePortSideView node .west)
+  let eastPorts ← withArena (·.nodePortSideView node .east)
   transformPorts westPorts.reverse corners
   transformPorts eastPorts corners
   return corners
@@ -487,8 +487,8 @@ private def insertNorthSouthAuxiliaryEdges : NspM Unit := do
   let layers := (← getGraph (← get).graph).layers
   for layer in layers do
     for node in (← getLayer layer).nodes do
-      let southPorts ← withArena (·.nodePortsBySide node .south)
-      let northPorts ← withArena (·.nodePortsBySide node .north)
+      let southPorts ← withArena (·.nodePortSideView node .south)
+      let northPorts ← withArena (·.nodePortSideView node .north)
       for port in southPorts do
         if let some dummy := (← getPort port).internal.portDummy then
           let nodeRep ← nodeRepOf node
@@ -546,7 +546,7 @@ removes down to index 0 and iterates the `ArenaSync` incoming lists instead of t
 private def markCrossingEdges (left right : LayerId) : NspM Unit := do
   let mut openEdges : Array LEdgeId := #[]
   for node in (← getLayer left).nodes do
-    for port in (← withArena (·.nodePortsBySide node .east)) do
+    for port in (← withArena (·.nodePortSideView node .east)) do
       for edge in (← getPort port).outgoingEdges do
         let a ← getThe LGraphArena
         let ed := a.edge edge
@@ -560,7 +560,7 @@ private def markCrossingEdges (left right : LayerId) : NspM Unit := do
           continue
         openEdges := openEdges.push edge
   for node in (← getLayer right).nodes.reverse do
-    for port in (← withArena (·.nodePortsBySide node .west)) do
+    for port in (← withArena (·.nodePortSideView node .west)) do
       for edge in (← getPort port).incomingEdges do
         let a ← getThe LGraphArena
         let ed := a.edge edge
@@ -727,8 +727,9 @@ private def preferStraightEdges : NspM Unit := do
         else edgeTypeWeight .longEdge .longEdge
       let weight := base * LONG_EDGE_VS_PATH_FACTOR
       if let some rep ← edgeRepOf? edge then
-        modifyNEdge rep.left fun e => { e with weight := fmax e.weight weight }
-        modifyNEdge rep.right fun e => { e with weight := fmax e.weight weight }
+        -- Java `Math.max(old, old + (weight - old))`
+        modifyNEdge rep.left fun e => { e with weight := javaMax e.weight (e.weight + (weight - e.weight)) }
+        modifyNEdge rep.right fun e => { e with weight := javaMax e.weight (e.weight + (weight - e.weight)) }
 
 /-- `NEdge` length beyond its minimum: `|layer(source) - layer(target)| - delta`. -/
 private def length (e : NEdgeId) : NspM Int := do
@@ -783,7 +784,10 @@ private def improveTwoPath (path : Path) (probe : Bool) : NspM Bool := do
     let bl ← getNode below
     belowDist := (Float.ofInt (← nlayer belowRep.head) - bl.margin.top) -
       (nHeadLayer + center.size.y + center.margin.bottom) - spacing
-  if probe && (aboveDist - belowDist).abs < EPSILON then
+  -- Guava `DoubleMath.fuzzyEquals(aboveDist, belowDist, EPSILON)`: `|a - b| <= ε`, or `a == b` (both
+  -- `+∞` for a node alone in its layer), or both NaN (elk-rs `(a - b).abs() < ε` missed the infinities)
+  if probe && ((aboveDist - belowDist).abs <= EPSILON || aboveDist == belowDist ||
+      (aboveDist.isNaN && belowDist.isNaN)) then
     return true
   let a ← length leftEdge.left
   let b := -(← length leftEdge.right)
