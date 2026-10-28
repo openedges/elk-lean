@@ -1,0 +1,377 @@
+# elk-lean GitLab CI -- DRAFT (R1, 2026-10-28)
+#
+# STATUS: nothing in this file has been run. Only the YAML syntax was checked locally.
+# Every job below is marked "UNTESTED" unless stated otherwise; the only platform on which the
+# build flow (lake build / lake test / build_ffi.sh --check / build_napi.sh) has been run by hand
+# is macOS arm64 (see HISTORY.md, TESTING.md section 3).
+#
+# Open questions for the maintainer (also listed in docs/release-dry-run-0.12.0.md):
+#   * runner tags (variables RUNNER_TAG_* below are placeholders)
+#   * Docker registry for the toolchain images (variable CI_IMAGE_* below)
+#   * Linux musl: no official Lean release for musl -> job is manual and expected to fail until a
+#     toolchain exists (see the job comment)
+#   * Windows: build_napi.sh has no Windows branch (see the job comment)
+#   * emsdk / Lean sources are not in git; the WASM job fetches them (build_wasm.sh header)
+#
+# Pipeline: build -> test -> parity-smoke -> package. Nothing is published or tagged here;
+# the publish step (npm publish, git tag) stays a manual maintainer action.
+
+stages:
+  - build
+  - test
+  - parity-smoke
+  - package
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+variables:
+  # reference submodules (external/elk-models is the parity corpus; ~64 MB shallow)
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_DEPTH: "1"
+  # runner tags -- PLACEHOLDERS, replace with the tags of the self-hosted runners
+  RUNNER_TAG_MACOS: "macos-arm64"
+  RUNNER_TAG_LINUX_X64: "docker-x64"
+  RUNNER_TAG_LINUX_ARM64: "docker-arm64"
+  RUNNER_TAG_WINDOWS: "windows-x64"
+  # container images -- PLACEHOLDERS (build once from the Dockerfile snippets in the comments
+  # below and push to the project registry)
+  CI_IMAGE_LINUX_GNU: "$CI_REGISTRY_IMAGE/ci-linux-gnu:lean-4.35.0"
+  CI_IMAGE_LINUX_MUSL: "$CI_REGISTRY_IMAGE/ci-linux-musl:lean-4.35.0"
+  CI_IMAGE_WASM: "$CI_REGISTRY_IMAGE/ci-wasm:emsdk-6.0.13"
+  NODE_MAJOR: "24"
+  EMSDK_VERSION: "6.0.13"
+  # Lake keeps the package build under .lake/ (gitignored); cache it per job + toolchain
+  ELAN_HOME: "$CI_PROJECT_DIR/.cache/elan"
+
+# ---------------------------------------------------------------------------------------------
+# shared building blocks
+# ---------------------------------------------------------------------------------------------
+
+# Toolchain bootstrap for Docker images that already contain elan (ci-linux-gnu image).
+# Dockerfile sketch for the image (UNTESTED):
+#   FROM debian:12
+#   RUN apt-get update && apt-get install -y --no-install-recommends \
+#         ca-certificates curl git build-essential clang python3 xz-utils zstd \
+#       && rm -rf /var/lib/apt/lists/*
+#   # node 24 from the official tarball (or nodesource)
+#   RUN curl -fsSL https://nodejs.org/dist/latest-v24.x/node-v24-linux-x64.tar.xz ... (pin exact version)
+#   RUN curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+#         | sh -s -- -y --default-toolchain none
+#   ENV PATH=/root/.elan/bin:$PATH
+.lean-setup: &lean-setup
+  - export PATH="$HOME/.elan/bin:$ELAN_HOME/bin:$PATH"
+  - command -v elan >/dev/null || { curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none --no-modify-path; export PATH="$HOME/.elan/bin:$PATH"; }
+  - elan toolchain install "$(cat lean-toolchain)"
+  - lean --version && lake --version
+
+.lean-cache: &lean-cache
+  key:
+    files:
+      - lean-toolchain
+      - lake-manifest.json
+      - lakefile.lean
+    prefix: "$CI_JOB_NAME_SLUG"
+  paths:
+    - .lake/
+    - .cache/elan/
+  policy: pull-push
+
+# ---------------------------------------------------------------------------------------------
+# macOS arm64 (the only platform exercised by hand so far)
+# UNTESTED as a CI job (the same commands were run manually on macOS 27 / arm64).
+# ---------------------------------------------------------------------------------------------
+build:macos:
+  stage: build
+  tags: [$RUNNER_TAG_MACOS]
+  cache: *lean-cache
+  script:
+    - *lean-setup
+    - lake build 2>&1 | tee build.log
+    - '! grep -E "(warning|error):" build.log'   # AGENTS.md gate: 0 warnings / 0 errors
+    - sh scripts/build_ffi.sh --check
+    - sh scripts/build_napi.sh --copy-to-npm
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - .lake/build/bin/elk
+      - .lake/build/ffi/
+      - plugins/org.eclipse.elk.js/dist/elk-lean.darwin-*.node
+      - plugins/org.eclipse.elk.js/npm/darwin-*/
+
+test:macos:
+  stage: test
+  tags: [$RUNNER_TAG_MACOS]
+  needs: ["build:macos"]
+  cache: *lean-cache
+  script:
+    - *lean-setup
+    - lake test     # expect: 13777 passed / 0 failed / 1 skipped (AGENTS.md snapshot)
+    - cd plugins/org.eclipse.elk.js && node --test test/   # JS tests (51 in the snapshot)
+
+# ---------------------------------------------------------------------------------------------
+# Linux x64 glibc -> npm package elk-lean-linux-x64-gnu
+# UNTESTED. Expected issues, in order of likelihood:
+#   1. build_ffi.sh uses `cc` (system gcc/clang) against the Lean headers and links the static
+#      Lean runtime (libInit.a, libStd.a, libleanrt.a, libuv.a, libgmp.a). The Lean toolchain ships
+#      its own clang (`leanc`) and sysroot; mixing it with the distro `cc` may need CC=clang or
+#      CC="$(lean --print-prefix)/bin/clang".
+#   2. build_napi.sh Linux branch ("not tested here") needs PIC static libs; if libuv.a/libgmp.a
+#      are not PIC the shared-object link fails -> fall back to libuv/gmp from the distro.
+#   3. node headers: the Docker node image ships include/node/node_api.h (NODE_INCLUDE_DIR).
+# ---------------------------------------------------------------------------------------------
+build:linux-x64-gnu:
+  stage: build
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_X64]
+  cache: *lean-cache
+  variables:
+    CC: clang
+  script:
+    - *lean-setup
+    - lake build 2>&1 | tee build.log
+    - '! grep -E "(warning|error):" build.log'
+    - sh scripts/build_ffi.sh --check
+    - sh scripts/build_napi.sh --skip-ffi --copy-to-npm
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - .lake/build/bin/elk
+      - .lake/build/ffi/
+      - plugins/org.eclipse.elk.js/dist/elk-lean.linux-x64-gnu.node
+      - plugins/org.eclipse.elk.js/npm/linux-x64-gnu/
+
+test:linux-x64-gnu:
+  stage: test
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_X64]
+  needs: ["build:linux-x64-gnu"]
+  cache: *lean-cache
+  script:
+    - *lean-setup
+    - lake test
+    - cd plugins/org.eclipse.elk.js && node --test test/
+
+# ---------------------------------------------------------------------------------------------
+# Linux x64 musl -> npm package elk-lean-linux-x64-musl
+# HONEST STATUS: not buildable today with a stock toolchain. As far as known (not verified from
+# this machine, no network research was done), Lean's GitHub releases ship `linux` (x86_64,
+# glibc), `linux_aarch64`, `darwin`, `darwin_aarch64` and `windows` archives -- there is no
+# musl-hosted `lean` binary. Options, none tried:
+#   a) build Lean 4 v4.35.0 from source inside Alpine (cmake + clang + libuv/gmp static; hours of
+#      CI time, then cache the stage1 prefix in the image) -- most faithful;
+#   b) cross-compile on glibc using `zig cc -target x86_64-linux-musl` as CC for the final C
+#      link steps only: the Lean-generated C of every Elk module is portable, but the static
+#      Lean runtime archives (libleanrt.a, libInit.a, libStd.a) are glibc objects -> would still
+#      have to be rebuilt from the v4.35.0 sources with the musl compiler (the WASM build already
+#      compiles src/runtime from source, see scripts/build_wasm.sh, so a musl variant of that is
+#      conceivable);
+#   c) drop the musl package and let musl users fall back to the WASM backend (the loader order
+#      in js/index.js is platform package -> dist/*.node -> WASM). package.json lists
+#      elk-lean-linux-x64-musl in optionalDependencies; removing it is a one-line change.
+# The job is therefore manual and allowed to fail.
+# ---------------------------------------------------------------------------------------------
+build:linux-x64-musl:
+  stage: build
+  image: $CI_IMAGE_LINUX_MUSL   # Dockerfile sketch: FROM alpine:3.21; apk add build-base clang cmake git python3 nodejs npm curl bash; + a Lean toolchain built per option (a)
+  tags: [$RUNNER_TAG_LINUX_X64]
+  when: manual
+  allow_failure: true
+  cache: *lean-cache
+  script:
+    - export PATH="$HOME/.elan/bin:$PATH"
+    - command -v lean >/dev/null || { echo "no musl Lean toolchain in the image (see the comment above)"; exit 1; }
+    - lake build
+    - sh scripts/build_ffi.sh --check
+    - sh scripts/build_napi.sh --skip-ffi --copy-to-npm   # triple is detected through `ldd --version | grep -i musl`
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - plugins/org.eclipse.elk.js/dist/elk-lean.linux-x64-musl.node
+      - plugins/org.eclipse.elk.js/npm/linux-x64-musl/
+
+# ---------------------------------------------------------------------------------------------
+# Linux arm64 glibc -> npm package elk-lean-linux-arm64-gnu
+# UNTESTED. Needs a native arm64 runner (RUNNER_TAG_LINUX_ARM64) -- Lean has a `linux_aarch64`
+# release, so the flow equals the x64 job. Cross-compiling from x64 is not supported by the
+# scripts. Same image recipe as ci-linux-gnu but built for arm64 (multi-arch build).
+# ---------------------------------------------------------------------------------------------
+build:linux-arm64-gnu:
+  stage: build
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_ARM64]
+  cache: *lean-cache
+  variables:
+    CC: clang
+  script:
+    - *lean-setup
+    - lake build 2>&1 | tee build.log
+    - '! grep -E "(warning|error):" build.log'
+    - sh scripts/build_ffi.sh --check
+    - sh scripts/build_napi.sh --skip-ffi --copy-to-npm
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - .lake/build/bin/elk
+      - plugins/org.eclipse.elk.js/dist/elk-lean.linux-arm64-gnu.node
+      - plugins/org.eclipse.elk.js/npm/linux-arm64-gnu/
+
+test:linux-arm64-gnu:
+  stage: test
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_ARM64]
+  needs: ["build:linux-arm64-gnu"]
+  cache: *lean-cache
+  script:
+    - *lean-setup
+    - lake test
+    - cd plugins/org.eclipse.elk.js && node --test test/
+
+# ---------------------------------------------------------------------------------------------
+# Windows x64 -> npm package elk-lean-win32-x64-msvc
+# HONEST STATUS: not supported by the scripts. Lean's `windows` release is a MinGW-w64/clang
+# toolchain (it ships its own clang + mingw sysroot; `lean --print-prefix` gives a Windows path),
+# NOT an MSVC one, while the package name promises the `msvc` ABI (the napi-rs convention that
+# elk-rs follows). A Node addon built with the mingw toolchain does load in node.exe, but needs:
+#   * a Windows branch in scripts/build_ffi.sh (it assumes POSIX sh, `cc`, `ar`, `find`, `uname`;
+#     run under Git-Bash/MSYS2) and the LDFLAGS case (`-lstdc++ -ldl` do not exist on mingw);
+#   * a Windows branch in scripts/build_napi.sh: output `elk-lean.win32-x64-msvc.node`
+#     (`-shared`, no -fPIC), link against node.lib (from the node headers tarball
+#     https://nodejs.org/dist/vX/win-x64/node.lib) or a delay-load hook, export only
+#     napi_register_module_v1 / node_api_module_get_api_version_v1 (.def file);
+#   * the TRIPLE case ($OS = MINGW64_NT-* / MSYS_NT-*) -> win32-x64-msvc (or rename the package to
+#     win32-x64-gnu, which would then also need the loader and package.json changed);
+#   * static GMP/libuv for mingw as shipped in the Lean windows release (unverified).
+# The job is manual / allow_failure so it documents the intent without blocking the pipeline.
+# ---------------------------------------------------------------------------------------------
+build:windows-x64:
+  stage: build
+  tags: [$RUNNER_TAG_WINDOWS]
+  when: manual
+  allow_failure: true
+  cache: *lean-cache
+  script:
+    - powershell -Command "Invoke-WebRequest https://raw.githubusercontent.com/leanprover/elan/master/elan-init.ps1 -OutFile elan-init.ps1; ./elan-init.ps1 -NoPrompt 1 -DefaultToolchain none"
+    - $env:PATH = "$env:USERPROFILE\.elan\bin;$env:PATH"
+    - elan toolchain install (Get-Content lean-toolchain)
+    - lake build            # the Lean part alone should build; C shim: plugins/org.eclipse.elk.core/c/elk_core_ffi.c
+    - echo "build_ffi.sh / build_napi.sh have no Windows branch yet (see the comment above)"
+    - exit 1
+  # (PowerShell runner: set `shell: powershell` in the runner config; the script block above is a sketch.)
+
+# ---------------------------------------------------------------------------------------------
+# WASM (emscripten, MEMORY64=2) -> plugins/org.eclipse.elk.js/dist/{wasm,wasm-node}
+# UNTESTED in CI (build_wasm.sh was run by hand on macOS only). Requirements from its header:
+#   * emsdk 6.0.13 under .reference/emsdk (needs python >= 3.10)
+#   * Lean v4.35.0 sources under .reference/lean4-v4.35.0 (src/runtime is compiled for wasm)
+#   * a host `lean` of the same version to regenerate Init/Std C
+# scripts/build_wasm.sh finds .reference/ in the checkout (or the main checkout of a worktree), so
+# the CI clones both into $CI_PROJECT_DIR/.reference/, which is also the cached path.
+# ---------------------------------------------------------------------------------------------
+build:wasm:
+  stage: build
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_X64]
+  cache:
+    - *lean-cache
+    - key: "reference-emsdk-$EMSDK_VERSION-lean-$CI_COMMIT_REF_SLUG"
+      paths:
+        - .reference/emsdk/
+        - .reference/lean4-*/
+      policy: pull-push
+  script:
+    - *lean-setup
+    - mkdir -p .reference
+    - LEAN_V=$(lean --short-version)
+    - test -d .reference/emsdk || git clone --depth 1 https://github.com/emscripten-core/emsdk.git .reference/emsdk
+    - (cd .reference/emsdk && ./emsdk install "$EMSDK_VERSION" && ./emsdk activate "$EMSDK_VERSION")
+    - test -d ".reference/lean4-v$LEAN_V" || git clone --depth 1 --branch "v$LEAN_V" https://github.com/leanprover/lean4 ".reference/lean4-v$LEAN_V"
+    - sh scripts/build_wasm.sh
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - plugins/org.eclipse.elk.js/dist/wasm/
+      - plugins/org.eclipse.elk.js/dist/wasm-node/
+      - plugins/org.eclipse.elk.wasm/dist/BUILD_INFO.json
+
+test:wasm:
+  stage: test
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_X64]
+  needs: ["build:wasm"]
+  script:
+    # the JS suite picks the WASM backend when no native addon is present (3 backend modes in the
+    # snapshot: native, wasm-node, wasm via the Worker mode); no addon exists in this job
+    - cd plugins/org.eclipse.elk.js && node --test test/
+
+# ---------------------------------------------------------------------------------------------
+# parity smoke (few models, no oracle)
+# The full gates (Java baseline, Java trace parity, elk-rs model/trace parity) need JDK 21 +
+# Maven (scripts/run_java_baseline.sh via mise), the elk-rs oracle (scripts/build_oracle.sh,
+# Rust 1.97.1, ../elk-rs checkout) and take hours: they stay manual / nightly (see oracle-build
+# below). The smoke compares the native addon with the CLI byte for byte on a few corpus models
+# (test/parity/run.mjs, needs external/elk-models from the submodule).
+# ---------------------------------------------------------------------------------------------
+parity-smoke:macos:
+  stage: parity-smoke
+  tags: [$RUNNER_TAG_MACOS]
+  needs: ["build:macos"]
+  script:
+    - export PATH="$HOME/.elan/bin:$PATH"
+    - node plugins/org.eclipse.elk.js/test/parity/run.mjs --models external/elk-models/realworld --ext json --limit 25 --cli .lake/build/bin/elk --output tests/tmp/ci_parity_smoke
+
+parity-smoke:linux-x64-gnu:
+  stage: parity-smoke
+  image: $CI_IMAGE_LINUX_GNU
+  tags: [$RUNNER_TAG_LINUX_X64]
+  needs: ["build:linux-x64-gnu"]
+  script:
+    - node plugins/org.eclipse.elk.js/test/parity/run.mjs --models external/elk-models/realworld --ext json --limit 25 --cli .lake/build/bin/elk --output tests/tmp/ci_parity_smoke
+
+# Optional: elk-rs oracle build, cached, for scripts/run_model_parity.sh --limit N.
+# Needs the sibling ../elk-rs checkout (not part of this repository) -> manual; UNTESTED.
+oracle-build:
+  stage: build
+  tags: [$RUNNER_TAG_LINUX_X64]
+  when: manual
+  allow_failure: true
+  cache:
+    key: "oracle-elk-rs-eb586b6d"
+    paths:
+      - .reference/elk-rs-target/
+  script:
+    - git clone https://github.com/openedges/elk-rs.git ../elk-rs && git -C ../elk-rs checkout eb586b6d91ee0b55cda591546cec8f04cc7f2422
+    - sh scripts/build_oracle.sh
+    - sh scripts/run_model_parity.sh external/elk-models tests/model_parity_ci --limit 25
+
+# ---------------------------------------------------------------------------------------------
+# package: assemble the npm tarballs. DOES NOT PUBLISH. (npm publish stays manual; the manifests
+# are still "private": true and must be flipped by the maintainer at release time.)
+# ---------------------------------------------------------------------------------------------
+package:npm:
+  stage: package
+  image: node:24
+  tags: [$RUNNER_TAG_LINUX_X64]
+  needs:
+    - job: build:wasm
+    - job: build:linux-x64-gnu
+    - job: build:linux-arm64-gnu
+      optional: true
+    - job: build:macos
+      optional: true
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    - cd plugins/org.eclipse.elk.js
+    - npm pack --dry-run                 # file list check
+    - npm pack --pack-destination "$CI_PROJECT_DIR/packages"
+    - for d in npm/*/; do if ls "$d"*.node >/dev/null 2>&1; then (cd "$d" && npm pack --pack-destination "$CI_PROJECT_DIR/packages"); fi; done
+  artifacts:
+    expire_in: 1 month
+    paths:
+      - packages/*.tgz
