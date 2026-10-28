@@ -332,7 +332,7 @@ def cellSystemConfiguratorTests : Suite := suite "alg.common.nodespacing.interna
     | some d => d.onlyCenterCellContributes
     | none => false
   let c ← configured (EnumSet.of #[SizeConstraint.minimumSize]) (EnumSet.of #[SizeOptions.minimumSizeAccountsForPadding])
-  checkEq "MINIMUM_SIZE + MSAFP: middle row contributes both (elk-rs, Java: height only)" (row c) (true, true)
+  checkEq "Java: MINIMUM_SIZE + MSAFP: middle row contributes its height only (elk-rs: both)" (row c) (false, true)
   checkEq "MINIMUM_SIZE + MSAFP: inside container contributes both" (flags c c.insideNodeLabelContainer) (true, true)
   check "MINIMUM_SIZE + MSAFP: only the center cell contributes" (onlyCenter c)
   checkEq "MINIMUM_SIZE + MSAFP: node label cells are not regarded" (flags c (c.nodeLabelCell .inCC)) (false, false)

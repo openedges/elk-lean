@@ -1,0 +1,1 @@
+java.lang.IllegalArgumentException: Label and node size calculator can only be used with ports that have port sides assigned.

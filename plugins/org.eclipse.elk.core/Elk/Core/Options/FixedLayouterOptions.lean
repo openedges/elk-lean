@@ -23,8 +23,9 @@ def NODE_SIZE_CONSTRAINTS : Property (EnumSet SizeConstraint) := CoreOptions.NOD
 def NODE_SIZE_MINIMUM : Property KVector := CoreOptions.NODE_SIZE_MINIMUM
 /-- `FixedLayouterOptions.NODE_SIZE_FIXED_GRAPH_SIZE`. -/
 def NODE_SIZE_FIXED_GRAPH_SIZE : Property Bool := CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE
-/-- `FixedLayouterOptions.PADDING`. -/
-def PADDING : Property ElkPadding := CoreOptions.PADDING
+/-- `FixedLayouterOptions.PADDING`: `CoreOptions.PADDING` with the fixed layouter default
+`new ElkPadding(15)` (`Core.melk`; elk-rs reuses the core default 12). -/
+def PADDING : Property ElkPadding := Property.ofProperty CoreOptions.PADDING (ElkPadding.ofAny 15.0)
 
 end FixedLayouterOptions
 

@@ -150,12 +150,15 @@ def gridContainerTests : Suite := suite "alg.common.nodespacing.cellsystem.GridC
   -- Tabular layout in (0, 0, 100, 60)
   let t := t.setCellRectangle tg { width := 100.0, height := 60.0 }
   let t := (t.layoutChildrenHorizontally tg).layoutChildrenVertically tg
-  checkRect "hand: tabular (BEGIN,BEGIN) = (2, 2, 10, 5)" (t.cellRectangle tids[0]!) 2.0 2.0 10.0 5.0
-  checkRect "hand: tabular (BEGIN,END) = (92, 2, 6, 5)" (t.cellRectangle tids[1]!) 92.0 2.0 6.0 5.0
+  -- Java hands one `colWidths` array ([10, 20, 6]) to the three rows and `applyWidthsToRow` updates
+  -- it in place: row BEGIN leaves [13, 74, 9], row CENTER [16, 74, 12] (free width 68), row END
+  -- applies widths 16 / 12 to the outer columns (elk-rs copies the array: 10 / 6, free width 74)
+  checkRect "Java: tabular (BEGIN,BEGIN) = (2, 2, 16, 5) (accumulated gaps)" (t.cellRectangle tids[0]!) 2.0 2.0 16.0 5.0
+  checkRect "Java: tabular (BEGIN,END) = (86, 2, 12, 5) (accumulated gaps)" (t.cellRectangle tids[1]!) 86.0 2.0 12.0 5.0
   checkRect "hand: tabular (CENTER,CENTER) = (15, 10, 74, 41)" (t.cellRectangle tids[2]!) 15.0 10.0 74.0 41.0
   checkRect "hand: tabular (END,CENTER) = (15, 54, 74, 4)" (t.cellRectangle tids[3]!) 15.0 54.0 74.0 4.0
-  checkRect "hand: center cell rectangle = content area minus outer columns' free space (2, 2, 74, 41)"
-    (t.centerCellRectangle tg) 2.0 2.0 74.0 41.0
+  checkRect "Java: center cell rectangle from the CENTER row's free width (2, 2, 68, 41)"
+    (t.centerCellRectangle tg) 2.0 2.0 68.0 41.0
   -- Non-tabular: the END row's column widths are applied last to every row (Java/elk-rs quirk)
   let a := a.setCellRectangle g { width := 100.0, height := 60.0 }
   let a := a.layoutChildrenHorizontally g

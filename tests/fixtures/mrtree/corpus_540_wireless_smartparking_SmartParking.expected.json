@@ -24,8 +24,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 67,
+              "y": 19
             },
             {
               "height": 8,
@@ -35,8 +35,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 5.5
             },
             {
               "height": 8,
@@ -46,8 +46,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 19
             },
             {
               "height": 8,
@@ -57,8 +57,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 32.5
             }
           ],
           "properties": {
@@ -91,8 +91,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 10
             },
             {
               "height": 8,
@@ -102,8 +102,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 66,
+              "y": 19
             },
             {
               "height": 8,
@@ -113,8 +113,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 28
             }
           ],
           "properties": {
@@ -147,8 +147,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 16.5
             },
             {
               "height": 8,
@@ -158,8 +158,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 61,
+              "y": 8.333333333333334
             },
             {
               "height": 8,
@@ -169,8 +169,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 61,
+              "y": 24.66666666666667
             }
           ],
           "properties": {
@@ -203,8 +203,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 41,
+              "y": 16.5
             },
             {
               "height": 8,
@@ -214,8 +214,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 16.5
             }
           ],
           "properties": {
@@ -367,8 +367,8 @@
             "port.side": "EAST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": 91,
+          "y": 80
         },
         {
           "height": 8,
@@ -378,8 +378,8 @@
             "port.side": "EAST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": 91,
+          "y": 168
         }
       ],
       "width": 91,
@@ -408,8 +408,8 @@
             "port.side": "EAST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": 31,
+          "y": 5
         },
         {
           "height": 8,
@@ -419,8 +419,8 @@
             "port.side": "WEST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": -8,
+          "y": 11.5
         },
         {
           "height": 8,
@@ -430,8 +430,8 @@
             "port.side": "EAST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": 31,
+          "y": 18
         }
       ],
       "properties": {
@@ -464,8 +464,8 @@
             "port.side": "WEST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": -8,
+          "y": 11.5
         }
       ],
       "properties": {
@@ -498,8 +498,8 @@
             "port.side": "WEST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": -8,
+          "y": 16.5
         },
         {
           "height": 8,
@@ -509,8 +509,8 @@
             "port.side": "EAST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": 61,
+          "y": 8.333333333333334
         },
         {
           "height": 8,
@@ -520,8 +520,8 @@
             "port.side": "EAST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": 61,
+          "y": 24.66666666666667
         }
       ],
       "properties": {
@@ -556,8 +556,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 19
             },
             {
               "height": 8,
@@ -567,8 +567,8 @@
                 "port.side": "SOUTH"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 15.5,
+              "y": 46
             },
             {
               "height": 8,
@@ -578,8 +578,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 39,
+              "y": 10
             },
             {
               "height": 8,
@@ -589,8 +589,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 39,
+              "y": 28
             }
           ],
           "properties": {
@@ -623,8 +623,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 16.5
             },
             {
               "height": 8,
@@ -634,8 +634,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 21,
+              "y": 16.5
             }
           ],
           "properties": {
@@ -668,8 +668,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 16.5
             },
             {
               "height": 8,
@@ -679,8 +679,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 61,
+              "y": 16.5
             }
           ],
           "properties": {
@@ -713,8 +713,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 29,
+              "y": 8.5
             },
             {
               "height": 8,
@@ -724,8 +724,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 8.5
             }
           ],
           "properties": {
@@ -758,8 +758,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 43,
+              "y": 8.5
             },
             {
               "height": 8,
@@ -769,8 +769,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 8.5
             }
           ],
           "properties": {
@@ -803,8 +803,8 @@
                 "port.side": "EAST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": 66,
+              "y": 19
             }
           ],
           "properties": {
@@ -837,8 +837,8 @@
                 "port.side": "WEST"
               },
               "width": 8,
-              "x": 0,
-              "y": 0
+              "x": -8,
+              "y": 11.5
             }
           ],
           "properties": {
@@ -1046,8 +1046,8 @@
             "port.side": "WEST"
           },
           "width": 8,
-          "x": 0,
-          "y": 0
+          "x": -8,
+          "y": 140
         }
       ],
       "width": 186,
