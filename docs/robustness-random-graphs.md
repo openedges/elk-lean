@@ -876,5 +876,5 @@ SPOrE 7·VertiFlex 8·rectpacking 1개 `java_exact`, 예외 4개·문구 2개 `j
 
 코퍼스(ELK Java 기준): Lean 출력 1,998개 기준 바이너리와 바이트 동일, 정확 일치 1878/119(집합 동일), Java 단계별 trace 1,743/1,997(요약 — 갈라지는 254개 모델과 첫 차이 단계 — 이 기준과 같음). elk-rs 보조 검사(spv14 바이너리, `portPos` 공유 포함): model parity(1e-6) 1447/1447, strict trace 1447/1447 — 떨어진 것 없음.
 
-성능(`elk bench` 합성 26개, 기준 바이너리와 번갈아 5회, 중앙값): 기하평균 0.997배, rectpacking 0.97~0.98배(`Weak`/차용 흉내
-제거), 나머지 0.99~1.02배(최대 `mrtree_xlarge` 1.019 — 두 바이너리의 실행 범위가 겹치는 잡음, mrtree 코드는 바뀌지 않음).
+성능(`elk bench` 합성 26개, 기준 바이너리와 번갈아 5회, 중앙값, 최종 바이너리): 기하평균 0.992배, rectpacking 0.96~0.97배
+(`Weak`/차용 흉내 제거), 나머지 0.97~1.01배(최대 `mrtree_xlarge` 1.008, 잡음 범위 — mrtree 코드는 바뀌지 않음).
