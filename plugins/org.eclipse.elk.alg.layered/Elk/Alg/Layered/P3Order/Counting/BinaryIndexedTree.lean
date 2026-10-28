@@ -6,7 +6,10 @@ Fenwick tree over `[0, maxNum)` counting how many entries were added per index (
 `binary_indexed_tree.rs`). Pure value; the counters keep it behind an `IO.Ref`.
 
 Rust semantics kept: `add` beyond `maxNum` still increments `size` (but no bucket), `rank`
-clamps the index to the tree size, `removeAll` ignores out-of-range indices.
+clamps the index to the tree size, `removeAll` ignores out-of-range indices. Both set `outOfRange`
+(Java's `numsPerIndex[index]` would throw `ArrayIndexOutOfBoundsException`; a `rank` beyond the tree is
+always followed by an `add` of the same index, so the flag also covers it) — the counters that can see
+such indices turn it into Java's exception.
 -/
 namespace Elk.Alg.Layered.P3Order.Counting
 
@@ -16,6 +19,8 @@ structure BinaryIndexedTree where
   numsPerIndex : Array Int := #[]
   size : Int := 0
   maxNum : Nat := 0
+  /-- An `add`/`removeAll` index was outside `[0, maxNum)` since the tree was created or cleared. -/
+  outOfRange : Bool := false
   deriving Inhabited, Repr
 
 namespace BinaryIndexedTree
@@ -39,7 +44,7 @@ private partial def rankLoop (sums : Array Int) (i : Nat) (acc : Int) : Int :=
 
 /-- `add(index)`: one more entry at `index`. -/
 def add (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
-  if index >= t.numsPerIndex.size then { t with size := t.size + 1 }
+  if index >= t.numsPerIndex.size then { t with size := t.size + 1, outOfRange := true }
   else
     -- take the arrays out first so that they are updated in place
     let nums := t.numsPerIndex
@@ -63,14 +68,15 @@ def removeAll (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
       let t := { t with numsPerIndex := #[], binarySums := #[] }
       let nums := nums.set! index 0
       { t with numsPerIndex := nums, binarySums := updateLoop sums (index + 1) (-numEntries), size := t.size - numEntries }
-  else t
+  else { t with outOfRange := true }
 
 /-- elk-rs `reset(maxNum)`: a fresh tree of the new size (Java creates a new tree). -/
 def reset (_t : BinaryIndexedTree) (maxNum : Nat) : BinaryIndexedTree := new maxNum
 
 /-- `clear()`: removes all entries, keeps the size. -/
 def clear (t : BinaryIndexedTree) : BinaryIndexedTree :=
-  { t with binarySums := Array.replicate t.binarySums.size 0, numsPerIndex := Array.replicate t.numsPerIndex.size 0, size := 0 }
+  { t with binarySums := Array.replicate t.binarySums.size 0, numsPerIndex := Array.replicate t.numsPerIndex.size 0, size := 0,
+           outOfRange := false }
 
 /-- `isEmpty()`. -/
 def isEmpty (t : BinaryIndexedTree) : Bool := t.size == 0

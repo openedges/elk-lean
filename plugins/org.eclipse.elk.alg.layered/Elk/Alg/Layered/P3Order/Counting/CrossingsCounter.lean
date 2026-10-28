@@ -910,39 +910,46 @@ private def initPortPositionsCounterClockwise (c : CrossingsCounter) (leftLayer 
 (`inLayer = false`) or `countInLayerCrossingsOnPorts` (`inLayer = true`) runs over `ports` with a tree
 of `maxNum` buckets, if any: per port `removeAll(cur)` (`numsPerIndex[cur]`, length `maxNum`), per
 (in-layer) edge whose far end lies above `rank(end)` (`binarySums[end]`, length `maxNum + 1`), then the
-`add(end)`s in the order the deque pops them (`numsPerIndex[end]`). The accessed indices depend only on
-the positions, so the first failing access can be found before counting. Positions are fresh for the
-ports a counter numbered, but far ends elsewhere keep the positions an earlier numbering left in the
-shared array (e.g. the other side's in-layer counter of a greedy switch decider), which can exceed
-the tree: Java then throws, the counts (and a greedy switch loop fed by them) would otherwise run on
-clamped values. -/
+`add(end)`s (`numsPerIndex[end]`, after all ranks of the port; every failing `add` has index
+`maxNum`). The accessed indices depend only on the positions. Positions are fresh for the ports a
+counter numbered, but far ends elsewhere keep the positions an earlier numbering left in the shared
+array (e.g. the other side's in-layer counter of a greedy switch decider), which can exceed the
+tree. Only evaluated when the count set the tree's `outOfRange` flag. -/
 def javaTreeIndexError (a : LGraphArena) (positions : Array Int) (maxNum : Nat) (ports : Array LPortId)
     (inLayer : Bool) : Option String := Id.run do
   let oob (i : Int) (len : Nat) : String :=
     s!"java.lang.ArrayIndexOutOfBoundsException: Index {i} out of bounds for length {len}"
+  let m : Int := maxNum
   for port in ports do
     let cur := positionIn positions a port
-    if cur < 0 || cur >= maxNum then return some (oob cur maxNum)
+    if cur < 0 || cur >= m then return some (oob cur maxNum)
     let pt := a.port port
-    let mut ends : Array Int := #[]
-    for e in pt.incomingEdges ++ pt.outgoingEdges do
-      if inLayer && !isInLayer a e then continue
-      let some other := otherEndOf a e port | continue
-      let endPosition := positionIn positions a other
-      if endPosition > cur then
-        if endPosition > maxNum then return some (oob endPosition (maxNum + 1))
-        ends := ends.push endPosition
-    for k in [0:ends.size] do
-      let endPosition := ends[ends.size - 1 - k]!
-      if endPosition >= maxNum then return some (oob endPosition maxNum)
+    let mut addFails := false
+    for edges in #[pt.incomingEdges, pt.outgoingEdges] do
+      for e in edges do
+        if inLayer && !isInLayer a e then continue
+        let some other := otherEndOf a e port | continue
+        let endPosition := positionIn positions a other
+        if endPosition > cur then
+          if endPosition > m then return some (oob endPosition (maxNum + 1))
+          if endPosition == m then addFails := true
+    if addFails then return some (oob m maxNum)
   return none
 
-/-- `withTree` after `javaTreeIndexError` (throws Java's exception text). -/
-@[inline] private def checkJavaTreeIndices (c : CrossingsCounter) (ports : Array LPortId) (inLayer : Bool) :
-    LayeredM Unit := do
-  let maxNum := (← c.indexTree.get).maxNum
-  if let some msg := javaTreeIndexError (← get) (← c.portPositions.get) maxNum ports inLayer then
-    throw (IO.userError msg)
+/-- A both-orders count with Java's index checks: the unchecked loop, then (only when the tree saw
+an index outside its range) Java's exception text for the first failing access. -/
+private def withTreeChecked (c : CrossingsCounter) (ports : Array LPortId) (inLayer : Bool) : LayeredM Int := do
+  let a ← get
+  let positions ← c.portPositions.get
+  let tree ← c.indexTree.swap {}
+  let maxNum := tree.maxNum
+  let (crossings, tree) :=
+    if inLayer then countInLayerCrossingsOnPorts a positions tree ports else countCrossingsOnPorts a positions tree ports
+  c.indexTree.set tree
+  if tree.outOfRange then
+    if let some msg := javaTreeIndexError a positions maxNum ports inLayer then
+      throw (IO.userError msg)
+  return crossings
 
 /-- Runs one of the pure counting loops on the counter's tree. -/
 @[inline] private def withTree (c : CrossingsCounter)
@@ -1069,13 +1076,11 @@ def countCrossingsBetweenPortsInBothOrders (c : CrossingsCounter) (upperPort low
     LayeredM (Int × Int) := do
   let a ← get
   let ports := connectedPortsSortedByPosition a (← c.portPositions.get) upperPort lowerPort
-  c.checkJavaTreeIndices ports false
-  let upperLowerCrossings ← c.withTree countCrossingsOnPorts ports
+  let upperLowerCrossings ← c.withTreeChecked ports false
   c.indexTree.modify (·.clear)
   c.switchPorts upperPort lowerPort
   let ports := stableSortByKey ports (positionIn (← c.portPositions.get) a ·)
-  c.checkJavaTreeIndices ports false
-  let lowerUpperCrossings ← c.withTree countCrossingsOnPorts ports
+  let lowerUpperCrossings ← c.withTreeChecked ports false
   c.indexTree.modify (·.clear)
   c.switchPorts lowerPort upperPort
   return (upperLowerCrossings, lowerUpperCrossings)
@@ -1087,13 +1092,11 @@ def countInLayerCrossingsBetweenNodesInBothOrders (c : CrossingsCounter) (upperN
     (side : PortSide) : LayeredM (Int × Int) := do
   let a ← get
   let ports := connectedInLayerPortsSortedByPosition a (← c.portPositions.get) upperNode lowerNode side
-  c.checkJavaTreeIndices ports true
-  let upperLowerCrossings ← c.withTree countInLayerCrossingsOnPorts ports
+  let upperLowerCrossings ← c.withTreeChecked ports true
   c.switchNodes upperNode lowerNode side
   c.indexTree.modify (·.clear)
   let ports := stableSortByKey ports (positionIn (← c.portPositions.get) a ·)
-  c.checkJavaTreeIndices ports true
-  let lowerUpperCrossings ← c.withTree countInLayerCrossingsOnPorts ports
+  let lowerUpperCrossings ← c.withTreeChecked ports true
   c.switchNodes lowerNode upperNode side
   c.indexTree.modify (·.clear)
   return (upperLowerCrossings, lowerUpperCrossings)

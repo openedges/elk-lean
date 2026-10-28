@@ -676,13 +676,13 @@ def transformEdge (imp : ElkGraphImporter) (elkedge : EdgeId) (lgraph : LGraphId
   gp ← transformEdgeLabels imp edge.labels ledge gp
   -- Java: the original bend points (start, bends, end of the first section) when the interactive
   -- crossing minimiser or node placer needs them (elk-rs does not keep them)
-  let lgProps := (← getGraph lgraph).props
-  let bendPointsRequired :=
-    lgProps.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep == .interactive
-      || lgProps.getD LayeredOptions.NODE_PLACEMENT_STRATEGY NodePlacementStrategy.brandesKoepf == .interactive
-  if bendPointsRequired then
-    if let some sec := edge.sections[0]? then
-      if !(← liftElk (ElkM.getSection sec)).bendPoints.isEmpty then
+  if let some sec := edge.sections[0]? then
+    if !(← liftElk (ElkM.getSection sec)).bendPoints.isEmpty then
+      let lgProps := (← getGraph lgraph).props
+      let bendPointsRequired :=
+        lgProps.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep == .interactive
+          || lgProps.getD LayeredOptions.NODE_PLACEMENT_STRATEGY NodePlacementStrategy.brandesKoepf == .interactive
+      if bendPointsRequired then
         let chain ← withElk (ElkUtil.createVectorChain · sec)
         modifyEdge ledge fun e => { e with internal := { e.internal with originalBendpoints := some (ledge.idx, chain) } }
   let st ← imp.state.get

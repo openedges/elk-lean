@@ -448,3 +448,91 @@ ticket 588 오류 문구 Java와 동일. 테스트: `tests/lean/Tests/Api/Layere
 동일, Java 코퍼스 1878/119(집합 동일), elk-rs model 1447/1447. 테스트: `force.fixtures.java`(+ `tests/fixtures/force/java/`
 입력 10개와 Java 출력), `force.import`의 반복 간선 검사, `core.util.java`의 `javaLog`(Java 값 48개 + 특수값); force/force_enum
 기대값 12개를 Java와 정확히 같은 값으로 재고정(`opt_java_status.tsv`의 java_differs 3·java_equal 7 → java_exact).
+
+## 13. P3J: layered 교차 최소화(P3)와 그 앞 프로세서의 Java 경로 (2026-10-29)
+
+방법: 라운드 6 병합본(`0fe9df9`)으로 파이프라인(시드 1~10, s/v)을 돌려 layered 단위가 다른 입력 70개(LPOS/LNODE/LEDGE)를
+Java·Lean 단계별 trace로 비교했다(처음 갈라짐: `LayerSweepCrossingMinimizer` 11, 나머지 57은 전 단계 일치). 무작위 생성기가
+교차 최소화 옵션을 거의 쓰지 않으므로(전략 3종만), v 세트의 layered 루트 그래프 1,802개에 P3 옵션(전략 4종, greedy switch
+종류·문턱, model order 전략·영향도·`portModelOrder`, `forceNodeModelOrder`, thoroughness, 시드, semi-interactive, node
+promotion, interactive 기준점, interactive일 때 노드 위치와 굽은 점 있는 section)을 무작위로 준 변형 세트(`p3a`)를 만들어
+같은 방식으로 분석했다. Java 내부 확인은 스크래치의 그림자 클래스(서명 제거한 layered jar 사본 + 계측한
+`LayerSweepCrossingMinimizer`/`BarycenterHeuristic`/`GreedyPortDistributor`/`SwitchDecider`/`CrossingsCounter`, 추적
+`Random`)로 했고, 결과 기준값은 항상 수정하지 않은 Java(`ElkJavaBaseline`)다.
+
+### 13.1 변경(전부 ELK Java가 기준, elk-rs와는 달라짐)
+
+- `BarycenterHeuristic.calculateBarycenter`(스냅숏 경로): 노드의 **현재** 포트 순서(`node.getPorts()`, 포트 분배기가 바꾼
+  순서)를 돈다. elk-rs는 스냅숏을 만들 때의 순서를 돌아서, 같은 층 이웃으로의 재귀 순서 — 곧 어느 노드가 어느 섭동 난수를
+  받는지 — 와 순위 합의 순서가 Java와 달랐다(`s5/g0032`·`s5/g0255`·`v3/g0150`·`v4/g0300`·`v7/g0258`·`v7/g0445` 등 8개).
+- `GreedyPortDistributor.switchPorts`: Java는 `getPortSideView`(남/서는 `Lists.reverse`) 하위 목록에 쓰므로 교환은 두 **보기
+  위치**가 가리키는 노드 목록 칸을 바꾼다. elk-rs는 칸 인덱스도 함께 바꿔, 두 번 움직인 포트의 다음 교환이 엉뚱한 칸을
+  바꿨다(`v5/g0228`·`v4/g0293`·`v9/g0020`; ELK Java 자체 테스트 `GreedyPortDistributorTest.
+  distributePorts_GivenMultipleCrossingsOnWesternSide_RemoveCrossing`의 기대값 `[1, 2, 0]`과도 이제 일치 — elk-rs 기대값은 `[2, 0, 1]`).
+- `LayerSweepCrossingMinimizer`: `FIRST_TRY_WITH_INITIAL_ORDER`와 `SECOND_TRY_WITH_INITIAL_ORDER`는 **같은 속성 id**
+  (`"firstTryWithInitialOrder"`)로 선언되어 한 값이다 → 무작위 반복의 첫 번째만 초기 순서를 쓴다(elk-rs는 두 번째도). 또 이
+  값은 `LGraph`에 남아, 초기 순서의 교차가 0이라 일찍 끝난 실행이 `true`로 남긴 값을 같은 그래프의 다음 실행(예: greedy
+  switch 처리기)이 읽는다.
+- greedy switch: `SwitchDecider`의 두 층 내 계수기는 heuristic의 포트 위치 배열 **하나**를 공유하고(다른 층·다른 쪽 위치가
+  남음), 부모 계수기는 부모 `GraphInfoHolder`의 배열을 공유한다(elk-rs: 계수기마다 복사본). `CrossingsCounter`의
+  `connected…PortsSortedByPosition`은 Java `TreeSet`처럼 **위치가 같은** 포트를 버린다(elk-rs: 동일성). 남은 위치가 트리를
+  넘으면 Java는 `BinaryIndexedTree`에서 `ArrayIndexOutOfBoundsException`을 던진다 — 트리가 범위 밖 `add`/`removeAll`을
+  표시하면(범위 밖 `rank` 뒤에는 늘 같은 `add`가 옴) 두 순서 계수가 Java의 접근 순서로 첫 실패 지점을 다시 찾아 같은 문구로
+  던진다(전에는 잘린 값으로 계속 세다가 greedy switch 루프가 끝나지 않았다; 추가 패스가 없어 비용 ≈ 0).
+- `InteractiveCrossingMinimizer`: 긴 간선 더미는 `ORIGIN` 간선의 `ORIGINAL_BENDPOINTS`(importer가 interactive 전략일 때
+  section의 시작점·굽은 점·끝점으로 설정 — 새 내부 속성)를 따라 보간하고, 뒤집히지 않은 간선은 Java처럼 그 사슬 객체를
+  제자리에서 늘린다(분할된 긴 간선 조각들이 같은 객체를 공유); x 거리 0 보호 없음(NaN/∞는 `Double.compare`로), 정렬은 TimSort.
+- `MedianHeuristic`: `weightComparator`(가중치 없는 첫 노드는 항상 큼 — 비일관)와 TimSort, `Double.MIN_VALUE`,
+  `Math.min/max`, 중앙값 노드에 가중치가 없으면 Java의 NPE 문구. `ModelOrderBarycenterHeuristic.setFirstLayerOrder`는
+  Java의 가상 호출대로 첫 층을 model order 삽입 정렬(제약 해소 없음). 무게중심·포트 무게중심 비교는 `Double.compareTo`/
+  `Float.compare`(NaN·`-0.0`).
+- `SweepCopy`: 재정렬은 `Collections.sort(ports, PortListSorter.CMP_COMBINED)`(TimSort + `PortListSorter` 비교자),
+  `FIXED_POS` 원점도 변 교정(elk-rs는 건너뜀).
+- `SortByInputModelProcessor`: 포트는 노드마다 새 `ModelOrderPortComparator`로 `Collections.sort`(TimSort; 상태 있는
+  비교자라 비교 순서가 결과를 정함 — elk-rs는 삽입 정렬). 비교자는 만들 때 앞 층을 복사하므로 층 0의 포트 비교자와 두 번째
+  노드 비교자는 첫 정렬 **뒤**의 층 0을 본다.
+- `NorthSouthPortPreprocessor`: `sortPortList`는 고정 변의 normal 노드에서만(elk-rs는 모든 노드, 자유 노드의 섞인 포트도
+  재정렬). `modelOrderNorthSouthInputReversing`은 Java가 실제로 계산하는 값 — `Lists.reverse(incoming).addAll(outgoing)`은
+  뒤집힌 보기 끝, 곧 원 목록 **앞**에 넣으므로 결과는 들어오는 간선 없는 포트를 거꾸로, 그다음 들어오는 포트를 원래 순서로.
+- `NodePromotion`(model order): Java 루프 그대로 — 승격 뒤 같은 인덱스를 다시 보고, 층 경계는 매번 `keySet().size()`,
+  최대/최소 키는 동적, 1층 그래프도 정렬·재구성, 층 정렬은 TimSort(`int` 뺄셈), 키 비교는 Java `Integer ==`(캐시 범위 밖은
+  상자 동일성), 간선 없는 경우의 `NoSuchElementException`. elk-rs 방식은 `p3a`에서 103개 입력이 끝나지 않았다.
+- `ElkGraphImporter.transformEdge`: 고정 변 노드에 바로 붙은 간선 끝의 포트는 첫 section의 시작/끝점에서 만든다(절대 좌표
+  → `elkparent` 기준, 자손으로 가는 간선은 source를 INPUT으로 노드 위치만큼 이동) — 변이 그 점으로 정해진다.
+- `LGraphToCGraphTransformer`: `VerticalSegment.compareTo`는 Guava `DoubleMath.fuzzyCompare` + `Double.compare`(비이행),
+  정렬은 TimSort.
+
+`rustSortBy` → `javaSortBy`: `NodePromotion`, `InteractiveCrossingMinimizer`(이제 layered에 `rustSortBy` 없음). 그 밖의
+TimSort 전환: `MedianHeuristic`, `SweepCopy`, `SortByInputModelProcessor` 포트, `LGraphToCGraphTransformer`.
+`HyperedgeCrossingsCounter`의 마지막 키는 Java에서 `hashCode()`(identity hash, `this.hashCode() - other.hashCode()` 넘침
+포함)라 재현할 수 없다 — Lean은 첫 source 포트의 arena 인덱스(elk-rs: 주소)를 쓴다.
+
+### 13.2 결과
+
+| 측정 | 전 | 후 |
+|---|---:|---:|
+| 무작위 v 정확(시드 1~10, origin/main `63797fa` 기준) | 5,287 / 5,761 | **5,297** |
+| 무작위 s 정확 | 1,180 / 1,205 | 1,182 |
+| 루트 layered v / s | 1,629 / 1,715 · 542 / 547 | 1,634 · 544 |
+| `p3a`(P3 옵션 변형 1,802개, 라운드 6 병합본 기준) 정확 | 904 | 1,302(병합 후; 병합 전 1,281) |
+| `p3a` drift / Lean 시간 초과 | 369 / 103 | 74 / 0 |
+
+정확 → 비정확 0. 무작위 s/v에서 바뀐 12개는 모두 drift → 정확이고, P3에서 처음 갈라지던 입력이 0개가 됐다. 남은 layered
+차이 58개(LPOS 46·LEDGE 8·LNODE 3 등)는 모두 단계별 trace가 Java와 같고, 그 입력 70개만 새 JVM에서 돌린 Java와는 65개가
+정확히 같다(파이프라인의 600개 단위 JVM 실행 맥락 의존 — LEDGE가 본 것과 같은 종류). 새 JVM에서도 다른 5개: `v3/g0156`(P4
+`LinearSegmentsNodePlacer`), `v8/g0471`·`v9/g0173`(trace는 같고 최종 간선 경로), `v5/g0424`·`v10/g0216`(mrtree 자식).
+`p3a`의 남은 차이: Java 자신의 결함(NPE `MAX_MODEL_ORDER_NODES` 언박싱 15, `CrossingsCounter` AIOOBE의 다른 지점 등 Java만
+실패 39 — 재현하지 않음), 오류 문구만 다른 11(그중 9는 HotSpot `OmitStackTraceInFastThrow`가 같은 JVM에서 반복된 AIOOBE의
+문구를 지운 것, 2는 다른 지점), self-loop 라우팅·P4/P5 등 P3 밖.
+
+코퍼스: Lean 출력 1,447개 바이트 동일(`lean/**`; 병합 후 origin/main과도 동일), elk-rs model 1447/1447·strict trace
+1447/1447이며 Lean trace 파일도 전부 바이트 동일(oracle 특이점 없음 — 코퍼스는 바뀐 경로가 결과를 바꾸지 않음), Java 정확
+1878/119(집합 동일), Java 단계별 trace 1,743/1,997(LEDGE의 새 Java 실행 기준값, 전후 동일 — layered 강제 trace 파일 바이트
+동일), 합성 26개 바이트 동일·Java 23/26. 성능(origin/main 대비, 교차 6회 중앙값): 합성 layered 4종 합 1.007배(crossmin
+0.996·hierarchy_flat 1.006·layered_large 1.010·layered_medium 1.005), P3L 코퍼스 부분집합 30개 합 1.005배(모델별 0.996~1.017;
+스냅숏 경로가 현재 포트 순서를 읽는 비용). 남은 `p3a` 오류 문구 차이 중 2건은 Java가 `AllCrossingsCounter`의 층 내 계수
+(스냅숏 경로, 검사 없음)에서 먼저 던지는 AIOOBE다(같은 예외 클래스, 다른 인덱스). 테스트 `layered.p3Java`(+
+`tests/fixtures/p3java/` 입력 12개, Java 출력 11개, Java 예외 문구 1개); elk-rs 기대값을 Java로 바꾼 검사: greedy 포트 분배
+`[2,0,1]` → `[1,2,0]`(Java 자체 테스트), interactive의 x 거리 0(`9` → NaN)·NaN 비교(`eq` → `gt`), median의
+`f64::MIN_POSITIVE` → `Double.MIN_VALUE`·정렬 함수, `SweepCopy`의 `FIXED_POS` 변 교정(안 함 → 함), node promotion 1층 정렬
+(안 함 → 함).
