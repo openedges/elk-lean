@@ -19,8 +19,9 @@ assigned):
   manager in Lean yet (JSON inputs carry none); once it exists, call it per loop with
   `targetWidthForLabelManagement` and spacing `2.0`, then `SelfHyperLoopLabels.sizeAfterLabelManagement`.
 
-Unlike Java (`placeLabels` computes positions before the slot assignment), Rust only assigns sides
-here; the label positions are computed by the router (`OrthogonalSelfLoopRouter.placeLoopLabels`).
+Like Java (`placeLabels` → `computeCoordinates`, and unlike elk-rs) the alignment coordinate of each
+label block is computed here, before the slot assignment, whose label overlap test reads it; the
+router (`OrthogonalSelfLoopRouter.placeLoopLabels`) then sets the coordinate of the routing slot.
 
 The side/alignment decisions are pure (`assignSidesAndAlignments` returns the new loops and the
 labels whose inline flag is cleared); `prepareLabels` applies them.
@@ -192,12 +193,33 @@ def targetWidthForLabelManagement (a : LGraphArena) (h : SelfLoopHolder) (lb : S
     | .top => MIN_WIDTH_EDGE_LABELS
   fmax targetWidth MIN_WIDTH_EDGE_LABELS
 
-/-- `prepare_labels(holder, labelManager)` (Java `placeLabels` without the positions) for the
-holder stored on `n` (no-op without holder). -/
+/-- Java `computeCoordinates(slLoop)`: the coordinate of the label block given by the alignment
+(`CENTER`: `x` centred on the node, `LEFT`/`RIGHT`: `x` at the reference port's anchor, `TOP`: `y` at
+it); the other coordinate keeps its value. `RoutingSlotAssigner` compares these `x` ranges. -/
+def computeCoordinates (a : LGraphArena) (h : SelfLoopHolder) (nodeSize : KVector) (l : SelfHyperLoop) :
+    SelfHyperLoop :=
+  match l.slLabels with
+  | none => l
+  | some lb =>
+    let ref := lb.alignmentReferenceSLPort.map (portAnchor a h)
+    let pos := lb.position
+    let pos : KVector := match lb.alignment, ref with
+      | .center, _ => { pos with x := (nodeSize.x - lb.size.x) / 2.0 }
+      | .left, some r => { pos with x := r.x }
+      | .right, some r => { pos with x := r.x - lb.size.x }
+      | .top, some r => { pos with y := r.y }
+      | _, none => pos
+    { l with slLabels := some { lb with position := pos } }
+
+/-- `prepare_labels(holder, labelManager)` (Java `placeLabels`: sides, alignments and
+`computeCoordinates`) for the holder stored on `n` (no-op without holder). -/
 def prepareLabels (n : LNodeId) : LayeredM Unit := do
   let some h ← SelfLoopHolder.get? n | return
   let ordering := ((← getNode n).props.get LayeredOptions.EDGE_ROUTING_SELF_LOOP_ORDERING).getD .stacked
-  let (loops, toClear) ← withArena fun a => assignSidesAndAlignments a h ordering
+  let nodeSize := (← getNode n).size
+  let (loops, toClear) ← withArena fun a =>
+    let (loops, toClear) := assignSidesAndAlignments a h ordering
+    (loops.map (computeCoordinates a h nodeSize), toClear)
   for lb in toClear do
     modifyLabel lb fun x => { x with props := x.props.remove LayeredOptions.EDGE_LABELS_INLINE }
   SelfLoopHolder.update n fun h => { h with slHyperLoops := loops }
