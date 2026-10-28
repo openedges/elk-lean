@@ -45,5 +45,15 @@ Source Code
 Third-party Content
 
 The native addon statically links the Lean 4 runtime and standard library
-(Apache License 2.0, https://github.com/leanprover/lean4), GMP (GNU LGPL v3)
-and libuv (MIT), as shipped with the Lean toolchain.
+(Apache License 2.0, https://github.com/leanprover/lean4); the runtime is
+rebuilt from the Lean v4.35.0 sources without GMP (Lean's built-in big-number
+implementation, scripts/build_runtime_nogmp.sh) and contains mimalloc (MIT,
+https://github.com/microsoft/mimalloc). It also statically links libuv (MIT,
+https://github.com/libuv/libuv) as shipped with the Lean toolchain.
+
+The WebAssembly build contains the Lean 4 runtime and standard library
+(Apache License 2.0), compiled from the same sources without GMP, and the
+mimalloc allocator of emscripten (MIT).
+
+This package contains no GMP and no other LGPL-licensed code
+(docs/gmp-licensing.md in the elk-lean repository).

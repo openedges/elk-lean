@@ -4,7 +4,12 @@
 #   .lake/build/ffi/include/elk_lean.h
 #   .lake/build/ffi/smoke          native smoke test (tests/ffi/smoke.c)
 #   .lake/build/ffi/ldflags        extra linker flags (Lean runtime libraries) for hosts
+#   .lake/build/ffi/runtime        `gmp` (toolchain libleanrt.a + libgmp.a) or `nogmp`
+#   .lake/build/ffi/libleanrt_nogmp.a   (ELK_NO_GMP=1 only) the Lean runtime the ldflags refer to
 # usage: sh scripts/build_ffi.sh [--check]   (--check: compare the smoke output with `elk layout`)
+# env: ELK_NO_GMP=1  link the Lean runtime rebuilt without GMP (scripts/build_runtime_nogmp.sh,
+#                    docs/gmp-licensing.md) instead of the toolchain's -lleanrt -lgmp; libelklean.a
+#                    itself is the same in both modes, only ldflags (and the smoke binary) change.
 set -eu
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "$HERE"
@@ -23,14 +28,32 @@ echo "$OUT/obj/elk_lean.o" >> "$OUT/objects.txt"
 rm -f "$OUT/libelklean.a"
 # shellcheck disable=SC2046
 ar rcs "$OUT/libelklean.a" $(cat "$OUT/objects.txt")
+if [ "${ELK_NO_GMP:-0}" = 1 ]; then
+  sh scripts/build_runtime_nogmp.sh
+  RUNTIME=nogmp
+  # next to libelklean.a, so that the directory is a self-contained C library bundle
+  cp .lake/build/runtime-nogmp/lib/libleanrt_nogmp.a "$OUT/"
+  LEANRT="-L$OUT -lleanrt_nogmp"
+  GMP=""
+else
+  RUNTIME=gmp
+  rm -f "$OUT/libleanrt_nogmp.a"
+  LEANRT="-lleanrt"
+  GMP="-lgmp"
+fi
 case "$(uname -s)" in
-  Darwin) LDFLAGS="-L$LEAN_PREFIX/lib/lean -L$LEAN_PREFIX/lib -lInit -lStd -lleanrt -lgmp -luv -lc++ -Wl,-dead_strip" ;;
-  *) LDFLAGS="-L$LEAN_PREFIX/lib/lean -L$LEAN_PREFIX/lib -Wl,--start-group -lInit -lStd -lleanrt -Wl,--end-group -lgmp -luv -lstdc++ -lm -lpthread -ldl -Wl,--gc-sections" ;;
+  Darwin) LDFLAGS="-L$LEAN_PREFIX/lib/lean -L$LEAN_PREFIX/lib -lInit -lStd $LEANRT $GMP -luv -lc++ -Wl,-dead_strip" ;;
+  *) LDFLAGS="-L$LEAN_PREFIX/lib/lean -L$LEAN_PREFIX/lib -Wl,--start-group -lInit -lStd $LEANRT -Wl,--end-group $GMP -luv -lstdc++ -lm -lpthread -ldl -Wl,--gc-sections" ;;
 esac
+LDFLAGS=$(echo "$LDFLAGS" | tr -s ' ')
 echo "$LDFLAGS" > "$OUT/ldflags"
+echo "$RUNTIME" > "$OUT/runtime"
 # shellcheck disable=SC2086
 cc $CFLAGS tests/ffi/smoke.c "$OUT/libelklean.a" $LDFLAGS -o "$OUT/smoke"
-echo "built $OUT/libelklean.a ($(wc -l < "$OUT/objects.txt" | tr -d ' ') objects), $OUT/smoke"
+echo "built $OUT/libelklean.a ($(wc -l < "$OUT/objects.txt" | tr -d ' ') objects), $OUT/smoke (Lean runtime: $RUNTIME)"
+if [ "$RUNTIME" = nogmp ] && nm "$OUT/smoke" 2>/dev/null | grep -q '__gmp'; then
+  echo "error: $OUT/smoke contains GMP symbols" >&2; exit 1
+fi
 if [ "${1:-}" = "--check" ]; then
   T=$(mktemp -d)
   printf '%s' '{"id":"root","children":[{"id":"a","width":30,"height":20},{"id":"b","width":30,"height":20}],"edges":[{"id":"e","sources":["a"],"targets":["b"]}]}' > "$T/g.json"

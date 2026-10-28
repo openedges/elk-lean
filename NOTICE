@@ -35,3 +35,20 @@ SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
 - `scripts/compare_model_parity_layouts.py` and `scripts/compare_phase_traces.py`
   are copied from elk-rs (EPL-2.0 OR GPL-3.0-or-later).
 - `external/elk-models` test models carry their own license notices.
+
+## Binary Distributions
+
+Executables and libraries built from this repository statically link the Lean 4
+runtime and standard library (Apache License 2.0,
+https://github.com/leanprover/lean4), which contains mimalloc (MIT,
+https://github.com/microsoft/mimalloc), and libuv (MIT,
+https://github.com/libuv/libuv).
+
+- Distributed binaries (release CLI, C library bundle, Node.js addon) use the
+  Lean runtime rebuilt without GMP (`scripts/build_runtime_nogmp.sh`,
+  `ELK_NO_GMP=1`) and contain no LGPL-licensed code. The WebAssembly build
+  never contains GMP.
+- A plain `lake build` links the Lean toolchain's runtime, which statically
+  includes GMP 6.3.0 (GNU LGPL v3, https://gmplib.org). Such builds are for
+  local use; distributing them carries the LGPL v3 section 4 obligations
+  described in `docs/gmp-licensing.md`.

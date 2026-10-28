@@ -30,12 +30,18 @@ elk-lean Node.js 네이티브 애드온. elk-rs `plugins/org.eclipse.elk.napi/sr
 
 ```sh
 sh scripts/build_napi.sh            # build_ffi.sh 후 plugins/org.eclipse.elk.js/dist/elk-lean.<triple>.node
-sh scripts/build_napi.sh --copy-to-npm   # npm/<triple>/에 애드온·LICENSE·NOTICE 복사(배포용)
+ELK_NO_GMP=1 sh scripts/build_napi.sh --copy-to-npm   # GMP 없는 런타임으로 빌드해 npm/<triple>/에 애드온·LICENSE·NOTICE 복사(배포용)
 ```
+
+- 배포용 애드온은 `ELK_NO_GMP=1`로 빌드한다: Lean 런타임을 v4.35.0 소스에서 GMP 없이 다시 컴파일한
+  `libleanrt_nogmp.a`(`scripts/build_runtime_nogmp.sh`)를 링크하므로 GMP(LGPL v3) 코드가 들어가지 않는다
+  (근거·검증: `docs/gmp-licensing.md`). `--copy-to-npm`은 GMP 런타임으로 만든 애드온을 거부한다.
+  기본 빌드(툴체인 `-lleanrt -lgmp`)는 로컬 개발용이다.
 
 - `NODE`(헤더를 찾을 node 바이너리) 또는 `NODE_INCLUDE_DIR`(`node_api.h` 위치)로 헤더를 지정한다.
 - macOS: `cc -bundle -undefined dynamic_lookup`, `napi_register_module_v1`·`node_api_module_get_api_version_v1`만 export.
 - Linux(미검증): `cc -shared -fPIC -Wl,-Bsymbolic -Wl,--exclude-libs,ALL -Wl,--version-script=...`.
   Lean 런타임에 정적 링크된 libuv가 node 실행 파일이 export하는 libuv 심볼에 바인딩되지 않도록 한다.
-  Lean 툴체인의 정적 라이브러리(`libleanrt.a`, `libInit.a`, `libStd.a`, `libuv.a`, `libgmp.a`)가 PIC여야 한다.
+  Lean 툴체인의 정적 라이브러리(`libInit.a`, `libStd.a`, `libuv.a`; 기본 빌드는 `libleanrt.a`, `libgmp.a`도)가
+  PIC여야 한다(`libleanrt_nogmp.a`는 `-fPIC`로 컴파일).
 - Windows: 미지원(node.lib/delay-load hook과 MSVC 또는 mingw Lean 툴체인 필요).
