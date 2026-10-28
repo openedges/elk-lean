@@ -15,7 +15,8 @@ assigns `LPort.id`s in traversal order.
 elk-rs hands the `GraphInfoHolder`'s counter a `CrossMinSnapshot`/`ArenaSync` (`set_snapshot`,
 `set_arena_sync`); in Lean `setSnapshot` reaches the between-layer counting of the
 `CrossingsCounter` (see there), everything else reads the arena. The
-`ELK_TRACE` crossings breakdown output of elk-rs is not reproduced.
+`ELK_TRACE` crossings breakdown output of elk-rs is not reproduced. Like Java (`initAfterTraversal`),
+both counters share one port position array (elk-rs gave the hyperedge counter its own).
 -/
 namespace Elk.Alg.Layered.P3Order.Counting
 
@@ -23,11 +24,14 @@ open Elk.Core.Options Elk.Alg.Layered.Graph LayeredM
 
 /-- `AllCrossingsCounter`. -/
 structure AllCrossingsCounter where
-  /-- `crossingCounter` (reset to fresh positions by `initAfterTraversal`). -/
+  /-- `crossingCounter` (reset to fresh positions by `initAfterTraversal`; its position array is
+  `portPos`, shared with `hyperedgeCrossingsCounter`). -/
   crossingCounter : CrossingsCounter
   /-- `hasHyperEdgesEastOfIndex`. -/
   hasHyperEdgesEastOfIndex : IO.Ref (Array Bool)
-  /-- `hyperedgeCrossingsCounter` (own position array, as in elk-rs). -/
+  /-- `hyperedgeCrossingsCounter`: Java's `initAfterTraversal` hands it the same `portPos` array as
+  `crossingCounter`, so the in-layer counts read the positions it wrote for far ends they do not
+  number themselves (elk-rs gave it an array of its own). -/
   hyperedgeCrossingsCounter : HyperedgeCrossingsCounter
   /-- `inLayerEdgeCounts`. -/
   inLayerEdgeCounts : IO.Ref (Array Int)
@@ -42,10 +46,11 @@ namespace AllCrossingsCounter
 argument); `_graph` identifies the `LGraph` and is not needed by the counter. -/
 def new (_graph : LGraphId) (order : Array (Array LNodeId)) : LayeredM AllCrossingsCounter := do
   let length := order.size
+  let portPos ← IO.mkRef (#[] : Array Int)
   return {
-    crossingCounter := ← CrossingsCounter.ofPositions #[]
+    crossingCounter := ← CrossingsCounter.new portPos
     hasHyperEdgesEastOfIndex := ← IO.mkRef (Array.replicate length false)
-    hyperedgeCrossingsCounter := ← HyperedgeCrossingsCounter.new #[] #[] #[]
+    hyperedgeCrossingsCounter := ← HyperedgeCrossingsCounter.shared portPos
     inLayerEdgeCounts := ← IO.mkRef (Array.replicate length 0)
     hasNorthSouthPorts := ← IO.mkRef (Array.replicate length false)
     nPorts := ← IO.mkRef 0 }
@@ -118,10 +123,10 @@ private def initAtEdgeLevel (c : AllCrossingsCounter) (l n p : Nat) (edge : LEdg
       if sl == tl then c.inLayerEdgeCounts.modify (·.modify l (· + 1))
     | _, _ => pure ()
 
-/-- `initAfterTraversal`: fresh position arrays of `nPorts` entries for both counters. -/
+/-- `initAfterTraversal`: a fresh position array `portPos` of `nPorts` entries, shared by both
+counters. -/
 private def initAfterTraversal (c : AllCrossingsCounter) : LayeredM Unit := do
   let n := (← c.nPorts.get).toNat
-  c.hyperedgeCrossingsCounter.portPositions.set (Array.replicate n 0)
   c.crossingCounter.resetTo (Array.replicate n 0)
 
 /-- The `IInitializable` implementation. -/
