@@ -1,0 +1,174 @@
+{
+  "children": [
+    {
+      "height": 25,
+      "id": "n0",
+      "width": 20
+    },
+    {
+      "height": 25,
+      "id": "n1",
+      "width": 25
+    },
+    {
+      "height": 25,
+      "id": "n2",
+      "width": 30
+    },
+    {
+      "height": 25,
+      "id": "n3",
+      "width": 35
+    },
+    {
+      "height": 25,
+      "id": "n4",
+      "width": 40
+    },
+    {
+      "height": 25,
+      "id": "n5",
+      "width": 45
+    },
+    {
+      "height": 25,
+      "id": "n6",
+      "width": 50
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "labels": [
+        {
+          "height": 10,
+          "id": "e0l0",
+          "text": "label 0.0",
+          "width": 30
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "id": "e1",
+      "labels": [
+        {
+          "height": 12,
+          "id": "e1l0",
+          "text": "label 1.0",
+          "width": 26
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "id": "e2",
+      "labels": [
+        {
+          "height": 10,
+          "id": "e2l0",
+          "text": "label 2.0",
+          "width": 40
+        }
+      ],
+      "sources": [
+        "n2"
+      ],
+      "targets": [
+        "n0"
+      ]
+    },
+    {
+      "id": "e3",
+      "labels": [
+        {
+          "height": 10,
+          "id": "e3l0",
+          "text": "label 3.0",
+          "width": 18
+        }
+      ],
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ]
+    },
+    {
+      "id": "e4",
+      "labels": [
+        {
+          "height": 10,
+          "id": "e4l0",
+          "text": "label 4.0",
+          "width": 22
+        }
+      ],
+      "sources": [
+        "n4"
+      ],
+      "targets": [
+        "n5"
+      ]
+    },
+    {
+      "id": "e5",
+      "sources": [
+        "n5"
+      ],
+      "targets": [
+        "n6"
+      ]
+    },
+    {
+      "id": "e6",
+      "labels": [
+        {
+          "height": 12,
+          "id": "e6l0",
+          "text": "label 6.0",
+          "width": 34
+        }
+      ],
+      "sources": [
+        "n6"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "id": "e7",
+      "labels": [
+        {
+          "height": 15,
+          "id": "e7l0",
+          "text": "label 7.0",
+          "width": 15
+        }
+      ],
+      "sources": [
+        "n4"
+      ],
+      "targets": [
+        "n6"
+      ]
+    }
+  ],
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "force",
+    "elk.randomSeed": "7"
+  }
+}

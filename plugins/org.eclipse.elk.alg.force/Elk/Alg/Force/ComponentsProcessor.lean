@@ -18,12 +18,14 @@ node it was reached from (`last`) is its source or target. Rust quirks reproduce
   the original node index) are a permutation of the node order; only with several components the ids
   are renumbered by the node order of each component;
 * an edge can be pushed to the edge list of a component twice (e.g. the closing edge of a cycle is
-  visited from both of its end nodes) and is then copied twice.
+  visited from both of its end nodes). Java then lists the same `FEdge` twice and its `FLabel`s twice
+  (elk-rs made two independent copies): the component keeps one copy and repeats its ids, and the force
+  models and `recombine` treat repeated entries with Java's object semantics.
 
-`recombine` assigns every component the sum of its node priorities (graph option `PRIORITY`) and its
+`recombine` assigns every component the sum of its node priorities (node option `PRIORITY`) and its
 bounding box, sorts the components by priority (descending) and bounding box area (ascending, stable),
-and places them row by row left to right in a square-ish layout (`ASPECT_RATIO`, default 1.0, spacing
-`SPACING_NODE_NODE`).
+and places them row by row left to right in a square-ish layout (`ASPECT_RATIO`, force default `1.6f`,
+spacing `SPACING_NODE_NODE`, force default 80).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -150,8 +152,14 @@ private def copyLabel (src : FArena) (dest : FArena) (old : FLabelId) (eid : FEd
       labelOrigin := a.labelOrigin.set! i (src.labelOrigin[old.idx]!)
       labelText := a.labelText.set! i (src.labelText[old.idx]!) }, lid)
 
-/-- Builds the component graph of the given nodes and edges: copies of the nodes (in the given order),
-of the edges with their bend points and labels. -/
+/-- Builds the component graph of the given nodes and edges (Java `dfs`: `component.getNodes().add`,
+`component.getEdges().add(edge)`, `component.getLabels().addAll(edge.getLabels())`): copies of the nodes
+(in the given order) and of the edges with their labels. Java keeps the *objects*: an edge the search
+lists twice (the closing edge of a cycle, reached from both end nodes) is the same `FEdge` twice in
+the edge list and its labels are the same `FLabel`s twice in the label list. The copy keeps that
+identity: the second occurrence pushes the ids of the first copy again (the label then acts twice as a
+particle, accumulates its displacement twice and is moved twice by `recombine`, all like Java). Java's
+search adds no bend points to the component (the force models create them later). -/
 private def buildComponent (graph : FGraph) (compNodes : Array FNodeId) (compEdges : Array FEdgeId) : FGraph :=
   Id.run do
     let mut component : FGraph := ({} : FGraph).copyProperties graph
@@ -160,16 +168,24 @@ private def buildComponent (graph : FGraph) (compNodes : Array FNodeId) (compEdg
       let (a, nid) := copyNode graph.arena component.arena old none
       component := { component with arena := a, nodes := component.nodes.push nid }
       remap := remap.insert old.idx nid
+    let mut edgeMap : Std.HashMap Nat FEdgeId := {}
     for oldEid in compEdges do
-      let (a, newEid) := copyEdge graph.arena component.arena oldEid remap
-      component := { component with arena := a }
-      for oldBid in graph.arena.edgeBendpoints[oldEid.idx]! do
-        let (a, bid) := copyBendpoint graph.arena component.arena oldBid newEid none
-        component := { component with arena := a, bendpoints := component.bendpoints.push bid }
-      for oldLid in graph.arena.edgeLabels[oldEid.idx]! do
-        let (a, lid) := copyLabel graph.arena component.arena oldLid newEid none
-        component := { component with arena := a, labels := component.labels.push lid }
-      component := { component with edges := component.edges.push newEid }
+      match edgeMap[oldEid.idx]? with
+      | some newEid =>
+        component := { component with
+          edges := component.edges.push newEid
+          labels := component.labels ++ component.arena.edgeLabels[newEid.idx]! }
+      | none =>
+        let (a, newEid) := copyEdge graph.arena component.arena oldEid remap
+        component := { component with arena := a }
+        for oldBid in graph.arena.edgeBendpoints[oldEid.idx]! do
+          let (a, _) := copyBendpoint graph.arena component.arena oldBid newEid none
+          component := { component with arena := a }
+        for oldLid in graph.arena.edgeLabels[oldEid.idx]! do
+          let (a, lid) := copyLabel graph.arena component.arena oldLid newEid none
+          component := { component with arena := a, labels := component.labels.push lid }
+        component := { component with edges := component.edges.push newEid }
+        edgeMap := edgeMap.insert oldEid.idx newEid
     return component
 
 /-- `ComponentsProcessor::split(graph)`. -/
@@ -199,9 +215,16 @@ def split (graph : FGraph) : Array FGraph := Id.run do
 private def boundingSize (g : FGraph) : KVector :=
   (g.bbLowright.getD {}) - (g.bbUpleft.getD {})
 
-/-- `move_graph(dest, source, offset_x, offset_y)`: appends a copy of the nodes, edges, bend points and
-labels of `source` to `dest`, translated so that the upper left corner of the source's bounding box
-ends up at `(offsetX, offsetY)`. -/
+/-- `moveGraph(destGraph, sourceGraph, offsetx, offsety)`: appends the nodes, edges and labels of
+`source` to `dest`, translated by `(offsetX, offsetY) - BB_UPLEFT`. Java semantics (object lists):
+* every node is moved once and added;
+* for every entry of the edge list the bend points of the edge are moved and the edge is added, so the
+  bend points of an edge listed twice (see `buildComponent`) are moved twice; the bend points are
+  **not** added to the bend point list of `dest` (the packed graph's bounding box in `applyLayout`
+  then ignores them);
+* every entry of the label list is moved and added (a label listed twice is moved twice).
+The arena copies keep that identity: an edge or label already copied is moved again instead of
+copied again. -/
 private def moveGraph (dest source : FGraph) (offsetX offsetY : Float) : FGraph := Id.run do
   let offset := KVector.mk offsetX offsetY - (source.bbUpleft.getD {})
   let mut dest := dest
@@ -210,22 +233,33 @@ private def moveGraph (dest source : FGraph) (offsetX offsetY : Float) : FGraph 
     let (a, nid) := copyNode source.arena dest.arena old (some offset)
     dest := { dest with arena := a, nodes := dest.nodes.push nid }
     remap := remap.insert old.idx nid
+  let mut edgeMap : Std.HashMap Nat FEdgeId := {}
   for oldEid in source.edges do
-    let (a, newEid) := copyEdge source.arena dest.arena oldEid remap
-    dest := { dest with arena := a }
-    for oldBid in source.arena.edgeBendpoints[oldEid.idx]! do
-      let (a, bid) := copyBendpoint source.arena dest.arena oldBid newEid (some offset)
-      dest := { dest with arena := a, bendpoints := dest.bendpoints.push bid }
-    dest := { dest with edges := dest.edges.push newEid }
+    if !edgeMap.contains oldEid.idx then
+      let (a, newEid) := copyEdge source.arena dest.arena oldEid remap
+      dest := { dest with arena := a }
+      for oldBid in source.arena.edgeBendpoints[oldEid.idx]! do
+        let (a, _) := copyBendpoint source.arena dest.arena oldBid newEid none
+        dest := { dest with arena := a }
+      edgeMap := edgeMap.insert oldEid.idx newEid
+    let some newEid := edgeMap[oldEid.idx]? | continue
+    let mut bendPosition := dest.arena.bendPosition
+    for bid in dest.arena.edgeBendpoints[newEid.idx]! do
+      bendPosition := bendPosition.modify bid.idx (· + offset)
+    dest := { dest with arena := { dest.arena with bendPosition }, edges := dest.edges.push newEid }
+  let mut labelMap : Std.HashMap Nat FLabelId := {}
   for oldLid in source.labels do
-    -- the new edge: the copy of the label's edge among the edges just appended to `dest`
-    let newEid : Option FEdgeId := do
-      let oldE ← source.arena.labelEdge[oldLid.idx]!
-      let idx ← source.edges.findIdx? (· == oldE)
-      dest.edges[dest.edges.size - source.edges.size + idx]?
-    if let some newEid := newEid then
+    match labelMap[oldLid.idx]? with
+    | some lid =>
+      dest := { dest with
+        arena := { dest.arena with labelPosition := dest.arena.labelPosition.modify lid.idx (· + offset) }
+        labels := dest.labels.push lid }
+    | none =>
+      let some oldE := source.arena.labelEdge[oldLid.idx]! | continue
+      let some newEid := edgeMap[oldE.idx]? | continue
       let (a, lid) := copyLabel source.arena dest.arena oldLid newEid (some offset)
       dest := { dest with arena := a, labels := dest.labels.push lid }
+      labelMap := labelMap.insert oldLid.idx lid
   return dest
 
 /-- Priority, bounding box and the sort order of `recombine`: higher priority first, then smaller

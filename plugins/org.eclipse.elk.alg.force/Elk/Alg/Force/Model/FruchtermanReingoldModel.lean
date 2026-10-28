@@ -19,6 +19,18 @@ Iteration structure of one iteration (Rust order):
    `temperature / length` is added to the displacement of `v` (`d` = distance minus both radii, at
    least 0);
 3. displacements are bounded by `dispBound` and added to the positions.
+
+Java's lists hold objects (FEL): a label of an edge that `ComponentsProcessor.split` lists twice is the
+same particle at two entries of `getParticles()` (`ParticleIdentity`). Its entries share one position
+(a separation of one entry moves all), the pair loop skips the other entries (Java `u != v`), the rows
+of all entries accumulate one displacement (stored at the first entry), and the update moves it once
+(the later entries add the reset zero vector).
+
+Known deviations from Java's `calcDisplacement`, all for degenerate coordinates only (kept because the
+Java forms cost about 10% of the force layout in the inner loop): a pair whose distance underflows to
+0 exerts no force (Java divides by 0), `d` is 0 for a NaN distance (Java `Math.max(0, NaN)` is NaN),
+and the scan's same-position test is `==` (equal infinite coordinates are tested again with Java's
+`pu.x - pv.x == 0` before they are wiggled).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -115,10 +127,6 @@ private def writePositions (g : FGraph) (particles : Array FParticleId) (px py :
     for i in [0:particles.size] do
       arena := arena.setParticlePosition particles[i]! ⟨px.get! i, py.get! i⟩
     return { g with arena }
-
-/-- Stores the positions of two particles in the arena. -/
-private def setTwoPositions (g : FGraph) (a b : FParticleId) (pa pb : KVector) : FGraph :=
-  { g with arena := (g.arena.setParticlePosition a pa).setParticlePosition b pb }
 
 /-- `isBend`. -/
 private def isBend : FParticleId → Bool
@@ -245,14 +253,20 @@ row's particle: the displacement of each `vi` (accumulated from zero, the reset 
 stored in `dx`/`dy`. Returns at the first row that needs a separation, which the caller handles in
 the monad (bend points go through the arena) before resuming at the next row. -/
 private partial def forceRows (px py radii priorities : FloatArray) (connections : Array FloatArray)
-    (n : USize) (k kk kk0 temperature zero : Float) (vi : USize) (dx dy : FloatArray) : RowsResult :=
+    (first : Array USize) (n : USize) (k kk kk0 temperature zero : Float) (vi : USize)
+    (dx dy : FloatArray) : RowsResult :=
   if vi >= n then ⟨dx, dy, n, n, zero, zero⟩
   else
+    -- the displacement belongs to the particle: a repeated entry continues the sum of its first
+    -- entry (Java adds to `v.getDisplacement()`, reset after the previous iteration's update)
+    let f := first[vi.toNat]?.getD vi
+    let ax0 := if f == vi then zero else fgetU dx f zero
+    let ay0 := if f == vi then zero else fgetU dy f zero
     let r := scanForces px py radii priorities connections[vi.toNat]! n vi (fgetU px vi zero)
-      (fgetU py vi zero) (fgetU radii vi zero) k kk kk0 temperature zero 0 true zero zero
+      (fgetU py vi zero) (fgetU radii vi zero) k kk kk0 temperature zero 0 true ax0 ay0
     if r.stop >= n then
-      forceRows px py radii priorities connections n k kk kk0 temperature zero (vi + 1)
-        (fsetU dx vi r.ax) (fsetU dy vi r.ay)
+      forceRows px py radii priorities connections first n k kk kk0 temperature zero (vi + 1)
+        (fsetU dx f r.ax) (fsetU dy f r.ay)
     else ⟨dx, dy, vi, r.stop, r.ax, r.ay⟩
 
 /-- `FruchtermanReingoldModel::layout(graph, monitor)` (the flat-array version of elk-rs). -/
@@ -268,6 +282,9 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
   let radii := flat.radii
   let priorities := flat.priorities
   let connections := flat.connections
+  let ident := ParticleIdentity.ofParticles particles
+  let first := ident.first
+  let repeats := ident.hasRepeats
   let (px0, py0) := readPositions (← get) particles
   let mut px := px0
   let mut py := py0
@@ -296,7 +313,7 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
     -- arena) before the row continues with that pair; every row overwrites its displacement
     let mut vi : USize := 0
     while vi < nu do
-      let rows := forceRows px py radii priorities connections nu k kk kk0 temperature zero vi dx dy
+      let rows := forceRows px py radii priorities connections first nu k kk kk0 temperature zero vi dx dy
       dx := rows.dx
       dy := rows.dy
       if rows.vi >= nu then
@@ -308,10 +325,18 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
         let mut stopU := rows.stop
         while stopU < nu do
           let stop := stopU.toNat
+          if particles[stop]! == particles[v]! then
+            -- another entry of the same particle (Java `u != v` is object identity): no force
+            let r := scanForces px py radii priorities connections[v]! nu rows.vi
+              (px.get! v) (py.get! v) (radii.get! v) k kk kk0 temperature zero (stopU + 1) true ax ay
+            ax := r.ax
+            ay := r.ay
+            stopU := r.stop
+            continue
           if isBend particles[stop]! || isBend particles[v]! then
-            -- bend points: edge aware separation through the arena
-            modify (setTwoPositions · particles[stop]! particles[v]! ⟨px.get! stop, py.get! stop⟩
-              ⟨px.get! v, py.get! v⟩)
+            -- bend points: edge aware separation through the arena (Java reads the live positions,
+            -- so all of them are written back first)
+            modify (writePositions · particles px py)
             random ← AbstractForceModel.avoidSamePosition random particles[stop]! particles[v]!
             let pu := (← get).arena.particlePosition particles[stop]!
             let pv := (← get).arena.particlePosition particles[v]!
@@ -320,7 +345,10 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
             px := px.set! v pv.x
             py := py.set! v pv.y
           else
-            let mut separated := false
+            -- Java's loop test `pu.x - pv.x == 0 && pu.y - pv.y == 0` (false for equal infinite
+            -- coordinates, which the scan's `==` test stops at)
+            let mut separated :=
+              !(px.get! stop - px.get! v == zero && py.get! stop - py.get! v == zero)
             while !separated do
               let (nu', r1) := wiggle ⟨px.get! stop, py.get! stop⟩ random fl1p0
               let (nv, r2) := wiggle ⟨px.get! v, py.get! v⟩ r1 fl1p0
@@ -329,21 +357,43 @@ def layout (monitor : ProgressMonitor) : FM Unit := do
               py := py.set! stop nu'.y
               px := px.set! v nv.x
               py := py.set! v nv.y
-              if nu'.x != nv.x || nu'.y != nv.y then separated := true
+              if !(nu'.x - nv.x == zero && nu'.y - nv.y == zero) then separated := true
+          if repeats then
+            -- the other entries of a moved particle share its position
+            for j in ident.others stop do
+              px := px.set! j (px.get! stop)
+              py := py.set! j (py.get! stop)
+            for j in ident.others v do
+              px := px.set! j (px.get! v)
+              py := py.set! j (py.get! v)
           -- the separated pair's force is computed without a second same-position test
           let r := scanForces px py radii priorities connections[v]! nu rows.vi
             (px.get! v) (py.get! v) (radii.get! v) k kk kk0 temperature zero stopU false ax ay
           ax := r.ax
           ay := r.ay
           stopU := r.stop
-        dx := dx.set! v ax
-        dy := dy.set! v ay
+        let f := (first[v]!).toNat
+        dx := dx.set! f ax
+        dy := dy.set! f ay
         vi := rows.vi + 1
     -- apply the displacements with bounds
     for i in [0:n] do
       let bounded := (KVector.mk (dx.get! i) (dy.get! i)).bound (-dispBound) (-dispBound) dispBound dispBound
       px := px.set! i (px.get! i + bounded.x)
       py := py.set! i (py.get! i + bounded.y)
+    if repeats then
+      -- Java moves a repeated particle at its first entry and resets its displacement, so its later
+      -- entries add the zero vector: position `p + bound(d) + 0.0`, shared by all entries
+      for grp in ident.groups do
+        let f := grp[0]!
+        let mut x := px.get! f
+        let mut y := py.get! f
+        for _ in [1:grp.size] do
+          x := x + zero
+          y := y + zero
+        for j in grp do
+          px := px.set! j x
+          py := py.set! j y
   -- final write-back of the positions, displacements are reset
   modify fun g =>
     let g := writePositions g particles px py

@@ -409,3 +409,42 @@ ticket 588 오류 문구 Java와 동일. 테스트: `tests/lean/Tests/Api/Layere
   `d1/g0052` 여백 38.6 vs 51.9), self loop 라벨(`SelfLoopPostProcessor`, `v4/g0515`), `LabelSideSelector`(`v5/g0151`),
   P4 `NetworkSimplexPlacer`(`v7/g0511`)·`BKNodePlacer` 1e-14, P5 f32 굽은 점 — 간선 경로 클래스(LEDGE).
 - 비layered 자식의 크기(DEF·NML)가 부모 layered 실행으로 번진 것(`v10/g0216`·`v10/g0534`·`v2/g0186` 등).
+
+## 12. FEL: force/stress의 반복 간선·라벨(Java 객체 동일성)과 Eades 모델 (2026-10-29)
+
+### 12.1 원인과 변경(전부 ELK Java가 기준, elk-rs와는 달라짐)
+
+- **반복 간선**: `ComponentsProcessor.dfs`는 `last`에서 온 간선만 건너뛰므로 사이클을 닫는 간선이 컴포넌트의 간선 목록에
+  두 번 들어가고, 그 라벨도 `getLabels().addAll`로 두 번 들어간다. Java에서는 **같은 객체**가 두 번 나열된다. elk-rs(그리고
+  이전 Lean)는 두 개의 독립 복사본을 만들었다. Java 결과에 미치는 영향:
+  - force: 라벨 입자가 `getParticles()`에 두 번 → 다른 입자에 두 번 힘을 주고, 자기 변위는 두 번 누적된 뒤 첫 항목에서 한 번
+    이동(둘째 항목은 0 벡터를 더함). 복사본 두 개는 서로 같은 위치에서 `avoidSamePosition`으로 흔들려 난수열까지 달라졌다
+    (예: `s1/g0392` 라벨 x 0.05 차이, `v2/g0075` 노드 1 ulp).
+  - `REPULSIVE_POWER`: `initialize`가 간선 목록을 돌며 굽은 점을 만들므로 반복 간선은 굽은 점이 두 배(한 간선에 고르게 분배).
+  - `recombine.moveGraph`: 간선 목록 항목마다 그 간선의 굽은 점을, 라벨 목록 항목마다 라벨을 옮기므로 반복 라벨·굽은 점은
+    **두 번 이동**한다(여러 컴포넌트일 때 라벨이 크게 어긋나던 force/stress 차이의 대부분, 예 `v1/g0292` 1458 vs 2794).
+    또 굽은 점은 결과 그래프의 굽은 점 목록에 추가되지 않아 `applyLayout`의 경계 상자에서 빠진다.
+  - Lean: `buildComponent`/`moveGraph`는 복사본 하나를 두고 id를 반복(`edges`·`labels`), `ParticleIdentity`(첫 항목·그룹)로
+    FR 평면 루프와 일반 루프가 Java의 객체 의미(자기 자신의 다른 항목 건너뛰기, 변위는 첫 항목에 누적, 이동 후 위치 공유)를 따른다.
+- **Eades 모델**(`elk.force.model = EADES`): Java `calcDisplacement`는 매 쌍마다 `avoidSamePosition`을 부른다(elk-rs는 생략 —
+  같은 위치의 입자는 힘이 없고 난수도 안 씀). 일반 `layout`을 Java 순서로 이식(같은 위치일 때만 모나드 분리, 나머지는 순수 스캔).
+  `Math.log`는 기준 JVM(aarch64 HotSpot)에서 `StrictMath.log`(fdlibm)와 같고 C 라이브러리 `log`와는 약 1%의 인자에서 1 ulp
+  다르다 → `Elk.Core.Util.Java.javaLog`(fdlibm `__ieee754_log` 이식, Java 값 200,000개 전부 일치).
+- `avoidSamePosition`: Java 루프 조건 `pu.x - pv.x == 0 && ...`, 길이 0 간선의 직교 벡터는 NaN(elk-rs는 무한 루프).
+- 남긴 편차(퇴화 좌표만, FR 내부 루프에서 Java 형태가 약 10% 느려 유지): 거리가 0으로 언더플로하는 쌍, NaN 거리의 `Math.max`,
+  무한 좌표의 같은 위치 검사(분리 직전에 Java 조건으로 다시 검사).
+
+### 12.2 결과(R6 병합본 `23059ea`의 Java 기준값 재사용)
+
+| 집합 | 정확 일치 전 → 후 | force/stress 클래스 전 → 후 |
+|---|---:|---|
+| s(시드 1~10) | 1,177 → 1,180 / 1,205 | DEF:force 2 → 0, POS:stress 1 → 0 |
+| v(시드 1~10) | 5,090 → **5,287** / 5,761 | DEF:force 100 → 0, POS:stress 100 → 0, NML:force/stress 2 → 0 |
+| d(시드 1~10) | 5,090 → 5,287 / 5,761 | POS:force 101 → 0, POS:stress 100 → 0, NML 2 → 0 |
+| o(시드 1~3 × 400) | 886 → 899 / 1,048 | force/stress의 1e-6 일치 13 → 정확 일치 13(Eades `log`) |
+
+정확 → 비정확 0, 바뀐 Lean 출력 212(v/s)·13(o)는 전부 force/stress를 쓰는 입력이고 그중 force/stress 단위는 모두 Java와 같다
+(12개는 다른 알고리즘의 기존 차이 — mrtree 경로·layered·rectpacking — 가 남음). 코퍼스 Lean 출력 1,447개·합성 26개 바이트
+동일, Java 코퍼스 1878/119(집합 동일), elk-rs model 1447/1447. 테스트: `force.fixtures.java`(+ `tests/fixtures/force/java/`
+입력 10개와 Java 출력), `force.import`의 반복 간선 검사, `core.util.java`의 `javaLog`(Java 값 48개 + 특수값); force/force_enum
+기대값 12개를 Java와 정확히 같은 값으로 재고정(`opt_java_status.tsv`의 java_differs 3·java_equal 7 → java_exact).

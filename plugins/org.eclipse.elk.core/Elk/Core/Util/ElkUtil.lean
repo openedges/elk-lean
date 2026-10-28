@@ -712,12 +712,17 @@ def translateNodeWithSizes (parent : NodeId) (newSize oldSize : KVector) : ElkM 
   modify (Pure.translateNodeWithSizes · parent newSize oldSize)
 
 /-- `ElkUtil.applyVectorChain(vectorChain, section)`; throws `IllegalArgumentException` for
-chains with fewer than two points. -/
+chains with fewer than two points. The section update of `Pure.applyVectorChain`, applied directly:
+matching on its `Except` result kept the old graph alive for the (unreachable) error branch, so
+every call copied the graph's section array (quadratic in the number of edges). -/
 def applyVectorChain (chain : KVectorChain) (s : SectionId) : ElkM Unit := do
   if chain.size < 2 then throwIllegalArgument vectorChainTooShortMessage
-  modify fun g => match Pure.applyVectorChain g chain s with
-    | .ok g => g
-    | .error _ => g
+  let first := chain[0]!
+  let last := chain[chain.size - 1]!
+  ElkM.modifySection s fun sec =>
+    { sec with startX := first.x, startY := first.y,
+               bendPoints := chain.extract 1 (chain.size - 1),
+               endX := last.x, endY := last.y }
 
 /-- `ElkUtil.configureWithDefaultValues(element)`. -/
 def configureWithDefaultValues (el : ElementId) : ElkM Unit := do

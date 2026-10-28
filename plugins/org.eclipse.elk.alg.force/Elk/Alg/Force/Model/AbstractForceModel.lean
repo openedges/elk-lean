@@ -1,3 +1,4 @@
+import Std.Data.HashMap
 import Elk.Graph
 import Elk.Core.Math.KVector
 import Elk.Core.Util.Random
@@ -14,11 +15,12 @@ default `layout`) becomes the strategy record `ForceModel` with the generic `lay
 the model specific state `σ` is threaded explicitly. `AbstractForceModel` itself keeps the random
 generator and the displacement bound.
 
-Iteration order of the generic `layout` (identical to Rust): for every particle `v` (nodes, labels,
-bend points of the graph lists) and every other particle `u` the displacement `calc_displacement(u, v)`
-is added to the displacement of `v`; all positions are updated afterwards, so the pairwise forces of
-one iteration are computed from the positions at the start of the iteration. The accumulation therefore
-happens in a local array (starting from the arena displacement, which is zero).
+Iteration order of the generic `layout` (Java `AbstractForceModel.layout`, used by the Eades model):
+for every particle `v` (nodes, labels, bend points of the graph lists) and every other particle `u`,
+`avoidSamePosition(u, v)` separates the two if they share a position (elk-rs skipped this) and the
+displacement `calcDisplacement(u, v)` is added to the displacement of `v`; all positions are updated
+afterwards. The accumulation happens in a local array indexed by the first entry of each particle
+(`ParticleIdentity`: a label listed twice is one Java object, see `ComponentsProcessor`).
 
 `wiggle` delegates to `Elk.Core.Math.KVector.wiggle` (Rust/Java rounding `x + (r * a - a / 2)`).
 -/
@@ -94,14 +96,16 @@ def iterationDone : FM Unit := do
 
 /-- `AbstractForceModel::avoid_same_position(random, graph, u, v)`: while `u` and `v` have the same
 position, moves them apart. Two bend points of (different) edges are moved by the orthogonal vectors
-of their edges; any other pair is wiggled randomly. Like in Rust this loops forever if the bend point
-branch cannot separate the particles (zero-length edges). -/
+of their edges; any other pair is wiggled randomly. Java semantics: the loop test is
+`pu.x - pv.x == 0 && pu.y - pv.y == 0` and the orthogonal vectors divide by the edge length unguarded,
+so a zero-length edge yields NaN coordinates and ends the loop (elk-rs looped forever there). -/
 partial def avoidSamePosition (random : Random) (u v : FParticleId) : FM Random := do
   let mut random := random
   while true do
     let pu := (← get).arena.particlePosition u
     let pv := (← get).arena.particlePosition v
-    if pu.x != pv.x || pu.y != pv.y then return random
+    -- Java `while (pu.x - pv.x == 0 && pu.y - pv.y == 0)` (infinite or NaN coordinates end the loop)
+    if !(pu.x - pv.x == fl0p0 && pu.y - pv.y == fl0p0) then return random
     let mut triedForBendpoints := false
     if let (.bend b1, .bend b2) := (u, v) then
       let uEdge := (← get).arena.bendEdge[b1.idx]!
@@ -114,16 +118,12 @@ partial def avoidSamePosition (random : Random) (u v : FParticleId) : FM Random 
         let vTarget := g.edgeTargetPoint vEid
         let (some us, some ut, some vs, some vt) := (uSource, uTarget, vSource, vTarget)
           | return random
+        -- Java divides by the edge length unguarded: a zero-length edge gives NaN coordinates,
+        -- which end the loop (elk-rs skipped the move and looped forever)
         let uVec := KVector.fromPoints us ut
-        let orthogonalU : KVector :=
-          if uVec.length > fl0p0 then
-            ⟨(uVec.x / uVec.length) * fl2p0, (-(uVec.y / uVec.length)) * fl2p0⟩
-          else {}
+        let orthogonalU : KVector := ⟨uVec.x / uVec.length * fl2p0, -uVec.y / uVec.length * fl2p0⟩
         let vVec := KVector.fromPoints vs vt
-        let orthogonalV : KVector :=
-          if vVec.length > fl0p0 then
-            ⟨(vVec.x / vVec.length) * fl2p0, (-(vVec.y / vVec.length)) * fl2p0⟩
-          else {}
+        let orthogonalV : KVector := ⟨vVec.x / vVec.length * fl2p0, -(vVec.y / vVec.length) * fl2p0⟩
         let moved := (pu + orthogonalU) + orthogonalV
         modify fun g => { g with arena := g.arena.setParticlePosition u moved }
         triedForBendpoints := true
@@ -136,6 +136,67 @@ partial def avoidSamePosition (random : Random) (u v : FParticleId) : FM Random 
 
 end AbstractForceModel
 
+/-- Java object identity of the entries of a particle list. Java's lists hold objects: a label whose
+edge is listed twice in a component (see `ComponentsProcessor.buildComponent`) is the same `FLabel`
+twice in `getParticles()`. `first[i]` is the index of the first entry of the particle at `i` (nodes
+and bend points are never repeated, so `first[i] = i` for them); `groups` lists the entries of every
+repeated particle (first entry first) and `groupOf[i]` is the group of entry `i` (`groups.size` for an
+entry that is not repeated). -/
+structure ParticleIdentity where
+  first : Array USize
+  groupOf : Array Nat
+  groups : Array (Array Nat)
+  deriving Inhabited
+
+namespace ParticleIdentity
+
+/-- The identity table of a particle list (`FGraph.particleIds`). -/
+def ofParticles (particles : Array FParticleId) : ParticleIdentity := Id.run do
+  let n := particles.size
+  let mut first : Array USize := Array.mkEmpty n
+  let mut seen : Std.HashMap Nat Nat := {}
+  let mut repeated : Array Nat := #[]
+  for i in [0:n] do
+    match particles[i]! with
+    | .label l =>
+      match seen[l.idx]? with
+      | some f =>
+        first := first.push f.toUSize
+        repeated := repeated.push i
+      | none =>
+        seen := seen.insert l.idx i
+        first := first.push i.toUSize
+    | _ => first := first.push i.toUSize
+  if repeated.isEmpty then
+    return { first, groupOf := #[], groups := #[] }
+  let mut groupOf : Array Nat := Array.replicate n n
+  let mut groups : Array (Array Nat) := #[]
+  for i in repeated do
+    let f := (first[i]!).toNat
+    let gi := groupOf[f]!
+    if gi < groups.size then
+      groups := groups.modify gi (·.push i)
+      groupOf := groupOf.set! i gi
+    else
+      groupOf := (groupOf.set! f groups.size).set! i groups.size
+      groups := groups.push #[f, i]
+  -- `n` marks the entries without repetition
+  groupOf := groupOf.map fun g => if g == n then groups.size else g
+  return { first, groupOf, groups }
+
+/-- Whether some particle is listed more than once. -/
+@[inline] def hasRepeats (t : ParticleIdentity) : Bool := !t.groups.isEmpty
+
+/-- The other entries of the particle at entry `i` (empty if it is listed once). -/
+@[inline] def others (t : ParticleIdentity) (i : Nat) : Array Nat :=
+  match t.groupOf[i]? with
+  | some g => match t.groups[g]? with
+    | some es => es.filter (· != i)
+    | none => #[]
+  | none => #[]
+
+end ParticleIdentity
+
 /-- The Rust trait `ForceModel`: what a concrete model contributes to the generic `layout`. `σ` is the
 model state (`max_iterations`, `temperature`, ...). -/
 structure ForceModel (σ : Type) where
@@ -143,53 +204,79 @@ structure ForceModel (σ : Type) where
   initializeModel : FGraph → σ
   /-- `more_iterations(count)`. -/
   moreIterations : σ → Int → Bool
-  /-- `calc_displacement(graph, forcer, forcee)`: the displacement `forcer` causes on `forcee`. -/
+  /-- `calcDisplacement(forcer, forcee)` after `avoidSamePosition`: the displacement `forcer` causes on
+  `forcee` (`none` = Java `null`, no displacement). -/
   calcDisplacement : σ → FGraph → FParticleId → FParticleId → Option KVector
   /-- `iteration_done()` (default: nothing). -/
   iterationDone : σ → σ := id
 
 namespace ForceModel
 
-/-- Displacement of every particle caused by all other particles (the pair loops of `layout`). -/
-private def pairDisplacements {σ : Type} (model : ForceModel σ) (st : σ) (g : FGraph)
-    (particles : Array FParticleId) : Array KVector := Id.run do
-  let n := particles.size
-  let mut disp : Array KVector := particles.map g.arena.particleDisplacement
-  for vi in [0:n] do
-    let v := particles[vi]!
-    for ui in [0:n] do
-      let u := particles[ui]!
-      if u == v then continue
-      match model.calcDisplacement st g u v with
-      | some d => disp := disp.modify vi (· + d)
-      | none => pure ()
-  return disp
+/-- The pair loop of particle `v` (entry `vi`) from entry `ui` on, with the graph unchanged:
+`calcDisplacement(u, v)` of every other particle `u` is added to `acc` in list order. Stops at the
+first `u` that shares the position of `v` (Java's `avoidSamePosition` test
+`pu.x - pv.x == 0 && pu.y - pv.y == 0`), which the caller separates in the monad; returns the sum
+and that entry (`particles.size` when the row is done). -/
+private partial def scanRow {σ : Type} (model : ForceModel σ) (st : σ) (g : FGraph)
+    (particles : Array FParticleId) (v : FParticleId) (ui : Nat) (acc : KVector) : KVector × Nat :=
+  if h : ui < particles.size then
+    let u := particles[ui]
+    if u == v then scanRow model st g particles v (ui + 1) acc
+    else
+      let pu := g.arena.particlePosition u
+      let pv := g.arena.particlePosition v
+      if pu.x - pv.x == 0.0 && pu.y - pv.y == 0.0 then (acc, ui)
+      else
+        let acc := match model.calcDisplacement st g u v with
+          | some d => acc + d
+          | none => acc
+        scanRow model st g particles v (ui + 1) acc
+  else (acc, particles.size)
 
-/-- Applies the bounded displacements to the particle positions and resets the displacements. -/
-private def applyDisplacements (g : FGraph) (particles : Array FParticleId) (disp : Array KVector)
-    (dispBound : Float) : FGraph := Id.run do
-  let mut arena := g.arena
-  for vi in [0:particles.size] do
-    let v := particles[vi]!
-    let bounded := (disp[vi]!).bound (-dispBound) (-dispBound) dispBound dispBound
-    arena := arena.setParticlePosition v (arena.particlePosition v + bounded)
-    arena := arena.setParticleDisplacement v {}
-  return { g with arena }
-
-/-- `ForceModel::layout(graph, monitor)`: the generic force layout loop. -/
+/-- `AbstractForceModel.layout(fgraph, monitor)`: the generic force layout loop of Java. Every
+iteration calls `iterationDone`, then for every particle `v` of `getParticles()` and every other
+particle `u` (object identity: repeated entries of `v` itself are skipped) separates the two if they
+share a position (`avoidSamePosition`, which may move them and advances the random generator) and adds
+`calcDisplacement(u, v)` to the displacement of `v`; afterwards every entry's displacement is bounded,
+added to its position and reset. The displacement belongs to the particle, so a particle listed twice
+accumulates both passes and moves once (its second entry adds the reset zero vector). -/
 def layout {σ : Type} (model : ForceModel σ) (monitor : ProgressMonitor) : FM Unit := do
   let _ ← monitor.begin "Component Layout" 1.0
   let base ← AbstractForceModel.initializeBase
-  AbstractForceModel.storeRandom base.random
+  let mut random := base.random
   let mut st := model.initializeModel (← get)
+  let particles := (← get).particleIds
+  let ident := ParticleIdentity.ofParticles particles
+  let n := particles.size
+  let zero : KVector := {}
   let mut iterations : Int := 0
   while model.moreIterations st iterations && !(← monitor.isCanceled) do
     AbstractForceModel.iterationDone
     st := model.iterationDone st
-    let particles := (← get).particleIds
-    let disp := pairDisplacements model st (← get) particles
-    modify (applyDisplacements · particles disp base.dispBound)
+    let mut disp : Array KVector := Array.replicate n zero
+    for vi in [0:n] do
+      let v := particles[vi]!
+      let slot := (ident.first[vi]!).toNat
+      let mut acc := disp[slot]!
+      let mut ui := 0
+      while ui < n do
+        let (acc', stop) := scanRow model st (← get) particles v ui acc
+        acc := acc'
+        if stop >= n then break
+        -- `u` shares the position of `v`: separate them, then the pair's displacement
+        let u := particles[stop]!
+        random ← AbstractForceModel.avoidSamePosition random u v
+        if let some d := model.calcDisplacement st (← get) u v then acc := acc + d
+        ui := stop + 1
+      disp := disp.set! slot acc
+    for vi in [0:n] do
+      let v := particles[vi]!
+      let slot := (ident.first[vi]!).toNat
+      let bounded := (disp[slot]!).bound (-base.dispBound) (-base.dispBound) base.dispBound base.dispBound
+      modify fun g => { g with arena := g.arena.setParticlePosition v (g.arena.particlePosition v + bounded) }
+      disp := disp.set! slot zero
     iterations := iterations + 1
+  AbstractForceModel.storeRandom random
   monitor.done
 
 end ForceModel
