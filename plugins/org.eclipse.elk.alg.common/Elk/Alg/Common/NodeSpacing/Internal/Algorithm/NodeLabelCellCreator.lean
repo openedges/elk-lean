@@ -169,13 +169,21 @@ def handleNodeLabel (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (l
 
 /-- `NodeLabelCellCreator.createNodeLabelCells(nodeContext, onlyInside, horizontalLayoutMode)`
 (elk-rs `create_node_label_cells`): creates the node label containers, then handles the node's
-labels in label order. `horizontalLayoutMode` is the layout mode of new label cells. -/
+labels in label order. `horizontalLayoutMode` is the layout mode of new label cells.
+
+A node without labels and without `NODE_LABELS` size constraints gets no outside containers (no
+Java counterpart): they would stay empty, and empty outside containers are only read for label
+placement (skipped without labels), for the `NODE_LABELS` size contributions (no slot cells) and
+for the `NODE_LABELS` node size (excluded); everything else already treats a missing outside
+container like an empty one. -/
 def createNodeLabelCells (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L)
     (onlyInside horizontalLayoutMode : Bool) : m (NodeContext N P L) := do
+  let labels ← a.nodeLabels ctx.node
+  let noOutsideContainers := labels.isEmpty && !ctx.sizeConstraints.contains .nodeLabels
   -- Make sure all the relevant containers exist
-  let mut ctx := createNodeLabelCellContainers ctx onlyInside
+  let mut ctx := createNodeLabelCellContainers ctx (onlyInside || noOutsideContainers)
   -- Handle each of the node's labels
-  for label in (← a.nodeLabels ctx.node) do
+  for label in labels do
     ctx ← handleNodeLabel a ctx label onlyInside horizontalLayoutMode
   return ctx
 
