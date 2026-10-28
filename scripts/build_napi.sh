@@ -7,16 +7,20 @@
 # usage: sh scripts/build_napi.sh [--skip-ffi] [--copy-to-npm]
 #   --skip-ffi     reuse the existing libelklean.a instead of running scripts/build_ffi.sh
 #   --copy-to-npm  also copy the addon, LICENSE and NOTICE into plugins/org.eclipse.elk.js/npm/<triple>/
+#                  (the published platform package: requires the no-GMP runtime, ELK_NO_GMP=1)
 # env:
 #   NODE              node binary whose headers are used (default: `node` on PATH, then `mise which node`)
 #   NODE_INCLUDE_DIR  directory holding node_api.h (default: <node prefix>/include/node)
 #   CC                C compiler (default: cc)
+#   ELK_NO_GMP=1      passed on to scripts/build_ffi.sh: link the Lean runtime rebuilt without GMP
+#                     (docs/gmp-licensing.md); with --skip-ffi the runtime recorded by the last
+#                     build_ffi.sh run (.lake/build/ffi/runtime) is used, and must then be `nogmp`
 #
 # Platforms:
 #   macOS:  cc -bundle -undefined dynamic_lookup (napi_* resolve against the node binary at load time);
 #           only napi_register_module_v1 / node_api_module_get_api_version_v1 are exported.
 #   Linux:  cc -shared -fPIC -Wl,-Bsymbolic -Wl,--exclude-libs,ALL -Wl,--version-script=<napi only>
-#           -Bsymbolic/--exclude-libs keep the statically linked libuv/gmp of the Lean runtime from
+#           -Bsymbolic/--exclude-libs keep the statically linked libuv (and gmp) of the Lean runtime from
 #           binding to the libuv symbols that the node executable exports (not tested here).
 #   Windows: not supported yet (needs node.lib / delay-load hook and a MSVC or mingw Lean toolchain).
 set -eu
@@ -39,6 +43,11 @@ if [ "$SKIP_FFI" = 0 ]; then
   sh scripts/build_ffi.sh
 fi
 [ -f "$FFI/libelklean.a" ] || { echo "missing $FFI/libelklean.a (run scripts/build_ffi.sh)" >&2; exit 1; }
+RUNTIME=$(cat "$FFI/runtime" 2>/dev/null || echo gmp)
+if [ "${ELK_NO_GMP:-0}" = 1 ] && [ "$RUNTIME" != nogmp ]; then
+  echo "ELK_NO_GMP=1 but $FFI was built with the GMP runtime (rerun ELK_NO_GMP=1 sh scripts/build_ffi.sh)" >&2
+  exit 1
+fi
 
 # node headers
 if [ -z "${NODE_INCLUDE_DIR:-}" ]; then
@@ -84,6 +93,12 @@ CFLAGS="-O2 -DNDEBUG -fPIC -std=c11 -Wall -Wextra -Werror -I $NODE_INCLUDE_DIR -
 # shellcheck disable=SC2086
 $CC $CFLAGS -c plugins/org.eclipse.elk.napi/src/elk_napi.c -o "$OBJ_DIR/elk_napi.o"
 LDFLAGS=$(cat "$FFI/ldflags")
+# before stripping: the GMP symbols linked into the addon are local ones
+check_no_gmp() {
+  if [ "$RUNTIME" = nogmp ] && nm "$OUT" 2>/dev/null | grep -q '__gmp'; then
+    echo "error: $OUT contains GMP symbols" >&2; exit 1
+  fi
+}
 case "$OS" in
   Darwin)
     # shellcheck disable=SC2086
@@ -91,6 +106,7 @@ case "$OS" in
       -Wl,-exported_symbol,_napi_register_module_v1 \
       -Wl,-exported_symbol,_node_api_module_get_api_version_v1 \
       "$OBJ_DIR/elk_napi.o" "$FFI/libelklean.a" $LDFLAGS -o "$OUT"
+    check_no_gmp
     strip -x "$OUT"
     ;;
   Linux)
@@ -98,11 +114,16 @@ case "$OS" in
     # shellcheck disable=SC2086
     $CC -shared -fPIC -Wl,-Bsymbolic -Wl,--exclude-libs,ALL -Wl,--version-script="$OBJ_DIR/exports.map" \
       "$OBJ_DIR/elk_napi.o" "$FFI/libelklean.a" $LDFLAGS -o "$OUT"
+    check_no_gmp
     strip --strip-unneeded "$OUT"
     ;;
 esac
-echo "built $OUT ($(wc -c < "$OUT" | tr -d ' ') bytes, node headers: $NODE_INCLUDE_DIR)"
+echo "built $OUT ($(wc -c < "$OUT" | tr -d ' ') bytes, Lean runtime: $RUNTIME, node headers: $NODE_INCLUDE_DIR)"
 if [ "$COPY_NPM" = 1 ]; then
+  if [ "$RUNTIME" != nogmp ]; then
+    echo "--copy-to-npm: the addon links GMP (LGPL v3); build the npm addon with ELK_NO_GMP=1 (docs/gmp-licensing.md)" >&2
+    exit 1
+  fi
   NPM_DIR="$HERE/plugins/org.eclipse.elk.js/npm/$TRIPLE"
   [ -d "$NPM_DIR" ] || { echo "no platform package template $NPM_DIR" >&2; exit 1; }
   cp "$OUT" "$NPM_DIR/"

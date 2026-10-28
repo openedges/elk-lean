@@ -10,6 +10,7 @@
 | `make_json_manifest.py` | Input manifest from the corpus `.json` models |
 | `merge_parity_manifests.py` | Joins the oracle and elk-lean batch manifests for the comparison script |
 | `build_wasm.sh` | WebAssembly build (emscripten) into `plugins/org.eclipse.elk.wasm/dist/`; see that plugin's README |
+| `build_runtime_nogmp.sh` | Native Lean runtime rebuilt without GMP (`libleanrt_nogmp.a`), `--check` big-number differential test, `--relink elk` GMP-free CLI; used by `build_ffi.sh`/`build_napi.sh` with `ELK_NO_GMP=1` (see `docs/gmp-licensing.md`) |
 
 Environment knobs: `ELK_RS_DIR` (default `../elk-rs`), `ORACLE_TARGET_DIR`,
 `ORACLE_RUNNER`.
