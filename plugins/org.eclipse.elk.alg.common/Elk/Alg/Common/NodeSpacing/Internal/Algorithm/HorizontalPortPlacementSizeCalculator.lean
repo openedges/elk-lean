@@ -14,13 +14,13 @@ Inside port label cells: Java has one `AtomicCell` per side, shared by
 elk-rs holds two copies and updates both; in the Lean arena both refer to the same cell, which
 is updated once (`updateInsidePortLabelCells`).
 
+`minSizeRequiredToRespectSpacing` treats ratios as equal like Java's `DoubleMath.fuzzyEquals`
+(difference at most `EQUALITY_TOLERANCE`; elk-rs requires a difference strictly below it).
+
 Deviations from Java (following elk-rs):
 * `FIXED_RATIO` reads `PortContext.portRatioOrPosition` (elk-rs never sets it: `0.0`) instead of
   the port's `PORT_RATIO_OR_POSITION` property, and sets up the port margins once before the
   loop (Java calls `setupPortMargins` once per port).
-* `minSizeRequiredToRespectSpacing` treats ratios as equal if they differ by *less than*
-  `EQUALITY_TOLERANCE` (Java's `DoubleMath.fuzzyEquals` also accepts a difference of exactly
-  the tolerance).
 * `Math.max` is `f64::max` (`fmax`).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
@@ -85,7 +85,9 @@ private def calculateHorizontalNodeSizeRequiredByFixedPosPorts (ctx : NodeContex
 satisfies the given spacing between the two ratios multiplied by that width (`0` if the ratios
 are (nearly) equal). -/
 def minSizeRequiredToRespectSpacing (spacing firstRatio secondRatio : Float) : Float :=
-  if (firstRatio - secondRatio).abs < EQUALITY_TOLERANCE then fl0p0
+  -- Guava `DoubleMath.fuzzyEquals(a, b, tol)`: `|a - b| <= tol || a == b || (isNaN a && isNaN b)`
+  if (firstRatio - secondRatio).abs ≤ EQUALITY_TOLERANCE || firstRatio == secondRatio
+      || (firstRatio.isNaN && secondRatio.isNaN) then fl0p0
   else spacing / (secondRatio - firstRatio)
 
 /-! ### Port margins -/

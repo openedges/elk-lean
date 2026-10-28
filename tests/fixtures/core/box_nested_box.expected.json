@@ -6,46 +6,46 @@
           "height": 60,
           "id": "n0_0",
           "width": 35,
-          "x": 12,
-          "y": 62
+          "x": 15,
+          "y": 60
         },
         {
           "height": 30,
           "id": "n0_1",
           "width": 20,
-          "x": 67,
-          "y": 12
+          "x": 65,
+          "y": 15
         },
         {
           "height": 10,
           "id": "n0_2",
           "width": 35,
-          "x": 12,
-          "y": 12
+          "x": 15,
+          "y": 15
         }
       ],
-      "height": 134,
+      "height": 135,
       "id": "n0",
       "layoutOptions": {
         "elk.algorithm": "box"
       },
-      "width": 99,
-      "x": 206,
-      "y": 151
+      "width": 100,
+      "x": 200,
+      "y": 150
     },
     {
       "height": 30,
       "id": "n1",
       "width": 80,
-      "x": 12,
-      "y": 450
+      "x": 15,
+      "y": 435
     },
     {
       "height": 15,
       "id": "n2",
       "width": 80,
-      "x": 112,
-      "y": 405
+      "x": 110,
+      "y": 390
     },
     {
       "children": [
@@ -53,46 +53,46 @@
           "height": 30,
           "id": "n3_0",
           "width": 80,
-          "x": 82,
-          "y": 12
+          "x": 80,
+          "y": 15
         },
         {
           "height": 30,
           "id": "n3_1",
           "width": 50,
-          "x": 12,
-          "y": 12
+          "x": 15,
+          "y": 15
         },
         {
           "height": 45,
           "id": "n3_2",
           "width": 120,
-          "x": 12,
-          "y": 62
+          "x": 15,
+          "y": 60
         }
       ],
-      "height": 119,
+      "height": 120,
       "id": "n3",
       "layoutOptions": {
         "elk.algorithm": "box"
       },
-      "width": 174,
-      "x": 12,
-      "y": 12
+      "width": 175,
+      "x": 15,
+      "y": 15
     },
     {
       "height": 45,
       "id": "n4",
       "width": 35,
-      "x": 112,
-      "y": 340
+      "x": 110,
+      "y": 330
     },
     {
       "height": 45,
       "id": "n5",
       "width": 80,
-      "x": 12,
-      "y": 305
+      "x": 15,
+      "y": 300
     },
     {
       "children": [
@@ -100,55 +100,55 @@
           "height": 15,
           "id": "n6_0",
           "width": 20,
-          "x": 12,
-          "y": 12
+          "x": 15,
+          "y": 15
         },
         {
           "height": 45,
           "id": "n6_1",
           "width": 10,
-          "x": 52,
-          "y": 12
+          "x": 50,
+          "y": 15
         },
         {
           "height": 60,
           "id": "n6_2",
           "width": 80,
-          "x": 82,
-          "y": 12
+          "x": 75,
+          "y": 15
         }
       ],
-      "height": 84,
+      "height": 90,
       "id": "n6",
       "layoutOptions": {
         "elk.algorithm": "box"
       },
-      "width": 174,
-      "x": 12,
-      "y": 151
+      "width": 170,
+      "x": 15,
+      "y": 150
     },
     {
       "height": 60,
       "id": "n7",
       "width": 50,
-      "x": 12,
-      "y": 370
+      "x": 15,
+      "y": 360
     },
     {
       "height": 15,
       "id": "n8",
       "width": 120,
-      "x": 112,
-      "y": 305
+      "x": 110,
+      "y": 300
     }
   ],
-  "height": 492,
+  "height": 480,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "box",
     "elk.box.packingMode": "GROUP_DEC"
   },
-  "width": 317,
+  "width": 315,
   "x": 0,
   "y": 0
 }

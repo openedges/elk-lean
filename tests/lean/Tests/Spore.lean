@@ -18,7 +18,10 @@ import Elk.Alg.Spore
 
 Not testable against elk-rs: `sporeCompaction` with `underlyingLayoutAlgorithm = sporeOverlap` (and
 the converse) recurses forever in elk-rs and Java (the underlying option is read from the very
-same graph again). -/
+same graph again). 
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `co_under_box`, `ov_under_box` are elk-lean outputs since RJ1 (the underlying box layout uses Java's box defaults; both still differ from ELK Java).
+-/
 namespace Tests.Spore
 
 open Tests Elk Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Data Elk.Core.Alg

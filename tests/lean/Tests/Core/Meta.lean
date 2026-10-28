@@ -288,7 +288,8 @@ def algorithms : Suite := suite "core.meta.algorithms" do
   checkEq "box description" box.description "Algorithm for packing of unconnected boxes, i.e. graphs without edges."
   checkEq "box preview image" box.previewImagePath (some "images/box_layout.png")
   checkEq "box known option count" box.knownOptions.size 11
-  check "box aspect ratio 1.3" (isDouble (box.defaultValueRaw "org.eclipse.elk.aspectRatio") 1.3)
+  check "Java: box aspect ratio 1.3f (= 1.2999999523162842)"
+    (isDouble (box.defaultValueRaw "org.eclipse.elk.aspectRatio") 1.2999999523162842)
   check "box priority 0" (isInt (box.defaultValueRaw "org.eclipse.elk.priority") 0)
   check "box knows packing mode" (box.knowsOption "org.eclipse.elk.box.packingMode")
   check "box knows contentAlignment" (box.knowsOption "org.eclipse.elk.contentAlignment")

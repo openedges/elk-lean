@@ -56,3 +56,13 @@ ORACLE_RUNNER=<scratch>/target/release/model_parity_layout_runner sh scripts/ora
 Notes on the oracle behaviour that the fixtures pin down: the `polyomino.*` sort and traversal
 options never reach the packer (the `Polyominoes` holder has no properties, so `PolyominoCompactor`
 always uses the defaults); only `polyomino.fill` and `aspectRatio` are read from the graph.
+
+## RJ1: re-pinned outputs
+
+Since RJ1 (node micro layout on Java's cell system, box/fixed option defaults of ELK Java) the
+expected files of `box_components`, `external_ports` and `rand_10`, `rand_13`, `rand_17`,
+`rand_19`, `rand_20`, `rand_23`, `rand_24`, `rand_27`, `rand_33`, `rand_34`, `rand_35` are elk-lean
+outputs, no longer elk-rs ones. They were checked against ELK Java 0.12.0 where Java lays them out:
+`rand_20` differs only in the graph size, the others still differ from Java (DisCo itself;
+`external_ports`, `rand_17`, `rand_23`, `rand_27`, `rand_33`, `rand_34`: Java throws a
+`NullPointerException`).

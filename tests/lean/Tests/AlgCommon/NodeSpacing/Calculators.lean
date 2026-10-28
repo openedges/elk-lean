@@ -173,8 +173,11 @@ def processTests : Suite := suite "alg.common.nodespacing.NodeLabelAndSizeCalcul
   checkVec "hand: inside top-center label at the padded top-left of its 30-wide cell" (labelPos g1 inside) 5.0 5.0
   checkVec "hand: outside bottom-center label below the node + label-node spacing, centered"
     (labelPos g1 outside) 10.0 35.0
-  check "oracle: COMPUTE_PADDING is discarded by process (no PADDING set)"
-    (!(g1.node n).props.has CoreOptions.PADDING)
+  -- Java `setNodePadding`: node rectangle (0, 0, 40, 30) minus the client area (the inside label
+  -- grid's center cell, x 5..35); elk-rs discards the computed padding
+  let padding := (g1.node n).props.get? CoreOptions.PADDING
+  check "Java: COMPUTE_PADDING sets PADDING (left 5, right 5)"
+    (match padding with | some p => p.left == 5.0 && p.right == 5.0 | none => false)
   -- applyStuff = false: same size, nothing applied
   let (size0, g0) ← runWith g fun a => NodeLabelAndSizeCalculator.processWithOptions a n .right false false
   checkVec "hand: applyStuff = false returns the same size" size0 40.0 30.0

@@ -25,6 +25,8 @@ probe, see below) are checked byte-for-byte:
   the error cases double edge / self loop (a node with two incoming edges).
 * `<name>.json` / `<name>.expected.err` (`err_*`): the layout fails; the file holds the message of
   the elk-rs panic (`UnsupportedConfigurationException` text or `index out of bounds`).
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `vf_ports_labels` is an elk-lean output since RJ1 (Java's node micro layout; every changed value equals ELK Java's).
 -/
 namespace Tests.VertiFlex
 

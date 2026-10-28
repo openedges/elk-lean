@@ -64,7 +64,9 @@ def boxAlgorithmData : LayoutAlgorithmData :=
     |>.addKnownOptionDefault CoreOptions.EXPAND_NODES.id none
     |>.addKnownOptionDefault CoreOptions.NODE_SIZE_CONSTRAINTS.id none
     |>.addKnownOptionDefault CoreOptions.NODE_SIZE_OPTIONS.id none
-    |>.addKnownOptionDefault CoreOptions.ASPECT_RATIO.id (some (.double 1.3))
+    -- `supports aspectRatio = 1.3f`: the `float` literal widened to `double`, like
+    -- `BoxLayouterOptions.ASPECT_RATIO`'s default (elk-rs: 1.3)
+    |>.addKnownOptionDefault CoreOptions.ASPECT_RATIO.id (BoxLayouterOptions.ASPECT_RATIO.default.map PropCodec.enc)
     |>.addKnownOptionDefault CoreOptions.INTERACTIVE.id none
     |>.addKnownOptionDefault CoreOptions.NODE_SIZE_MINIMUM.id none
     |>.addKnownOptionDefault BoxLayouterOptions.BOX_PACKING_MODE.id none

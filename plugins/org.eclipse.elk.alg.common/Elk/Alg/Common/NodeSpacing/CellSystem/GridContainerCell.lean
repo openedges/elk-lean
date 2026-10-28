@@ -12,10 +12,9 @@ Faithfully reproduced quirks (Java and elk-rs agree):
   non-tabular mode the widths of the last row (`END`) end up on all rows.
 * Neither `layoutChildrenHorizontally` nor `layoutChildrenVertically` recurses into children.
 
-Deviation from Java (following elk-rs): in tabular mode Java passes the same `colWidths` array
-to `applyWidthsToRow` for every row and that method adds the gap to it in place, so later rows
-see accumulated gaps. elk-rs passes a copy (`[f64; 3]` is `Copy`) to every row; the port does
-the same.
+Like Java (and unlike elk-rs, which passes a copy of its `[f64; 3]` to every row): in tabular mode
+the same column widths go to `applyWidthsToRow` for every row and that method updates them in
+place (gap added to the outer widths, center width enlarged), so later rows see accumulated gaps.
 -/
 namespace Elk.Alg.Common.NodeSpacing.CellSystem
 
@@ -186,9 +185,11 @@ pair of them. -/
 
 /-- `GridContainerCell.applyWidthsToRow(row, colWidths)`: horizontal coordinates for the columns
 (applied to all cells of each column); for the center row also the x/width of the center cell
-rectangle. The three column widths are passed unboxed. -/
-def applyWidthsToRow (a : CellArena L) (id : CellId) (d : GridCellData) (row : ContainerArea)
-    (colWidth0 colWidth1 colWidth2 : Float) : CellArena L := Id.run do
+rectangle. The three column widths are passed unboxed; like Java, which updates its `colWidths`
+array in place (the outer widths get the gap added when positive, the center width is raised to the
+free content area width), the updated widths are returned with the arena. -/
+def applyWidthsToRowW (a : CellArena L) (id : CellId) (d : GridCellData) (row : ContainerArea)
+    (colWidth0 colWidth1 colWidth2 : Float) : CellArena L × Float × Float × Float := Id.run do
   let cellRectangle := a.cellRectangle id
   let cellPadding := a.padding id
   let mut w0 := colWidth0
@@ -218,7 +219,12 @@ def applyWidthsToRow (a : CellArena L) (id : CellId) (d : GridCellData) (row : C
     let x := cellRectangle.x + cellPadding.left + (centerWidth - freeContentAreaWidth) / cellTwo
     a := a.modifyGridData id fun g =>
       { g with centerCellRect := { g.centerCellRect with width := centerWidth, x := x } }
-  return a
+  return (a, w0, w1, w2)
+
+/-- `GridContainerCell.applyWidthsToRow(row, colWidths)` without the updated widths. -/
+@[inline] def applyWidthsToRow (a : CellArena L) (id : CellId) (d : GridCellData) (row : ContainerArea)
+    (colWidth0 colWidth1 colWidth2 : Float) : CellArena L :=
+  (applyWidthsToRowW a id d row colWidth0 colWidth1 colWidth2).1
 
 /-- `GridContainerCell.layoutChildrenHorizontally()`: column widths for all rows at once
 (tabular) or per row; does not recurse into children. -/
@@ -228,10 +234,12 @@ def applyWidthsToRow (a : CellArena L) (id : CellId) (d : GridCellData) (row : C
   | none => a
   | some d =>
     if d.tabular then
+      -- Java hands the same `colWidths` array to every row and `applyWidthsToRow` updates it in
+      -- place, so the later rows see the widths (gaps added, center enlarged) of the earlier ones
       let w := minColumnWidths a minWidth d none false
-      let a := applyWidthsToRow a id d .begin w.v0 w.v1 w.v2
-      let a := applyWidthsToRow a id d .center w.v0 w.v1 w.v2
-      applyWidthsToRow a id d .«end» w.v0 w.v1 w.v2
+      let (a, w0, w1, w2) := applyWidthsToRowW a id d .begin w.v0 w.v1 w.v2
+      let (a, w0, w1, w2) := applyWidthsToRowW a id d .center w0 w1 w2
+      applyWidthsToRow a id d .«end» w0 w1 w2
     else
       let w := minColumnWidths a minWidth d (some .begin) false
       let a := applyWidthsToRow a id d .begin w.v0 w.v1 w.v2
