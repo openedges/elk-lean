@@ -333,8 +333,15 @@ def main():
     # access) instead of silently overwriting globals
     # -sMALLOC=mimalloc: Lean allocates many small objects; about 13 % faster than dlmalloc on the
     # realworld corpus (same process A/B), linear memory stays flat across repeated layouts.
+    # -sMAXIMUM_MEMORY=4GB: the whole wasm32 address space instead of emscripten's 2 GB default
+    # (a layered node with 4,250 ports already needed more: the orthogonal router keeps O(n^2)
+    # segment dependencies). Engines reserve the 4 GB address range of a wasm32 memory anyway, so
+    # the larger maximum costs nothing until the memory grows. -sINITIAL_HEAP=16MB: emscripten's
+    # default, which it drops (falling back to a 16 MiB INITIAL_MEMORY, smaller than stack + data)
+    # once MAXIMUM_MEMORY is given; the initial memory stays stack + data + 16 MiB = 42 MiB.
     link_common = TARGET_FLAGS + ["-O3", "--no-entry", "-Wl,--stack-first", "-sMALLOC=mimalloc",
-                                  "-sALLOW_MEMORY_GROWTH=1", "-sSTACK_SIZE=%d" % STACK_SIZE,
+                                  "-sALLOW_MEMORY_GROWTH=1", "-sMAXIMUM_MEMORY=4GB", "-sINITIAL_HEAP=16MB",
+                                  "-sSTACK_SIZE=%d" % STACK_SIZE,
                    "-sEXPORTED_FUNCTIONS=" + ",".join(EXPORTS),
                    "-sSIGNATURE_CONVERSIONS=" + ",".join(SIGNATURES),
                    # Module options a host may pass (`init(moduleArg)` in the browser build)

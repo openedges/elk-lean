@@ -68,9 +68,13 @@ const out = layout_json(JSON.stringify(graph), '{}');
 - **Elk C**: `Elk.Ffi`의 import 폐포(생성 C의 `// Imports:` 헤더 기준, 744 모듈)만 링크한다.
   Lean C는 네이티브와 같은 `-O3 -DNDEBUG -ffp-contract=off`로 컴파일한다.
 - **링크**: `em++ -O3 --no-entry -Wl,--stack-first -sMALLOC=mimalloc -sALLOW_MEMORY_GROWTH=1
-  -sSTACK_SIZE=16MiB`. `--stack-first`로 선형 메모리 스택 넘침이 정적 데이터를 덮지 않고 트랩이 된다.
+  -sMAXIMUM_MEMORY=4GB -sINITIAL_HEAP=16MB -sSTACK_SIZE=16MiB`. `--stack-first`로 선형 메모리 스택 넘침이
+  정적 데이터를 덮지 않고 트랩이 된다. 최대 메모리는 wasm32 주소 공간 전체(4 GB, 아래 "메모리"),
+  초기 메모리는 스택 + 정적 데이터 + 16 MiB = 42 MiB(emscripten은 `MAXIMUM_MEMORY`를 주면 기본
+  `INITIAL_HEAP`을 버리고 스택보다 작은 16 MiB `INITIAL_MEMORY`로 링크에 실패하므로 명시한다).
 - **JS**: `js/elk_lean_api.js`(`--post-js`)가 C API(`plugins/org.eclipse.elk.ffi/include/elk_lean.h`)를 감싸
-  `Module.createBackend()`를 제공한다(문자열은 TextEncoder/TextDecoder, 엔진 오류 시 wasm 스택 포인터 복원).
+  `Module.createBackend()`를 제공한다(문자열은 TextEncoder/TextDecoder, 엔진 오류 시 wasm 스택 포인터 복원,
+  C `exit()` 시 `backend.failed`, 아래 "메모리").
 
 ## 검증
 
@@ -147,8 +151,30 @@ emcc: warning: MEMORY64=2 is deprecated (under consideration for removal (https:
   (`STACK_OVERFLOW_CHECK=0`, `--stack-first`)에서 그림자 스택이 넘치면 주소가 음수로 감겨 경계 밖 접근
   트랩(`RuntimeError: memory access out of bounds`)이 된다. `STACK_OVERFLOW_CHECK`/`ASSERTIONS`는 그림자
   스택 넘침을 진단 메시지로 바꿀 뿐 JS 엔진 스택의 `RangeError`와는 무관하므로 릴리스 빌드에서는 켜지 않는다.
-- **메모리 최대 2 GB**: emscripten 기본 `MAXIMUM_MEMORY`. 포트 5,000개짜리 노드 하나(네이티브 최대 1.1 GB)는
-  `INTERNAL PANIC: out of memory` 후 `ExitStatus: Program terminated with exit(1)`로 끝나고 인스턴스를 다시 쓸 수
-  없다. `-sMAXIMUM_MEMORY=4GB -sINITIAL_MEMORY=32MB` 실험 빌드는 이 그래프를 배치했다(기본 빌드 반영은 parity·
-  성능 확인 후 TODO).
+- **메모리 최대 4 GB** (`-sMAXIMUM_MEMORY=4GB`, 2026-10-28): emscripten 기본값 2 GB에서는 포트 N개가 각각
+  다른 노드로 이어진 layered 노드 하나(직교 라우팅이 세그먼트 의존성을 O(N²)개 만든다)가 N = 4,250에서
+  `INTERNAL PANIC: out of memory`로 끝났다(4,000 통과; Node 직접·Worker 모드 같음, Chrome도 5,000 실패).
+  4 GB에서는 8,000 통과(선형 메모리 4,085 MiB, 네이티브 CLI와 바이트 일치), 8,500·9,000·10,000 실패.
+  5,000은 Node 직접·Worker·Chrome 메인 스레드·Web Worker 모두 네이티브와 같은 결과(최대 2,452 MiB).
+  노드 수는 한계가 아니다: 평평한 DAG 100,000 노드·200,000 간선도 2 GB 빌드에서 1.2 GB·198초였다.
+  - 비용 없음: `.wasm` 크기는 같고(19,337,024 바이트, 메모리 섹션 최댓값만 다름) 초기 메모리 42 MiB,
+    인스턴스화 약 40~60 ms·초기화 약 105~135 ms도 같다. realworld 550/550 바이트 일치, WASM/네이티브 총 시간
+    비율 1.39·1.46배(같은 시각 2 GB 빌드 1.43배, 공유 머신 잡음 범위). 코퍼스 반복 시 메모리 41.9 MiB 유지.
+  - `MEMORY64=2` 특이점: Node 플래그는 필요 없다. 내보낸 함수의 포인터는 i64(BigInt → `Number`)라 2 GB 이상
+    주소도 양수로 온다. 다만 emscripten은 `MEMORY64`일 때 `CAN_ADDRESS_2GB`를 켜지 않아(`tools/link.py`)
+    시스템 라이브러리 JS(`fd_write`의 iovec, `clock_gettime`, `__cxa_throw` 등)가 힙 인덱스를 부호 있는
+    `>>`로 계산한다. 이 빌드에서 그런 포인터는 스택(`--stack-first`, 하위 주소)에 있거나 `Number`로 바로
+    쓰여 레이아웃 경로에서는 문제가 없었지만, 2 GB 위 힙 주소를 받는 시스템 호출이 생기면 깨질 수 있다
+    (`js/elk_lean_api.js`는 `>>>`를 쓴다).
+  - 브라우저: wasm32 메모리 65,536 페이지(4 GB)는 Chrome(V8)·Firefox가 지원하고 Chrome 156에서 확인했다.
+    64비트 엔진은 wasm32 메모리마다 4 GB 이상 주소 공간을 미리 예약하므로 최댓값을 올려도 예약량은 같다.
+    Safari는 확인하지 못했다.
+  - **실패 후**: Lean 런타임의 `lean_internal_panic`은 C `exit(1)`을 부르고, emscripten은 이를
+    `ExitStatus`(Error가 아님; Node에서는 `process.exitCode = 1`도 설정)로 던진다. 작은 입력은 그 뒤에도
+    배치되지만 중단된 호출의 객체는 해제되지 않고 런타임 상태도 보장되지 않는다. 그래서
+    `js/elk_lean_api.js`는 `process.exitCode`를 되돌리고 `backend.failed`에 메시지를 남긴 뒤
+    `Error('elk-lean: the WASM instance terminated (Program terminated with exit(1)), most likely out of
+    memory (N MiB in use); create a new instance')`를 던지며, 이후 모든 호출도 같은 오류를 던진다. npm
+    패키지의 로더와 Worker는 실패한 인스턴스를 새 인스턴스로 바꾼다(`plugins/org.eclipse.elk.js/README.md`
+    "Limits").
 - 파일 시스템 API(Lean `IO.FS`)는 emscripten MEMFS 위에서만 동작한다(elk-lean API는 쓰지 않음).
