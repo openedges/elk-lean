@@ -718,6 +718,7 @@ Coffman–Graham star의 힙 순서(`[[0],[2,1],[4,3]]` → `[[0],[3,1],[4,2]]`)
   `p3a/v2_g0201`은 NIK 병합 후 Java와 같다), `OrthogonalEdgeRouter` 1건(`p3a/v5_g0360`: 두 간선의 세그먼트 x 교환 — 사이클 깨기 난수 상태 또는 세그먼트
   순서).
 - 담당 밖: SPOrE(`sporeOverlap` 75·`sporeCompaction` 9, o 세트), VertiFlex 10, rectpacking 4.
+- → 위 layered 3건과 담당 밖 세 클래스는 SPV에서 전부 Java와 같아졌다(16장).
 
 ### 15.7 결과(시드 1~10; Java 기준값은 같은 입력 — s·v는 라운드 6 실행, d·o·p는 이 라운드 실행)
 
@@ -740,3 +741,140 @@ overflow 14 → 0, Lean 예외·Java overflow 3 → 0. 코퍼스와 기타 검�
 `javaSortByDouble`, mrtree 단위 테스트의 Java 기대값(자식 캐시, 압축 `UNDEFINED`·제자리 정렬, `(int) Math.round`, 하이퍼엣지
 가져오기, Fan 차분 테스트의 예외 일치), Java와 대조해 다시 고정한 mrtree fixture 26개(`tests/fixtures/opt_java_status.tsv`의
 `RJ3 re-pin` 행: 24개 `java_exact`, 2개 `java_error_equal`).
+
+## 16. SPV: SPOrE·VertiFlex·rectpacking의 Java 경로, layered 결정적 3건, 삼각함수 통일 (2026-10-29)
+
+방법: 라운드 8 병합본(`38fae55`, `elk_base`)의 `o` 세트 SPOrE 84·VertiFlex 10, `v`·`d` 세트 rectpacking 4(`v8/g0580`,
+`v10/g0460`), 15.6의 layered 3건을 Java 소스와 새 JVM 단일 실행, 그림자 클래스(서명 제거한 ELK jar 사본 + 덤프를 넣은
+`ElkGraphImporter`/`OrthogonalRoutingGenerator`/`HyperEdgeCycleDetector`, 결과 기준값에는 쓰지 않음)로 확인했다. 결과
+기준값은 항상 수정하지 않은 Java(`ElkJavaBaseline`)다. 전부 ELK Java가 기준이고 elk-rs와는 달라진다.
+
+### 16.1 SPOrE(`sporeOverlap`·`sporeCompaction`)
+
+- **`HashSet` 순회 순서**: `BowyerWatsonTriangulation`의 `HashSet<TTriangle>`·`HashSet<TEdge>`, 겹침 제거의 겹침 간선 집합,
+  `Graph.tEdges`는 Java `HashSet`이고 원소의 `hashCode`가 값 기반이다(`KVector` = `Double.hashCode(x) +
+  Integer.reverse(Double.hashCode(y))`, `TEdge` = 두 끝의 합, `TTriangle` = 세 꼭짓점의 합). 그 순서가 `NaiveMinST`의 같은
+  비용 간선 순서(안정 정렬)를 정해 신장 트리와 결과가 바뀐다 — elk-rs는 `std` 집합(무작위 순서)이었고 Lean은 삽입 순서였다.
+  새 `Elk.Core.Util.JavaHashSet`이 JDK 21 `HashMap`의 빈 배열(16에서 두 배, 적재율 0.75, `resize`의 lo/hi 분할), 빈 안
+  삽입 순서, `clear()`가 용량을 유지하는 것, 트리 빈(9개 이상·용량 64 이상, `TreeNode` 적흑 트리, `moveRootToFront`,
+  `removeTreeNode`, 분할·`untreeify`), 반복자 제거(`movable = false`), `AbstractSet.removeAll`의 두 분기를 옮겼다.
+  `java.util.HashSet`과의 차분(`scripts/java/HashSetOrder.java`, `scripts/gen_hashset_ops.py`): 무작위 연산 열 128개(그중
+  20개는 트리 빈 최대 6개)에서 모든 순회 순서가 같다. 겹침 간선 집합은 반복마다 같은 객체를 `clear()`하고 그래프의
+  간선 집합이 되며, Delaunay 단계는 그 집합에 `addAll`한다(같은 객체).
+- `ScanlineOverlapCheck`: 활성 집합은 `TreeSet`(같다고 비교되는 노드는 추가 실패 → Java `IllegalStateException: Invalid
+  hitboxes for scanline overlap calculation.`, 크기 0 노드 등; elk-rs는 그냥 넣음), 비교자 `Double.compare`. `NaiveMinST`:
+  `Double.compare` 정렬, 가중치 NaN 간선은 건너뜀. `fuzzyCompare`는 Guava(`a == b`·둘 다 NaN도 같음).
+- 하위 알고리즘(`underlyingLayoutAlgorithm` = `box`/`fixed`/`random`)이 그래프를 먼저 배치할 때 Java `getProperty`는 그
+  알고리즘 메타데이터의 **기본 padding(15)을 노드에 저장**한다(`EMapPropertyHolderImpl`의 복제 기본값). 뒤에 읽는 SPOrE·
+  DisCo의 padding이 12가 아니라 15가 된다 — box/fixed/random 공급자에 `ElkM.getNodePropSticky`를 썼다.
+- **재현 불가**: SPOrE 임포터는 중심이 같은 노드에 `Math.random()` 흔들림(±0.0005)을 더한다(`ElkGraphImporter` 169행). 같은
+  위치의 노드가 있는 입력은 Java 실행마다 결과가 다르다(두 JVM 실행이 서로 다름; Lean은 흔들림 없이 결정적). 트리 빈 안의
+  **같은 hash** 원소 순서(`System.identityHashCode`의 `tieBreakOrder`)도 재현하지 않는다(SPOrE 입력에서는 트리 빈 자체가
+  생기지 않았다).
+
+### 16.2 VertiFlex
+
+- `RelativeXPlacer.splitGroup`: Java 루프는 `i`를 늘리지 않는다 — 음수 폭이 아니면 루프에 들어가지 않거나(들어가면 Java는
+  끝나지 않음 → Lean은 `IllegalStateException`으로 끊음) 결과가 `-1`이어서, 높이가 같은 자식 무리는 통째로 오른쪽으로 간다
+  (`o1/g0513`; elk-rs는 `i`를 늘렸다).
+- 루트 이동의 `CONSIDER_NODE_MODEL_ORDER`는 레이아웃 그래프가 아니라 **트리 노드**에서 읽는다(노드에 없으면 기본 `true`;
+  `o7/g0218`).
+- 트리 순회는 노드 **자신의** 간선(`getOutgoingEdges()`/`getIncomingEdges()`)이다: 포트의 간선은 자식이 아니고(elk-rs는
+  `allOutgoingEdges`), 목표가 포트인 간선은 `(ElkNode)` 형변환의 `ClassCastException`, 목표 없는 간선은
+  `IndexOutOfBoundsException`. `findRoot`만 포트 포함(`ElkGraphUtil.allIncomingEdges`). 부모 수는 노드의 들어오는 간선 수,
+  `Math.max`, 오류 문구의 식별자 `null`, Java의 IOOBE 문구.
+
+### 16.3 rectpacking
+
+- `RowFillingAndCompaction`: 행을 다시 압축해야 하면 Java는 **같은 행**을 다시 압축한다(`rowIdx--` + `rowIdx++`; elk-rs는
+  앞 행으로 돌아가 뒤 행을 앞 행에 붙였다 — `v10/g0460`).
+- 강한 참조: 블록은 행 목록에서 빠진 행과 초기화된 스택을 계속 부모로 가진다(elk-rs `Weak`는 `None`). 빠진 다음 행에서 온
+  블록은 다시 압축할 때 `wasFromNextRow`로 보여 행에 **두 번** 들어가고, `RectRow.removeBlock`은 첫 항목만 지우며(
+  `List.remove(Object)`) 높이는 `Double.MIN_VALUE`에서 `Math.max`(`v8/g0580`). `notifyAboutNodeChange`는 모든 블록에서 다시
+  계산한다(elk-rs `RefCell` 차용 실패 시 "defer" 없음). `Block.setLocation`의 Java 계산 순서(`row.x + x - blk.x`),
+  `Math.min/max`, 빈 블록 평균 높이 NaN, 빈 목록의 IOOBE.
+- `InteractiveNodeReorderer`: 같은 위치에 `-1`을 내는 비교자는 JDK TimSort(`javaSortBy`)로, 음수 `desiredPosition`은 EMF
+  `BasicEList.addUnique`의 `System.arraycopy` 예외 `ArrayIndexOutOfBoundsException: arraycopy: source index <위치> out of
+  bounds for object array[<용량>]`(용량은 `c + c/2 + 4`로 자란 자식 배열; elk-rs는 0으로 잘랐다). 기존 fixture 3개(`g2_168`,
+  `g2_364`, `enum/g4_155`)가 Java처럼 예외가 되고 2개는 Java 문구로 바뀌었다.
+
+### 16.4 layered 결정적 3건과 교차 계수
+
+- `NetworkSimplexPlacer`(`p2/v2_g0421`): Java `LNode.getPortSideView`는 캐시된 인덱스 범위(`cachePortSides()`)를 다시 검증하지
+  않는다 — `PortListSorter` 뒤에 북/남 포트가 더해진 노드에서 뷰가 밀려 다른 변의 포트를 담거나 빠뜨리고, 캐시가 없으면
+  `findPortIndices()`(변마다 마지막 연속 구간). elk-rs는 범위가 어긋나면 변으로 걸렀다. `LGraphArena.nodePortSideView`를
+  Java대로 바꾸고 NSP의 `getPortSideView` 지점(`transformFixedOrderNode`, 북/남 보조 간선, `markCrossingEdges`)을 그것으로,
+  P3 교차 계수(`CrossMinUtil.sideView`, `CrossingsCounter`의 live·snapshot 경로)도 같은 의미로 맞췄다(P3 시작에
+  `GraphInfoHolder`가 모든 노드를 다시 캐시하므로 포트가 변별로 정렬돼 있으면 같은 범위다). `improveTwoPath`는 Guava
+  `fuzzyEquals`(같은 무한대 포함), 직선 간선 가중치는 Java의 `Math.max(old, old + (w - old))`.
+- `SortByInputModelProcessor`(`p5/v5_g0464`): `ModelOrderPortComparator`/`ModelOrderNodeComparator`의 네 번째 추이 검사는
+  Java에서 둘째 검사의 복사라 결정하지 않고, 앞 layer 검사는 `checkReferenceLayer`(먼저 발견된 원천 노드가 결정), group
+  model order는 두 원소 모두의 group id(`int` 산술), long edge 목표의 model order 맵은 목표마다 따로.
+- `OrthogonalEdgeRouter`(P3 변형 `v5_g0360`): `HyperEdgeSegment.insertSorted`는 원소의 **`floatValue()`**를 `double`과 비교한다
+  — `float`이 아닌 좌표(`-60.2`)는 같은 값이 두 번 들어가 의존 가중치(교차 수)에 들어간다. elk-rs는 `f64::EPSILON` 비교.
+- `AllCrossingsCounter`: Java `initAfterTraversal`은 `HyperedgeCrossingsCounter`와 `CrossingsCounter`에 **같은 `portPos`
+  배열**을 준다 — in-layer 계수는 스스로 번호를 매기지 않는 먼 끝(다른 변의 포트)의 위치를 이전 계수(하이퍼엣지 계수 포함)가
+  남긴 값으로 읽는다. elk-rs는 하이퍼엣지 계수기에 따로 배열을 줬다. 공유로 바꿨다(무작위·변형 세트의 결과는 그대로).
+
+### 16.5 삼각함수 통일
+
+Java `Math.sin/cos/atan2/acos/asin`의 나머지 호출 지점을 기준 JVM 함수로 바꿨다(15.3): 코어 `KVector`(`new KVector(angle)`,
+`rotate`, `angle`, `toRadians` — 새 `javaAsin`, JDK `FdLibm.Asin`: 기준 JVM `Math.asin`과 인자 400,026개에서 비트 동일,
+`scripts/java/AsinDump.java`), layered `SplinesMath`(`acos`·`cos`, 스플라인 자기 루프의
+`KVector.fromAngle`), DisCo `ElkGraphTransformer`(`atan2`·`sin`·`cos`). 이제 ELK Java 소스의 삼각함수 호출 24곳 전부가
+`Elk.Core.Util.Java`를 쓴다. 코퍼스 Lean 출력은 바이트 동일.
+
+### 16.6 재현하지 않는 것·남은 것
+
+- SPOrE의 `Math.random()` 흔들림(같은 중심의 노드, 16.1): Java 자체가 실행마다 다르다. 같은 위치 노드가 있는 SPOrE
+  fixture 4개(`co_dup_positions`, `ov_identical`, `ov_identical3`, `ov_same_center`)는 Java 두 실행이 서로 달라 Lean 출력
+  그대로 둔다(`opt_java_status.tsv`의 `java_differs`).
+- Lean CLI는 옵션 범위를 검증한다(`desiredPosition` 음수 → `GraphValidationException`). ELK Java 엔진(`RecursiveGraphLayoutEngine`)
+  은 검증하지 않아 위 AIOOBE까지 간다 — 기존 차이로 고치지 않았고(JSON fixture 대신 단위 테스트로 AIOOBE 경로를 검사),
+  무작위 세트에는 나오지 않는다.
+- 남은 무작위 차이(둘 다 성공 19,336개 중 134개): layered LPOS 93·LEDGE 17·LNODE 8(15.5의 실행 맥락 의존 — 새 JVM 단일
+  실행 또는 `SelfHyperLoop` 패치 Java와 같다; 15.5의 결정적 2건은 이번에 고쳐졌다), radial `HashSet` 순서·NaN 표현(POS:radial 11, T 3, NML:radial 2; 15.3). 비-layered
+  알고리즘의 남은 차이는 radial뿐이다(o 세트 12개 전부).
+- DisCo fixture 42개 중 Java와 정확히 같은 것은 5개(`tests/fixtures/disco/README.md`): 나머지는 DisCo 패킹 자체(담당 밖),
+  무작위 세트에는 DisCo가 없다.
+
+### 16.7 결과(시드 1~10, Java 기준값은 같은 입력 — RJ3 실행 재사용)
+
+| 세트 | 둘 다 성공 | 정확 일치 전(`38fae55`) → 후 | 1e-6 전 → 후 |
+|---|---:|---:|---:|
+| s | 1,205 | 1,197 → 1,197 | 1,197 → 1,197 |
+| v | 5,761 | 5,709 → **5,711** | 5,709 → 5,711 |
+| d | 5,761 | 5,709 → 5,711 | 5,709 → 5,711 |
+| o | 5,236 | 5,130 → **5,224**(99.8%) | 5,133 → 5,227 |
+| p | 1,373 | 1,357 → **1,359** | 1,357 → 1,359 |
+| NIK `npa`(1,802개) | 1,323 | 1,316 → 1,317 | |
+| NIK `npb` | 1,151 | 1,142 → 1,143 | |
+| NIK `mob` | 1,715 | 1,698 → 1,698 | |
+| P3J `p3a` | 1,376 | 1,353 → **1,354** | |
+
+정확 → 비정확 0, 비정확 → 정확 100(s·v·d·o·p: SPOrE 84 = `sporeOverlap` 75·`sporeCompaction` 9, VertiFlex 10, rectpacking
+`v8/g0580`·`v10/g0460`(v·d), `p2/v2_g0421`, `p5/v5_g0464`) + 변형 세트 3(`npa/v10_g0253`, `npb/v3_g0181`, `p3a/v5_g0360`), 결과
+종류(ok/예외/시간 초과/스택 넘침) 변화 0. 분류(전 → 후): POS:sporeOverlap 75 → 0, POS:sporeCompaction 9 → 0, POS:vertiflex
+10 → 0, POS:rectpacking 2 → 0, DEF:rectpacking 2 → 0, LEDGE 18 → 17, LNODE 9 → 8, LPOS 93·POS:radial 11·T 3·NML:radial 2는
+그대로(둘 다 성공 19,336개 중 남은 차이 234 → 134). SPOrE를 쓰는 입력 1,118개·VertiFlex 268개는 전부 정확, rectpacking이
+들어 있는 1,930개 중 남은 19개는 다른(layered) 단위의 차이다. 변형 세트의 결과 종류 변화 1건: `npb/v1_g0132`는 Java가
+`AllCrossingsCounter`의 in-layer 계수에서 `BinaryIndexedTree.rank`의 `ArrayIndexOutOfBoundsException: Index 7 out of bounds for
+length 2`를 내고, 전에는 Lean이 성공했으며 이제 Lean도 같은 트리(크기 1)에서 예외를 내지만 다른 칸(`Index 1 out of bounds
+for length 1`, `add`)이다 — Lean의 단계별 trace는 Java가 남긴 188단계와 전부 같고(기준 바이너리는
+`SortByInputModelProcessor`에서 갈라졌다) 실패하는 P3 단계 안에서, 앞선 계수가 남긴 먼 끝 위치만 다르다(`portPos` 공유 후에도
+같음; 더 조사하지 않음).
+
+테스트: `spv.java`/`spv.java.errors`(`tests/fixtures/spv/` 입력 16개, 새 JVM Java 출력 14개·예외 문구 2개, 15개는 기준 바이너리에서
+실패, `vertiflex_constraint_before_cast`는 형변환 순서의 회귀 검사), `spv.javaHashSet`(`java.util.HashSet` 순서 재생), `spv.javaAsin`(JVM 표본 42개, `ELK_ASIN_CASES`로 전체),
+`layered.p3counting.all_crossings_counter`의 `portPos` 공유, `alg.common`·`spore`·`rectpacking` 단위 테스트의 Java 값(`KVector`/
+`TEdge`/`TTriangle` hash, Bowyer–Watson 결과, `NaiveMinST` NaN 가중치, `INVALID_HITBOXES`, 스택 강한 참조·중복 블록·
+`MIN_VALUE`, 음수 위치 AIOOBE와 EMF 용량), Java와 대조해 다시 고정한 fixture(`tests/fixtures/opt_java_status.tsv`의 `SPV` 행:
+SPOrE 7·VertiFlex 8·rectpacking 1개 `java_exact`, 예외 4개·문구 2개 `java_error_equal`, DisCo 35개는 padding 15에 맞춘 Lean 출력,
+그중 5개 `java_exact`), 쓸모없어진 SPOrE 대체 출력(`.alt<k>.json`) 33개 삭제. VertiFlex의 수직 제약 검사는 간선마다 형변환한다
+(앞 자식의 제약 위반이 뒤 간선의 `ClassCastException`보다 먼저, `vertiflex_constraint_before_cast`). `lake build` 경고 0,
+`lake test` 16,830 통과/0 실패(기준 16,754).
+
+코퍼스(ELK Java 기준): Lean 출력 1,998개 기준 바이너리와 바이트 동일, 정확 일치 1878/119(집합 동일), Java 단계별 trace 1,743/1,997(요약 — 갈라지는 254개 모델과 첫 차이 단계 — 이 기준과 같음). elk-rs 보조 검사(spv14 바이너리, `portPos` 공유 포함): model parity(1e-6) 1447/1447, strict trace 1447/1447 — 떨어진 것 없음.
+
+성능(`elk bench` 합성 26개, 기준 바이너리와 번갈아 5회, 중앙값): 기하평균 0.997배, rectpacking 0.97~0.98배(`Weak`/차용 흉내
+제거), 나머지 0.99~1.02배(최대 `mrtree_xlarge` 1.019 — 두 바이너리의 실행 범위가 겹치는 잡음, mrtree 코드는 바뀌지 않음).
