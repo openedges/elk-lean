@@ -645,17 +645,23 @@ the side views, the filtered port lists, the target lists or the `for` loop stat
 are walked in place (`sideView`, the same view as `getPortSideView`), and the targets of a port are
 read twice (ranks, then additions; the additions of a port commute). -/
 
-/-- The numbering state: positions, the numbered ports and the next index. -/
+/-- The numbering state: positions, the numbered ports, the next index and the stack of dummies. -/
 structure NSState where
   positions : Array Int
   ports : Array LPortId
   index : Int
+  stack : Array LNodeId
   deriving Inhabited
 
 /-- Numbers port `p` (`positions[LPort.id] := index`, pushed onto the ports). -/
 @[inline] def nsNumber (a : LGraphArena) (p : LPortId) (st : NSState) : NSState :=
   match st with
-  | ⟨positions, ports, index⟩ => ⟨setPosition positions (portIdOf a p) index, ports.push p, index + 1⟩
+  | ⟨positions, ports, index, stack⟩ => ⟨setPosition positions (portIdOf a p) index, ports.push p, index + 1, stack⟩
+
+/-- Pushes a dummy onto the stack. -/
+@[inline] def nsPush (n : LNodeId) (st : NSState) : NSState :=
+  match st with
+  | ⟨positions, ports, index, stack⟩ => ⟨positions, ports, index, stack.push n⟩
 
 /-- Numbers the ports of a side view from position `j` (`v`: `ports[lo:hi]` when cached, else the
 ports on `side`), only those with a `PORT_DUMMY` with `needDummy`. -/
@@ -674,35 +680,38 @@ partial def nsNumberView (a : LGraphArena) (ports : Array LPortId) (v : SideView
     nsNumberView a ports v side needDummy (j + 1) st
   else st
 
-/-- The first port of a side view from position `j` (`none` for an empty view). -/
-partial def viewFirst (a : LGraphArena) (ports : Array LPortId) (v : SideView) (side : PortSide) (j : Nat) : Option LPortId :=
+/-- The position of the first port of a side view from position `j` (`ports.size` for an empty view). -/
+partial def viewFirstIdx (a : LGraphArena) (ports : Array LPortId) (v : SideView) (side : PortSide) (j : Nat) : Nat :=
   if v.cached then
-    if h : j < v.hi ∧ j < ports.size then some ports[j] else none
+    if j < v.hi && j < ports.size then j else ports.size
   else if h : j < ports.size then
-    if sideIs (a.port ports[j]).side side then some ports[j] else viewFirst a ports v side (j + 1)
-  else none
+    if sideIs (a.port ports[j]).side side then j else viewFirstIdx a ports v side (j + 1)
+  else ports.size
 
-/-- `getPortSideView(side)[0]?` of a node. -/
-@[inline] def firstOnSide (a : LGraphArena) (n : LNodeId) (side : PortSide) : Option LPortId :=
-  let nd := a.node n
+/-- The position of `getPortSideView(side)[0]` in the node's port list (`ports.size`: empty view). -/
+@[inline] def firstIdxOnSide (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) : Nat :=
   let v := sideView a n nd side
-  viewFirst a nd.ports v side (if v.cached then v.lo else 0)
+  viewFirstIdx a nd.ports v side (if v.cached then v.lo else 0)
+
+/-- Numbers `getPortSideView(side)[0]` of a node when the view is not empty. -/
+@[inline] def nsNumberFirst (a : LGraphArena) (n : LNodeId) (nd : LNode) (side : PortSide) (st : NSState) : NSState :=
+  let k := firstIdxOnSide a n nd side
+  if h : k < nd.ports.size then nsNumber a nd.ports[k] st else st
 
 /-- `emptyStack(stack, ports, EAST, index)`: numbers the first eastern port of every stacked dummy
 (LIFO). -/
-partial def nsEmptyStack (a : LGraphArena) (stack : Array LNodeId) (st : NSState) : Array LNodeId × NSState :=
-  if stack.isEmpty then (stack, st)
-  else
-    let dummy := stack.back!
-    let stack := stack.pop
-    match firstOnSide a dummy .east with
-    | some p => nsEmptyStack a stack (nsNumber a p st)
-    | none => nsEmptyStack a stack st
+partial def nsEmptyStack (a : LGraphArena) (st : NSState) : NSState :=
+  match st with
+  | ⟨positions, ports, index, stack⟩ =>
+    if stack.isEmpty then ⟨positions, ports, index, stack⟩
+    else
+      let dummy := stack.back!
+      nsEmptyStack a (nsNumberFirst a dummy (a.node dummy) .east ⟨positions, ports, index, stack.pop⟩)
 
 /-- The node loop of `initPositionsForNorthSouthCounting` from `nodes[i]` (`hasLast`/`last`: the last
 layout unit). -/
-partial def nsInitLoop (a : LGraphArena) (nodes : Array LNodeId) (i : Nat) (stack : Array LNodeId) (hasLast : Bool)
-    (last : LNodeId) (st : NSState) : NSState :=
+partial def nsInitLoop (a : LGraphArena) (nodes : Array LNodeId) (i : Nat) (hasLast : Bool) (last : LNodeId)
+    (st : NSState) : NSState :=
   if h : i < nodes.size then
     let current := nodes[i]
     let nd := a.node current
@@ -710,36 +719,35 @@ partial def nsInitLoop (a : LGraphArena) (nodes : Array LNodeId) (i : Nat) (stac
     let changed := hasLast && last != current && (match layoutUnit with
       | some u => u != last
       | none => false)
-    let (stack, st) := if changed then nsEmptyStack a stack st else (stack, st)
-    let (hasLast, last) := match layoutUnit with
-      | some u => (true, u)
-      | none => (hasLast, last)
+    let st := if changed then nsEmptyStack a st else st
+    let hasLast := hasLast || layoutUnit.isSome
+    let last := match layoutUnit with
+      | some u => u
+      | none => last
     match nd.type with
     | .normal =>
       let vn := sideView a current nd .north
       let st := nsNumberView a nd.ports vn .north true (if vn.cached then vn.lo else 0) st
-      let (stack, st) := nsEmptyStack a stack st
+      let st := nsEmptyStack a st
       let vs := sideView a current nd .south
       let st := nsNumberView a nd.ports vs .south true (if vs.cached then vs.lo else 0) st
-      nsInitLoop a nodes (i + 1) stack hasLast last st
+      nsInitLoop a nodes (i + 1) hasLast last st
     | .northSouthPort =>
-      let st := match firstOnSide a current .west with
-        | some p => nsNumber a p st
-        | none => st
-      let stack := if (firstOnSide a current .east).isSome then stack.push current else stack
-      nsInitLoop a nodes (i + 1) stack hasLast last st
+      let st := nsNumberFirst a current nd .west st
+      let st := if firstIdxOnSide a current nd .east < nd.ports.size then nsPush current st else st
+      nsInitLoop a nodes (i + 1) hasLast last st
     | .longEdge =>
       let vw := sideView a current nd .west
       let st := nsNumberView a nd.ports vw .west false (if vw.cached then vw.lo else 0) st
-      let stack := if (firstOnSide a current .east).isSome then stack.push current else stack
-      nsInitLoop a nodes (i + 1) stack hasLast last st
-    | _ => nsInitLoop a nodes (i + 1) stack hasLast last st
-  else (nsEmptyStack a stack st).2
+      let st := if firstIdxOnSide a current nd .east < nd.ports.size then nsPush current st else st
+      nsInitLoop a nodes (i + 1) hasLast last st
+    | _ => nsInitLoop a nodes (i + 1) hasLast last st
+  else nsEmptyStack a st
 
 /-- `initPositionsForNorthSouthCounting(nodes)` (see "North/south counting without intermediate arrays"). -/
 def initPositionsForNorthSouthCountingFast (a : LGraphArena) (positions : Array Int) (nodes : Array LNodeId) :
     Array Int × Array LPortId :=
-  let st := nsInitLoop a nodes 0 #[] false default ⟨positions, #[], 0⟩
+  let st := nsInitLoop a nodes 0 false default ⟨positions, #[], 0, #[]⟩
   (st.positions, st.ports)
 
 /-- Sum of `rank(endPosition) * degree` over the ports `targets[k:]` above `cur` (the degree of each

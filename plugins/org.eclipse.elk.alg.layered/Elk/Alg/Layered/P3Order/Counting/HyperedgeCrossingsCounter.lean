@@ -497,13 +497,33 @@ partial def straightLoop (values : Array Int) (firstIndex : Int) (i : Nat) (tree
     straightLoop values firstIndex (i + 1) tree crossings
   else crossings
 
-/-- `countStraightCrossings` on the upper right positions `ur` of the sorted hyperedges. -/
+/-- `straightUp` on natural numbers (`index ≥ 0`: the same steps; the tree holds counts). -/
+partial def straightUpNat (index : Nat) (tree : Array Nat) (crossings : Nat) : Array Nat × Nat :=
+  if index > 0 then
+    let crossings := if index % 2 == 1 then crossings + (tree[index + 1]?.getD 0) else crossings
+    let index := (index - 1) / 2
+    straightUpNat index (tree.modify index (· + 1)) crossings
+  else (tree, crossings)
+
+/-- `straightLoop` on natural numbers. -/
+partial def straightLoopNat (values : Array Int) (firstIndex : Nat) (i : Nat) (tree : Array Nat) (crossings : Nat) : Nat :=
+  if h : i < values.size then
+    let index := values[i].toNat + firstIndex
+    let (tree, crossings) := straightUpNat index (tree.modify index (· + 1)) crossings
+    straightLoopNat values firstIndex (i + 1) tree crossings
+  else crossings
+
+/-- `countStraightCrossings` on the upper right positions `ur` of the sorted hyperedges. When no
+position is negative (always: they are port positions or counts), every compressed value, index and
+count is a natural number and the tree pass runs on `Nat`s (the same steps). -/
 def countStraightCrossingsOf (ur : Array Int) (targetCount : Int) : Int :=
   let deltas := fillDeltas 0 0 (markDeltas ur 0 (Array.replicate (targetCount + 1).toNat 0))
   let (values, q) := compressValues deltas 0 0 ur
   let firstIndex := powerAbove q 1
   let treeSize := 2 * firstIndex - 1
-  straightLoop values (firstIndex - 1) 0 (Array.replicate treeSize.toNat 0) 0
+  if values.all (· ≥ 0) && firstIndex ≥ 1 then
+    (straightLoopNat values (firstIndex - 1).toNat 0 (Array.replicate treeSize.toNat 0) 0 : Int)
+  else straightLoop values (firstIndex - 1) 0 (Array.replicate treeSize.toNat 0) 0
 
 /-- `HyperedgeCorner.compare c1 c2 == .gt` on the corner keys `i` and `j` (position, opposite
 position, identity, upper). -/
@@ -544,8 +564,7 @@ def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int :
     opp := (opp.push l).push u
     ids := (ids.push h.identity).push h.identity
     upper := (upper.push 1).push 0
-  let perm := keyedStableSort n (cornerGreater pos opp ids upper)
-  return overlapSweep upper perm 0 0 0
+  return overlapSweep upper (keyedStableSort n (cornerGreater pos opp ids upper)) 0 0 0
 
 /-- `countCrossingsPure` with the scratch arrays (see "Allocation-poor counting"); the scratch is
 returned zeroed. -/
