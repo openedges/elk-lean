@@ -5,32 +5,32 @@
 
 | scenario | rust_native ms | rust_api ms | lean_api ms | lean/rust_api | lean vs baseline |
 |---|---|---|---|---|---|
-| layered_small | 0.449 | 0.543 | 0.600 | 1.10x | -22.3% |
-| layered_medium | 3.274 | 3.716 | 4.184 | 1.13x | -41.2% |
-| layered_large | 15.829 | 18.229 | 20.668 | 1.13x | -43.8% |
-| layered_xlarge | 264.489 | 281.751 | 302.006 | 1.07x | -62.0% |
-| force_medium | 2.960 | 3.285 | 2.882 | 0.88x | -62.3% |
-| force_large | 12.865 | 14.434 | 12.451 | 0.86x | -62.2% |
-| force_xlarge | 142.405 | 146.872 | 126.213 | 0.86x | -58.5% |
-| stress_medium | 3.656 | 3.934 | 4.033 | 1.03x | -57.5% |
-| stress_large | 15.253 | 16.647 | 16.830 | 1.01x | -56.9% |
-| stress_xlarge | 175.029 | 179.124 | 189.181 | 1.06x | -56.5% |
-| mrtree_medium | 0.216 | 0.441 | 0.435 | 0.99x | -34.4% |
-| mrtree_large | 0.859 | 1.749 | 1.768 | 1.01x | -34.7% |
-| mrtree_xlarge | 4.600 | 9.301 | 9.328 | 1.00x | -33.0% |
-| radial_medium | 1.376 | 1.629 | 0.333 | 0.20x | -39.6% |
-| radial_large | 3.042 | 3.953 | 1.343 | 0.34x | -40.0% |
-| radial_xlarge | 13.116 | 17.757 | 6.783 | 0.38x | -39.2% |
-| rectpacking_medium | 0.169 | 0.254 | 0.259 | 1.02x | -56.2% |
-| rectpacking_large | 0.685 | 1.017 | 1.048 | 1.03x | -58.6% |
-| rectpacking_xlarge | 4.874 | 6.642 | 5.748 | 0.87x | -59.9% |
-| routing_polyline | 2.823 | 3.314 | 3.753 | 1.13x | -35.1% |
-| routing_orthogonal | 3.107 | 3.699 | 4.166 | 1.13x | -41.6% |
-| routing_splines | 3.733 | 4.296 | 5.358 | 1.25x | -27.0% |
-| crossmin_layer_sweep | 3.127 | 3.683 | 4.170 | 1.13x | -41.5% |
-| crossmin_none | 1.771 | 2.322 | 2.673 | 1.15x | -42.1% |
-| hierarchy_flat | 1.586 | 1.848 | 2.247 | 1.22x | -30.5% |
-| hierarchy_nested | 0.876 | 1.076 | 1.261 | 1.17x | -17.7% |
+| layered_small | 0.444 | 0.543 | 0.511 | 0.94x | -14.7% |
+| layered_medium | 3.208 | 3.717 | 3.735 | 1.00x | -10.7% |
+| layered_large | 15.810 | 18.265 | 18.763 | 1.03x | -9.2% |
+| layered_xlarge | 264.759 | 281.678 | 291.084 | 1.03x | -3.6% |
+| force_medium | 2.971 | 3.288 | 2.832 | 0.86x | -1.7% |
+| force_large | 12.871 | 14.398 | 12.156 | 0.84x | -2.4% |
+| force_xlarge | 142.650 | 147.496 | 125.647 | 0.85x | -0.4% |
+| stress_medium | 3.645 | 3.935 | 3.983 | 1.01x | -1.2% |
+| stress_large | 15.146 | 16.681 | 16.570 | 0.99x | -1.5% |
+| stress_xlarge | 176.393 | 179.486 | 188.717 | 1.05x | -0.2% |
+| mrtree_medium | 0.226 | 0.443 | 0.387 | 0.87x | -11.0% |
+| mrtree_large | 0.894 | 1.751 | 1.559 | 0.89x | -11.8% |
+| mrtree_xlarge | 4.609 | 9.333 | 8.290 | 0.89x | -11.1% |
+| radial_medium | 1.383 | 1.629 | 0.285 | 0.18x | -14.1% |
+| radial_large | 3.041 | 3.941 | 1.129 | 0.29x | -15.9% |
+| radial_xlarge | 13.075 | 17.926 | 5.708 | 0.32x | -15.8% |
+| rectpacking_medium | 0.168 | 0.255 | 0.243 | 0.95x | -6.3% |
+| rectpacking_large | 0.687 | 1.018 | 0.981 | 0.96x | -6.4% |
+| rectpacking_xlarge | 4.873 | 6.602 | 5.169 | 0.78x | -10.1% |
+| routing_polyline | 2.812 | 3.260 | 3.356 | 1.03x | -10.6% |
+| routing_orthogonal | 3.094 | 3.626 | 3.811 | 1.05x | -8.5% |
+| routing_splines | 3.708 | 4.238 | 3.891 | 0.92x | -27.4% |
+| crossmin_layer_sweep | 3.100 | 3.661 | 3.752 | 1.03x | -10.0% |
+| crossmin_none | 1.806 | 2.322 | 2.231 | 0.96x | -16.5% |
+| hierarchy_flat | 1.662 | 1.896 | 1.976 | 1.04x | -12.1% |
+| hierarchy_nested | 0.873 | 1.073 | 1.006 | 0.94x | -20.2% |
 
-- geometric mean lean/rust_api: 0.91x over 26 scenarios
+- geometric mean lean/rust_api: 0.82x over 26 scenarios
 - regression gate (5%): pass

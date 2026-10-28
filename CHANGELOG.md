@@ -27,15 +27,20 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
   JSON out layout, metadata queries, error reporting, thread registration; native smoke test.
 - **Node.js addon** (`plugins/org.eclipse.elk.napi`, Node-API C, worker_threads capable) and the
   **elkjs-compatible npm package** `elk-lean` (`plugins/org.eclipse.elk.js`): native addon with a
-  WASM fallback, elkjs API and typings, `workerUrl` worker support (the stack-enlarged Worker mode
-  for very deep recursion is still pending). JS tests: 51/51 (including the three WASM
-  modes). Addon vs CLI output: 1447/1448 byte identical.
+  WASM fallback, elkjs API and typings, `workerUrl` worker support with a stack-enlarged
+  `worker_threads` Worker for deeply nested or deeply recursive graphs (`workerStackSizeMb`, default
+  64 MB). JS tests: 56/56 (including the three WASM modes and the deep-recursion cases). Addon vs
+  CLI output: 1447/1448 byte identical.
+- **GMP-free native runtime**: distributed native artefacts (release CLI, C library bundle, addon)
+  link a Lean runtime rebuilt without GMP (`ELK_NO_GMP=1`, `scripts/build_runtime_nogmp.sh`), so
+  they contain no LGPL code; output is byte-identical to the toolchain runtime
+  (`docs/gmp-licensing.md`).
 - **WASM** (`plugins/org.eclipse.elk.wasm`, emscripten 6.0.13, `-sMEMORY64=2`): Node CJS and
   browser ESM builds, about 18.9 MB `.wasm`; realworld corpus 550/550, 1.34x the native runtime.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 13777 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 13806 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Result parity against unmodified ELK Java 0.12.0** (corpus of 1,998 models, 1,997 compared; 1
   fails identically on both sides): 1,878 exact (tolerance 0). The other 119 depend on the Java
@@ -46,10 +51,12 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 - **Parity against elk-rs** (secondary): model parity 1447/1447 (tolerance 1e-6), strict phase
   trace 1447/1447. Byte identity with elk-rs is 1060/1447; the rest differ only in `-0.0`,
   snapping or values below 4e-12 and are no longer a gate.
-- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.91x
-  (layered 1.07 to 1.13x, force 0.86 to 0.88x, stress 1.01 to 1.06x, mrtree 1.0x, rectpacking 0.87
-  to 1.03x, radial 0.2 to 0.4x, splines routing 1.25x, hierarchy 1.17 to 1.22x). Repeated layouts
-  keep RSS flat. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
+- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.82x
+  (layered 0.94 to 1.03x, force 0.84 to 0.86x, stress 0.99 to 1.05x, mrtree 0.87 to 0.89x,
+  rectpacking 0.78 to 0.96x, radial 0.18 to 0.32x, edge routing 0.92 to 1.05x, hierarchy 0.94 to
+  1.04x); over the 1,447 corpus models 1.23x in total and 1.09x per model (geometric mean), the
+  remaining gap being the crossing minimisation of large layered graphs. Repeated layouts keep RSS
+  flat. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
 
 ### Known differences
 - **119 context-dependent models**: ELK Java iterates a few `HashMap`/`HashSet`s keyed by objects
@@ -77,8 +84,8 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 ### Not yet available
 - Packages are not published (all `package.json` carry `"private": true`).
 - Only macOS arm64 builds have been exercised. Linux (glibc x64/arm64, musl), Windows and
-  CI builds are drafted in `.gitlab-ci.yml` but untested. The GMP (LGPL) static-linking question is
-  open. See `docs/release-dry-run-0.12.0.md`.
+  CI builds are drafted in `.gitlab-ci.yml` but untested, including the GMP-free runtime build on
+  Linux. See `docs/release-dry-run-0.12.0.md`.
 
 ## Project scaffold (pre-release history)
 

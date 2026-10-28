@@ -100,6 +100,13 @@ and `elk layout --force-algorithm` do the same. Expected result: every compared 
 within 1e-6 and every trace step matches strictly; one ticket model fails identically on both
 sides. Exact (tolerance 0) agreement is checked against ELK Java, not against elk-rs.
 
+Differential inputs for the node size / port label cell system (ports with and without labels,
+every size constraint/option combination, port label placements, hierarchy, several algorithms):
+`python3 scripts/gen_nodesize_graphs.py <dir> 600 7`, then lay the graphs out with the binary under
+review and with a reference binary and `cmp` the `--pretty --sort-keys` outputs (use a per-graph
+time limit: with seed 7, `g0054.json` makes both elk-lean and the elk-rs oracle loop, see
+`HISTORY.md`).
+
 ### C. Metadata equivalence
 
 `elk algorithms|options|categories` output compared with the elk-rs

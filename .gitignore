@@ -30,5 +30,8 @@ node_modules/
 /tests/model_parity*/*_progress.tsv
 /tests/perf/*.csv
 !/tests/perf/baseline_*.csv
+/tests/perf/corpus/*.csv
+!/tests/perf/corpus/baseline_*.csv
+/tests/perf/corpus/*.log
 /tests/tmp/*
 !/tests/tmp/.gitkeep
