@@ -71,6 +71,11 @@ FakeWorker.prototype._handleMessage = function(backend, msg) {
       this.onmessage({ data: { id: msg.id, data: result } });
     }
   } catch (err) {
+    // a failed WASM instance is replaced before the next message (see `failed` below)
+    if (failed(backend)) {
+      this._backend = null;
+      this._initPromise = null;
+    }
     if (this.onmessage) {
       this.onmessage({ data: { id: msg.id, error: convertError(err) } });
     }
@@ -114,6 +119,15 @@ function handleCommand(backend, msg) {
     default:
       throw new Error('Unknown command: ' + msg.cmd);
   }
+}
+
+/**
+ * True when `backend` is a WASM instance that has ended with a C exit (`backend.failed`, set by
+ * the WASM build, e.g. after Lean's out-of-memory panic): its memory is lost and every later call
+ * fails, so the worker loads a new instance for the next request.
+ */
+function failed(backend) {
+  return !!(backend && backend.failed);
 }
 
 function convertError(err) {
@@ -160,13 +174,25 @@ if (_parentPort) {
       _parentPort.postMessage({ id: msg.id, data: result });
     } catch (err) {
       _parentPort.postMessage({ id: msg.id, error: convertError(err) });
+      if (failed(nodeBackend)) {
+        // js/load-wasm.js evaluates the WASM module again for a failed instance
+        try {
+          nodeBackend = loadNodeBackend();
+        } catch (e) {
+          nodeBackend = null;
+          nodeBackendError = e;
+        }
+      }
     }
   });
 } else if (isWebWorker && !isNode) {
   // Pure browser Web Worker — WASM via dynamic import
-  var wasmReady = import('./load-wasm.browser.mjs').then(function(loader) {
-    return loader.default();
-  });
+  var loadBrowserBackend = function() {
+    return import('./load-wasm.browser.mjs').then(function(loader) {
+      return loader.default();
+    });
+  };
+  var wasmReady = loadBrowserBackend();
 
   self.onmessage = function(e) {
     var msg = e.data;
@@ -176,6 +202,8 @@ if (_parentPort) {
         self.postMessage({ id: msg.id, data: result });
       } catch (err) {
         self.postMessage({ id: msg.id, error: convertError(err) });
+        // js/load-wasm.browser.mjs creates a new instance for a failed one
+        if (failed(backend)) wasmReady = loadBrowserBackend();
       }
     }).catch(function(err) {
       self.postMessage({ id: msg.id, error: convertError(err) });

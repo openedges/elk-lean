@@ -124,10 +124,23 @@ limit, `--stack-size=984`):
   and smaller in a Web Worker (the worker failed at JSON depth 4,000 and chain 1,000 where the main
   thread passed), so a Web Worker only keeps the page responsive; very deep graphs need Node.js
   worker mode or the native CLI.
-- **Memory**: the WASM build is wasm32 (`-sMEMORY64=2`) with emscripten's default 2 GB maximum; a
-  layout that needs more (e.g. one node with 5,000 ports: 1.1 GB native peak) aborts with
-  `INTERNAL PANIC: out of memory` / `ExitStatus`, after which the instance is unusable (a build with
-  `-sMAXIMUM_MEMORY=4GB` lays that graph out; not enabled yet).
+- **Memory**: the WASM build is wasm32 (`-sMEMORY64=2`) with a 4 GB maximum
+  (`-sMAXIMUM_MEMORY=4GB`; it starts at 42 MiB and grows on demand). The orthogonal router of a
+  layered node with N ports, each to its own target node, keeps O(N²) segment dependencies (native
+  peak 50 MB at 1,000, 0.74 GB at 4,000, 1.2 GB at 5,000, 2.4 GB at 8,000): N = 8,000 lays out
+  (4,085 MiB of wasm memory), 8,500 does not; with emscripten's former 2 GB default the limit was
+  ~4,000 (4,250 failed). Results are the same in Node.js direct and worker mode and in Chrome's main
+  thread and Web Worker.
+- **Out of memory**: the Lean runtime prints `INTERNAL PANIC: out of memory` (stderr) and calls
+  C `exit(1)`. The WASM backend then throws `Error('elk-lean: the WASM instance terminated (Program
+  terminated with exit(1)), most likely out of memory (N MiB in use); create a new instance')`,
+  restores `process.exitCode` (emscripten sets it to 1) and marks the instance failed
+  (`backend.failed`): the aborted call's objects are never freed and the runtime state is unknown, so
+  every later call on that instance throws the same error. Recovery: `js/load-wasm.js` and
+  `js/load-wasm.browser.mjs` create a new instance on their next call, so a new `ELK()` (direct
+  mode) gets a fresh backend, the browser direct mode and `js/elk-worker.js` (`worker_threads`, Web
+  Worker, in-process fake worker) replace the instance before the next request; the failing request
+  itself is rejected. The native addon and the CLI are limited only by the machine's memory.
 
 ## Tests
 
@@ -140,7 +153,10 @@ node --test plugins/org.eclipse.elk.js/test/   # node:test, no npm dependencies
 `test/testEntryPoints.test.mjs` runs the WASM fallback in direct, fake-worker and `worker_threads`
 modes in a copy of the package without native addon; `test/testDeepRecursion.test.mjs` checks the
 stack limits above (8,000-node mrtree chain: `RangeError` in WASM direct mode and with
-`workerStackSizeMb: 1`, success in the default worker, equal to the native addon).
+`workerStackSizeMb: 1`, success in the default worker, equal to the native addon);
+`test/testWasmMemory.test.mjs` checks the recovery from a failed WASM instance with a stub module
+and, with `ELK_LEAN_TEST_LARGE_MEMORY=1` (~4 GB, ~30 s), the 5,000-port node in direct and worker
+mode against the native addon and a 10,000-port node that runs out of memory.
 
 Parity against the native CLI (byte-for-byte, `elk layout X --sort-keys`):
 
