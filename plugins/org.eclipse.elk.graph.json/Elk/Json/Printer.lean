@@ -74,10 +74,17 @@ def escapeString (s : String) : String := escapeInto "" s
 private def sortEntries (kvs : Array (String × Value)) : Array (String × Value) :=
   Elk.Core.Util.stableSort kvs (fun a b => compare a.1 b.1)
 
-/-- Appends the decimal representation of `n` (`Nat.repr` without the intermediate string). -/
+/-- `"0"` … `"99"`. -/
+private def smallNats : Array String := (Array.range 100).map toString
+
+/-- `"00"` … `"99"`. -/
+private def digitPairs : Array String := (Array.range 100).map fun n => if n < 10 then "0" ++ toString n else toString n
+
+/-- Appends the decimal representation of `n` (`Nat.repr` without the intermediate string), two
+digits per append. -/
 private def pushNat (out : String) (n : Nat) : String :=
-  if n < 10 then out.push (Char.ofNat (48 + n))
-  else (pushNat out (n / 10)).push (Char.ofNat (48 + n % 10))
+  if n < 100 then out ++ smallNats.getD n ""
+  else pushNat out (n / 100) ++ digitPairs.getD (n % 100) ""
 termination_by n
 decreasing_by omega
 
@@ -85,7 +92,7 @@ decreasing_by omega
 @[inline] private def pushNumber (out : String) (n : Number) : String :=
   match n with
   | .int (.ofNat k) => pushNat out k
-  | .int (.negSucc k) => pushNat (out.push '-') (k + 1)
+  | .int (.negSucc k) => pushNat (out ++ "-") (k + 1)
   | n => out ++ n.render
 
 mutual
@@ -121,12 +128,22 @@ partial def compactMembers (sortKeys : Bool) (kvs : Array (String × Value)) (i 
 
 end
 
-/-- `"\n"` followed by the indentation of levels `0 … 31` (two spaces per level). -/
-private def nlIndents : Array String := (Array.range 32).map fun l => "\n".pushn ' ' (2 * l)
+/-- `pre ++ "\n"`, the indentation of a level (two spaces each) and `post`. -/
+private def indentLit (pre post : String) (level : Nat) : String := (pre ++ "\n").pushn ' ' (2 * level) ++ post
 
-/-- A line break and the indentation of `level`. -/
-@[inline] private def nlIndent (level : Nat) : String :=
-  if h : level < nlIndents.size then nlIndents[level] else "\n".pushn ' ' (2 * level)
+/-- `indentLit pre post` for the levels `0 … 31`. -/
+private def indentTable (pre post : String) : Array String := (Array.range 32).map (indentLit pre post)
+
+/-! Line breaks with their indentation and punctuation, one append each. -/
+private def openObjs : Array String := indentTable "{" ""
+private def openArrs : Array String := indentTable "[" ""
+private def closeObjs : Array String := indentTable "" "}"
+private def closeArrs : Array String := indentTable "" "]"
+private def commaLines : Array String := indentTable "," ""
+
+/-- Entry `level` of a table built by `indentTable pre post`. -/
+@[inline] private def indentOf (t : Array String) (pre post : String) (level : Nat) : String :=
+  if h : level < t.size then t[level] else indentLit pre post level
 
 mutual
 
@@ -135,30 +152,36 @@ partial def pretty (sortKeys : Bool) (v : Value) (level : Nat) (out : String) : 
   match v with
   | .arr xs =>
     if xs.isEmpty then out ++ "[]"
-    else prettyItems sortKeys xs (level + 1) (nlIndent (level + 1)) 0 (out ++ "[") ++ nlIndent level ++ "]"
+    else
+      let out := prettyItems sortKeys xs (level + 1) (indentOf commaLines "," "" (level + 1)) 0
+        (out ++ indentOf openArrs "[" "" (level + 1))
+      out ++ indentOf closeArrs "" "]" level
   | .obj kvs =>
     if kvs.isEmpty then out ++ "{}"
     else
       let kvs := if sortKeys then sortEntries kvs else kvs
-      prettyMembers sortKeys kvs (level + 1) (nlIndent (level + 1)) 0 (out ++ "{") ++ nlIndent level ++ "}"
+      let out := prettyMembers sortKeys kvs (level + 1) (indentOf commaLines "," "" (level + 1)) 0
+        (out ++ indentOf openObjs "{" "" (level + 1))
+      out ++ indentOf closeObjs "" "}" level
   | other => compact sortKeys other out
 
-/-- `pretty` of the elements `xs[i:]` at `level`, each on its own line (`inner` is `nlIndent level`). -/
-partial def prettyItems (sortKeys : Bool) (xs : Array Value) (level : Nat) (inner : String) (i : Nat)
+/-- `pretty` of the elements `xs[i:]` at `level`, each on its own line (`sep` is `,` and the line
+break with the indentation of `level`; the caller wrote the first line break). -/
+partial def prettyItems (sortKeys : Bool) (xs : Array Value) (level : Nat) (sep : String) (i : Nat)
     (out : String) : String :=
   if h : i < xs.size then
-    let out := (if i != 0 then out ++ "," else out) ++ inner
-    prettyItems sortKeys xs level inner (i + 1) (pretty sortKeys xs[i] level out)
+    let out := if i != 0 then out ++ sep else out
+    prettyItems sortKeys xs level sep (i + 1) (pretty sortKeys xs[i] level out)
   else out
 
 /-- `pretty` of the members `kvs[i:]` at `level`, each on its own line. -/
-partial def prettyMembers (sortKeys : Bool) (kvs : Array (String × Value)) (level : Nat) (inner : String)
+partial def prettyMembers (sortKeys : Bool) (kvs : Array (String × Value)) (level : Nat) (sep : String)
     (i : Nat) (out : String) : String :=
   if h : i < kvs.size then
     let kv := kvs[i]
-    let out := (if i != 0 then out ++ "," else out) ++ inner
+    let out := if i != 0 then out ++ sep else out
     let out := appendKey out prettyKeys "\"" kv.1 "\": "
-    prettyMembers sortKeys kvs level inner (i + 1) (pretty sortKeys kv.2 level out)
+    prettyMembers sortKeys kvs level sep (i + 1) (pretty sortKeys kv.2 level out)
   else out
 
 end
