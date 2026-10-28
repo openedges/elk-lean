@@ -1,4 +1,5 @@
 import Elk.Core.Util.Java
+import Elk.Graph.ArrayModify
 /-!
 # JSON value model (`Elk.Json.Value`)
 
@@ -137,6 +138,26 @@ namespace Key
 
 end Key
 
+/-! Unchecked byte reads with `USize` indices for the byte loops of the parser and printer (no
+`Nat` arithmetic per byte, see `PLAN.md` 7.1 item 15). -/
+namespace Utf8
+
+/-- The `USize` byte size of `s` (truncated modulo the word size, which no string reaches). -/
+@[inline] def usize (s : String) : USize := s.utf8ByteSize.toUSize
+
+theorem lt_size_of_lt_usize (s : String) (i : USize) (h : i < usize s) : i.toNat < s.utf8ByteSize := by
+  have h1 : i.toNat < (usize s).toNat := h
+  have h2 : (usize s).toNat ≤ s.utf8ByteSize := by
+    simp [usize, Nat.toUSize]
+    exact Nat.mod_le _ _
+  omega
+
+/-- Byte `i` of `s` (`lean_string_uget_byte_fast`). -/
+@[inline] def uget (s : String) (i : USize) (h : i < usize s) : UInt8 :=
+  String.Internal.ugetUTF8Byte s i (lt_size_of_lt_usize s i h)
+
+end Utf8
+
 /-- Path segment for `Value.getAt`/`modifyAt`. -/
 inductive Seg where
   | key (k : String)
@@ -222,7 +243,7 @@ def hasKey (v : Value) (key : String) : Bool :=
 /-- `obj[key] = x` on an entry array: replaces the first member named `key` in place or appends. -/
 @[inline] def setEntry (kvs : Array (String × Value)) (key : String) (x : Value) : Array (String × Value) :=
   let i := keyIndex kvs key
-  if i < kvs.size then kvs.set! i (key, x) else kvs.push (key, x)
+  if i < kvs.size then kvs.modifyIn i (fun kv => (kv.1, x)) else kvs.push (key, x)
 
 /-- `obj[key] = x`: replaces an existing member in place or appends. Non-objects are unchanged. -/
 def set (v : Value) (key : String) (x : Value) : Value :=
@@ -243,7 +264,7 @@ def modifyKey (v : Value) (key : String) (default : Value) (f : Value → Value)
   match v with
   | .obj kvs =>
     let i := keyIndex kvs key
-    if i < kvs.size then .obj (kvs.modify i fun kv => (kv.1, f kv.2))
+    if i < kvs.size then .obj (kvs.modifyIn i fun kv => (kv.1, f kv.2))
     else .obj (kvs.push (key, f default))
   | other => other
 
@@ -263,11 +284,11 @@ partial def modifyAt (v : Value) (path : List Seg) (f : Value → Value) : Value
     match v with
     | .obj kvs =>
       let i := keyIndex kvs k
-      if i < kvs.size then .obj (kvs.modify i fun kv => (kv.1, kv.2.modifyAt rest f)) else v
+      if i < kvs.size then .obj (kvs.modifyIn i fun kv => (kv.1, kv.2.modifyAt rest f)) else v
     | other => other
   | .idx i :: rest =>
     match v with
-    | .arr xs => if i < xs.size then .arr (xs.modify i (·.modifyAt rest f)) else v
+    | .arr xs => if i < xs.size then .arr (xs.modifyIn i (·.modifyAt rest f)) else v
     | other => other
 
 /-- `getAt` on the segments `path[i:]` (no list conversion). -/
@@ -294,13 +315,35 @@ partial def modifyAtFrom (v : Value) (path : Array Seg) (i : Nat) (f : Value →
       match v with
       | .obj kvs =>
         let j := keyIndex kvs k
-        if j < kvs.size then .obj (kvs.modify j fun kv => (kv.1, kv.2.modifyAtFrom path (i + 1) f)) else v
+        if j < kvs.size then .obj (kvs.modifyIn j fun kv => (kv.1, kv.2.modifyAtFrom path (i + 1) f)) else v
       | other => other
     | .idx j =>
       match v with
-      | .arr xs => if j < xs.size then .arr (xs.modify j (·.modifyAtFrom path (i + 1) f)) else v
+      | .arr xs => if j < xs.size then .arr (xs.modifyIn j (·.modifyAtFrom path (i + 1) f)) else v
       | other => other
   else f v
+
+/-- `x`, `y`, `width`, `height` of the object at the path `path[i:]` set to the given values (in this
+order, like four `set` calls: existing members are replaced in place, missing ones appended). The
+dedicated traversal of `transferXywh` (no update closure). -/
+partial def setXywhAtFrom (v : Value) (path : Array Seg) (i : Nat) (x y w h : Value) : Value :=
+  if hp : i < path.size then
+    match path[i] with
+    | .key k =>
+      match v with
+      | .obj kvs =>
+        let j := keyIndex kvs k
+        if j < kvs.size then .obj (kvs.modifyIn j fun kv => (kv.1, kv.2.setXywhAtFrom path (i + 1) x y w h)) else v
+      | other => other
+    | .idx j =>
+      match v with
+      | .arr xs => if j < xs.size then .arr (xs.modifyIn j (·.setXywhAtFrom path (i + 1) x y w h)) else v
+      | other => other
+  else
+    match v with
+    | .obj kvs =>
+      .obj (setEntry (setEntry (setEntry (setEntry kvs Key.x x) Key.y y) Key.width w) Key.height h)
+    | other => other
 
 /-- Structural equality (objects compare in order). -/
 partial def beq : Value → Value → Bool

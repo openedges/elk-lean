@@ -33,18 +33,17 @@ private def pushEscaped (out : String) (c : Char) : String :=
 
 /-- Whether `s` has a character that serde_json escapes (`"`, `\`, control characters), checked on
 the UTF-8 bytes from byte `i` (bytes of multi-byte characters are `≥ 0x80`). -/
-private def hasEscapes (s : String) (n : Nat) (hn : n = s.utf8ByteSize) (i : Nat) : Bool :=
+private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) (i : USize) : Bool :=
   if h : i < n then
-    let b := s.getUTF8Byte ⟨i⟩ (show i < s.utf8ByteSize from hn ▸ h)
-    b < 0x20 || b == 0x22 || b == 0x5c || hasEscapes s n hn (i + 1)
+    let b := Utf8.uget s i (hn ▸ h)
+    if b < 0x20 || b == 0x22 || b == 0x5c then true else hasEscapes s n hn (i + 1)
   else
     false
-termination_by n - i
 
 /-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
 def escapeInto (out s : String) : String :=
   let out := out.push '"'
-  let out := if hasEscapes s s.utf8ByteSize rfl 0 then s.foldl pushEscaped out else out ++ s
+  let out := if hasEscapes s (Utf8.usize s) rfl 0 then s.foldl pushEscaped out else out ++ s
   out.push '"'
 
 /-- serde_json string escaping. -/

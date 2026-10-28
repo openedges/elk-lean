@@ -75,27 +75,31 @@ private partial def skipBlockComment (bs : String) (i : Nat) : Nat :=
     if byteAt bs i == 42 && isAt bs (i + 1) 47 then i + 2 else skipBlockComment bs (i + 1)
   else i
 
-/-- Index of the first non-whitespace byte from `i` (`n` is the input size; one bounds test per
-byte, space tested first: indentation dominates pretty-printed input). -/
-private partial def skipBlanks (bs : String) (n : Nat) (hn : n = bs.utf8ByteSize) (i : Nat) : Nat :=
+/-- `skipBlanks` on `USize` indices (`n` is the input size; one bounds test per byte, space tested
+first: indentation dominates pretty-printed input). -/
+private partial def skipBlanksU (bs : String) (n : USize) (hn : n = Utf8.usize bs) (i : USize) : USize :=
   if h : i < n then
-    let x := bs.getUTF8Byte ⟨i⟩ (show i < bs.utf8ByteSize from hn ▸ h)
-    if x == 32 || x == 10 || x == 13 || x == 9 then skipBlanks bs n hn (i + 1) else i
+    let x := Utf8.uget bs i (hn ▸ h)
+    if x == 32 || x == 10 || x == 13 || x == 9 then skipBlanksU bs n hn (i + 1) else i
   else i
+
+/-- Index of the first non-whitespace byte from `i`. -/
+@[inline] private def skipBlanks (bs : String) (i : Nat) : Nat :=
+  (skipBlanksU bs (Utf8.usize bs) rfl i.toUSize).toNat
 
 /-- Skips whitespace and comments (lenient mode), from a non-whitespace byte at `i`. -/
 private partial def skipComments (bs : String) (i : Nat) : Nat :=
   if i + 1 < bs.utf8ByteSize && byteAt bs i == 47 then
     let y := byteAt bs (i + 1)
-    if y == 47 then skipComments bs (skipBlanks bs bs.utf8ByteSize rfl (skipLineComment bs (i + 2)))
-    else if y == 42 then skipComments bs (skipBlanks bs bs.utf8ByteSize rfl (skipBlockComment bs (i + 2)))
+    if y == 47 then skipComments bs (skipBlanks bs (skipLineComment bs (i + 2)))
+    else if y == 42 then skipComments bs (skipBlanks bs (skipBlockComment bs (i + 2)))
     else i
   else i
 
 /-- Skips whitespace, and comments in lenient mode. (`skipBlanks` stops at a non-whitespace byte,
 so strict mode needs no further test.) -/
 @[inline] private def skipWs (bs : String) (lenient : Bool) (i : Nat) : Nat :=
-  let i := skipBlanks bs bs.utf8ByteSize rfl i
+  let i := skipBlanks bs i
   if lenient then skipComments bs i else i
 
 /-- `expected 'c'` at `i`. -/
@@ -129,19 +133,16 @@ private def parseHex4 (bs : String) (i : Nat) : PR Nat := Id.run do
 private def pushChar (buf : ByteArray) (code : Nat) : ByteArray :=
   buf ++ (String.singleton (Char.ofNat code)).toUTF8
 
-/-- Fast scan of a string body from `i`: the index of the closing quote `q` when the body has no
-escape and (in strict mode) no control character; `none` when the general loop must decide. -/
-private partial def scanPlainString (bs : String) (q : UInt8) (lenient : Bool) (i : Nat) : Option Nat :=
-  go bs.utf8ByteSize rfl i
-where
-  go (n : Nat) (hn : n = bs.utf8ByteSize) (i : Nat) : Option Nat :=
-    if h : i < n then
-      let x := bs.getUTF8Byte ⟨i⟩ (show i < bs.utf8ByteSize from hn ▸ h)
-      if x == q then some i
-      else if x == 92 then none
-      else if x < 32 && !lenient then none
-      else go n hn (i + 1)
-    else none
+/-- Fast scan of a string body from `i`: the index of the first byte that is the closing quote `q`,
+an escape (`\`) or (in strict mode) a control character, or the input size. The body is plain
+(sliced in one step) when that byte is `q`; the general loop decides otherwise. -/
+private partial def scanPlainString (bs : String) (q : UInt8) (lenient : Bool) (n : USize)
+    (hn : n = Utf8.usize bs) (i : USize) : USize :=
+  if h : i < n then
+    let x := Utf8.uget bs i (hn ▸ h)
+    if x == q || x == 92 || (x < 32 && !lenient) then i
+    else scanPlainString bs q lenient n hn (i + 1)
+  else i
 
 /-- The general string loop (escapes, errors) from position `i` with the decoded bytes `buf`. -/
 private partial def parseStringBody (bs : String) (q : UInt8) (lenient : Bool) (i : Nat)
@@ -235,10 +236,10 @@ private def parseStringLit (bs : String) (lenient : Bool) (i : Nat) (intern : Bo
     if q != 34 && !(q == 39 && lenient) then fail i "expected string"
     else
       let body := i + 1
-      match scanPlainString bs q lenient body with
-      | some close =>
+      let close := (scanPlainString bs q lenient (Utf8.usize bs) rfl body.toUSize).toNat
+      if close < bs.utf8ByteSize && byteAt bs close == q then
         .ok (if intern then internSlice bs body close else slice bs body close) (close + 1)
-      | none =>
+      else
         match parseStringBody bs q lenient body ByteArray.empty with
         | .err e => .err e
         | .ok buf i =>

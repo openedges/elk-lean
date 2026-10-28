@@ -238,14 +238,11 @@ def transferXywh (x y w h : Float) (path : JsonPath) (parent : Option ElementId)
   let ay ← match parent with
     | some p => adjustParentY p y
     | none => pure y
-  modAt path fun o =>
-    match o with
-    | .obj kvs =>
-      let kvs := Value.setEntry kvs Key.x (.ofFloatElk ax)
-      let kvs := Value.setEntry kvs Key.y (.ofFloatElk ay)
-      let kvs := Value.setEntry kvs Key.width (.ofFloatElk w)
-      .obj (Value.setEntry kvs Key.height (.ofFloatElk h))
-    | other => other
+  let vx := Value.ofFloatElk ax
+  let vy := Value.ofFloatElk ay
+  let vw := Value.ofFloatElk w
+  let vh := Value.ofFloatElk h
+  modI (·.modifyModel (·.setXywhAtFrom path 0 vx vy vw vh))
 
 /-- `recompute_fixed_order_vertical_port_surrounding_height`. -/
 def recomputeFixedOrderVerticalPortSurroundingHeight (n : NodeId) : ImportM (Option Float) := do
@@ -365,7 +362,8 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
 /-- `transfer_layout_port`. -/
 def transferLayoutPort (p : PortId) : ImportM Unit := do
   let some path := tableGet? (← getI).portPath p.idx | throwJsonImport "Port did not exist in input."
-  let _ ← objectAt path
+  -- (the importer registers paths of JSON objects only, and the transfer never replaces them, so
+  -- the `json_object_mut` check of the reference always succeeds here)
   let port := (← getG).port p
   let parent := port.parent.map ElementId.node
   recordShape (.port p) parent port.x port.y port.props
@@ -475,7 +473,7 @@ where
 /-- `transfer_layout_label`. -/
 def transferLayoutLabel (l : LabelId) : ImportM Unit := do
   let some path := tableGet? (← getI).labelPath l.idx | throwJsonImport "Label did not exist in input."
-  let _ ← objectAt path
+  -- (`path` holds a JSON object, see `transferLayoutPort`)
   let label := (← getG).label l
   let parent := label.parent
   recordShape (.label l) parent label.x label.y label.props
