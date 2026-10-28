@@ -23,11 +23,12 @@ structure Spacings where
   vertical : Array (Array (Option (Property Float)))
   /-- Graph-level value per option id (`cache_graph_values`). -/
   graphPropertyValues : Array (String × Float)
-  /-- `graphSpacingValue` of every entry of `horizontal` (`0` where there is no option), resolved
-  once by `new` instead of a search by option id per lookup (no Java counterpart). -/
-  horizontalValues : Array (Array Float) := #[]
-  /-- `graphSpacingValue` of every entry of `vertical` (see `horizontalValues`). -/
-  verticalValues : Array (Array Float) := #[]
+  /-- For every entry `t1 * NodeType.COUNT + t2` of `horizontal`, the index of its option's value in
+  `graphPropertyValues` (out of range where there is no option): the graph values are looked up
+  by position instead of by option id (no Java counterpart). -/
+  horizontalSlots : Array Nat := #[]
+  /-- The `graphPropertyValues` index of every entry of `vertical` (see `horizontalSlots`). -/
+  verticalSlots : Array Nat := #[]
   deriving Inhabited
 
 namespace Spacings
@@ -89,20 +90,42 @@ private def precalculateNodeTypeSpacings (s : Spacings) : Spacings :=
     |>.nodeTypeSpacing .breakingPoint .label LayeredOptions.SPACING_EDGE_NODE LayeredOptions.SPACING_EDGE_NODE_BETWEEN_LAYERS
     |>.nodeTypeSpacing .breakingPoint .longEdge LayeredOptions.SPACING_EDGE_NODE LayeredOptions.SPACING_EDGE_NODE_BETWEEN_LAYERS
 
-/-- `cache_graph_values`: resolves every option of both tables against the graph's properties
-(stored value, else the option default; every spacing option has a default). -/
-private def cacheGraphValues (s : Spacings) (graphProps : PropertyMap) : Spacings := Id.run do
-  let mut values : Array (String × Float) := #[]
-  let cache (values : Array (String × Float)) (p : Property Float) : Array (String × Float) :=
-    if values.any (·.1 == p.key.id) then values
-    else values.push (p.key.id, (graphProps.get p).getD 0.0)
+/-- The distinct options of both tables in `cache_graph_values` order (rows of `vertical`, then
+of `horizontal`; first occurrence of each option id) and the slot of every table entry (index into
+that list, `distinct.size` for an empty entry). -/
+private def tableSlots (s : Spacings) : Array (Property Float) × Array Nat × Array Nat := Id.run do
+  let mut distinct : Array (Property Float) := #[]
   for row in s.vertical do
     for p in row do
-      if let some p := p then values := cache values p
+      if let some p := p then
+        if !distinct.any (·.key.id == p.key.id) then distinct := distinct.push p
   for row in s.horizontal do
     for p in row do
-      if let some p := p then values := cache values p
-  return { s with graphPropertyValues := values }
+      if let some p := p then
+        if !distinct.any (·.key.id == p.key.id) then distinct := distinct.push p
+  let slotsOf (table : Array (Array (Option (Property Float)))) : Array Nat := Id.run do
+    let mut slots : Array Nat := #[]
+    for row in table do
+      for p in row do
+        slots := slots.push (match p with
+          | some p => (distinct.findIdx? (·.key.id == p.key.id)).getD distinct.size
+          | none => distinct.size)
+    return slots
+  return (distinct, slotsOf s.horizontal, slotsOf s.vertical)
+
+/-- The node type tables with their slots, the same for every graph (computed once). -/
+private def precalculated : Spacings × Array (Property Float) :=
+  let s := ({ horizontal := emptyTable, vertical := emptyTable, graphPropertyValues := #[] } : Spacings)
+    |>.precalculateNodeTypeSpacings
+  let (distinct, horizontalSlots, verticalSlots) := s.tableSlots
+  ({ s with horizontalSlots, verticalSlots }, distinct)
+
+/-- `cache_graph_values`: resolves every option of both tables against the graph's properties
+(stored value, else the option default; every spacing option has a default), one entry per
+option id in table order. -/
+private def cacheGraphValues (s : Spacings) (distinct : Array (Property Float)) (graphProps : PropertyMap) :
+    Spacings :=
+  { s with graphPropertyValues := distinct.map fun p => (p.key.id, (graphProps.get p).getD 0.0) }
 
 /-- `graph_spacing_value(property)`: the cached graph value, else the option default. -/
 def graphSpacingValue (s : Spacings) (p : Property Float) : Float :=
@@ -110,17 +133,10 @@ def graphSpacingValue (s : Spacings) (p : Property Float) : Float :=
   | some (_, v) => v
   | none => p.default.getD 0.0
 
-/-- `graphSpacingValue` of every option of a table (`0` for empty entries). -/
-private def resolveTable (s : Spacings) (table : Array (Array (Option (Property Float)))) : Array (Array Float) :=
-  table.map (·.map fun p? => match p? with
-    | some p => s.graphSpacingValue p
-    | none => 0.0)
-
 /-- `new Spacings(graph)` from the graph's property map. -/
 def new (graphProps : PropertyMap) : Spacings :=
-  let s := ({ horizontal := emptyTable, vertical := emptyTable, graphPropertyValues := #[] } : Spacings)
-    |>.precalculateNodeTypeSpacings |>.cacheGraphValues graphProps
-  { s with horizontalValues := s.resolveTable s.horizontal, verticalValues := s.resolveTable s.vertical }
+  let (s, distinct) := precalculated
+  s.cacheGraphValues distinct graphProps
 
 /-- `get_individual_or_default_f64(node, property)`: the node's individual spacing if set,
 else the graph value. -/
@@ -147,38 +163,48 @@ def getIndividualOrDefaultF64 (s : Spacings) (nodeProps : PropertyMap) (p : Prop
   | some v => v
   | none => graphValue
 
+/-- `graphSpacingValue` of the option of a table entry, read by its slot (`horizontalSlots` /
+`verticalSlots`); the search by option id is the fallback for a slot out of range. -/
+@[inline] private def slotValue (s : Spacings) (slots : Array Nat) (i j : Nat) (option : Property Float) : Float :=
+  match slots[i * NodeType.COUNT + j]? with
+  | some k =>
+    match s.graphPropertyValues[k]? with
+    | some (_, v) => v
+    | none => s.graphSpacingValue option
+  | none => s.graphSpacingValue option
+
 /-- The spacing between two nodes of the given types: the larger individual-or-graph value of
-the table's option (`values` holds the options' graph values, `horizontalValues`/`verticalValues`). -/
-private def localSpacing? (s : Spacings) (table : Array (Array (Option (Property Float))))
-    (values : Array (Array Float)) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) :
-    Option Float := do
+the table's option (`slots`: the table's `horizontalSlots`/`verticalSlots`). -/
+private def localSpacing? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
+    (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float := do
   let i := ElkEnum.ordinal t1
   let j := ElkEnum.ordinal t2
   let option ← (table[i]?.bind (·[j]?)).bind id
-  let graphValue := match values[i]?.bind (·[j]?) with
-    | some v => v
-    | none => s.graphSpacingValue option
+  let graphValue := s.slotValue slots i j option
   return fmax (individualOr p1 option graphValue) (individualOr p2 option graphValue)
 
-private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (Property Float)))) (t1 t2 : NodeType) : Option Float := do
-  let option ← (table[ElkEnum.ordinal t1]?.bind (·[ElkEnum.ordinal t2]?)).bind id
-  return s.graphSpacingValue option
+private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
+    (t1 t2 : NodeType) : Option Float := do
+  let i := ElkEnum.ordinal t1
+  let j := ElkEnum.ordinal t2
+  let option ← (table[i]?.bind (·[j]?)).bind id
+  return s.slotValue slots i j option
 
 /-- `getHorizontalSpacing(n1, n2)`: `none` = Java `UnspecifiedSpacingException`. -/
 def getHorizontalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
-  s.localSpacing? s.horizontal s.horizontalValues t1 p1 t2 p2
+  s.localSpacing? s.horizontal s.horizontalSlots t1 p1 t2 p2
 
 /-- `getVerticalSpacing(n1, n2)`. -/
 def getVerticalSpacing? (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : Option Float :=
-  s.localSpacing? s.vertical s.verticalValues t1 p1 t2 p2
+  s.localSpacing? s.vertical s.verticalSlots t1 p1 t2 p2
 
 /-- `getHorizontalSpacing(NodeType, NodeType)`. -/
 def getHorizontalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
-  s.localSpacingForTypes? s.horizontal t1 t2
+  s.localSpacingForTypes? s.horizontal s.horizontalSlots t1 t2
 
 /-- `getVerticalSpacing(NodeType, NodeType)`. -/
 def getVerticalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
-  s.localSpacingForTypes? s.vertical t1 t2
+  s.localSpacingForTypes? s.vertical s.verticalSlots t1 t2
 
 /-- Throwing variants (the Java methods throw `UnspecifiedSpacingException`). -/
 def getHorizontalSpacing (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : IO Float :=

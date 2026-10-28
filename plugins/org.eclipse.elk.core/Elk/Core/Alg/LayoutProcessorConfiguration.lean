@@ -57,7 +57,11 @@ def getListItem (c : LayoutProcessorConfiguration P F) (index : Nat) : Array F :
 def doAdd (c : LayoutProcessorConfiguration P F) (index : Nat) (processor : F) : LayoutProcessorConfiguration P F :=
   let c := c.ensureListSize (index + 1)
   if (c.list[index]!).contains processor then c
-  else { c with list := c.list.modify index (·.push processor) }
+  else
+    -- the slot list is taken out of the configuration so that both are updated in place
+    let list := c.list
+    let c : LayoutProcessorConfiguration P F := { c with list := #[] }
+    { c with list := list.modifyIn index (·.push processor) }
 
 /-- `add(processor)`: into the slot selected by `before`/`after`; Java throws
 `IllegalStateException` when none was selected. -/
