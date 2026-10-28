@@ -74,8 +74,9 @@ def metaTests : Suite := suite "disco.meta" do
   check "strategy type enum" (strategy.type == .enum)
   check "strategy default POLYOMINO"
     ((strategy.defaultValue.bind PropCodec.dec : Option CompactionStrategy) == some .polyomino)
-  check "strategy has no parser" strategy.parser.isNone
-  check "strategy has no choices" strategy.choices.isEmpty
+  -- Java registers the enum class (choices and parser); elk-rs had neither (agent OPT)
+  check "strategy has a parser (Java)" strategy.parser.isSome
+  checkEq "strategy choices (Java)" strategy.choices #["POLYOMINO"]
   -- the component layout algorithm option
   let some layoutAlgorithm ← LayoutMetaDataService.getOptionData
       DisCoOptions.COMPONENT_COMPACTION_COMPONENT_LAYOUT_ALGORITHM.id

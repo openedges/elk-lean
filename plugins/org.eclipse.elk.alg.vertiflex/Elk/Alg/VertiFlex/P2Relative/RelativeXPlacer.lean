@@ -295,9 +295,11 @@ def splitNodesWithModelOrder (original : Array NodeId) : VertiFlexM (Array NodeI
 children in a V shape (the deepest child in the middle): children are dealt to the lighter side,
 the left list is reversed and the right list sorted descending. Returns the new order.
 
-Rust writes the result back with `children[idx] = node` for `idx in 0..left.len()`; a result
-longer than `children` (exactly two children with `consider_node_model_order`) panics there with
-`index out of bounds`, reproduced as an exception. -/
+Java writes the result back with `children.set(i, a.get(i))` for `i < children.size()`: a longer
+result (exactly two children with `considerNodeModelOrder`, whose split adds them twice) is cut to
+the length of `children`, a shorter one is Java's `IndexOutOfBoundsException`. (elk-rs iterates over
+the result and panics on the longer one, which elk-lean reproduced before agent OPT; Java lays such
+trees out.) -/
 def sortSubtrees (cfg : Config) (children : Array NodeId) : VertiFlexM (Array NodeId) := do
   let mut keys : Array NodeKey := #[]
   for c in children do
@@ -328,10 +330,10 @@ def sortSubtrees (cfg : Config) (children : Array NodeId) : VertiFlexM (Array No
     rightKeys := rightKeys.push (← NodeComparator.key c)
   right := (stableSort rightKeys (NodeComparator.compare true)).map (·.node)
   left := left ++ right
-  if left.size > sorted.size then
-    throw (IO.userError s!"index out of bounds: the len is {sorted.size} but the index is {sorted.size}")
+  if left.size < sorted.size then
+    throw (IO.userError s!"java.lang.IndexOutOfBoundsException: Index {left.size} out of bounds for length {left.size}")
   let mut result := sorted
-  for idx in [0:left.size] do
+  for idx in [0:sorted.size] do
     result := result.set! idx left[idx]!
   return result
 

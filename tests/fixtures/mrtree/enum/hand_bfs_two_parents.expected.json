@@ -1,0 +1,127 @@
+{
+  "children": [
+    {
+      "height": 10,
+      "id": "n0",
+      "width": 10,
+      "x": 35,
+      "y": 20
+    },
+    {
+      "height": 10,
+      "id": "n1",
+      "width": 10,
+      "x": 20,
+      "y": 50
+    },
+    {
+      "height": 10,
+      "id": "n2",
+      "width": 10,
+      "x": 50,
+      "y": 50
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e0",
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 38.33333333333333,
+              "y": 33
+            }
+          ],
+          "endPoint": {
+            "x": 25,
+            "y": 50
+          },
+          "id": "e0_s0",
+          "startPoint": {
+            "x": 38.33333333333333,
+            "y": 30
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 41.666666666666664,
+              "y": 33
+            }
+          ],
+          "endPoint": {
+            "x": 56.666666666666664,
+            "y": 50
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 41.666666666666664,
+            "y": 30
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "bendPoints": [
+            {
+              "x": 25,
+              "y": 63
+            },
+            {
+              "x": 53.33333333333333,
+              "y": 63
+            }
+          ],
+          "endPoint": {
+            "x": 53.33333333333333,
+            "y": 50
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 25,
+            "y": 60
+          }
+        }
+      ],
+      "sources": [
+        "n1"
+      ],
+      "targets": [
+        "n2"
+      ]
+    }
+  ],
+  "height": 80,
+  "id": "root",
+  "layoutOptions": {
+    "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
+    "org.eclipse.elk.mrtree.searchOrder": "BFS"
+  },
+  "width": 80,
+  "x": 0,
+  "y": 0
+}

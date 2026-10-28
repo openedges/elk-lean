@@ -191,7 +191,8 @@ def metaTests : Suite := suite "force.meta" do
   check "force: PRIORITY default 1" (isInt (force.defaultValueRaw CoreOptions.PRIORITY.id) 1)
   check "force: SPACING_NODE_NODE default 80" (isDouble (force.defaultValueRaw CoreOptions.SPACING_NODE_NODE.id) 80.0)
   check "force: SPACING_EDGE_LABEL default 5" (isDouble (force.defaultValueRaw CoreOptions.SPACING_EDGE_LABEL.id) 5.0)
-  check "force: ASPECT_RATIO default 1.6" (isDouble (force.defaultValueRaw CoreOptions.ASPECT_RATIO.id) 1.6)
+  -- Java `supports org.eclipse.elk.aspectRatio = 1.6f` (the float widened to double; elk-rs: 1.6)
+  check "force: ASPECT_RATIO default 1.6f" (isDouble (force.defaultValueRaw CoreOptions.ASPECT_RATIO.id) 1.600000023841858)
   check "force: RANDOM_SEED default 1" (isInt (force.defaultValueRaw CoreOptions.RANDOM_SEED.id) 1)
   check "force: SEPARATE_CONNECTED_COMPONENTS default true" (isBool (force.defaultValueRaw CoreOptions.SEPARATE_CONNECTED_COMPONENTS.id) true)
   check "force: PADDING default 50" (force.defaultValue CoreOptions.PADDING == some (ElkPadding.ofAny 50.0))
@@ -221,8 +222,9 @@ def metaTests : Suite := suite "force.meta" do
   check "MODEL: default FRUCHTERMAN_REINGOLD" (model.defaultValue.bind (PropCodec.dec : PropValue → Option ForceModelStrategy) == some .fruchtermanReingold)
   check "MODEL: parents" (model.targets == EnumSet.of #[.parents])
   checkEq "MODEL: name" model.name "Force Model"
-  check "MODEL: no parser (Rust)" model.parser.isNone
-  check "MODEL: no choices (Rust)" model.choices.isEmpty
+  -- Java registers the enum class (choices and parser); elk-rs had neither (agent OPT)
+  check "MODEL: parser (Java)" model.parser.isSome
+  checkEq "MODEL: choices (Java)" model.choices #["EADES", "FRUCHTERMAN_REINGOLD"]
   let iterations ← opt "org.eclipse.elk.force.iterations"
   check "ITERATIONS: int default 300" (iterations.type == .int && isInt iterations.defaultValue 300)
   check "ITERATIONS: lower bound 1" (match iterations.lowerBound with | some b => !b.isExclusive && isInt (some b.value) 1 | none => false)
@@ -245,8 +247,9 @@ def metaTests : Suite := suite "force.meta" do
   check "DESIRED_EDGE_LENGTH: double 100, parents+edges"
     (del.type == .double && isDouble del.defaultValue 100.0 && del.targets == EnumSet.of #[.parents, .edges])
   let dim ← opt "org.eclipse.elk.stress.dimension"
-  check "DIMENSION: enum default XY, no parser (Rust)"
-    (dim.type == .enum && dim.defaultValue.bind (PropCodec.dec : PropValue → Option Dimension) == some .xy && dim.parser.isNone)
+  check "DIMENSION: enum default XY, parser (Java)"
+    (dim.type == .enum && dim.defaultValue.bind (PropCodec.dec : PropValue → Option Dimension) == some .xy && dim.parser.isSome)
+  checkEq "DIMENSION: choices (Java)" dim.choices #["XY", "X", "Y"]
   let eps ← opt "org.eclipse.elk.stress.epsilon"
   check "EPSILON: double 0.001" (eps.type == .double && isDouble eps.defaultValue 0.001)
   let lim ← opt "org.eclipse.elk.stress.iterationLimit"
@@ -324,8 +327,9 @@ def layoutTests : Suite := suite "force.layout" do
   let c ← layoutGraph g4 root4
   check "force: different seed, different layout" (!samePositions (positions a root) (positions c root))
   check "force: root has a size" ((a.node root).width > 0.0 && (a.node root).height > 0.0)
+  -- `ForceOptions.PADDING` (Java default 50; the core default 12 before agent OPT)
   checkFloat "force: padded bounding box starts at the padding"
-    ((positions a root).foldl (fun m (x, _) => fmin m x) Float.maxValue) 12.0 1e-9
+    ((positions a root).foldl (fun m (x, _) => fmin m x) Float.maxValue) 50.0 1e-9
   -- Eades selected through the stored property
   let eadesGraph := g.setNodeProp root ForceOptions.MODEL ForceModelStrategy.eades
   let e1 ← layoutGraph eadesGraph root
@@ -444,28 +448,15 @@ def fixtureTests : Suite := suite "force.fixtures" do
 /-- Directory of the fixtures that need the enum options `MODEL` / `DIMENSION` to be parseable. -/
 private def enumFixtureDir : System.FilePath := "tests/fixtures/force_enum"
 
-/-- Strict enum parser (exact Java name, upper-cased), the parser the elk-rs harness installs. -/
-private def strictEnumParser (α : Type) [ElkEnum α] : OptionParser :=
-  fun s => (ElkEnum.ofJavaName? s.trimAscii.toString.toUpper : Option α).map PropCodec.enc
-
-/-- `force.fixtures.enum`: the stock elk-rs registration of `elk.force.model` and `elk.stress.dimension`
-has no parser, so the oracle runner ignores `EADES` / `X` / `Y`. The expected outputs of
-`tests/fixtures/force_enum` were therefore produced by the same elk-rs code driven through a small
-Rust harness that re-registers the two options with a parser. This suite does the same in Lean (it
-swaps in parsers for the two options, runs the fixtures and restores the stock registration). -/
+/-- `force.fixtures.enum`: `elk.force.model` and `elk.stress.dimension` given as strings (constant
+names and ordinals). The stock elk-rs registration has no parser for them, so the expected outputs
+were first produced by a Rust harness that re-registered the two options with a strict parser; since
+agent OPT the Lean registration parses them like ELK Java (`Enum.valueOf`, else the ordinal) and the
+expected outputs are elk-lean results checked against ELK Java 0.12.0
+(`tests/fixtures/opt_java_status.tsv`). -/
 def enumFixtureTests : Suite := suite "force.fixtures.enum" do
   Elk.Api.ensureInitialized
-  let some model ← LayoutMetaDataService.getOptionData ForceOptions.MODEL.id
-    | report "MODEL registered" false
-  let some dim ← LayoutMetaDataService.getOptionData StressOptions.DIMENSION.id
-    | report "DIMENSION registered" false
-  LayoutMetaDataService.modifyInstance fun s =>
-    (s.registerLayoutOption { model with parser := some (strictEnumParser ForceModelStrategy) }).registerLayoutOption
-      { dim with parser := some (strictEnumParser Dimension) }
-  try
-    runFixtures enumFixtureDir none
-  finally
-    LayoutMetaDataService.modifyInstance fun s => (s.registerLayoutOption model).registerLayoutOption dim
+  runFixtures enumFixtureDir none
 
 def suites : Array Tests.Suite :=
   #[importTests, importerTests, metaTests, formulaTests, layoutTests, fixtureTests, enumFixtureTests]

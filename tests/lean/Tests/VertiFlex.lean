@@ -27,6 +27,12 @@ probe, see below) are checked byte-for-byte:
   the elk-rs panic (`UnsupportedConfigurationException` text or `index out of bounds`).
 
 Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `vf_ports_labels` is an elk-lean output since RJ1 (Java's node micro layout; every changed value equals ELK Java's).
+
+Agent OPT (Java option semantics): `elk.vertiflex.layoutStrategy` is parsed like in Java, so the
+`bend_*` inputs now also carry `"elk.vertiflex.layoutStrategy": "BEND"` and `vf_strategy_ignored`
+is laid out with bends; `err_two_children` / `err_deep_two_children` are laid out like ELK Java
+(elk-rs panics). All of them are elk-lean outputs equal to ELK Java 0.12.0 at tolerance 0
+(`tests/fixtures/opt_java_status.tsv`).
 -/
 namespace Tests.VertiFlex
 
@@ -49,10 +55,11 @@ def metadataTests : Suite := suite "vertiflex.metadata" do
     checkEq "layout strategy name" o.name "Edge layout strategy"
     checkEq "layout strategy group" o.group ""
     check "layout strategy visible" (o.visibility == .visible)
-    -- elk-rs registers neither the choices nor a parser for this enum (see module doc of the provider)
-    checkEq "layout strategy choices (none in elk-rs)" o.choices #[]
-    check "layout strategy not parseable (elk-rs)" (!o.canParseValue)
-    check "layout strategy value ignored" (o.parseValue "BEND").isNone
+    -- Java registers the enum class (choices and parser); elk-rs had neither (agent OPT)
+    checkEq "layout strategy choices (Java)" o.choices #["STRAIGHT", "BEND"]
+    check "layout strategy parseable (Java)" o.canParseValue
+    check "layout strategy value parsed"
+      ((o.parseValue "BEND").bind PropCodec.dec == some EdgeRoutingStrategy.bend)
   -- layer_distance_defaults
   match ← LayoutMetaDataService.getOptionData VertiFlexOptions.LAYER_DISTANCE.id with
   | none => report "layer distance option registered" false
@@ -227,7 +234,8 @@ def providerTests : Suite := suite "vertiflex.provider" do
   match ← layoutDirect g root with
   | .error e => checkEq "cycle: not a tree" e "org.eclipse.elk.core.UnsupportedConfigurationException: The given graph is not a tree!"
   | .ok _ => report "cycle: not a tree" false "expected an exception"
-  -- exactly two children with considerNodeModelOrder (default true): elk-rs index overflow
+  -- exactly two children with considerNodeModelOrder (default true): elk-rs panics (index overflow),
+  -- Java cuts the doubled split to the number of children and lays the tree out (agent OPT)
   let (g, root) := ElkGraphUtil.createGraph
   let (g, a) := addChild g root 30.0 20.0
   let (g, b) := addChild g root 40.0 20.0
@@ -235,8 +243,8 @@ def providerTests : Suite := suite "vertiflex.provider" do
   let (g, _) := ElkGraphUtil.createSimpleEdge g (.node a) (.node b)
   let (g, _) := ElkGraphUtil.createSimpleEdge g (.node a) (.node c)
   match ← layoutDirect g root with
-  | .error e => checkEq "two children: index out of bounds" e "index out of bounds: the len is 2 but the index is 2"
-  | .ok _ => report "two children: index out of bounds" false "expected an exception"
+  | .error e => report "two children: laid out like Java" false e
+  | .ok _ => report "two children: laid out like Java" true
 
 /-! ### Fixtures against the elk-rs oracle -/
 

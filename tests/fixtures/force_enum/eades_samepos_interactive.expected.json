@@ -4,29 +4,29 @@
       "height": 30,
       "id": "n0",
       "width": 30,
-      "x": 12,
-      "y": 12
+      "x": 50,
+      "y": 50
     },
     {
       "height": 30,
       "id": "n1",
       "width": 30,
-      "x": 12,
-      "y": 12
+      "x": 50,
+      "y": 50
     },
     {
       "height": 30,
       "id": "n2",
       "width": 30,
-      "x": 12,
-      "y": 12
+      "x": 50,
+      "y": 50
     },
     {
       "height": 30,
       "id": "n3",
       "width": 30,
-      "x": 12,
-      "y": 12
+      "x": 50,
+      "y": 50
     }
   ],
   "edges": [
@@ -36,13 +36,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 27,
-            "y": 27
+            "x": 65,
+            "y": 65
           },
           "id": "e0_s0",
           "startPoint": {
-            "x": 27,
-            "y": 27
+            "x": 65,
+            "y": 65
           }
         }
       ],
@@ -59,13 +59,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 27,
-            "y": 27
+            "x": 65,
+            "y": 65
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 27,
-            "y": 27
+            "x": 65,
+            "y": 65
           }
         }
       ],
@@ -82,13 +82,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 27,
-            "y": 27
+            "x": 65,
+            "y": 65
           },
           "id": "e2_s0",
           "startPoint": {
-            "x": 27,
-            "y": 27
+            "x": 65,
+            "y": 65
           }
         }
       ],
@@ -100,7 +100,7 @@
       ]
     }
   ],
-  "height": 54,
+  "height": 130,
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "force",
@@ -108,7 +108,7 @@
     "elk.interactive": "true",
     "elk.randomSeed": "3"
   },
-  "width": 54,
+  "width": 130,
   "x": 0,
   "y": 0
 }

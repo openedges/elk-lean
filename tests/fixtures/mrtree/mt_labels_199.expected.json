@@ -17,12 +17,12 @@
         "org.eclipse.elk.mrtree.treeLevel": 0
       },
       "width": 0,
-      "x": 12,
-      "y": 12
+      "x": 20,
+      "y": 20
     }
   ],
   "edges": [],
-  "height": 103,
+  "height": 119,
   "id": "root",
   "layoutOptions": {
     "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
@@ -30,7 +30,7 @@
     "org.eclipse.elk.direction": "UP",
     "org.eclipse.elk.mrtree.compaction": true
   },
-  "width": 25,
+  "width": 41,
   "x": 0,
   "y": 0
 }

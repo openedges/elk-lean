@@ -4,14 +4,14 @@
       "height": 20,
       "id": "n0",
       "width": 40,
-      "x": 117.5,
+      "x": 95.625,
       "y": 0
     },
     {
       "height": 20,
       "id": "n1",
       "width": 30,
-      "x": 30,
+      "x": 32.5,
       "y": 90
     },
     {
@@ -21,7 +21,7 @@
         "elk.vertiflex.verticalConstraint": "120"
       },
       "width": 35,
-      "x": 82.5,
+      "x": 93.75,
       "y": 120
     },
     {
@@ -31,14 +31,14 @@
         "elk.vertiflex.verticalConstraint": "200"
       },
       "width": 30,
-      "x": 122.5,
+      "x": 133.75,
       "y": 200
     },
     {
       "height": 20,
       "id": "n4",
       "width": 30,
-      "x": 157.5,
+      "x": 168.75,
       "y": 90
     },
     {
@@ -48,28 +48,28 @@
         "elk.vertiflex.verticalConstraint": "300"
       },
       "width": 20,
-      "x": 35,
+      "x": 0,
       "y": 300
     },
     {
       "height": 15,
       "id": "n6",
       "width": 25,
-      "x": 0,
+      "x": 30,
       "y": 180
     },
     {
       "height": 20,
       "id": "n7",
       "width": 20,
-      "x": 65,
+      "x": 75,
       "y": 180
     },
     {
       "height": 20,
       "id": "n8",
       "width": 30,
-      "x": 87.5,
+      "x": 100,
       "y": 300
     },
     {
@@ -79,14 +79,14 @@
         "elk.vertiflex.verticalConstraint": "400"
       },
       "width": 20,
-      "x": 127.5,
+      "x": 140,
       "y": 400
     },
     {
       "height": 25,
       "id": "n10",
       "width": 25,
-      "x": 157.5,
+      "x": 170,
       "y": 300
     }
   ],
@@ -97,12 +97,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 45,
+            "x": 47.5,
             "y": 90
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 115.625,
             "y": 20
           }
         }
@@ -119,13 +119,19 @@
       "id": "e2",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 111.25,
+              "y": 80
+            }
+          ],
           "endPoint": {
-            "x": 100,
+            "x": 111.25,
             "y": 120
           },
           "id": "e2_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 115.625,
             "y": 20
           }
         }
@@ -142,13 +148,19 @@
       "id": "e3",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 148.75,
+              "y": 80
+            }
+          ],
           "endPoint": {
-            "x": 137.5,
+            "x": 148.75,
             "y": 200
           },
           "id": "e3_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 115.625,
             "y": 20
           }
         }
@@ -166,12 +178,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 172.5,
+            "x": 183.75,
             "y": 90
           },
           "id": "e4_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 115.625,
             "y": 20
           }
         }
@@ -188,13 +200,19 @@
       "id": "e5",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 10,
+              "y": 170
+            }
+          ],
           "endPoint": {
-            "x": 45,
+            "x": 10,
             "y": 300
           },
           "id": "e5_s0",
           "startPoint": {
-            "x": 45,
+            "x": 47.5,
             "y": 110
           }
         }
@@ -212,12 +230,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 12.5,
+            "x": 42.5,
             "y": 180
           },
           "id": "e6_s0",
           "startPoint": {
-            "x": 45,
+            "x": 47.5,
             "y": 110
           }
         }
@@ -235,12 +253,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 75,
+            "x": 85,
             "y": 180
           },
           "id": "e7_s0",
           "startPoint": {
-            "x": 45,
+            "x": 47.5,
             "y": 110
           }
         }
@@ -258,12 +276,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 102.5,
+            "x": 115,
             "y": 300
           },
           "id": "e8_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 148.75,
             "y": 230
           }
         }
@@ -280,13 +298,19 @@
       "id": "e9",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 150,
+              "y": 290
+            }
+          ],
           "endPoint": {
-            "x": 137.5,
+            "x": 150,
             "y": 400
           },
           "id": "e9_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 148.75,
             "y": 230
           }
         }
@@ -304,12 +328,12 @@
       "sections": [
         {
           "endPoint": {
-            "x": 170,
+            "x": 182.5,
             "y": 300
           },
           "id": "e10_s0",
           "startPoint": {
-            "x": 137.5,
+            "x": 148.75,
             "y": 230
           }
         }
@@ -328,7 +352,7 @@
     "elk.algorithm": "org.eclipse.elk.vertiflex",
     "elk.vertiflex.layoutStrategy": "BEND"
   },
-  "width": 199.5,
+  "width": 210.75,
   "x": 0,
   "y": 0
 }

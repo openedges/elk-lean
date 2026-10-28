@@ -128,7 +128,11 @@ partial def positionNodes (node root : NodeId) (radius : Float) (sorter : Option
 def translate (root : NodeId) (radius : Float) (sorter : Option IRadialSorter)
     (criteria : AnnulusWedgeCriteria) (optimizer : Option IEvaluation) : RadialM Unit := do
   let (successorCache, leafCache) ← RadialUtil.buildTreeCaches root
-  let (_, wedgeCache) ← ElkM.withGraph fun g => wedgeSpaces g criteria successorCache leafCache root {}
+  -- `AnnulusWedgeByLeafs` is the leaf count of the tree caches; `AnnulusWedgeByNodeSpace` is filled
+  -- for the whole tree below the root
+  let wedgeCache ← match criteria with
+    | .leafNumber => pure leafCache
+    | .nodeSize => ElkM.withGraph fun g => (wedgeSpaces g criteria successorCache leafCache root {}).2
   let mut optimalOffset := fl0p0
   let mut optimalValue := Float.maxValue
   if let some optimizer := optimizer then

@@ -4,22 +4,22 @@
       "height": 20,
       "id": "a",
       "width": 20,
-      "x": 12,
-      "y": 12
+      "x": 8,
+      "y": 8
     },
     {
       "height": 20,
       "id": "b",
       "width": 20,
-      "x": 112,
-      "y": 12
+      "x": 108,
+      "y": 8
     },
     {
       "height": 20,
       "id": "c",
       "width": 20,
-      "x": 12,
-      "y": 112
+      "x": 8,
+      "y": 108
     }
   ],
   "edges": [
@@ -29,13 +29,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 112,
-            "y": 22
+            "x": 108,
+            "y": 18
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 32,
-            "y": 22
+            "x": 28,
+            "y": 18
           }
         }
       ],
@@ -52,13 +52,13 @@
       "sections": [
         {
           "endPoint": {
-            "x": 32,
-            "y": 112
+            "x": 28,
+            "y": 108
           },
           "id": "e2_s0",
           "startPoint": {
-            "x": 112,
-            "y": 32
+            "x": 108,
+            "y": 28
           }
         }
       ],
@@ -70,12 +70,12 @@
       ]
     }
   ],
-  "height": 144,
+  "height": 136,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeOverlap"
   },
-  "width": 144,
+  "width": 136,
   "x": 0,
   "y": 0
 }

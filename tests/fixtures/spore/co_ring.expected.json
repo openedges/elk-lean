@@ -4,37 +4,37 @@
       "height": 40,
       "id": "a",
       "width": 40,
-      "x": 12,
-      "y": 12
+      "x": 8,
+      "y": 8
     },
     {
       "height": 40,
       "id": "b",
       "width": 40,
-      "x": 72,
-      "y": 12
+      "x": 56,
+      "y": 8
     },
     {
       "height": 40,
       "id": "c",
       "width": 40,
-      "x": 12,
-      "y": 72
+      "x": 8,
+      "y": 56
     },
     {
       "height": 40,
       "id": "d",
       "width": 40,
-      "x": 72,
-      "y": 72
+      "x": 56,
+      "y": 56
     }
   ],
-  "height": 124,
+  "height": 104,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeCompaction"
   },
-  "width": 124,
+  "width": 104,
   "x": 0,
   "y": 0
 }

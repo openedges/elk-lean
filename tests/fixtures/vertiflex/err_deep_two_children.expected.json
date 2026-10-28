@@ -1,0 +1,171 @@
+{
+  "children": [
+    {
+      "height": 20,
+      "id": "n0",
+      "width": 30,
+      "x": 45,
+      "y": 0
+    },
+    {
+      "height": 20,
+      "id": "n1",
+      "width": 40,
+      "x": 0,
+      "y": 90
+    },
+    {
+      "height": 30,
+      "id": "n2",
+      "width": 20,
+      "x": 60,
+      "y": 90
+    },
+    {
+      "height": 30,
+      "id": "n3",
+      "width": 20,
+      "x": 100,
+      "y": 90
+    },
+    {
+      "height": 10,
+      "id": "n4",
+      "width": 10,
+      "x": 80,
+      "y": 190
+    },
+    {
+      "height": 15,
+      "id": "n5",
+      "width": 15,
+      "x": 100,
+      "y": 190
+    }
+  ],
+  "edges": [
+    {
+      "container": "root",
+      "id": "e1",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 20,
+            "y": 90
+          },
+          "id": "e1_s0",
+          "startPoint": {
+            "x": 60,
+            "y": 20
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n1"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e2",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 70,
+            "y": 90
+          },
+          "id": "e2_s0",
+          "startPoint": {
+            "x": 60,
+            "y": 20
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n2"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e3",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 110,
+            "y": 90
+          },
+          "id": "e3_s0",
+          "startPoint": {
+            "x": 60,
+            "y": 20
+          }
+        }
+      ],
+      "sources": [
+        "n0"
+      ],
+      "targets": [
+        "n3"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e4",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 85,
+            "y": 190
+          },
+          "id": "e4_s0",
+          "startPoint": {
+            "x": 110,
+            "y": 120
+          }
+        }
+      ],
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n4"
+      ]
+    },
+    {
+      "container": "root",
+      "id": "e5",
+      "sections": [
+        {
+          "endPoint": {
+            "x": 107.5,
+            "y": 190
+          },
+          "id": "e5_s0",
+          "startPoint": {
+            "x": 110,
+            "y": 120
+          }
+        }
+      ],
+      "sources": [
+        "n3"
+      ],
+      "targets": [
+        "n5"
+      ]
+    }
+  ],
+  "height": 217,
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "org.eclipse.elk.vertiflex"
+  },
+  "width": 132,
+  "x": 0,
+  "y": 0
+}

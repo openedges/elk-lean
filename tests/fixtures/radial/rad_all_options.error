@@ -1,0 +1,1 @@
+java.lang.NullPointerException: Cannot read field "x" because "position1" is null

@@ -644,7 +644,8 @@
   "id": "root",
   "layoutOptions": {
     "elk.algorithm": "org.eclipse.elk.vertiflex",
-    "elk.vertiflex.considerNodeModelOrder": "false"
+    "elk.vertiflex.considerNodeModelOrder": "false",
+    "elk.vertiflex.layoutStrategy": "BEND"
   },
   "width": 523,
   "x": 0,

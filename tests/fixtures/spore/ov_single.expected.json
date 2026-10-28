@@ -4,16 +4,16 @@
       "height": 30,
       "id": "a",
       "width": 40,
-      "x": 12,
-      "y": 12
+      "x": 8,
+      "y": 8
     }
   ],
-  "height": 54,
+  "height": 46,
   "id": "root",
   "layoutOptions": {
     "algorithm": "org.eclipse.elk.sporeOverlap"
   },
-  "width": 64,
+  "width": 56,
   "x": 0,
   "y": 0
 }

@@ -4,15 +4,15 @@
       "height": 10,
       "id": "n0",
       "width": 10,
-      "x": 23,
-      "y": 96
+      "x": 25,
+      "y": 42
     },
     {
       "height": 20,
       "id": "n1",
       "width": 20,
-      "x": 18,
-      "y": 113
+      "x": 20,
+      "y": 59
     },
     {
       "height": 5,
@@ -21,15 +21,15 @@
         "org.eclipse.elk.priority": 1
       },
       "width": 30,
-      "x": 23,
-      "y": 29
+      "x": 20,
+      "y": 86
     },
     {
       "height": 30,
       "id": "n3",
       "width": 5,
-      "x": 35.5,
-      "y": 41.5
+      "x": 32.5,
+      "y": 98.5
     },
     {
       "height": 15,
@@ -38,15 +38,15 @@
         "org.eclipse.elk.priority": 3
       },
       "width": 15,
-      "x": 15.5,
-      "y": 12
+      "x": 20,
+      "y": 20
     },
     {
       "height": 8,
       "id": "n5",
       "width": 8,
-      "x": 12,
-      "y": 80
+      "x": 20,
+      "y": 135.5
     }
   ],
   "edges": [
@@ -55,14 +55,20 @@
       "id": "e0",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 30,
+              "y": 55
+            }
+          ],
           "endPoint": {
-            "x": 28,
-            "y": 113
+            "x": 30,
+            "y": 59
           },
           "id": "e0_s0",
           "startPoint": {
-            "x": 28,
-            "y": 106
+            "x": 30,
+            "y": 52
           }
         }
       ],
@@ -78,14 +84,20 @@
       "id": "e1",
       "sections": [
         {
+          "bendPoints": [
+            {
+              "x": 35,
+              "y": 94
+            }
+          ],
           "endPoint": {
-            "x": 38,
-            "y": 41.5
+            "x": 35,
+            "y": 98.5
           },
           "id": "e1_s0",
           "startPoint": {
-            "x": 38,
-            "y": 34
+            "x": 35,
+            "y": 91
           }
         }
       ],
@@ -97,14 +109,14 @@
       ]
     }
   ],
-  "height": 142.5,
+  "height": 167,
   "id": "root",
   "layoutOptions": {
     "org.eclipse.elk.algorithm": "org.eclipse.elk.mrtree",
     "org.eclipse.elk.aspectRatio": 0.5,
     "org.eclipse.elk.spacing.nodeNode": 7
   },
-  "width": 54,
+  "width": 70,
   "x": 0,
   "y": 0
 }

@@ -108,6 +108,11 @@ def build (a : TArena) (root : TNodeId) (isVertical : Bool) : TreeSoA := Id.run 
           fullDimVec := fullDimVec.push fl0p0
           childIndices := childIndices.push ci
       childrenVec := childrenVec.set! idx childIndices
+      -- a node whose children were all reached before (a BFS treeification of a cyclic graph can
+      -- leave a node with several parents; Java walks such a child once per parent) is a leaf of the
+      -- tree arrays: elk-rs keeps `is_leaf = false` and panics on its empty child list (agent OPT;
+      -- the multi-parent placement of Java is not reproduced)
+      if childIndices.isEmpty then isLeafVec := isLeafVec.set! idx true
     levelStart := levelEnd
     levelEnd := nodes.size
   let n := nodes.size

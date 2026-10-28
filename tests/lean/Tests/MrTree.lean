@@ -131,7 +131,7 @@ def metaTests : Suite := suite "mrtree.meta" do
   check "PADDING default 20" (mr.defaultValue CoreOptions.PADDING == some (ElkPadding.ofAny 20.0))
   check "SPACING_NODE_NODE default 20" (isDouble (mr.defaultValueRaw CoreOptions.SPACING_NODE_NODE.id) 20.0)
   check "SPACING_EDGE_NODE default 3" (isDouble (mr.defaultValueRaw CoreOptions.SPACING_EDGE_NODE.id) 3.0)
-  check "ASPECT_RATIO default 1.6" (isDouble (mr.defaultValueRaw CoreOptions.ASPECT_RATIO.id) 1.6)
+  check "ASPECT_RATIO default 1.6f" (isDouble (mr.defaultValueRaw CoreOptions.ASPECT_RATIO.id) 1.600000023841858)
   check "PRIORITY default 1" (isInt (mr.defaultValueRaw CoreOptions.PRIORITY.id) 1)
   check "SEPARATE_CONNECTED_COMPONENTS default true"
     (isBool (mr.defaultValueRaw CoreOptions.SEPARATE_CONNECTED_COMPONENTS.id) true)
@@ -161,7 +161,9 @@ def metaTests : Suite := suite "mrtree.meta" do
   let w ← opt "org.eclipse.elk.mrtree.weighting"
   check "WEIGHTING: enum, default MODEL_ORDER"
     (w.type == .enum && w.defaultValue.bind (PropCodec.dec : PropValue → Option OrderWeighting) == some .modelOrder)
-  check "WEIGHTING: no parser, no choices (Rust)" (w.parser.isNone && w.choices.isEmpty)
+  -- Java registers the enum class (choices and parser); elk-rs had neither (agent OPT)
+  check "WEIGHTING: parser and choices (Java)"
+    (w.parser.isSome && w.choices == #["MODEL_ORDER", "DESCENDANTS", "FAN", "CONSTRAINT"])
   let erm ← opt "org.eclipse.elk.mrtree.edgeRoutingMode"
   check "EDGE_ROUTING_MODE: default AVOID_OVERLAP"
     (erm.defaultValue.bind (PropCodec.dec : PropValue → Option EdgeRoutingMode) == some .avoidOverlap)
@@ -293,6 +295,15 @@ def importTests : Suite := suite "mrtree.import" do
   let a := a.modifyNode ns[1]! fun n => { n with position := ⟨40.0, 0.0⟩, props := n.props.set MrTreeOptions.TREE_LEVEL 3 }
   let a := a.modifyNode ns[2]! fun n => { n with position := ⟨0.0, 50.0⟩ }
   let a := a.modifyEdge es[0]! fun e => { e with bendPoints := #[⟨1, 1⟩, ⟨2, 2⟩, ⟨3, 3⟩] }
+  -- Java `ElkUtil.applyVectorChain` needs a source and a target point (agent OPT; elk-rs routed an
+  -- edge without points centre to centre)
+  match ← (ElkM.run (ElkGraphImporter.applyLayout a tg) g).toBaseIO with
+  | .ok _ => report "edge without points: Java exception" false "layout succeeded"
+  | .error e =>
+    checkEq "edge without points: Java exception" (toString e)
+      "java.lang.IllegalArgumentException: The vector chain must contain at least a source and a target point."
+  let a := a.modifyEdge es[1]! fun e => { e with bendPoints := #[⟨15, 20⟩, ⟨5, 55⟩] }
+  let a := a.modifyEdge es[2]! fun e => { e with bendPoints := #[⟨5, 55⟩, ⟨15, 20⟩] }
   let ((), g) ← ElkM.run (ElkGraphImporter.applyLayout a tg) g
   let kids := (g.node root).children
   check "ELK n2 position" ((g.node kids[1]!).x == 40.0 && (g.node kids[1]!).y == 0.0)
@@ -304,14 +315,14 @@ def importTests : Suite := suite "mrtree.import" do
     && sec1.endY == 3.0 && sec1.bendPoints.size == 1)
   let some e2 := elkEdgeById g "e2" | report "e2 found" false
   let sec2 := g.edgeSection (g.edge e2).sections[0]!
-  -- hand: centre of n1 = (0 + 30/2, 0 + 40/2), centre of n3 = (0 + 10/2, 50 + 10/2)
+  -- the two given points: the centres of n1 = (0 + 30/2, 0 + 40/2) and of n3 = (0 + 10/2, 50 + 10/2)
   check "e2 section centre to centre" (sec2.startX == 15.0 && sec2.startY == 20.0 && sec2.endX == 5.0
     && sec2.endY == 55.0 && sec2.bendPoints.isEmpty)
-  -- hand: box min (-15, -20), max (40.5, 55); default padding 12
+  -- hand: box min (-15, -20), max (40.5, 55); `MrTreeOptions.PADDING` default 20 (Java; elk-rs 12)
   checkFloat "CHILD_AREA_WIDTH" (((g.node root).props.get CoreOptions.CHILD_AREA_WIDTH).getD 0.0) 55.5
   checkFloat "CHILD_AREA_HEIGHT" (((g.node root).props.get CoreOptions.CHILD_AREA_HEIGHT).getD 0.0) 75.0
-  checkFloat "root width" (g.node root).width 79.5
-  checkFloat "root height" (g.node root).height 99.0
+  checkFloat "root width" (g.node root).width 95.5
+  checkFloat "root height" (g.node root).height 115.0
 
 /-! ### Components -/
 
@@ -330,8 +341,10 @@ def componentsTests : Suite := suite "mrtree.components" do
   let (a, e32) := mkEdge a g n3 n2
   let (comps, a) ← MrTreeM.run (ComponentsProcessor.split g) a
   checkEq "split: three components" comps.size 3
-  checkEq "split: component nodes (BFS order)" (comps.map fun c => (a.graph c).nodes) #[#[n0, n1], #[n2, n3], #[n4]]
-  checkEq "split: component edges" (comps.map fun c => (a.graph c).edges) #[#[e01], #[e32], #[]]
+  -- Java: depth first, nodes in preorder, every edge once per incident node visit (agent OPT)
+  checkEq "split: component nodes (DFS order)" (comps.map fun c => (a.graph c).nodes) #[#[n0, n1], #[n2, n3], #[n4]]
+  checkEq "split: component edges (twice, Java)" (comps.map fun c => (a.graph c).edges)
+    #[#[e01, e01], #[e32, e32], #[]]
   checkEq "split: renumbered ids" (#[n0, n1, n2, n3, n4].map fun n => (a.node n).id) #[0, 1, 0, 1, 0]
   check "split: properties copied" (comps.all fun c =>
     (a.graph c).props.get MrTreeOptions.DIRECTION == some Direction.up
@@ -353,18 +366,20 @@ def componentsTests : Suite := suite "mrtree.components" do
   let p := p.modifyNode b1 fun n => { n with props := n.props.set MrTreeOptions.PRIORITY 2 }
   let (result, p) ← MrTreeM.run (ComponentsProcessor.pack #[ga, gb]) p
   let r := p.graph result
-  -- hand: B first (priority 2), row width max(30, sqrt(700) * 1.6) = 42.33; B moved by (-10, -10);
-  -- A starts a new row at y = 20 + 10 and is moved by (0, 30); bounds (-5, -5); padding moves (9, 8)
-  checkEq "pack: node order" r.nodes #[b1, a1, a2n]
+  -- hand (Java): node priorities default to 1 (`MrTreeOptions.PRIORITY`), so A sums to 2 like B; the
+  -- smaller box (A, 300) comes first; row width max(30, (float) sqrt(700) * 1.6) = 42.33; A stays,
+  -- B starts a new row at y = 10 + 10 and is moved by (0, 20) - (5, 5) (the box origin is subtracted
+  -- once); bounds (0, 0)-(30, 40); padding (left 4, top 3) moves everything by (4, 3)
+  checkEq "pack: node order" r.nodes #[a1, a2n, b1]
   checkEq "pack: edges" r.edges #[ea]
-  check "pack: b1" ((p.node b1).position == ⟨4.0, 3.0⟩)
-  check "pack: a1" ((p.node a1).position == ⟨9.0, 38.0⟩)
-  check "pack: a2" ((p.node a2n).position == ⟨29.0, 38.0⟩)
-  check "pack: bend point" ((p.edge ea).bendPoints == #[⟨24.0, 43.0⟩])
+  check "pack: b1" ((p.node b1).position == ⟨4.0, 23.0⟩)
+  check "pack: a1" ((p.node a1).position == ⟨4.0, 3.0⟩)
+  check "pack: a2" ((p.node a2n).position == ⟨24.0, 3.0⟩)
+  check "pack: bend point" ((p.edge ea).bendPoints == #[⟨19.0, 8.0⟩])
   checkEq "pack: priority of B" ((p.graph gb).props.get MrTreeOptions.PRIORITY) (some 2)
-  checkEq "pack: priority of A (sum)" ((p.graph ga).props.get MrTreeOptions.PRIORITY) (some 0)
-  checkEq "pack: result takes B's properties" (r.props.get MrTreeOptions.PRIORITY) (some 2)
-  check "pack: bounds of the result" (r.internal.graphXmin == -5.0 && r.internal.graphYmin == -5.0
+  checkEq "pack: priority of A (sum of the node defaults)" ((p.graph ga).props.get MrTreeOptions.PRIORITY) (some 2)
+  checkEq "pack: result takes A's properties" (r.props.get MrTreeOptions.PRIORITY) (some 2)
+  check "pack: bounds of the result" (r.internal.graphXmin == 0.0 && r.internal.graphYmin == 0.0
     && r.internal.graphXmax == 30.0 && r.internal.graphYmax == 40.0)
   check "pack: BB_UPLEFT reset" (r.internal.bbUpleft == some ⟨0.0, 0.0⟩)
   check "pack: BB_LOWRIGHT of A" ((p.graph ga).internal.bbLowright == some ⟨30.0, 10.0⟩)
@@ -692,12 +707,15 @@ def orderTests : Suite := suite "mrtree.p2order" do
   let (h, gh) := ({} : TArena).createGraph
   let (some cfg, _) ← MrTreeM.run (P2Order.NodeOrderer.configuration gh) h
     | report "configuration" false
-  checkEq "configuration: MODEL_ORDER" (cfg.processorsBefore TreeLayoutPhases.p2NodeOrdering).size 1
+  -- Java's static configuration (ROOT, FAN, LEVEL for every weighting; elk-rs: FAN only for
+  -- weightings other than MODEL_ORDER, never LEVEL; agent OPT)
+  check "configuration: MODEL_ORDER"
+    (cfg.processorsBefore TreeLayoutPhases.p2NodeOrdering == #[.rootProc, .fanProc, .levelProc])
   let h := h.modifyGraph gh fun x => { x with props := x.props.set MrTreeOptions.WEIGHTING .descendants }
   let (some cfg, _) ← MrTreeM.run (P2Order.NodeOrderer.configuration gh) h
     | report "configuration" false
-  check "configuration: DESCENDANTS adds FAN_PROC"
-    (cfg.processorsBefore TreeLayoutPhases.p2NodeOrdering == #[.rootProc, .fanProc])
+  check "configuration: DESCENDANTS"
+    (cfg.processorsBefore TreeLayoutPhases.p2NodeOrdering == #[.rootProc, .fanProc, .levelProc])
 
 /-- `node_placer.rs`: the Reingold-Tilford pass on `r -> a, b` (r 10x20, a 30x5, b 8x40). -/
 def placeTests : Suite := suite "mrtree.p3place" do
@@ -740,8 +758,10 @@ def placeTests : Suite := suite "mrtree.p3place" do
   let (c, _) := mkEdge c gc c0 c2
   let (c, _) := mkEdge c gc c1 c2
   let c ← runProc RootProcessor.processor c gc
-  checkThrows "two parents: index out of bounds" do
-    let _ ← MrTreeM.run (P3Place.NodePlacer.process gc ProgressMonitor.null) c
+  -- a node reached twice is a leaf of the tree arrays (elk-rs panics; Java places it once per parent)
+  match ← (MrTreeM.run (P3Place.NodePlacer.process gc ProgressMonitor.null) c).toBaseIO with
+  | .ok _ => report "two parents: no exception" true
+  | .error e => report "two parents: no exception" false (toString e)
 
 /-- `edge_router.rs`: middle-to-middle routes, `NONE`, the configuration. -/
 def routeTests : Suite := suite "mrtree.p4route" do
@@ -820,13 +840,13 @@ def driverTests : Suite := suite "mrtree.driver" do
   let (a, g, _) := tree
   let (algorithm, _) ← MrTreeM.run (MrTree.updateModules g) a
   checkEqR "MODEL_ORDER chain" (algorithm.map (·.name))
-    #["DFSTreeifyer", "RootProcessor", "NodeOrderer", "NodePlacer", "CompactionProcessor",
-      "LevelCoordinatesProcessor", "GraphBoundsProcessor", "Untreeifyer", "EdgeRouter"]
+    #["DFSTreeifyer", "RootProcessor", "FanProcessor", "LevelProcessor", "NodeOrderer", "NodePlacer",
+      "CompactionProcessor", "LevelCoordinatesProcessor", "GraphBoundsProcessor", "Untreeifyer", "EdgeRouter"]
   let a := a.modifyGraph g fun x => { x with props := x.props.set MrTreeOptions.WEIGHTING .fan }
   let (algorithm, _) ← MrTreeM.run (MrTree.updateModules g) a
   checkEqR "FAN chain" (algorithm.map (·.name))
-    #["DFSTreeifyer", "RootProcessor", "FanProcessor", "NodeOrderer", "NodePlacer", "CompactionProcessor",
-      "LevelCoordinatesProcessor", "GraphBoundsProcessor", "Untreeifyer", "EdgeRouter"]
+    #["DFSTreeifyer", "RootProcessor", "FanProcessor", "LevelProcessor", "NodeOrderer", "NodePlacer",
+      "CompactionProcessor", "LevelCoordinatesProcessor", "GraphBoundsProcessor", "Untreeifyer", "EdgeRouter"]
   check "provider registered" (← LayoutProvider.isRegistered MrTreeOptions.ALGORITHM_ID)
   check "phase order" ((ElkEnum.values : Array TreeLayoutPhases).map ElkEnum.javaName ==
     #["P1_TREEIFICATION", "P2_NODE_ORDERING", "P3_NODE_PLACEMENT", "P4_EDGE_ROUTING"])
