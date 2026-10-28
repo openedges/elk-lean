@@ -7,7 +7,7 @@ Regression tests for agent SPV (SPOrE, VertiFlex, rectpacking option sets and th
 cases of the random-graph Java parity). Every layout fixture under `tests/fixtures/spv/` is laid out with
 `Elk.Api.layoutJson` and compared at tolerance `0` with the layout of unmodified ELK Java 0.12.0 in a fresh
 JVM (`<name>.java.json`, `ElkJavaBaseline`), or must fail with Java's exception text (`<name>.java.error`).
-All of them differed from Java before their fix. Inputs come from `scripts/run_random_java_parity.sh`
+All but `vertiflex_constraint_before_cast` differed from Java before their fix. Inputs come from `scripts/run_random_java_parity.sh`
 (sets `v`/`o`/`p`, seeds 1–10) and P3J's variant set `p3a`:
 
 * `spore_*` (`o9/g0005`, `o2/g0451`, `o2/g0392`, `o4/g0205`, `o6/g0429`, `o5/g0132`): the iteration
@@ -20,7 +20,8 @@ All of them differed from Java before their fix. Inputs come from `scripts/run_r
 * `vertiflex_port_edges_ignored`, `vertiflex_port_target_cast`: the tree walks use the node's own edges
   (`getOutgoingEdges()`); a port target is Java's `ClassCastException`.
 * `vertiflex_constraint_before_cast`: the vertical constraint check casts edge by edge, so a child that
-  violates its constraint is reported before a later edge's `ClassCastException`.
+  violates its constraint is reported before a later edge's `ClassCastException` (a guard for the
+  edge-by-edge cast; the elk-rs port ignored port targets and also got Java's text).
 * `rectpacking_recompact_same_row` (`v10/g0460`): `RowFillingAndCompaction` compacts the same row again.
 * `rectpacking_stale_parent_row` (`v8/g0580`): Java's strong parent-row references (a block of a removed
   next row is added to the row twice), `RectRow.removeBlock` of the first occurrence, `Double.MIN_VALUE`.
