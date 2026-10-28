@@ -31,12 +31,6 @@ open Tests Elk.Api Elk.Json
 
 private def fixtureDir : System.FilePath := "tests/fixtures/nodemicro"
 
-private def apiWrapper : String := "org.eclipse.elk.core.UnsupportedConfigurationException: "
-
-/-- The error of a layout with the API wrapper in front of `java.*` classes removed. -/
-private def javaError (e : String) : String :=
-  if e.startsWith (apiWrapper ++ "java.") then (e.drop apiWrapper.length).toString else e
-
 private def layoutFixture (name : String) : IO (Except String String) := do
   let input ← IO.FS.readFile (fixtureDir / s!"{name}.json")
   layoutJson input "{}" (pretty := true) (sortKeys := true)
@@ -81,7 +75,7 @@ def exceptions : Suite := suite "nodemicro.java.exceptions" do
   for (name, expected) in expectedExceptions do
     match ← layoutFixture name with
     | .ok _ => report s!"{name}: exception expected" false
-    | .error e => checkEq s!"{name}: Java exception" (javaError e) expected
+    | .error e => checkEq s!"{name}: Java exception" (javaExceptionText e) expected
 
 def suites : Array Suite := #[layout, sizing, exceptions]
 

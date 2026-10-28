@@ -20,6 +20,8 @@ Ports of the elk-rs tests `plugins/org.eclipse.elk.alg.radial/tests/all`
   radial metadata provider additionally registers the enum choices and parsers (the only change
   to elk-rs; the algorithm code is the stock one). The suite installs
   `RadialMetaDataProvider.enumParserProvider` for the duration of the run.
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `rad_ports` (and `enum/rad_ports`) hold ELK Java's exception text (`<name>.error`) since RJ1.
 -/
 namespace Tests.Radial
 

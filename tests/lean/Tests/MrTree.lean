@@ -32,6 +32,8 @@ import Elk.Alg.MrTree
   parents).
 
 The expected values of the unit tests are derived by hand from the Rust sources ("hand: …").
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `corpus_000/090/180/270/450/540_*` are elk-lean outputs since RJ1 (Java's node micro layout: every changed value equals ELK Java's; the rest still differs from Java by the mrtree padding/spacing defaults); `mt_labels_071` and `enum/mt_labels_031`, `enum/mt_labels_159` hold ELK Java's exception text (`<name>.error`).
 -/
 namespace Tests.MrTree
 

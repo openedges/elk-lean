@@ -25,6 +25,8 @@ Two fixture suites compare `Elk.Api.layoutJson` byte-for-byte with the elk-rs or
   whitespace eliminator); the port must report an error.
 `ELK_RECTPACKING_FIXTURES` / `ELK_RECTPACKING_FIXTURES_ENUM` point the suites to other directories
 (large parity runs).
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `trybox_simple` equals ELK Java since RJ1; `enum/g4_285` is an elk-lean output (its `TRYBOX` child now equals Java; Java rejects the whole graph: `A target width has to be set …`).
 -/
 namespace Tests.RectPacking
 

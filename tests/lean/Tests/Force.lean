@@ -17,6 +17,8 @@ import Elk.Alg.Force
 
 `Elk.Api` links this plugin only through its import of `Elk.Alg.Force`; the suite imports the plugin
 directly, so the providers and the metadata are registered in the test binary either way.
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `force_ports_seed3` holds ELK Java's exception text (`<name>.error.txt`) since RJ1.
 -/
 namespace Tests.Force
 

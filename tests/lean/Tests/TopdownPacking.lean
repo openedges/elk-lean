@@ -19,6 +19,8 @@ Skipped / adapted Rust tests:
 * `topdown_layout_test.rs`: the root graph uses `org.eclipse.elk.fixed` instead of the default
   algorithm layered (`TODO(phase4)`), and `test_child_dimension_calculation` runs the top-level
   node with `fixed` instead of `layered` (the checked size is fixed by `fixedGraphSize`).
+
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `tp_three`, `tp_five`, `tp_six`, `tp_ten` are elk-lean outputs since RJ1 (box padding/spacing defaults 15 like Java; every changed value equals ELK Java's, which still differs elsewhere).
 -/
 namespace Tests.TopdownPacking
 
