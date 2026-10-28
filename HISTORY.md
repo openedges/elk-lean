@@ -166,6 +166,21 @@
 - `scripts/compare_bytes.sh`(`elk layout --pretty --sort-keys` vs oracle 파일): 코퍼스 1,447/1,447 바이트 일치(이전 1,395). **이후 숫자 의미론을 ELK Java로 바꾸면서(아래 절) elk-rs와의 바이트 일치는 1,060/1,447로 내려갔고(차이는 `-0.0`/스냅 표기와 ≤4e-12 값), 정확 일치 검사는 Java 기준으로 옮겼다.**
 - 남은 점검 대상: Rust 복합 대입(`a += b + c`)을 평탄한 합으로 옮긴 곳이 더 있을 수 있다(코퍼스에서는 더 드러나지 않음).
 
+### 성능 5차·릴리스 준비 (2026-10-28): 3차 라운드 착수
+- **interactive 모델 3개 조사(종결, 결함 아님)**: `interactiveRectpacking_oneBigNode`·`interactiveRectpacking_hierarchy`·`interactiveLayout_mixedHierarchy`는 코퍼스 1,447개 중 루트 `elk.algorithm`이 layered가 아닌(`rectpacking`) 유일한 3개다. trace 모드(`elk batch --trace-dir`)는 elk-rs 러너의 `force_layered_algorithm`과 같이 루트 알고리즘을 layered로 강제하므로 출력이 달라지는 것이 의도된 동작이다. 확인: 두 모드 모두 Lean 출력이 oracle과 값 단위로 동일(trace 모드 oracle==lean, 일반 모드 oracle==lean, oracle 자신도 두 모드가 다름), 코퍼스 전체의 일반/trace 모드 Lean 출력 비교 1,444 동일 / 3 상이(정확히 이 3개). `ELK_TRACE_DIR` 환경변수만 주는 `elk layout`은 강제하지 않아 동일 출력.
+- **코퍼스 총시간 참고치**(조용한 상태, 1,447개 레이아웃을 파일로 쓰는 조건, 3회): `elk batch` 6.18/6.34/6.31 s vs oracle `model_parity_layout_runner` 5.37/5.53/5.54 s(약 1.15배). 이전 기록의 rust_api 3.53 s는 파일 출력이 없는 `perf_benchmark` 코퍼스 모드라 직접 비교 대상이 아니다.
+- **3차 라운드 할당**(아래 표 PS·PH·PJ2·W2·G1·R1): 남은 고정 비용과 스플라인·hierarchy 격차, 그리고 릴리스 준비(WASM Worker 모드, GMP 링크 검토, CI/CHANGELOG). 각 에이전트는 `origin/main`(`523854c` 이후)에서 분기한 worktree에서 기준 바이너리를 먼저 만들고 코퍼스·합성 출력의 바이트 동일성을 자체 검증한다.
+
+### 성능 5차·릴리스 준비 작업 할당표 (2026-10-28)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| PS. 스플라인 라우팅 성능(routing_splines 1.25배) | Lean `P5Edges/Splines/**`(elk-rs `p5edges/splines/**`, Java `p5edges.splines`) | opus | xhigh | 서브에이전트 PS(worktree) | 진행 중 |
+| PH. hierarchy·layered 공통 경로(hierarchy 1.17~1.22배, layered 1.07~1.13배, `NodeMarginCalculator` 어댑터 클로저) | Lean `Core/Util/Adapters/**`, `NodeSpacing/Calculators/NodeMarginCalculator`, layered `Graph/Transform/**`, `Compound/**`, `ElkLayered`, `RecursiveGraphLayoutEngine`, P1/P2/P4·intermediate 중 프로파일 상위 | opus | xhigh | 서브에이전트 PH(worktree) | 진행 중 |
+| PJ2. JSON·API 고정 비용 2차(ConwayRandom의 파싱 6.5%·변환 8%·transfer 8%·프린터 5%, `Random.nextLong` GMP) | Lean `Elk/Json/**`, `Elk/Api/LayoutApi`, `Core/Util/Random`, `Core/Data/**` | opus | high | 서브에이전트 PJ2(worktree) | 진행 중 |
+| W2. WASM 깊은 재귀용 Worker 모드(`stackSizeMb`), 로더/README 정리, `MEMORY64=2` deprecated 대응 조사 | elk-rs `plugins/org.eclipse.elk.js/js/*`, `plugins/org.eclipse.elk.wasm`, `scripts/build_wasm.sh` | opus | high | 서브에이전트 W2(worktree) | 진행 중 |
+| G1. GMP(LGPL) 정적 링크 검토 + GMP 없는 네이티브 Lean 런타임 시제품(`scripts/build_ffi.sh`/`build_napi.sh` 연동) | Lean 소스 `src/runtime`(v4.35.0, `LEAN_USE_GMP`), `scripts/build_{ffi,napi}.sh`, NOTICE | opus | high | 서브에이전트 G1(worktree) | 진행 중 |
+| R1. 릴리스 준비 문서: `.gitlab-ci.yml` 초안(Linux x64 gnu/musl·arm64, Windows, WASM), `CHANGELOG.md` 0.12.0, 릴리스 체크리스트 예행(`npm pack --dry-run`, 게시 없음) | `TESTING.md` 3장, `VERSIONING.md`, elk-rs CI 구성 | sonnet | medium | 서브에이전트 R1(worktree) | 진행 중 |
+
 ### 성능 4차 (2026-10-28): 2차 최적화 병합 (PF2·PN·PJ·PL5)
 - **병합**(`integration` → `main`, 머지 커밋 4개 + 주 에이전트 `09e3128`): PF2(force/stress 쌍 루프·rectpacking 스캔), PN(`NodeMicroLayout` 공통 경로), PJ(JSON·고정 비용·`Float.compareTotal` GMP 제거), PL5(P5 직교 라우팅). 각 에이전트는 같은 기반(`1abde8e`)에서 서로 다른 파일만 바꿨고(충돌 없음), 병합본을 주 에이전트가 재검증했다. 상세는 작업 할당표의 각 행.
 - **병합본 검증**(`09e3128`): `lake build` 경고 0, `lake test` **13777 통과/0 실패**(PJ의 차분 테스트로 +818), ELK Java 정확 parity 1878/119(드리프트 집합 119개 동일), elk-rs strict trace 1447/1447, elk-rs model parity 1447/1447(oracle 재생성), 합성 26/26, 코퍼스 로그 `PANIC` 0.
