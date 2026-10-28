@@ -90,6 +90,12 @@ function handleCommand(backend, msg) {
       return null;
 
     case 'layout': {
+      // elk-api.js sends JSON strings (graphJson/optionsJson) and gets the result string back;
+      // an elkjs-style request with graph/layoutOptions objects is answered with an object.
+      if (typeof msg.graphJson === 'string') {
+        return backend.layout_json(msg.graphJson,
+          typeof msg.optionsJson === 'string' ? msg.optionsJson : '{}');
+      }
       var graphJson = JSON.stringify(msg.graph);
       var optionsJson = JSON.stringify(msg.layoutOptions || {});
       var resultJson = backend.layout_json(graphJson, optionsJson);
