@@ -348,13 +348,16 @@ def checkPortModelOrder (p1 p2 : LPortId) (p1HasModelOrder p2HasModelOrder : Boo
 /-- The transitivity checks at the start of `compare` (indices are allocated for `p1`, then `p2`): Java's
 fourth check repeats the second one (`biggerThan.get(p2).contains(p1)`) and so never decides. -/
 def relationVerdict (p1 p2 : LPortId) : PortComparatorM (Option Int) := do
-  let k1 ← withRelations (·.index p1)
-  let k2 ← withRelations (·.index p2)
-  let rel := (← get).relations
-  if rel.isBigger k1 k2 then return some 1
-  if rel.isBigger k2 k1 then return some (-1)
-  if rel.isSmaller k1 k2 then return some (-1)
-  return none
+  -- one pass over the relations: index `p1`, then `p2`, then the three checks
+  withRelations fun rel =>
+    let (k1, rel) := rel.index p1
+    let (k2, rel) := rel.index p2
+    let v : Option Int :=
+      if rel.isBigger k1 k2 then some 1
+      else if rel.isBigger k2 k1 then some (-1)
+      else if rel.isSmaller k1 k2 then some (-1)
+      else none
+    (v, rel)
 
 /-- Records the decision `p1 > p2` (`v > 0`) or `p2 > p1` and returns `±reverseOrder` (the recurring
 Rust tail `if v > 0 { update(p1, p2, r); r } else { update(p2, p1, r); -r }`). -/
