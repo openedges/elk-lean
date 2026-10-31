@@ -12,7 +12,7 @@ with the ELK release they port (see `VERSIONING.md`).
 
 First release: a pure Lean 4 port of the Eclipse Layout Kernel 0.12.0 (reference ELK / elkjs
 0.12.0, performance and secondary parity oracle elk-rs 0.12.1 at `eb586b6d`). Not yet tagged or
-published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
+published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 
 ### Delivered
 - **ELK port**: all layered phases (P1 cycle breaking to P5 edge routing, 59 intermediate
@@ -42,11 +42,11 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17077 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17088 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused and crossing-minimisation variant sets): where both succeed,
-  5,711 of 5,761 layouts (99.1%) are exact (DisCo set: 5,073 of 5,104); every input Java rejects
+  5,711 of 5,761 layouts (99.1%) are exact (DisCo set: 5,072 of 5,104); every input Java rejects
   fails in elk-lean with Java's exception class and message. Like ELK Java's JSON path, the engine
   does not validate option ranges (out-of-range values reach the algorithm and behave as in Java).
   The remaining differences come from Java's own run context (identity hash codes, `HashSet` and

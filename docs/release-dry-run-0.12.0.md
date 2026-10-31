@@ -8,7 +8,7 @@
 
 | # | 항목 | 상태 | 근거 / 부족한 것 |
 |---|---|---|---|
-| 1 | `lake build`·`lake test` clean | 충족(10차 라운드 병합본 `7e02809`), 태그 직전 재실행 | `lake build` 경고 0, `lake test` 17077 통과 / 0 실패 / 1 skip(BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요); 무작위 Java parity `sh scripts/run_random_java_parity.sh` v 5,711/5,761, Java 예외 문구 전부 일치 |
+| 1 | `lake build`·`lake test` clean | 충족(11차 라운드 병합본 `0d0b35c`), 태그 직전 재실행 | `lake build` 경고 0, `lake test` 17088 통과 / 0 실패 / 1 skip(BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요); 무작위 Java parity `sh scripts/run_random_java_parity.sh` v 5,711/5,761, Java 예외 문구 전부 일치 |
 | 2a | ELK Java 결과 parity | 충족(스냅샷) | 1,997개 비교, 정확 일치 1,878, 나머지 119는 Java 컨텍스트 의존(패치 0001 적용 Java와 전부 일치), ticket 213은 Java NaN. `HISTORY.md` 160~161행 |
 | 2b | Java 단계별 trace parity | 충족(스냅샷) | 1,817/1,997 전 단계 일치, 180은 Java 측 요인(170 비유한 포트 좌표, 7 self-loop 변 순서, 3 partition 포트 순서) |
 | 2c | 컨텍스트 의존 모델 목록화 | 부분 충족 | 분석 결과는 `HISTORY.md`(172개 변동 모델, `scripts/java_outcomes.py`)에 있으나 모델 이름 목록이 릴리스 문서에는 없음. 목록 산출물 위치를 담당자가 확인 필요 |
