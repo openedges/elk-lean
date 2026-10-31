@@ -250,8 +250,10 @@ partial def layoutRecursively (layoutNode : NodeId) (monitor : ProgressMonitor) 
       evaluateHierarchyHandlingInheritance n
       let nd ← ElkM.getNode n
       let stopHierarchy := nd.props.getD CoreOptions.HIERARCHY_HANDLING .separateChildren == .separateChildren
+      -- Java `!algorithmData.equals(node.getProperty(RESOLVED_ALGORITHM))`: a `NO_LAYOUT` node has no
+      -- resolved algorithm (`LayoutAlgorithmResolver` skips it), so one with `ALGORITHM` is separate
       let algorithmSwitch := nd.props.has CoreOptions.ALGORITHM &&
-        ((← getResolvedAlgorithm n).map (· != algorithmData)).getD false
+        ((← getResolvedAlgorithm n).map (· != algorithmData)).getD true
       if stopHierarchy || algorithmSwitch then
         let subMonitor ← monitor.subTask fl1p0
         let childLoops ← layoutRecursively n subMonitor
