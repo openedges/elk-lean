@@ -11,9 +11,9 @@ implementations:
   zero-height and zero-width boxes, NaN coordinates, groups);
 * `alg.common.compaction.longestPathFast`: `LongestPathCompaction.compact` (pure) against
   `compactReference`, with lock functions reading the graph and spacing handlers;
-* `alg.common.compaction.cgraphFast`: `CGraph.calculateGroupOffsets` against
-  `calculateGroupOffsetsReference`, including empty groups, nodes in several groups and
-  out-of-range ids.
+* `alg.common.compaction.cgraphFast`: `CGraph.calculateGroupOffsets` and
+  `calculateConstraintsForCGroups` against their `…Reference`, including empty groups, nodes in
+  several groups, out-of-range ids and self constraints.
 
 Every comparison is on the full element state (floats by bit pattern) and on the exception text. -/
 namespace Tests.AlgCommon.CompactionFast
@@ -223,7 +223,23 @@ def cgraphFast : Suite := suite "alg.common.compaction.cgraphFast" do
     let b := graphKey g.calculateGroupOffsetsReference
     total := total + 1
     if a == b then same := same + 1 else IO.println s!"calculateGroupOffsets mismatch seed {seed}"
-  checkEq "calculateGroupOffsets = calculateGroupOffsetsReference" same total
+    -- group degrees from random constraints (including out-of-range targets and self loops)
+    let mut gc := g
+    let mut s := seed.toUInt64 * 911
+    for i in [0:gc.cNodes.size] do
+      let (s1, k) := below s 4
+      s := s1
+      let mut cs : Array CNodeId := #[]
+      for _ in [0:k] do
+        let (s2, t) := below s (gc.cNodes.size + 1)
+        s := s2
+        cs := cs.push ⟨t⟩
+      gc := gc.modifyCNode ⟨i⟩ fun c => { c with constraints := cs }
+    let a := graphKey gc.calculateConstraintsForCGroups
+    let b := graphKey gc.calculateConstraintsForCGroupsReference
+    total := total + 1
+    if a == b then same := same + 1 else IO.println s!"calculateConstraintsForCGroups mismatch seed {seed}"
+  checkEq "CGraph fast paths = references" same total
 
 def suites : Array Tests.Suite := #[stableSortTR, scanlineFast, longestPathFast, cgraphFast]
 

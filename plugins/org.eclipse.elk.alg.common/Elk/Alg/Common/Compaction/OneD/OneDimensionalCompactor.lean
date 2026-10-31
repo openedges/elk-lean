@@ -117,9 +117,8 @@ def transposeHitboxes (g : CGraph) : CGraph := Id.run do
         cGroupOffset := ⟨c.cGroupOffset.y, c.cGroupOffset.x⟩ }
   return g.calculateGroupOffsets
 
-/-- `calculateConstraintsForCGroups`: recomputes `outDegree`, `outDegreeReal` and
-`incomingConstraints` of all groups from the node constraints. -/
-def calculateConstraintsForCGroups (g : CGraph) : CGraph := Id.run do
+/-- The original `calculateConstraintsForCGroups` (reference of the fast path). -/
+def calculateConstraintsForCGroupsReference (g : CGraph) : CGraph := Id.run do
   let mut g := g
   let groups := g.cGroupIds
   for gi in groups do
@@ -136,6 +135,31 @@ def calculateConstraintsForCGroups (g : CGraph) : CGraph := Id.run do
         g := g.modifyCGroup incomingGroup fun grp =>
           { grp with outDegree := grp.outDegree + 1, outDegreeReal := grp.outDegreeReal + 1 }
   return g
+
+/-- `calculateConstraintsForCGroups`: recomputes `outDegree`, `outDegreeReal` and
+`incomingConstraints` of all groups from the node constraints.
+
+Fast path of `calculateConstraintsForCGroupsReference` (same reads and updates in the same order,
+on the unpacked arenas; differential test `alg.common.compaction.cgraphFast`). -/
+def calculateConstraintsForCGroups (g : CGraph) : CGraph :=
+  match g with
+  | ⟨nodes, groups, sd, ph, pv⟩ => Id.run do
+    let mut groups := groups
+    for gi in [0:groups.size] do
+      groups := groups.modifyIn gi fun grp =>
+        { grp with outDegree := 0, outDegreeReal := 0, incomingConstraints := #[] }
+    for gi in [0:groups.size] do
+      let groupNodes := groups[gi]!.cNodes
+      for n in groupNodes do
+        for incoming in (nodes[n.idx]?.getD default).constraints do
+          let some incomingGroup := (nodes[incoming.idx]?.getD default).cGroup | continue
+          if incomingGroup.idx == gi then continue
+          groups := groups.modifyIn gi fun grp =>
+            if grp.incomingConstraints.contains incoming then grp
+            else { grp with incomingConstraints := grp.incomingConstraints.push incoming }
+          groups := groups.modifyIn incomingGroup.idx fun grp =>
+            { grp with outDegree := grp.outDegree + 1, outDegreeReal := grp.outDegreeReal + 1 }
+    return ⟨nodes, groups, sd, ph, pv⟩
 
 /-- `reverseConstraints`: every constraint `a → b` becomes `b → a` (the new lists are ordered by
 the source node index), start positions are reset, then `calculateConstraintsForCGroups`. -/

@@ -97,9 +97,12 @@ namespace Pure
   | some f => f g n dir
   | none => false
 
-/-- `isLockedGroup` on the graph value. -/
+/-- `isLockedGroup` on the graph value (without a lock function no node is locked, so the scan
+over the group's nodes is skipped). -/
 @[inline] def lockedGroup (lockFun : Option LockFunction) (g : CGraph) (group : CGroupId) (dir : Direction) : Bool :=
-  (g.cGroup group).cNodes.any fun n => lockedNode lockFun g n dir
+  match lockFun with
+  | some f => (g.cGroup group).cNodes.any fun n => f g n dir
+  | none => false
 
 /-- Whether `group` occurs in `sinks` from index `i` on (Rust `sinks.iter().any(..)` on the
 not yet popped entries). -/
