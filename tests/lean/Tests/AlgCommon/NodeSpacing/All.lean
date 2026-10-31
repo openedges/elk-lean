@@ -596,8 +596,112 @@ def issue475Tests : Suite := suite "alg.common issue_475 (fixed layout with long
   report "rust: test_compound_node_size (resizable graph contains its child)" resizableMsgs.isEmpty
     (", ".intercalate resizableMsgs.toList)
 
+/-! ### `NodeMarginCalculator.processElkGraph` (ORM fast path) against the generic calculator -/
+
+/-- One step of a 64-bit LCG (Knuth's MMIX constants). -/
+private def lcgNext (x : UInt64) : UInt64 := x * 6364136223846793005 + 1442695040888963407
+
+/-- A random number below `n` and the next generator state. -/
+private def lcgBelow (x : UInt64) (n : Nat) : Nat × UInt64 :=
+  let x := lcgNext x
+  (((x >>> 33) % n.toUInt64).toNat, x)
+
+/-- A random coordinate (quarter steps in `[-20, 60)`, sometimes `NaN`). -/
+private def lcgCoord (x : UInt64) : Float × UInt64 :=
+  let (v, x) := lcgBelow x 321
+  (if v == 320 then Float.nan else v.toFloat / 4.0 - 20.0, x)
+
+/-- A random flat graph: nodes with labels and ports (random sides, port labels, `OUTSIDE` port label
+placement on some nodes), edges between nodes and ports with labels of random placement. -/
+private def randomMarginGraph (seed : UInt64) : ElkM NodeId := do
+  let mut r := seed
+  let root ← ElkM.createNode none
+  let (v, r1) := lcgBelow r 3; r := r1
+  if v != 0 then ElkM.setNodeProp root CoreOptions.SPACING_LABEL_NODE (v.toFloat * 1.5)
+  let (nodeCount, r1) := lcgBelow r 6; r := r1
+  let mut shapes : Array ConnectableId := #[]
+  for _ in [0:nodeCount + 1] do
+    let (x, r1) := lcgCoord r; let (y, r2) := lcgCoord r1; let (w, r3) := lcgCoord r2; let (h, r4) := lcgCoord r3
+    r := r4
+    let n ← mkNode root x y w.abs h.abs
+    shapes := shapes.push (.node n)
+    let (o, r1) := lcgBelow r 2; r := r1
+    if o == 1 then ElkM.setNodeProp n CoreOptions.PORT_LABELS_PLACEMENT (EnumSet.of #[PortLabelPlacement.outside])
+    let (labels, r1) := lcgBelow r 3; r := r1
+    for _ in [0:labels] do
+      let (x, r1) := lcgCoord r; let (y, r2) := lcgCoord r1; let (w, r3) := lcgCoord r2; let (h, r4) := lcgCoord r3
+      r := r4
+      let _ ← mkLabel (.node n) x y w h
+    let (ports, r1) := lcgBelow r 4; r := r1
+    for _ in [0:ports] do
+      let (x, r1) := lcgCoord r; let (y, r2) := lcgCoord r1; let (w, r3) := lcgCoord r2; let (side, r4) := lcgBelow r3 6
+      r := r4
+      let sides := #[PortSide.north, .east, .south, .west, .undefined]
+      let p ← mkPort n x y w (w / 2.0) sides[side]?
+      shapes := shapes.push (.port p)
+      let (portLabels, r1) := lcgBelow r 3; r := r1
+      for _ in [0:portLabels] do
+        let (x, r1) := lcgCoord r; let (w, r2) := lcgCoord r1
+        r := r2
+        let _ ← mkLabel (.port p) x (x / 3.0) w (w / 2.0)
+  let (edgeCount, r1) := lcgBelow r 8; r := r1
+  for _ in [0:edgeCount] do
+    let (si, r1) := lcgBelow r shapes.size; let (ti, r2) := lcgBelow r1 shapes.size; let (labels, r3) := lcgBelow r2 3
+    r := r3
+    let e ← ElkM.createSimpleEdge shapes[si]! shapes[ti]!
+    for _ in [0:labels] do
+      let (w, r1) := lcgCoord r; let (pl, r2) := lcgBelow r1 4
+      r := r2
+      let l ← mkLabel (.edge e) 0.0 0.0 w.abs (w.abs / 2.0)
+      let placements := #[EdgeLabelPlacement.head, .tail, .center]
+      if let some placement := placements[pl]? then ElkM.setProp (.label l) CoreOptions.EDGE_LABELS_PLACEMENT placement
+  return root
+
+/-- The margins of the root's children, as bit patterns. -/
+private def marginBits (root : NodeId) : ElkM (Array (Array UInt64)) := do
+  let children := (← ElkM.getNode root).children
+  children.mapM fun n => do
+    let m := (← ElkM.getNode n).props.getD CoreOptions.MARGINS {}
+    return #[m.top.toBits, m.bottom.toBits, m.left.toBits, m.right.toBits]
+
+def marginFastPathTests : Suite := suite "alg.common.nodespacing.marginFastPath" do
+  let mut mismatches := 0
+  let mut nonZero := 0
+  for seed in [0:300] do
+    let (root, g) ← ElkM.run (randomMarginGraph (seed.toUInt64 * 2654435761 + 7)) {}
+    for flags in [0:16] do
+      let c : NodeMarginCalculator :=
+        ⟨flags % 2 == 1, flags / 2 % 2 == 1, flags / 4 % 2 == 1, flags / 8 % 2 == 1⟩
+      let (generic, _) ← ElkM.run (do c.process (← ElkGraphAdapters.adapt root) root; marginBits root) g
+      let (fast, _) ← ElkM.run (do c.processElkGraph root; marginBits root) g
+      if generic != fast then mismatches := mismatches + 1
+      if generic.any (·.any (· != (0.0 : Float).toBits)) then nonZero := nonZero + 1
+  checkEq "fast path margins equal the generic calculator (300 graphs x 16 configurations)" mismatches 0
+  check "the random graphs exercise non-zero margins" (nonZero > 1000)
+  -- `NodeMicroLayout.forGraph` takes the fast path, `forAdapter` the generic one
+  let mut microAgree := true
+  let mut microRuns := 0
+  for seed in [0:40] do
+    let (root, g) ← ElkM.run (randomMarginGraph (seed.toUInt64 * 40503 + 11)) {}
+    let viaGraph ← try
+        let (bits, _) ← ElkM.run (do (← NodeMicroLayout.forGraph root).execute; marginBits root) g
+        pure (Except.ok bits)
+      catch e => pure (Except.error (toString e))
+    let viaAdapter ← try
+        let (bits, _) ← ElkM.run (do
+          (NodeMicroLayout.forAdapter (← ElkGraphAdapters.adapt root) root).execute; marginBits root) g
+        pure (Except.ok bits)
+      catch e => pure (Except.error (toString e))
+    if viaGraph.toBool then microRuns := microRuns + 1
+    match viaGraph, viaAdapter with
+    | .ok a, .ok b => if a != b then microAgree := false
+    | .error a, .error b => if a != b then microAgree := false
+    | _, _ => microAgree := false
+  check "NodeMicroLayout: forGraph (fast path) and forAdapter agree on 40 graphs" microAgree
+  check "NodeMicroLayout: some graphs are laid out" (microRuns > 5)
+
 def suites : Array Tests.Suite :=
   #[nodeMarginTests, dimensionTests, microLayoutTests, nextToPortRuleTests, portLabelPlacementTests,
-    nodeMicroLayoutTests, cellSystemProcessTests, issue475Tests]
+    nodeMicroLayoutTests, cellSystemProcessTests, issue475Tests, marginFastPathTests]
 
 end Tests.AlgCommon.NodeSpacing.All

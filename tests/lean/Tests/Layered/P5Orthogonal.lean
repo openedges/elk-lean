@@ -3,6 +3,7 @@ import Elk.Alg.Layered
 import Elk.Alg.Layered.P5Edges.Orthogonal
 import Elk.Alg.Layered.P5Edges.OrthogonalEdgeRouter
 import Elk.Alg.Layered.P5Edges.PolylineEdgeRouter
+import Tests.Layered.P5OrthogonalSegmentGraphRef
 /-!
 Tests of `org.eclipse.elk.alg.layered.p5edges` (orthogonal and polyline routers, the orthogonal routing
 generator and its hyperedge segment machinery).
@@ -415,6 +416,84 @@ def cycleDetectorTests : Suite := suite "layered.p5edges.orthogonal.cycleDetecto
   checkEq "S0 outgoing after reversal" (g3.segment 0).outgoingSegmentDependencies #[0, d2]
   checkEq "S2 outgoing after reversal" (g3.segment 2).outgoingSegmentDependencies #[]
 
+/-! ### Differential test of the packed `SegmentGraph` (ORM) against the six-column reference -/
+
+/-- Whether the new and the reference graph agree on every segment (coordinates, extent, split
+partner, dependency lists in order) and every dependency (ends, weight, type). -/
+def segmentGraphsAgree (g : SegmentGraph) (r : Tests.Layered.SegmentGraphRef.SegmentGraph) : Bool :=
+  g.segments.size == r.segments.size && g.dependencyCount == r.dependencyCount &&
+    (Array.range g.segments.size).all (fun i =>
+      let a := g.segment i
+      let b := r.segment i
+      a.outgoingSegmentDependencies == b.outgoingSegmentDependencies &&
+        a.incomingSegmentDependencies == b.incomingSegmentDependencies &&
+        a.incomingConnectionCoordinates == b.incomingConnectionCoordinates &&
+        a.outgoingConnectionCoordinates == b.outgoingConnectionCoordinates &&
+        a.splitPartner == b.splitPartner && a.startPosition.toBits == b.startPosition.toBits &&
+        a.endPosition.toBits == b.endPosition.toBits) &&
+    (Array.range g.dependencyCount).all (fun d =>
+      let x := g.dependency d
+      let y := r.dependency d
+      x.source == y.source && x.target == y.target && x.weight == y.weight &&
+        (x.dependencyType == .critical) == (y.dependencyType == .critical))
+
+/-- One step of a 64-bit LCG (Knuth's MMIX constants). -/
+def lcgNext (x : UInt64) : UInt64 := x * 6364136223846793005 + 1442695040888963407
+
+/-- Applies `steps` random operations (add, remove, reverse, split; remove and reverse also on
+already removed dependencies) to both graphs; `false` as soon as they disagree. -/
+partial def segmentGraphDiffRun (g : SegmentGraph) (r : Tests.Layered.SegmentGraphRef.SegmentGraph) (rng : UInt64)
+    (steps : Nat) : Bool :=
+  if steps == 0 then true
+  else
+    let rng := lcgNext rng
+    let op := (rng >>> 33) % 20
+    let rng2 := lcgNext rng
+    let a := ((rng2 >>> 33) % 1000).toNat
+    let rng3 := lcgNext rng2
+    let b := ((rng3 >>> 33) % 1000).toNat
+    let n := g.segments.size
+    let count := g.dependencyCount
+    let (g', r') :=
+      if op < 10 then
+        let critical := op < 2
+        let weight : Int := (b / 7) % 40
+        (g.addDependency critical (a % n) (b % n) weight, r.addDependency critical (a % n) (b % n) weight)
+      else if count == 0 then (g, r)
+      else if op < 14 then (g.removeDependency (a % count), r.removeDependency (a % count))
+      else if op < 19 then (g.reverseDependency (a % count), r.reverseDependency (a % count))
+      else
+        let pos := (b.toFloat) / 10.0
+        ((g.splitAt (a % n) pos).1, (r.splitAt (a % n) pos).1)
+    segmentGraphsAgree g' r' && segmentGraphDiffRun g' r' rng3 (steps - 1)
+
+def segmentGraphDiffTests : Suite := suite "layered.p5edges.orthogonal.segmentGraphDiff" do
+  let segs := #[seg #[0] #[10], seg #[1] #[11, 30], seg #[2, 5] #[12], seg #[3] #[13], seg #[4] #[14, 20], seg #[6] #[7]]
+  let g : SegmentGraph := { segments := segs }
+  let r : Tests.Layered.SegmentGraphRef.SegmentGraph := { segments := segs }
+  let mut allAgree := true
+  for seed in [0:200] do
+    if !segmentGraphDiffRun g r (seed.toUInt64 * 7919 + 1) 300 then allAgree := false
+  check "200 random sequences of 300 operations agree with the reference" allAgree
+  -- larger graphs: many dependencies per segment
+  let big := (Array.range 40).map fun i => seg #[i.toFloat] #[(i * 3 % 17).toFloat + 0.5]
+  let mut bigAgree := true
+  for seed in [0:10] do
+    if !segmentGraphDiffRun { segments := big } { segments := big } (seed.toUInt64 * 104729 + 3) 1500 then
+      bigAgree := false
+  check "10 random sequences of 1500 operations on 40 segments agree with the reference" bigAgree
+  -- past the flat head of the dependency columns (2^20 - 2 words): the chunked part
+  let (g, r) := (List.range 1100000).foldl (init := (({ segments := big } : SegmentGraph),
+      ({ segments := big } : Tests.Layered.SegmentGraphRef.SegmentGraph))) fun (g, r) i =>
+    let s := i % 40
+    let t := (i * 7 + 3) % 40
+    let critical := i % 11 == 0
+    let w : Int := (i % 13 : Nat)
+    (g.addDependency critical s t w, r.addDependency critical s t w)
+  check "1.1 million dependencies (chunked columns) agree with the reference" (segmentGraphsAgree g r)
+  check "chunked columns: random removals and reversals agree with the reference"
+    (segmentGraphDiffRun g r 12345 12)
+
 def generatorTests : Suite := suite "layered.p5edges.orthogonal.generator" do
   checkEq "countCrossings" (OrthogonalRoutingGenerator.countCrossings #[10, 20, 30, 40] 15 30) 2
   check "minimumDifference with NaN (Rust test)"
@@ -474,6 +553,6 @@ def configurationTests : Suite := suite "layered.p5edges.configuration" do
 
 def suites : Array Tests.Suite :=
   #[straightEdgeTests, crossingRegularTests, crossingCriticalTests, hyperedgeTests, layerOffsetTests, verticalTests,
-    polylineTests, segmentTests, dependencyTests, cycleDetectorTests, generatorTests, configurationTests]
+    polylineTests, segmentTests, dependencyTests, cycleDetectorTests, segmentGraphDiffTests, generatorTests, configurationTests]
 
 end Tests.Layered.P5Orthogonal
