@@ -1025,8 +1025,66 @@ def pureComparatorTests : Suite := suite "layered.intermediate.preserveorder.pur
     checkEq s!"{names[i]!}: pure = monadic ({n} runs, {e} exceptions)" bad 0
     check s!"{names[i]!}: the exception cases are exercised" (e > 0 && n > e)
 
+/-! ## `CrossMinSnapshot.ofArena` against `ofArenaRef` (P3C)
+
+On the random graphs above, with random `LNode.id`/`LPort.id`s (duplicates, ids beyond the port
+count, negative ids), half-connected edges, `PORT_CONSTRAINTS` and `BARYCENTER_ASSOCIATES`, and
+random port counts, both builders must give the same snapshot (every field; the id indices are
+compared on every key of the arena range). -/
+
+open Elk.Alg.Layered.P3Order in
+/-- Whether two snapshots are equal (every field). -/
+def sameSnapshot (s t : CrossMinSnapshot) (keys : Nat) : Bool :=
+  (Array.range keys).all (fun k => s.nodeMap.get k == t.nodeMap.get k && s.portMap.get k == t.portMap.get k) &&
+  s.nodeGraphIds == t.nodeGraphIds && s.nodeLayers == t.nodeLayers && s.nodeTypes == t.nodeTypes &&
+  s.nodeNested == t.nodeNested && s.nodePortIds == t.nodePortIds && s.nodeSideMasks == t.nodeSideMasks &&
+  s.nodeInputCounts == t.nodeInputCounts && s.nodeNorthInputCounts == t.nodeNorthInputCounts &&
+  s.nodeOutputCounts == t.nodeOutputCounts && s.nodeMaxPortIds == t.nodeMaxPortIds &&
+  s.nodeOrderFixed.data == t.nodeOrderFixed.data && s.nodeEndFlags.data == t.nodeEndFlags.data &&
+  s.nodePredCounts == t.nodePredCounts && s.nodeSuccCounts == t.nodeSuccCounts &&
+  s.portFlags.data == t.portFlags.data && s.endIds == t.endIds && s.endStart == t.endStart && s.endMid == t.endMid &&
+  s.portEndsOk.data == t.portEndsOk.data && s.portSides == t.portSides && s.portOwners == t.portOwners &&
+  s.portIns == t.portIns && s.portOuts == t.portOuts && s.nodeRefs == t.nodeRefs && s.portRefs == t.portRefs &&
+  s.nNodes == t.nNodes && s.nPorts == t.nPorts
+
+open Elk.Alg.Layered.P3Order in
+def crossMinSnapshotTests : Suite := suite "layered.p3.crossMinSnapshot" do
+  let mut bad := 0
+  let mut withPorts := 0
+  for k in [0:600] do
+    let seed : UInt64 := (k.toUInt64 + 7) * 0xbf58476d1ce4e5b9
+    let (rg, a) ← LayeredM.run (do
+      let rg ← randomGraph seed
+      let mut s := lcgNext seed
+      let n := rg.ports.size
+      for p in rg.ports do
+        let (v, s1) := rnd s (n + 4)
+        s := s1
+        let id : Int := if v == n + 3 then -1 else if v == n + 2 then (v : Int) else (v % (n + 1) : Nat)
+        LayeredM.modifyPort p fun x => { x with id := id }
+      for nd in rg.nodes do
+        let (v, s1) := rnd s 9
+        s := s1
+        LayeredM.modifyNode nd fun x => { x with id := (v : Int) - 1 }
+        if v == 0 then LayeredM.setNodeProp nd LayeredOptions.PORT_CONSTRAINTS PortConstraints.fixedOrder
+        if v == 1 then LayeredM.modifyNode nd fun x => { x with internal.barycenterAssociates := #[nd] }
+      -- half-connected edges
+      if h : 0 < rg.ports.size then
+        let e ← LayeredM.createEdge
+        LayeredM.setEdgeSource e (some rg.ports[0])
+        let e2 ← LayeredM.createEdge
+        LayeredM.setEdgeTarget e2 (some rg.ports[rg.ports.size - 1]!)
+      return rg)
+    if !rg.ports.isEmpty then withPorts := withPorts + 1
+    let order := rg.layers.map fun l => (a.layer l).nodes
+    let keys := a.nodes.size + a.ports.size + 8
+    for nPorts in #[rg.ports.size, rg.ports.size / 2, rg.ports.size + 3] do
+      if !sameSnapshot (CrossMinSnapshot.ofArena a order nPorts) (CrossMinSnapshot.ofArenaRef a order nPorts) keys then
+        bad := bad + 1
+  checkEq s!"ofArena = ofArenaRef ({withPorts} graphs with ports, 3 port counts each)" bad 0
+
 def suites : Array Suite :=
   #[cmGroupTests, nodeComparatorTests, portComparatorTests, relationTests, sortProcessorRustTests, sortProcessorTests,
-    pureComparatorTests]
+    pureComparatorTests, crossMinSnapshotTests]
 
 end Tests.Layered.IntermediatePreserveOrder

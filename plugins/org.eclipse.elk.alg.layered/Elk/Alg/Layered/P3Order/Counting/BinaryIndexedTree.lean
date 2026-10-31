@@ -44,14 +44,12 @@ private partial def rankLoop (sums : Array Int) (i : Nat) (acc : Int) : Int :=
 
 /-- `add(index)`: one more entry at `index`. -/
 def add (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
-  if index >= t.numsPerIndex.size then { t with size := t.size + 1, outOfRange := true }
-  else
-    -- take the arrays out first so that they are updated in place
-    let nums := t.numsPerIndex
-    let sums := t.binarySums
-    let t := { t with numsPerIndex := #[], binarySums := #[] }
-    let nums := nums.modify index (· + 1)
-    { t with numsPerIndex := nums, binarySums := updateLoop sums (index + 1) 1, size := t.size + 1 }
+  -- a constructor match keeps the cell and both arrays unshared (updated in place)
+  match t with
+  | ⟨sums, nums, size, maxNum, outOfRange⟩ =>
+    if h : index < nums.size then
+      ⟨updateLoop sums (index + 1) 1, nums.set index (nums[index] + 1), size + 1, maxNum, outOfRange⟩
+    else ⟨sums, nums, size + 1, maxNum, true⟩
 
 /-- `rank(index)`: number of entries at indices `< index`. -/
 def rank (t : BinaryIndexedTree) (index : Nat) : Int :=
@@ -59,16 +57,13 @@ def rank (t : BinaryIndexedTree) (index : Nat) : Int :=
 
 /-- `removeAll(index)`: drops all entries at `index`. -/
 def removeAll (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
-  if h : index < t.numsPerIndex.size then
-    let numEntries := t.numsPerIndex[index]
-    if numEntries == 0 then t
-    else
-      let nums := t.numsPerIndex
-      let sums := t.binarySums
-      let t := { t with numsPerIndex := #[], binarySums := #[] }
-      let nums := nums.set! index 0
-      { t with numsPerIndex := nums, binarySums := updateLoop sums (index + 1) (-numEntries), size := t.size - numEntries }
-  else { t with outOfRange := true }
+  match t with
+  | ⟨sums, nums, size, maxNum, outOfRange⟩ =>
+    if h : index < nums.size then
+      let numEntries := nums[index]
+      if numEntries == 0 then ⟨sums, nums, size, maxNum, outOfRange⟩
+      else ⟨updateLoop sums (index + 1) (-numEntries), nums.set index 0, size - numEntries, maxNum, outOfRange⟩
+    else ⟨sums, nums, size, maxNum, true⟩
 
 /-- `a` with every entry `0`, in place when unshared. -/
 private partial def zeroFrom (a : Array Int) (i : Nat) : Array Int :=
