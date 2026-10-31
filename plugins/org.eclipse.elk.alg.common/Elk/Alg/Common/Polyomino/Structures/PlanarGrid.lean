@@ -1,3 +1,4 @@
+import Elk.Core.Util.Java
 import Elk.Alg.Common.Polyomino.Structures.TwoBitGrid
 /-!
 # `org.eclipse.elk.alg.common.polyomino.structures.PlanarGrid`
@@ -6,12 +7,17 @@ A `TwoBitGrid` with a center, addressable in center-based coordinates (elk-rs
 `structures/planar_grid.rs`). `xCenter = (width - 1) >> 1` (arithmetic shift, `-1` for an
 empty grid), likewise `yCenter`.
 
-The operations that Rust implements with a panic on out-of-bounds cells (`to_index`,
-`to_index_non_center`: the center-based getters/setters, `addFilledCellsFromGrid`,
-`weaklyBlockArea`, `weaklyIntersectsArea`) return `Except String` with the Rust message; the
-polyomino variants (`intersectsWithCenterBasedPolyomino`, `addFilledCellsFromPolyomino`) need
-`PolyominoLike` and live in `Elk.Alg.Common.Polyomino.Structures.Polyomino`.
-`getFilledBounds` returns the Rust `Quadruple` as a tuple `(minX, minY, width, height)`.
+The operations that can reach out-of-bounds cells (the center-based getters/setters,
+`addFilledCellsFromGrid`, `weaklyBlockArea`, `weaklyIntersectsArea`) return `Except String` with
+the message of Java's `IndexOutOfBoundsException` and follow Java's bounds (`TwoBitGrid.*Java`:
+reads right of the width inside the last 32-cell word see `EMPTY`, writes there fail; the
+center-based ones append ` Given center based coordinates were (x, y).` to the message of the
+translated point). elk-rs checks every access against the width and reports the center-based
+point. The polyomino variants (`intersectsWithCenterBasedPolyomino`,
+`addFilledCellsFromPolyomino`) need `PolyominoLike` and live in
+`Elk.Alg.Common.Polyomino.Structures.Polyomino`. `getFilledBounds` returns the Java `Quadruple` as
+a tuple `(minX, minY, width, height)` in Java `int` arithmetic (no blocked cell:
+`(Integer.MAX_VALUE, Integer.MAX_VALUE, 2, 2)`).
 -/
 namespace Elk.Alg.Common.Polyomino.Structures
 
@@ -62,34 +68,37 @@ def reinitialize (_ : PlanarGrid) (width height : Nat) : PlanarGrid := new width
 /-- `getCenterY()`. -/
 @[inline] def centerY (g : PlanarGrid) : Int := g.yCenter
 
-/-- `to_index(x, y)`: center-based → array coordinates, failing outside the grid. -/
+/-- Java's center-based rethrow message: `e.getLocalizedMessage() + " Given center based
+coordinates were (x, y)."`. -/
+def centerMessage (msg : String) (x y : Int) : String :=
+  s!"{msg} Given center based coordinates were ({x}, {y})."
+
+/-- `toIndex(x, y)`: center-based → array coordinates, failing outside the grid (message of the
+translated point plus the center-based coordinates, as Java's center-based accessors). -/
 def toIndex (g : PlanarGrid) (x y : Int) : Except String (Nat × Nat) :=
   let xi := x + g.xCenter
   let yi := y + g.yCenter
   if xi < 0 || yi < 0 || !g.inBounds xi.toNat yi.toNat then
-    .error (TwoBitGrid.boundsMessage g.width g.height x y)
+    .error (centerMessage (TwoBitGrid.boundsMessage g.width g.height xi yi) x y)
   else .ok (xi.toNat, yi.toNat)
 
-/-- `to_index_non_center(x, y)`: bounds check of plain coordinates. -/
-def toIndexNonCenter (g : PlanarGrid) (x y : Int) : Except String (Nat × Nat) :=
-  if x < 0 || y < 0 || !g.inBounds x.toNat y.toNat then
-    .error (TwoBitGrid.boundsMessage g.width g.height x y)
-  else .ok (x.toNat, y.toNat)
+/-- Rethrows an error of a translated access with the center-based message. -/
+@[inline] def withCenterMessage {α : Type} (r : Except String α) (x y : Int) : Except String α :=
+  match r with
+  | .ok v => .ok v
+  | .error e => .error (centerMessage e x y)
 
-/-- `isEmptyCenterBased(x, y)`. -/
-def isEmptyCenterBased (g : PlanarGrid) (x y : Int) : Except String Bool := do
-  let (xu, yu) ← g.toIndex x y
-  return g.isEmpty xu yu
+/-- `isEmptyCenterBased(x, y)` (Java bounds). -/
+def isEmptyCenterBased (g : PlanarGrid) (x y : Int) : Except String Bool :=
+  withCenterMessage (g.grid.isEmptyJava (x + g.xCenter) (y + g.yCenter)) x y
 
-/-- `isBlockedCenterBased(x, y)`. -/
-def isBlockedCenterBased (g : PlanarGrid) (x y : Int) : Except String Bool := do
-  let (xu, yu) ← g.toIndex x y
-  return g.isBlocked xu yu
+/-- `isBlockedCenterBased(x, y)` (Java bounds). -/
+def isBlockedCenterBased (g : PlanarGrid) (x y : Int) : Except String Bool :=
+  withCenterMessage (g.grid.isBlockedJava (x + g.xCenter) (y + g.yCenter)) x y
 
-/-- `isWeaklyBlockedCenterBased(x, y)`. -/
-def isWeaklyBlockedCenterBased (g : PlanarGrid) (x y : Int) : Except String Bool := do
-  let (xu, yu) ← g.toIndex x y
-  return g.isWeaklyBlocked xu yu
+/-- `isWeaklyBlockedCenterBased(x, y)` (Java bounds). -/
+def isWeaklyBlockedCenterBased (g : PlanarGrid) (x y : Int) : Except String Bool :=
+  withCenterMessage (g.grid.isWeaklyBlockedJava (x + g.xCenter) (y + g.yCenter)) x y
 
 /-- `inBoundsCenterBased(x, y)`. -/
 def inBoundsCenterBased (g : PlanarGrid) (x y : Int) : Bool :=
@@ -97,20 +106,20 @@ def inBoundsCenterBased (g : PlanarGrid) (x y : Int) : Bool :=
   let yi := y + g.yCenter
   if xi < 0 || yi < 0 then false else g.inBounds xi.toNat yi.toNat
 
-/-- `setBlockedCenterBased(x, y)`. -/
+/-- `setBlockedCenterBased(x, y)` (Java bounds). -/
 def setBlockedCenterBased (g : PlanarGrid) (x y : Int) : Except String PlanarGrid := do
-  let (xu, yu) ← g.toIndex x y
-  return g.setBlocked xu yu
+  let grid ← withCenterMessage (g.grid.setBitsJava (x + g.xCenter) (y + g.yCenter) false true) x y
+  return { g with grid }
 
-/-- `setEmptyCenterBased(x, y)`. -/
+/-- `setEmptyCenterBased(x, y)` (Java bounds). -/
 def setEmptyCenterBased (g : PlanarGrid) (x y : Int) : Except String PlanarGrid := do
-  let (xu, yu) ← g.toIndex x y
-  return g.setEmpty xu yu
+  let grid ← withCenterMessage (g.grid.setBitsJava (x + g.xCenter) (y + g.yCenter) false false) x y
+  return { g with grid }
 
-/-- `setWeaklyBlockedCenterBased(x, y)`. -/
+/-- `setWeaklyBlockedCenterBased(x, y)` (Java bounds). -/
 def setWeaklyBlockedCenterBased (g : PlanarGrid) (x y : Int) : Except String PlanarGrid := do
-  let (xu, yu) ← g.toIndex x y
-  return g.setWeaklyBlocked xu yu
+  let grid ← withCenterMessage (g.grid.setBitsJava (x + g.xCenter) (y + g.yCenter) true false) x y
+  return { g with grid }
 
 /-- `intersectsWithCenterBasedGrid(other, xOffset, yOffset)`: some cell of `other` translated by
 the offset (center-based) lies inside this grid and either a non-empty cell of `other` meets a
@@ -145,8 +154,9 @@ def addFilledCellsFromGrid (g other : PlanarGrid) (xOffset yOffset : Int) :
           g ← g.setWeaklyBlockedCenterBased xT yT
   return g
 
-/-- `getFilledBounds()`: `(minX, minY, width, height)` of the blocked cells, `(0, 0, 0, 0)` if
-there are none. -/
+/-- `getFilledBounds()`: `(minX, minY, width, height)` of the blocked cells, in Java `int`
+arithmetic: without any blocked cell `minX = minY = Integer.MAX_VALUE` and the sizes wrap
+(`Integer.MIN_VALUE - Integer.MAX_VALUE + 1 = 2`). -/
 def filledBounds (g : PlanarGrid) : Int × Int × Int × Int := Id.run do
   let i32Max : Int := 2147483647
   let i32Min : Int := -2147483648
@@ -161,35 +171,35 @@ def filledBounds (g : PlanarGrid) : Int × Int × Int × Int := Id.run do
         maxX := max maxX xi
         minY := min minY yi
         maxY := max maxY yi
-  if minX == i32Max then return (0, 0, 0, 0)
-  return (minX, minY, maxX - minX + 1, maxY - minY + 1)
+  return (minX, minY, Elk.Core.Util.Int.wrap32 (maxX - minX + 1), Elk.Core.Util.Int.wrap32 (maxY - minY + 1))
 
 /-- `weaklyBlockArea(xUpperLeft, yUpperLeft, xBottomRight, yBottomRight)` (inclusive bounds,
-plain coordinates): weakly blocks every cell of the area that is not blocked. -/
+plain coordinates): weakly blocks every cell of the area that is not blocked. Java bounds: the
+first cell outside the grid fails (a cell right of the width inside the last word reads as
+empty, so its write fails). -/
 def weaklyBlockArea (g : PlanarGrid) (xUpperLeft yUpperLeft xBottomRight yBottomRight : Int) :
     Except String PlanarGrid := do
-  let mut g := g
+  let mut grid := g.grid
   let mut yi := yUpperLeft
   while yi <= yBottomRight do
     let mut xi := xUpperLeft
     while xi <= xBottomRight do
-      let (xu, yu) ← g.toIndexNonCenter xi yi
-      if !g.isBlocked xu yu then
-        g := g.setWeaklyBlocked xu yu
+      if !(← grid.isBlockedJava xi yi) then
+        grid ← grid.setBitsJava xi yi true false
       xi := xi + 1
     yi := yi + 1
-  return g
+  return { g with grid }
 
 /-- `weaklyIntersectsArea(xUpperLeft, yUpperLeft, xBottomRight, yBottomRight)`: some cell of the
-area (inclusive bounds, plain coordinates) is blocked. -/
+area (inclusive bounds, plain coordinates) is blocked. Java bounds: cells right of the width
+inside the last word are empty, cells outside the array fail. -/
 def weaklyIntersectsArea (g : PlanarGrid) (xUpperLeft yUpperLeft xBottomRight yBottomRight : Int) :
     Except String Bool := do
   let mut yi := yUpperLeft
   while yi <= yBottomRight do
     let mut xi := xUpperLeft
     while xi <= xBottomRight do
-      let (xu, yu) ← g.toIndexNonCenter xi yi
-      if g.isBlocked xu yu then return true
+      if ← g.grid.isBlockedJava xi yi then return true
       xi := xi + 1
     yi := yi + 1
   return false

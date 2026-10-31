@@ -9,10 +9,14 @@ lives in word `x >> 5` at bit offset `(x & 31) * 2`, the lower bit being the LSB
 `EMPTY = 0b00`, `BLOCKED = 0b01`, `WEAKLY_BLOCKED = 0b10`. The Rust `Vec<Vec<u64>>` is stored
 row-major in one flat `Array UInt64`.
 
-Out-of-bounds accesses panic in Rust (Java: `IndexOutOfBoundsException`). The Lean grid is
-total: out-of-bounds reads report `EMPTY` and writes are ignored. Callers that can reach
-out-of-bounds cells (`PlanarGrid`'s center-based and area operations) check the bounds
-themselves and fail with `boundsMessage`.
+Out-of-bounds accesses panic in Rust (Java: `IndexOutOfBoundsException`). The total Lean
+accessors (`retrieve`, `setBits`, `isEmpty`, ...) report `EMPTY` for out-of-bounds reads and
+ignore out-of-bounds writes; they serve the callers whose coordinates are in bounds. The callers
+that can reach out-of-bounds cells (`PlanarGrid`'s center-based and area operations) use the
+`*Java` variants, which follow Java exactly: a read fails only outside the `long[height][words]`
+array (`y` outside the height, `x < 0`, `x >> 5 >= words`) — a cell right of the width inside the
+last word reads `EMPTY` (it is never written) — and a write fails for `x >= width` as well;
+the error is the Java message (`boundsMessage`).
 -/
 namespace Elk.Alg.Common.Polyomino.Structures
 
@@ -79,6 +83,32 @@ def setBits (g : TwoBitGrid) (x y : Nat) (msb lsb : Bool) : TwoBitGrid :=
         let w := if lsb then w ||| mask else w &&& ~~~mask
         if msb then w ||| msbMask else w &&& ~~~msbMask }
   else g
+
+/-- Java `retrieve(x, y)` (`(grid[y][x >> 5] >>> ((x & 31) << 1)) & 3`): fails outside the
+array (Java `ArrayIndexOutOfBoundsException`, rethrown by the public accessors as
+`IndexOutOfBoundsException` with `boundsMessage`); cells right of the width inside the last word
+read `EMPTY`. -/
+def retrieveJava (g : TwoBitGrid) (x y : Int) : Except String UInt64 :=
+  if y < 0 || y >= (g.ySize : Int) || x < 0 || (x.toNat >>> 5) >= g.words then
+    .error (boundsMessage g.xSize g.ySize x y)
+  else
+    .ok (((g.grid[y.toNat * g.words + (x.toNat >>> 5)]?.getD 0) >>> bitOffset x.toNat) &&& TWO_LSBS_MASK)
+
+/-- Java `isEmpty(x, y)` (bounds of `retrieveJava`). -/
+@[inline] def isEmptyJava (g : TwoBitGrid) (x y : Int) : Except String Bool :=
+  return (← g.retrieveJava x y) == EMPTY
+/-- Java `isBlocked(x, y)` (bounds of `retrieveJava`). -/
+@[inline] def isBlockedJava (g : TwoBitGrid) (x y : Int) : Except String Bool :=
+  return (← g.retrieveJava x y) == BLOCKED
+/-- Java `isWeaklyBlocked(x, y)` (bounds of `retrieveJava`). -/
+@[inline] def isWeaklyBlockedJava (g : TwoBitGrid) (x y : Int) : Except String Bool :=
+  return (← g.retrieveJava x y) == WEAKLY_BLOCKED
+
+/-- Java `set(x, y, msb, lsb)`: fails for `x >= width` and outside the array. -/
+def setBitsJava (g : TwoBitGrid) (x y : Int) (msb lsb : Bool) : Except String TwoBitGrid :=
+  if x < 0 || y < 0 || x >= (g.xSize : Int) || y >= (g.ySize : Int) then
+    .error (boundsMessage g.xSize g.ySize x y)
+  else .ok (g.setBits x.toNat y.toNat msb lsb)
 
 /-- `isEmpty(x, y)`. -/
 @[inline] def isEmpty (g : TwoBitGrid) (x y : Nat) : Bool := g.retrieve x y == EMPTY

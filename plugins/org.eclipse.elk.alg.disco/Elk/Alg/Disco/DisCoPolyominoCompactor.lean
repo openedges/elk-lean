@@ -28,7 +28,7 @@ private def fl100p0 : Float := 100.0
 
 namespace Elk.Alg.Disco
 
-open Elk.Core Elk.Core.Math Elk.Core.Options Elk.Alg.Common.Compaction.Options
+open Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Alg.Common.Compaction.Options
 open Elk.Alg.Common.Polyomino Elk.Alg.Common.Polyomino.Structures
 open Elk.Alg.Disco.Graph Elk.Alg.Disco.Options Elk.Alg.Disco.Structures
 
@@ -99,8 +99,8 @@ def applyToDCGraph (graph : DCGraph) (polys : Array DCPolyomino) (grid : PlanarG
   let parentHeight := Float.ofInt cropHeight * gridCellSizeY + paddingVert
   let mut graph := { graph with dimensions := KVector.mk' parentWidth parentHeight }
   for poly in polys do
-    let absoluteIntX := PolyominoLike.x poly - cropX
-    let absoluteIntY := PolyominoLike.y poly - cropY
+    let absoluteIntX := Int.wrap32 (PolyominoLike.x poly - cropX)
+    let absoluteIntY := Int.wrap32 (PolyominoLike.y poly - cropY)
     let absolutePosition :=
       ((KVector.mk' (Float.ofInt absoluteIntX) (Float.ofInt absoluteIntY)).scaleValues
         poly.cellSizeX poly.cellSizeY).add (DCPolyomino.getOffset graph poly)

@@ -4,7 +4,8 @@
 Stages (each skipped when its result is already in <out_dir> unless --force):
   gen    <out>/gen/s<seed> (gen_nodesize_graphs.py OUT COUNT SEED), <out>/gen/v<seed> (sanitize_for_java.py),
          <out>/gen/d<seed> (--explicit-defaults), <out>/gen/o<seed> (gen_option_graphs.py OUT COUNT SEED),
-         <out>/gen/p<seed> (gen_p3_graphs.py OUT SEED <out>/gen/v<seed>: layered roots only)
+         <out>/gen/p<seed> (gen_p3_graphs.py OUT SEED <out>/gen/v<seed>: layered roots only),
+         <out>/gen/c<seed> (gen_disco_graphs.py OUT COUNT SEED: DisCo layout nodes)
   java   <out>/java/<set>/ : ELK Java 0.12.0 (`ElkJavaBaseline`), one JVM per set with a watchdog: a
          model that makes no progress for --java-timeout seconds is recorded as `timeout`, the JVM is
          killed and restarted on the remaining models (chunk directories of symlinks); a per-set alarm
@@ -81,6 +82,13 @@ def stage_gen(a, seeds, sets):
             if a.force or not os.path.isdir(o_dir) or len(inputs_of(o_dir)) != a.count:
                 shutil.rmtree(o_dir, ignore_errors=True)
                 subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_option_graphs.py"), o_dir,
+                                str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
+        if "c" in sets:
+            # DisCo layout nodes with random components and options (gen_disco_graphs.py)
+            c_dir = os.path.join(a.out, "gen", f"c{seed}")
+            if a.force or not os.path.isdir(c_dir) or len(inputs_of(c_dir)) != a.count:
+                shutil.rmtree(c_dir, ignore_errors=True)
+                subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_disco_graphs.py"), c_dir,
                                 str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
         if not {"s", "v", "d", "p"} & set(sets):
             continue
@@ -401,7 +409,8 @@ def write_report(a, rows, set_names):
       "`d` (experiment) = `v` plus ELK Java's algorithm specific option defaults written explicitly "
       "(`sanitize_for_java.py --explicit-defaults`), `o` = flat graphs of the non-layered algorithms with "
       "random values of their own options (`gen_option_graphs.py`), `p` = the layered roots of `v` with "
-      "random crossing minimisation / layering options (`gen_p3_graphs.py`, seed = set seed).")
+      "random crossing minimisation / layering options (`gen_p3_graphs.py`, seed = set seed), `c` = DisCo "
+      "layout nodes with random components and DisCo options (`gen_disco_graphs.py`).")
     w("")
     w("## Per set")
     w("")

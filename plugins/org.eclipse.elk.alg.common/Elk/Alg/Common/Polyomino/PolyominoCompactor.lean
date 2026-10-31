@@ -1,4 +1,5 @@
 import Elk.Core.Util.Sort
+import Elk.Core.Util.Java
 import Elk.Core.Exceptions
 import Elk.Alg.Common.Compaction.Options.PolyominoOptions
 import Elk.Alg.Common.Polyomino.Structures.Polyominoes
@@ -11,13 +12,15 @@ import Elk.Alg.Common.Polyomino.SuccessorQuadrantsGeneric
 /-!
 # `org.eclipse.elk.alg.common.polyomino.PolyominoCompactor`
 
-Greedy polyomino packing (elk-rs `polyomino_compactor.rs`): the polyominoes are sorted
-(stable sorts applied in the Rust order: low-level criterion first, then the high-level
-criterion's sorts), then each one is placed at the first candidate offset of the traversal
-strategy where it does not intersect the already placed cells, starting at `(0, 0)`.
+Greedy polyomino packing (Java `PolyominoCompactor.packPolyominoes`): the polyominoes are sorted
+(Java `List.sort`, stable, with consistent comparators: the low-level criterion first, then the
+high-level criterion's sorts), then each one is placed at the first candidate offset of the
+traversal strategy where it does not intersect the already placed cells, starting at `(0, 0)`.
 
-Rust/Java difference kept from Rust (the oracle): Java sorts with the low-level comparator
-`.reversed()` (largest polyominoes first), elk-rs sorts ascending (`polys.sort_by(min_perimeter_cmp)`).
+Java sorts with the low-level comparator `.reversed()` (largest polyominoes first); elk-rs sorts
+ascending (`polys.sort_by(min_perimeter_cmp)`) — the main DisCo difference between elk-rs and ELK
+Java, which the Lean port follows. The comparator values are Java `int` arithmetic (`w * w`
+wraps).
 
 `packPolyominoes` returns `Except String` because the grid operations can run out of bounds
 (a Rust panic); `packPolyominoesIO` throws `java.lang.IndexOutOfBoundsException` instead.
@@ -30,16 +33,19 @@ namespace PolyominoCompactor
 
 variable {P : Type} [PolyominoLike P]
 
-/-- `MinPerimeterComparator`: by `width + height`. -/
+/-- `MinPerimeterComparator`: by `width + height` (Java `int`). -/
 def minPerimeterCmp (a b : P) : Ordering :=
-  compare (PolyominoLike.width a + PolyominoLike.height a) (PolyominoLike.width b + PolyominoLike.height b)
+  let value (p : P) : Int :=
+    Int.wrap32 ((PolyominoLike.width p : Int) + (PolyominoLike.height p : Int))
+  compare (value a) (value b)
 
-/-- `MinPerimeterComparatorWithShape`: by `w² + h` (if `w < h`) or `w + h²`. -/
+/-- `MinPerimeterComparatorWithShape`: by `w * w + h` (if `w < h`) or `w + h * h`, in Java `int`
+arithmetic. -/
 def minPerimeterShapeCmp (a b : P) : Ordering :=
-  let value (p : P) : Nat :=
-    let w := PolyominoLike.width p
-    let h := PolyominoLike.height p
-    if w < h then w * w + h else w + h * h
+  let value (p : P) : Int :=
+    let w : Int := PolyominoLike.width p
+    let h : Int := PolyominoLike.height p
+    if w < h then Int.wrap32 (Int.wrap32 (w * w) + h) else Int.wrap32 (w + Int.wrap32 (h * h))
   compare (value a) (value b)
 
 /-- `MinNumOfExtensionsComparator`. -/
@@ -88,12 +94,13 @@ def successorFor (traversal : TraversalStrategy) : SuccessorFunction P :=
     SuccessorCombination (SuccessorQuadrantsGeneric SuccessorJitter)
       (SuccessorQuadrantsGeneric SuccessorManhattan)
 
-/-- Sorts the polyominoes by the configured criteria (Rust order of the stable sorts). -/
+/-- Sorts the polyominoes by the configured criteria: Java's stable `List.sort` calls, the
+low-level comparator `.reversed()` (descending), then the high-level ones ascending. -/
 def sortPolys [Inhabited P] (polys : Array P) (lowLevel : LowLevelSortingCriterion)
     (highLevel : HighLevelSortingCriterion) : Array P :=
   let polys := match lowLevel with
-    | .bySize => stableSort polys minPerimeterCmp
-    | .bySizeAndShape => stableSort polys minPerimeterShapeCmp
+    | .bySize => stableSort polys (fun a b => minPerimeterCmp b a)
+    | .bySizeAndShape => stableSort polys (fun a b => minPerimeterShapeCmp b a)
   match highLevel with
   | .cornerCasesThanSingleSideLast =>
     let polys := stableSort polys minNumExtensionsCmp
