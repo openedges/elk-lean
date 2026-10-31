@@ -182,13 +182,16 @@ def recordCompared (n1 n2 : LNodeId) (compared : Int) : NodeComparatorM Unit := 
 /-- The transitivity checks at the start of `compare` (indices are allocated for `n1`, then `n2`); Java's
 fourth check (`biggerThan.get(n2).contains(n1)`, a repetition of the second) never decides. -/
 def relationVerdict (n1 n2 : LNodeId) : NodeComparatorM (Option Int) := do
-  let k1 ← withRelations (·.index n1)
-  let k2 ← withRelations (·.index n2)
-  let rel := (← get).relations
-  if rel.isBigger k1 k2 then return some 1
-  if rel.isBigger k2 k1 then return some (-1)
-  if rel.isSmaller k1 k2 then return some (-1)
-  return none
+  -- one pass over the relations: index `n1`, then `n2`, then the three checks
+  withRelations fun rel =>
+    let (k1, rel) := rel.index n1
+    let (k2, rel) := rel.index n2
+    let v : Option Int :=
+      if rel.isBigger k1 k2 then some 1
+      else if rel.isBigger k2 k1 then some (-1)
+      else if rel.isSmaller k1 k2 then some (-1)
+      else none
+    (v, rel)
 
 /-- `for (LNode previousNode : previousLayer)`: `-1` if `p1Node` is found first, `1` if `p2Node` is,
 `0` if neither is in the previous layer. -/

@@ -164,6 +164,7 @@ def initializable (h : GreedySwitchHeuristic) : Initializable where
     if let some layer := (← getNode node).layer then
       modifyLayer layer fun x => { x with id := l }
   initAfterTraversal := do h.portPositions.set (Array.replicate (← h.nPorts.get) 0)
+  usesEdgeLevel := false
 
 /-- The `ICrossingMinimizationHeuristic` view of the object. -/
 def toHeuristic (h : GreedySwitchHeuristic) : CrossingMinimizationHeuristic where

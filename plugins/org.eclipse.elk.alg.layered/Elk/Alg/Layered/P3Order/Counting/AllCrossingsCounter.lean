@@ -129,12 +129,16 @@ private def initAfterTraversal (c : AllCrossingsCounter) : LayeredM Unit := do
   let n := (← c.nPorts.get).toNat
   c.crossingCounter.resetTo (Array.replicate n 0)
 
-/-- The `IInitializable` implementation. -/
+/-- The `IInitializable` implementation. `initAtEdgeLevel` only counts into `inLayerEdgeCounts`,
+which nothing reads (Java hands it to the hyperedge counter, whose constructor ignores it; it cannot
+throw), so the traversal skips the edge level for it (`usesEdgeLevel := false`; `initAtEdgeLevel` is
+kept for the record). -/
 def initializable (c : AllCrossingsCounter) : Initializable where
   initAtNodeLevel := c.initAtNodeLevel
   initAtPortLevel := c.initAtPortLevel
   initAtEdgeLevel := fun l n p _ edge order => c.initAtEdgeLevel l n p edge order
   initAfterTraversal := c.initAfterTraversal
+  usesEdgeLevel := false
 
 end AllCrossingsCounter
 

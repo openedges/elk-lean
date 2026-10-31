@@ -119,6 +119,14 @@ state). The row and the state are taken out before the update so that both chang
     states.setIfInBounds li row
   else states
 
+/-- `updateIn` as a specialised function (a copy per update lambda, not inlined): a caller that
+rebuilds a structure around the table (`BarycenterData`) then has no join point of `updateIn`'s
+branches between taking the structure apart and rebuilding it, so the structure's cell is reused
+(inlined, every update allocated a new one). Callers that only thread the table keep `updateIn`. -/
+@[specialize] def BarycenterState.updateInS (states : Array (Array (Option BarycenterState))) (li ni : Nat)
+    (f : BarycenterState → BarycenterState) : Array (Array (Option BarycenterState)) :=
+  BarycenterState.updateIn states li ni f
+
 /-- `ForsterConstraintResolver.ConstraintGroup`: nodes that must stay together, with the
 constraint graph edges (group ids). -/
 structure ConstraintGroup where

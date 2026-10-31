@@ -555,23 +555,37 @@ partial def overlapSweep (upper : ByteArray) (perm : Array Nat) (k : Nat) (open_
     else overlapSweep upper perm (k + 1) (open_ - 1) (crossings + (open_ - 1))
   else crossings
 
+/-- The corner positions and opposite positions of `hyperedges[i:]` (upper, then lower corner of each;
+`left`: the left bounds, else the right ones), pushed onto `pos` and `opp`. -/
+partial def cornerPositions (hyperedges : Array Hyperedge) (left : Bool) (i : Nat) (pos opp : Array Int) :
+    Array Int × Array Int :=
+  if h : i < hyperedges.size then
+    let he := hyperedges[i]
+    let u := if left then he.upperLeft else he.upperRight
+    let l := if left then he.lowerLeft else he.lowerRight
+    cornerPositions hyperedges left (i + 1) ((pos.push u).push l) ((opp.push l).push u)
+  else (pos, opp)
+
+/-- The corner identities of `hyperedges[i:]` (twice each), pushed onto `ids`. -/
+partial def cornerIds (hyperedges : Array Hyperedge) (i : Nat) (ids : Array Nat) : Array Nat :=
+  if h : i < hyperedges.size then
+    let id := hyperedges[i].identity
+    cornerIds hyperedges (i + 1) ((ids.push id).push id)
+  else ids
+
+/-- `k` pairs of corner kinds (upper `1`, lower `0`) pushed onto `upper`. -/
+partial def cornerUppers (k : Nat) (upper : ByteArray) : ByteArray :=
+  if k == 0 then upper else cornerUppers (k - 1) ((upper.push 1).push 0)
+
 /-- `countOverlapCrossings` of one side: the corners `(upper, lower, id, upper corner)` and
 `(lower, upper, id, lower corner)` of every hyperedge (`left`: the left bounds, else the right ones),
 in hyperedge order. -/
-def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int := Id.run do
+def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int :=
   let n := 2 * hyperedges.size
-  let mut pos : Array Int := Array.emptyWithCapacity n
-  let mut opp : Array Int := Array.emptyWithCapacity n
-  let mut ids : Array Nat := Array.emptyWithCapacity n
-  let mut upper : ByteArray := ByteArray.emptyWithCapacity n
-  for h in hyperedges do
-    let u := if left then h.upperLeft else h.upperRight
-    let l := if left then h.lowerLeft else h.lowerRight
-    pos := (pos.push u).push l
-    opp := (opp.push l).push u
-    ids := (ids.push h.identity).push h.identity
-    upper := (upper.push 1).push 0
-  return overlapSweep upper (keyedStableSort n (cornerGreater pos opp ids upper)) 0 0 0
+  let (pos, opp) := cornerPositions hyperedges left 0 (Array.emptyWithCapacity n) (Array.emptyWithCapacity n)
+  let ids := cornerIds hyperedges 0 (Array.emptyWithCapacity n)
+  let upper := cornerUppers hyperedges.size (ByteArray.emptyWithCapacity n)
+  overlapSweep upper (keyedStableSort n (cornerGreater pos opp ids upper)) 0 0 0
 
 /-- `countCrossingsPure` with the scratch arrays (see "Allocation-poor counting"); the scratch is
 returned zeroed. -/

@@ -29,33 +29,78 @@ structure Initializable where
 
 namespace Initializable
 
+/-- `inits[k:]` at the layer level. -/
+partial def layerLevel (inits : Array Initializable) (k l : Nat) (order : Array (Array LNodeId)) : LayeredM Unit := do
+  if h : k < inits.size then
+    inits[k].initAtLayerLevel l order
+    layerLevel inits (k + 1) l order
+
+/-- `inits[k:]` at the node level. -/
+partial def nodeLevel (inits : Array Initializable) (k l n : Nat) (order : Array (Array LNodeId)) : LayeredM Unit := do
+  if h : k < inits.size then
+    inits[k].initAtNodeLevel l n order
+    nodeLevel inits (k + 1) l n order
+
+/-- `inits[k:]` at the port level. -/
+partial def portLevel (inits : Array Initializable) (k l n p : Nat) (order : Array (Array LNodeId)) : LayeredM Unit := do
+  if h : k < inits.size then
+    inits[k].initAtPortLevel l n p order
+    portLevel inits (k + 1) l n p order
+
+/-- `inits[k:]` at the edge level. -/
+partial def edgeLevel (inits : Array Initializable) (k l n p e : Nat) (edge : LEdgeId) (order : Array (Array LNodeId)) :
+    LayeredM Unit := do
+  if h : k < inits.size then
+    inits[k].initAtEdgeLevel l n p e edge order
+    edgeLevel inits (k + 1) l n p e edge order
+
+/-- The edge level over `edges[k:]` (edge indices from `base + k`). -/
+partial def edgeLoop (inits : Array Initializable) (l n p : Nat) (edges : Array LEdgeId) (base k : Nat)
+    (order : Array (Array LNodeId)) : LayeredM Unit := do
+  if h : k < edges.size then
+    edgeLevel inits 0 l n p (base + k) edges[k] order
+    edgeLoop inits l n p edges base (k + 1) order
+
+/-- The port (and edge) levels over the ports `ports[p:]` of node `n` of layer `l`. -/
+partial def portLoop (portInits edgeInits : Array Initializable) (l n : Nat) (ports : Array LPortId) (p : Nat)
+    (order : Array (Array LNodeId)) : LayeredM Unit := do
+  if h : p < ports.size then
+    portLevel portInits 0 l n p order
+    if !edgeInits.isEmpty then
+      let pt ← getPort ports[p]
+      -- `connectedEdges` (incoming, then outgoing) without building the concatenation
+      let incoming := pt.incomingEdges
+      let outgoing := pt.outgoingEdges
+      edgeLoop edgeInits l n p incoming 0 0 order
+      edgeLoop edgeInits l n p outgoing incoming.size 0 order
+    portLoop portInits edgeInits l n ports (p + 1) order
+
+/-- The node (and port) levels over the nodes `nodes[n:]` of layer `l`. -/
+partial def nodeLoop (inits portInits edgeInits : Array Initializable) (l : Nat) (nodes : Array LNodeId) (n : Nat)
+    (order : Array (Array LNodeId)) : LayeredM Unit := do
+  if h : n < nodes.size then
+    nodeLevel inits 0 l n order
+    if !(portInits.isEmpty && edgeInits.isEmpty) then
+      portLoop portInits edgeInits l n (← getNode nodes[n]).ports 0 order
+    nodeLoop inits portInits edgeInits l nodes (n + 1) order
+
+/-- The traversal from layer `l` on. -/
+partial def layerLoop (inits portInits edgeInits : Array Initializable) (l : Nat) (order : Array (Array LNodeId)) :
+    LayeredM Unit := do
+  if h : l < order.size then
+    layerLevel inits 0 l order
+    nodeLoop inits portInits edgeInits l order[l] 0 order
+    layerLoop inits portInits edgeInits (l + 1) order
+
 /-- `IInitializable.init(initializables, order)`: the traversal (ports in node order, edges
 in `connectedEdges` order = incoming then outgoing). Initializables whose port or edge level is the
 no-op (`usesPortLevel`/`usesEdgeLevel`) are not called there, and the edge level is not traversed
-when none uses it. -/
+when none uses it. The node's port list is read when its port loop starts (after the node level
+of every initializable, which may change it). -/
 def init (initializables : Array Initializable) (order : Array (Array LNodeId)) : LayeredM Unit := do
   let portInits := initializables.filter (·.usesPortLevel)
   let edgeInits := initializables.filter (·.usesEdgeLevel)
-  for h : layerIndex in [0:order.size] do
-    let layerNodes := order[layerIndex]
-    for i in initializables do i.initAtLayerLevel layerIndex order
-    for h2 : nodeIndex in [0:layerNodes.size] do
-      let node := layerNodes[nodeIndex]
-      for i in initializables do i.initAtNodeLevel layerIndex nodeIndex order
-      if portInits.isEmpty && edgeInits.isEmpty then continue
-      let ports := (← getNode node).ports
-      for h3 : portIndex in [0:ports.size] do
-        let port := ports[portIndex]
-        for i in portInits do i.initAtPortLevel layerIndex nodeIndex portIndex order
-        if edgeInits.isEmpty then continue
-        let pt ← getPort port
-        -- `connectedEdges` (incoming, then outgoing) without building the concatenation
-        let incoming := pt.incomingEdges
-        let outgoing := pt.outgoingEdges
-        for h4 : edgeIndex in [0:incoming.size] do
-          for i in edgeInits do i.initAtEdgeLevel layerIndex nodeIndex portIndex edgeIndex incoming[edgeIndex] order
-        for h4 : k in [0:outgoing.size] do
-          for i in edgeInits do i.initAtEdgeLevel layerIndex nodeIndex portIndex (incoming.size + k) outgoing[k] order
+  layerLoop initializables portInits edgeInits 0 order
   for i in initializables do i.initAfterTraversal
 
 end Initializable

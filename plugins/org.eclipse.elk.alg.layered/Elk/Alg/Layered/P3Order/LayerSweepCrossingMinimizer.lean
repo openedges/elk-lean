@@ -248,51 +248,82 @@ so layer `0` is its own previous layer (elk-rs: empty). -/
 @[inline] def previousLayerOf (layers : Array (Array LNodeId)) (layerIndex : Nat) : Array LNodeId :=
   (if layerIndex == 0 then layers[0]? else layers[layerIndex - 1]?).getD #[]
 
+/-- The pairs `(active[p], active[k])`, `k > p`, of `countModelOrderNodeChanges` from `(p, k)` on: the
+comparator after them and `acc` plus the number of pairs ordered the other way round. -/
+partial def nodeChangePairs (layer : Array LNodeId) (active : Array Nat) (p k : Nat) (comp : ModelOrderNodeComparator)
+    (acc : Int) : LayeredM (ModelOrderNodeComparator × Int) := do
+  if h : p < active.size then
+    if h2 : k < active.size then
+      let (value, comp) ← comp.compare layer[active[p]]! layer[active[k]]!
+      nodeChangePairs layer active p (k + 1) comp (if value > 0 then acc + 1 else acc)
+    else nodeChangePairs layer active (p + 1) (p + 2) comp acc
+  else return (comp, acc)
+
+/-- The indices of the nodes of `layer[i:]` with `MODEL_ORDER`, pushed onto `out`. -/
+partial def modelOrderIndices (a : LGraphArena) (layer : Array LNodeId) (i : Nat) (out : Array Nat) : Array Nat :=
+  if h : i < layer.size then
+    modelOrderIndices a layer (i + 1) (if (a.node layer[i]).internal.modelOrder.isSome then out.push i else out)
+  else out
+
+/-- The layers `layers[li:]` of `countModelOrderNodeChanges`. -/
+partial def nodeChangeLayers (layers : Array (Array LNodeId)) (li : Nat) (comp : ModelOrderNodeComparator) (acc : Int) :
+    LayeredM Int := do
+  if h : li < layers.size then
+    let layer := layers[li]
+    let comp := comp.resetForPreviousLayerSlice (previousLayerOf layers li)
+    let active := modelOrderIndices (← get) layer 0 #[]
+    let (comp, acc) ← nodeChangePairs layer active 0 1 comp acc
+    nodeChangeLayers layers (li + 1) comp acc
+  else return acc
+
 /-- `countModelOrderNodeChanges(graph, layers, strategy, cmGroupOrderStrategy)`: pairs `i < j` of
 nodes with `MODEL_ORDER` of each layer that the node comparator orders the other way round (a fresh
-comparator per layer, here: reset; `previousLayerOf`). -/
+comparator per layer, here: reset; `previousLayerOf`). The loops are tail-recursive functions
+(`nodeChangeLayers`, `nodeChangePairs`) with the same comparison sequence. -/
 def countModelOrderNodeChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
-    (strategy : OrderingStrategy) (groupStrategy : GroupOrderStrategy) : LayeredM Int := do
-  let mut wrongModelOrder : Int := 0
-  let mut comp := ModelOrderNodeComparator.new graph #[] strategy .equal groupStrategy false
-  for h : layerIndex in [0:layers.size] do
-    let layer := layers[layerIndex]
-    comp := comp.resetForPreviousLayerSlice (previousLayerOf layers layerIndex)
-    let mut activeIndices : Array Nat := #[]
-    for h2 : index in [0:layer.size] do
-      if (← getNode layer[index]).internal.modelOrder.isSome then
-        activeIndices := activeIndices.push index
-    for h3 : activePos in [0:activeIndices.size] do
-      let i := activeIndices[activePos]
-      for h4 : k in [activePos + 1:activeIndices.size] do
-        let j := activeIndices[k]
-        let (value, c) ← comp.compare layer[i]! layer[j]!
-        comp := c
-        if value > 0 then wrongModelOrder := wrongModelOrder + 1
-  return wrongModelOrder
+    (strategy : OrderingStrategy) (groupStrategy : GroupOrderStrategy) : LayeredM Int :=
+  nodeChangeLayers layers 0 (ModelOrderNodeComparator.new graph #[] strategy .equal groupStrategy false) 0
+
+/-- The pairs `(ports[i], ports[j])`, `j > i`, of `countModelOrderPortChanges` from `(i, j)` on. -/
+partial def portChangePairs (ports : Array LPortId) (i j : Nat) (comp : ModelOrderPortComparator) (acc : Int) :
+    LayeredM (ModelOrderPortComparator × Int) := do
+  if h : i < ports.size then
+    if h2 : j < ports.size then
+      let (value, comp) ← comp.compare ports[i] ports[j]
+      portChangePairs ports i (j + 1) comp (if value > 0 then acc + 1 else acc)
+    else portChangePairs ports (i + 1) (i + 2) comp acc
+  else return (comp, acc)
+
+/-- The nodes `nodes[k:]` of one layer of `countModelOrderPortChanges`. -/
+partial def portChangeNodes (nodes : Array LNodeId) (k : Nat) (comp : ModelOrderPortComparator) (acc : Int) :
+    LayeredM (ModelOrderPortComparator × Int) := do
+  if h : k < nodes.size then
+    let node := nodes[k]
+    let longEdgeTargets ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
+    let ports := (← getNode node).ports
+    if ports.size < 2 then portChangeNodes nodes (k + 1) comp acc
+    else
+      let (comp, acc) ← portChangePairs ports 0 1 (comp.resetForNodeTargetModelOrder (some longEdgeTargets)) acc
+      portChangeNodes nodes (k + 1) comp acc
+  else return (comp, acc)
+
+/-- The layers `layers[li:]` of `countModelOrderPortChanges`. -/
+partial def portChangeLayers (layers : Array (Array LNodeId)) (li : Nat) (comp : ModelOrderPortComparator) (acc : Int) :
+    LayeredM Int := do
+  if h : li < layers.size then
+    let (comp, acc) ← portChangeNodes layers[li] 0 (comp.resetForPreviousLayerSlice (previousLayerOf layers li)) acc
+    portChangeLayers layers (li + 1) comp acc
+  else return acc
 
 /-- `countModelOrderPortChanges(graph, layers, groupOrderStrategy)`: pairs `i < j` of ports of every
 node that the port comparator orders the other way round. Like Java a fresh comparator per node
 (here: reset), and `longEdgeTargetNodePreprocessing` for every node — it caches
 `TARGET_NODE_MODEL_ORDER` and sets `LONG_EDGE_TARGET_NODE` also on nodes with fewer than two ports
-(elk-rs skipped those first). -/
+(elk-rs skipped those first). The loops are tail-recursive functions (`portChangeLayers`,
+`portChangeNodes`, `portChangePairs`) with the same calls in the same order. -/
 def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
-    (strategy : OrderingStrategy) (portModelOrder : Bool) : LayeredM Int := do
-  let mut wrongModelOrder : Int := 0
-  let mut comp := ModelOrderPortComparator.new graph #[] strategy none portModelOrder
-  for h : layerIndex in [0:layers.size] do
-    comp := comp.resetForPreviousLayerSlice (previousLayerOf layers layerIndex)
-    for node in layers[layerIndex] do
-      let longEdgeTargets ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
-      let ports := (← getNode node).ports
-      if ports.size < 2 then continue
-      comp := comp.resetForNodeTargetModelOrder (some longEdgeTargets)
-      for h2 : i in [0:ports.size] do
-        for h3 : j in [i + 1:ports.size] do
-          let (value, c) ← comp.compare ports[i] ports[j]
-          comp := c
-          if value > 0 then wrongModelOrder := wrongModelOrder + 1
-  return wrongModelOrder
+    (strategy : OrderingStrategy) (portModelOrder : Bool) : LayeredM Int :=
+  portChangeLayers layers 0 (ModelOrderPortComparator.new graph #[] strategy none portModelOrder) 0
 
 /-! ## Holder access -/
 

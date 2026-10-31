@@ -2026,7 +2026,110 @@ def northSouthDifferential (seeds : Nat) : IO (Nat × Nat) := do
     nonZero := nonZero + nz
   return (mismatches, nonZero)
 
+/-- The port set collectors of the both-orders counts (`…Fast`, `sortPortsByPosition`) against the
+reference loops (`connectedInLayerPortsSortedByPosition`, `connectedPortsSortedByPosition`,
+`stableSortByKey`) on random graphs with extra in-layer edges, self loops and a hub with many edges,
+and random positions with collisions (small ranges) or beyond 16 distinct values: the number of
+differing results and of compared sets with more than 16 ports. -/
+def portSetDifferential (seeds : Nat) : IO (Nat × Nat) := do
+  let mut mismatches := 0
+  let mut big := 0
+  for seed in [0:seeds] do
+    let r ← IO.mkRef (Random.ofInt (seed + 3000))
+    let (m, b) ← runL do
+      let (g, _) ← randomLayers r 3
+      for layer in ← nodeArray g do
+        let a ← get
+        let ports := layer.foldl (fun acc n => acc ++ (a.node n).ports) #[]
+        if ports.size > 1 then
+          for _ in [0:(← rnd r 8)] do
+            connect ports[← rnd r ports.size]! ports[← rnd r ports.size]!
+          -- a hub: many edges at one port
+          if (← rnd r 3) == 0 then
+            let hub := ports[← rnd r ports.size]!
+            for _ in [0:12 + (← rnd r 20)] do
+              -- a fresh port on a node of the layer (an in-layer edge)
+              let side := if (← rnd r 2) == 0 then PortSide.east else .west
+              let q ← addPort {} layer[← rnd r layer.size]! side
+              if (← rnd r 2) == 0 then connect hub q else connect q hub
+      let nPorts ← Tests.Layered.P3Counting.assignIds g
+      randomPortOrders r (← nodeArray g)
+      let order ← nodeArray g
+      let a ← get
+      let allPorts := order.foldl (fun acc layer => layer.foldl (fun acc n => acc ++ (a.node n).ports) acc) #[]
+      let mut m := 0
+      let mut b := 0
+      for _ in [0:4] do
+        let wide := (← rnd r 2) == 0
+        let narrow ← rnd r 20
+        let far ← rnd r 200
+        let range := if wide then 40 + far else 2 + narrow
+        let mut positions : Array Int := #[]
+        for _ in [0:nPorts] do
+          positions := positions.push ((← rnd r range) : Int)
+        for layer in order do
+          for i in [0:layer.size] do
+            for j in [0:layer.size] do
+              for side in #[PortSide.west, .east, .north, .south, .undefined] do
+                let x := CrossingsCounter.connectedInLayerPortsSortedByPosition a positions layer[i]! layer[j]! side
+                let y := CrossingsCounter.connectedInLayerPortsSortedByPositionFast a positions layer[i]! layer[j]! side
+                if x != y then m := m + 1
+                if x.size > 16 then b := b + 1
+        for _ in [0:20] do
+          if allPorts.size > 0 then
+            let p := allPorts[← rnd r allPorts.size]!
+            let q := allPorts[← rnd r allPorts.size]!
+            let x := CrossingsCounter.connectedPortsSortedByPosition a positions p q
+            let y := CrossingsCounter.connectedPortsSortedByPositionFast a positions p q
+            if x != y then m := m + 1
+            if x.size > 16 then b := b + 1
+            -- the re-sort after a switch: keys with ties
+            let mut sample : Array LPortId := #[]
+            for _ in [0:(← rnd r 50)] do
+              sample := sample.push allPorts[← rnd r allPorts.size]!
+            if stableSortByKey sample (CrossingsCounter.positionIn positions a ·) !=
+                CrossingsCounter.sortPortsByPosition a positions sample then m := m + 1
+      return (m, b)
+    mismatches := mismatches + m
+    big := big + b
+  return (mismatches, big)
+
+/-- A random stored adjacency list (as `AdjacencyList.new` leaves it: sorted positions, possibly
+repeated, `currentCardinality = cardinality`, reset). -/
+def randomAdjacencyList (r : IO.Ref Random) : IO AdjacencyList := do
+  let n ← rnd r 7
+  let mut entries : Array Adjacency := #[]
+  let mut pos : Int := 0
+  let mut size := 0
+  for _ in [0:n] do
+    pos := pos + ((← rnd r 3) : Int)
+    let c := 1 + (← rnd r 3)
+    entries := entries.push { position := pos, cardinality := c, currentCardinality := c }
+    size := size + c
+  return ({ adjacencyList := entries, side := .east, size, currentSize := size } : AdjacencyList).reset
+
+/-- `countCrossingsOfStoredLists` against `countCrossingsByMergingAdjacencyLists` of the reset lists:
+the number of differing results and of pairs with crossings. -/
+def adjacencyMergeDifferential (runs : Nat) : IO (Nat × Nat) := do
+  let r ← IO.mkRef (Random.ofInt 4242)
+  let mut m := 0
+  let mut nz := 0
+  for _ in [0:runs] do
+    let u ← randomAdjacencyList r
+    let l ← randomAdjacencyList r
+    let x := countCrossingsByMergingAdjacencyLists u.reset l.reset
+    let y := countCrossingsOfStoredLists u l
+    if x != y then m := m + 1
+    if x != (0, 0) then nz := nz + 1
+  return (m, nz)
+
 def fastPathTests : Suite := suite "layered.p3counting.fast_paths" do
+  let (mismatches, nonZero) ← adjacencyMergeDifferential 20000
+  checkEq "greedy switch adjacency merge: scalar cursors = list merge (20000 random pairs)" mismatches 0
+  check s!"adjacency merge differential counts crossings ({nonZero} pairs with crossings)" (nonZero > 5000)
+  let (mismatches, big) ← portSetDifferential 300
+  checkEq "both-orders port sets: fast collectors = reference loops (300 random graphs)" mismatches 0
+  check s!"port set differential covers sets beyond the linear search ({big} sets with more than 16 ports)" (big > 50)
   let (mismatches, nonZero) ← northSouthDifferential 400
   checkEq "north/south fast loops = port loops (400 random graphs, 2400 calls)" mismatches 0
   check s!"north/south differential calls count crossings ({nonZero} with crossings)" (nonZero > 200)

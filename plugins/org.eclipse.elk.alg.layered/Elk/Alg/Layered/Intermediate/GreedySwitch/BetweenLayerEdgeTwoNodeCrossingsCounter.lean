@@ -145,6 +145,47 @@ def countCrossingsByMergingAdjacencyLists (upper lower : AdjacencyList) : Int ×
       lower := lower.removeFirst
   return (upperLowerCrossings, lowerUpperCrossings)
 
+/-- `countCrossingsByMergingAdjacencyLists` on two freshly reset lists without copying or mutating
+them: the cursor of a list is its index `i`, the current cardinality `c` of entry `i` and the current
+size `n` (a stored list is only reset, so every entry beyond the cursor still has
+`currentCardinality = cardinality`, which is what `incrementCurrentIndex` restores). The same
+comparisons and sums as the reference loop; `(ul, lu)` are the running `upperLowerCrossings` and
+`lowerUpperCrossings`. -/
+partial def mergeAdjacencies (us ls : Array Adjacency) (ui uc un li lc ln : Nat) (ul lu : Int) : Int × Int :=
+  if un == 0 || ln == 0 then (ul, lu)
+  else
+    let uf : Int := if h : ui < us.size then us[ui].position else 0
+    let lf : Int := if h : li < ls.size then ls[li].position else 0
+    -- `removeFirst` of a non-empty list: the current entry loses one edge or the cursor advances
+    let nextU (k : Nat → Nat → Nat → Int × Int) : Int × Int :=
+      if ui < us.size then
+        if uc == 1 then
+          let ui' := ui + 1
+          k ui' (if h : ui' < us.size then us[ui'].cardinality else uc) (un - 1)
+        else k ui (uc - 1) (un - 1)
+      else k ui uc (un - 1)
+    let nextL (ui' uc' un' : Nat) (ul' lu' : Int) : Int × Int :=
+      if li < ls.size then
+        if lc == 1 then
+          let li' := li + 1
+          mergeAdjacencies us ls ui' uc' un' li' (if h : li' < ls.size then ls[li'].cardinality else lc) (ln - 1) ul' lu'
+        else mergeAdjacencies us ls ui' uc' un' li (lc - 1) (ln - 1) ul' lu'
+      else mergeAdjacencies us ls ui' uc' un' li lc (ln - 1) ul' lu'
+    if uf > lf then nextL ui uc un (ul + un) lu
+    else if lf > uf then nextU fun ui' uc' un' => mergeAdjacencies us ls ui' uc' un' li lc ln ul (lu + ln)
+    else
+      -- `countAdjacenciesBelowNodeOfFirstPort` (`Nat` subtraction of the current cardinality, `0` past
+      -- the end)
+      let ub : Int := ((un - (if ui < us.size then uc else 0) : Nat) : Int)
+      let lb : Int := ((ln - (if li < ls.size then lc else 0) : Nat) : Int)
+      nextU fun ui' uc' un' => nextL ui' uc' un' (ul + ub) (lu + lb)
+
+/-- `countCrossingsByMergingAdjacencyLists(upper.reset(), lower.reset())` by `mergeAdjacencies`. -/
+@[inline] def countCrossingsOfStoredLists (upper lower : AdjacencyList) : Int × Int :=
+  let uc := if h : 0 < upper.adjacencyList.size then upper.adjacencyList[0].cardinality else 0
+  let lc := if h : 0 < lower.adjacencyList.size then lower.adjacencyList[0].cardinality else 0
+  mergeAdjacencies upper.adjacencyList lower.adjacencyList 0 uc upper.size 0 lc lower.size 0 0
+
 /-- `BetweenLayerEdgeTwoNodeCrossingsCounter`. -/
 structure BetweenLayerEdgeTwoNodeCrossingsCounter where
   /-- `upperLowerCrossings`. -/
@@ -227,10 +268,11 @@ private def addCrossings (c : BetweenLayerEdgeTwoNodeCrossingsCounter) (upperNod
   let (some upperIndex, some lowerIndex) := (c.nodeIndices[upperNode]?, c.nodeIndices[lowerNode]?) | return
   let adjacencies ← c.ensureAdjacencies side
   if upperIndex == lowerIndex then return
-  let upperAdjacencies := ((adjacencies[upperIndex]?).getD default).reset
-  let lowerAdjacencies := ((adjacencies[lowerIndex]?).getD default).reset
-  if upperAdjacencies.currentSize == 0 || lowerAdjacencies.currentSize == 0 then return
-  let (upperDelta, lowerDelta) := countCrossingsByMergingAdjacencyLists upperAdjacencies lowerAdjacencies
+  let upperAdjacencies := (adjacencies[upperIndex]?).getD default
+  let lowerAdjacencies := (adjacencies[lowerIndex]?).getD default
+  -- `reset` sets `currentSize := size`
+  if upperAdjacencies.size == 0 || lowerAdjacencies.size == 0 then return
+  let (upperDelta, lowerDelta) := countCrossingsOfStoredLists upperAdjacencies lowerAdjacencies
   c.upperLowerRef.modify (· + upperDelta)
   c.lowerUpperRef.modify (· + lowerDelta)
 

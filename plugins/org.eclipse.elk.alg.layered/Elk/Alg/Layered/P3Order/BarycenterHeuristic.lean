@@ -168,7 +168,7 @@ namespace BarycenterData
 /-- `bary_state_mut(li, ni)` with an update (no-op without a state). -/
 @[inline] def modifyState (d : BarycenterData) (li ni : Nat) (f : BarycenterState → BarycenterState) : BarycenterData :=
   match d with
-  | ⟨states, random, traces⟩ => ⟨BarycenterState.updateIn states li ni f, random, traces⟩
+  | ⟨states, random, traces⟩ => ⟨BarycenterState.updateInS states li ni f, random, traces⟩
 
 /-- The barycenter of a state (`none` without a state). -/
 @[inline] def barycenter? (d : BarycenterData) (li ni : Nat) : Option Float :=
@@ -188,9 +188,16 @@ def addFrom (d : BarycenterData) (li ni fromLi fromNi : Nat) : BarycenterData :=
     | none => (0, floatZero)
   d.modifyState li ni fun st => { st with degree := st.degree + degree, summedWeight := st.summedWeight + weight }
 
+/-- `assign` on the states table (not inlined: no closure for the captured `value`). -/
+@[noinline] def assignState (states : Array (Array (Option BarycenterState))) (li ni : Nat) (value : Float) :
+    Array (Array (Option BarycenterState)) :=
+  BarycenterState.updateIn states li ni fun st =>
+    { st with barycenterValue := value, hasBarycenter := true, summedWeight := value, degree := 1 }
+
 /-- Sets barycenter, summed weight (both `value`) and degree `1`. -/
-@[inline] def assign (d : BarycenterData) (li ni : Nat) (value : Float) : BarycenterData :=
-  d.modifyState li ni fun st => { st with barycenterValue := value, hasBarycenter := true, summedWeight := value, degree := 1 }
+def assign (d : BarycenterData) (li ni : Nat) (value : Float) : BarycenterData :=
+  match d with
+  | ⟨states, random, traces⟩ => ⟨assignState states li ni value, random, traces⟩
 
 /-- `random.next_float()` with `random_trace::trace_next_float`. -/
 def drawFloat (d : BarycenterData) (traceOn : Bool) (location : Unit → String) : Float × BarycenterData :=
@@ -341,7 +348,7 @@ partial def calcSnap (c : BarycenterContext) (s : CrossMinSnapshot) (flat : Nat)
           let perturbation := Float.toF32 (Float.toF32 (Float.toF32 raw * ra) - Float.toF32 (ra / floatTwo))
           let summedWeight := sum + perturbation
           let barycenterValue := summedWeight / Float.ofInt degree
-          ⟨BarycenterState.updateIn states li ni fun st =>
+          ⟨BarycenterState.updateInS states li ni fun st =>
               { st with visited := true, degree, summedWeight, barycenterValue, hasBarycenter := true },
             { random with seed }, traces⟩
       else
@@ -391,7 +398,7 @@ partial def calcSnapConnected (c : BarycenterContext) (s : CrossMinSnapshot) (fl
       let rank := c.portRanks.get! fixedPid
       let d := match d with
         | ⟨states, random, traces⟩ =>
-          ⟨BarycenterState.updateIn states li ni fun st => { st with summedWeight := st.summedWeight + rank, degree := st.degree + 1 },
+          ⟨BarycenterState.updateInS states li ni fun st => { st with summedWeight := st.summedWeight + rank, degree := st.degree + 1 },
            random, traces⟩
       calcSnapConnected c s flat li ni connected (k + 1) d
   else d
@@ -441,12 +448,20 @@ partial def fillFlatToNode (nodes : Array LNodeId) (flats : Array Nat) (base i :
     fillFlatToNode nodes flats base (i + 1) (out.setIfInBounds (flats[i]! - base) (nodes[i].idx + 1))
   else out
 
-/-- Clears the `visited` flags of the flat nodes `flats[i:]`. -/
-partial def clearVisitedSnap (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat) (d : BarycenterData) : BarycenterData :=
+/-- Clears the `visited` flags of the flat nodes `flats[i:]` in the states table (the table alone is
+passed, so no `BarycenterData` is rebuilt per node). -/
+partial def clearVisitedStates (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat)
+    (states : Array (Array (Option BarycenterState))) : Array (Array (Option BarycenterState)) :=
   if h : i < flats.size then
     let flat := flats[i]
-    clearVisitedSnap s flats (i + 1) (d.modifyState (s.nodeLayerOf flat) (s.nodeGraphIdOf flat) fun st => { st with visited := false })
-  else d
+    clearVisitedStates s flats (i + 1)
+      (BarycenterState.updateIn states (s.nodeLayerOf flat) (s.nodeGraphIdOf flat) fun st => { st with visited := false })
+  else states
+
+/-- Clears the `visited` flags of the flat nodes `flats[i:]`. -/
+def clearVisitedSnap (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat) (d : BarycenterData) : BarycenterData :=
+  match d with
+  | ⟨states, random, traces⟩ => ⟨clearVisitedStates s flats i states, random, traces⟩
 
 /-- `alreadyVisited` on a states table. -/
 @[inline] def visitedIn (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Bool :=
