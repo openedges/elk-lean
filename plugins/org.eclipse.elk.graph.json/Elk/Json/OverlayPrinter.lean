@@ -59,19 +59,28 @@ private def BIT_SECTIONS_SET : UInt32 := (1 : UInt32) <<< 29
   else
     if h : j < compactKeysFirst.size then out ++ compactKeysFirst[j] else appendQuoted out "\"" k "\":"
 
+/-- The key literal of an ELK member name index `j` (`"key":` or `,"key":`). -/
+@[inline] private def keyLit (nonEmpty : Bool) (j : Nat) : String :=
+  if nonEmpty then compactKeysNext.getD j "" else compactKeysFirst.getD j ""
+
 /-- The key of a member appended after the members of the object (`j` is a member name index). -/
 @[inline] private def appendedKey (out : String) (nonEmpty : Bool) (j : Nat) : String :=
-  out ++ (if nonEmpty then compactKeysNext.getD j "" else compactKeysFirst.getD j "")
+  out ++ keyLit nonEmpty j
 
-/-- `{"x":x,"y":y}` (`pointValue`). -/
-@[inline] private def point (out : String) (x y : Float) : String :=
-  appendElkNumber (appendElkNumber (out ++ "{\"x\":") x ++ ",\"y\":") y ++ "}"
+/-- A member of the document as `Printer.compactMembers` prints it: an ELK member name with a string
+value without escapes in one append. -/
+@[inline] private def plainMember (out : String) (nonEmpty : Bool) (k : String) (j : Nat) (v : Value) : String :=
+  match v with
+  | .str s =>
+    if j < KEY_NONE && !hasEscapes s (Utf8.usize s) rfl 0 then
+      append3 out (if nonEmpty then compactKeysNextQ.getD j "" else compactKeysFirstQ.getD j "") s "\""
+    else escapeInto (memberKey out nonEmpty k j) s
+  | v => compact false v (memberKey out nonEmpty k j)
 
 /-- `pointsValue` from pair `i` on. -/
 private partial def pointItems (xs : FloatArray) (i : Nat) (out : String) : String :=
   if i + 1 < xs.size then
-    let out := if i != 0 then out ++ "," else out
-    pointItems xs (i + 2) (point out (xs.get! i) (xs.get! (i + 1)))
+    pointItems xs (i + 2) (appendPoint out (if i != 0 then "," else "") (xs.get! i) (xs.get! (i + 1)))
   else out
 
 /-- `pointsValue xs`. -/
@@ -91,11 +100,14 @@ private partial def jsonIdItems (ids : Array JsonId) (i : Nat) (out : String) : 
 
 /-! ## Sections -/
 
-/-- The value of section member `j` written by the transfer (`j` is one it writes). -/
-private def sectionMember (so : SectionOut) (j : Nat) (out : String) : String :=
-  if j == K_START then point out so.sx so.sy
-  else if j == K_END then point out so.ex so.ey
-  else if j == K_BENDS then points out so.bends
+/-- Section member `j` written by the transfer (`j` is one it writes) with its key (`nonEmpty`: after
+another member). -/
+private def sectionMember (so : SectionOut) (j : Nat) (nonEmpty : Bool) (out : String) : String :=
+  if j == K_START then appendPoint out (keyLit nonEmpty j) so.sx so.sy
+  else if j == K_END then appendPoint out (keyLit nonEmpty j) so.ex so.ey
+  else
+  let out := out ++ keyLit nonEmpty j
+  if j == K_BENDS then points out so.bends
   else if j == K_IN_SHAPE then match so.inShape with
     | some id => jsonId out id
     | none => out
@@ -123,7 +135,7 @@ private def sectionMember (so : SectionOut) (j : Nat) (out : String) : String :=
 private partial def sectionAppends (so : SectionOut) (j : Nat) (seen : UInt32) (nonEmpty : Bool) (out : String) : String :=
   if j <= K_OUT_SECS then
     if sectionWrites so j && !has seen j then
-      sectionAppends so (j + 1) seen true (sectionMember so j (appendedKey out nonEmpty j))
+      sectionAppends so (j + 1) seen true (sectionMember so j nonEmpty out)
     else sectionAppends so (j + 1) seen nonEmpty out
   else out
 
@@ -133,45 +145,55 @@ private partial def sectionMembers (so : SectionOut) (kvs : Array (String × Val
   if h : i < kvs.size then
     let kv := kvs[i]
     let j := keyId kv.1
-    let out := memberKey out (i != 0) kv.1 j
-    let out := if j >= K_START && j <= K_OUT_SECS && !has seen j && sectionWrites so j then sectionMember so j out
-      else compact false kv.2 out
+    let out := if j >= K_START && j <= K_OUT_SECS && !has seen j && sectionWrites so j then sectionMember so j (i != 0) out
+      else plainMember out (i != 0) kv.1 j kv.2
     sectionMembers so kvs (i + 1) (seen ||| bitOf j) out
   else sectionAppends so K_START seen (kvs.size != 0) out
 
-/-- `sectionValue input so`. -/
-private def sectionObj (input : Option Value) (so : SectionOut) (out : String) : String :=
-  let base : Array (String × Value) := match so.base with
-    | some j =>
-      match input with
+/-- `sectionValue edgeId input so`. -/
+private def sectionObj (edgeId : String) (input : Option Value) (so : SectionOut) (out : String) : String :=
+  match so.base with
+  | some j =>
+    let base : Array (String × Value) := match input with
       | some (.arr xs) =>
         match xs[j]? with
         | some (.obj kvs) => kvs
         | _ => #[]
       | _ => #[]
-    | none => #[(Key.id, .str so.fallbackId)]
-  sectionMembers so base 0 0 (out ++ "{") ++ "}"
+    sectionMembers so base 0 0 (out ++ "{") ++ "}"
+  | none =>
+    -- `{"id": fallbackId}`; `<edgeId>_s<index>` is escaped like the edge id (the suffix has nothing
+    -- to escape)
+    let out := match so.ident with
+      | some s => plainMember (out ++ "{") false Key.id 0 (.str s)
+      | none =>
+        if hasEscapes edgeId (Utf8.usize edgeId) rfl 0 then
+          plainMember (out ++ "{") false Key.id 0 (.str (so.fallbackId edgeId))
+        else pushNat (append3 out "{\"id\":\"" edgeId "_s") so.index ++ "\""
+    sectionAppends so K_START 0 true out ++ "}"
 
 /-- The replacement `sections` array from section `i` on. -/
-private partial def sectionItems (input : Option Value) (secs : Array SectionOut) (i : Nat) (out : String) : String :=
+private partial def sectionItems (edgeId : String) (input : Option Value) (secs : Array SectionOut) (i : Nat)
+    (out : String) : String :=
   if h : i < secs.size then
     let out := if i != 0 then out ++ "," else out
-    sectionItems input secs (i + 1) (sectionObj input secs[i] out)
+    sectionItems edgeId input secs (i + 1) (sectionObj edgeId input secs[i] out)
   else out
 
 /-! ## Labels, ports, nodes and edges -/
 
-/-- `x`/`y`/`width`/`height` of transferred shape `d` (dense index) for member index `j`. -/
-@[inline] private def xywh (ov : Overlay) (d j : Nat) (out : String) : String :=
-  if j == K_X then appendElkNumber out (ov.sx.get! d)
-  else if j == K_Y then appendElkNumber out (ov.sy.get! d)
-  else if j == K_WIDTH then appendElkNumber out (ov.sw.get! d)
-  else appendElkNumber out (ov.sh.get! d)
+/-- Member `x`/`y`/`width`/`height` (index `j`) of transferred shape `d` (dense index) with its key. -/
+@[inline] private def xywh (ov : Overlay) (d j : Nat) (nonEmpty : Bool) (out : String) : String :=
+  let v := if j == K_X then ov.sx.get! d
+    else if j == K_Y then ov.sy.get! d
+    else if j == K_WIDTH then ov.sw.get! d
+    else ov.sh.get! d
+  appendPreElkNumber out (keyLit nonEmpty j) v
 
 /-- `x`, `y`, `width`, `height` of shape `d` not in `seen`, appended in this order. -/
 private partial def xywhAppends (ov : Overlay) (d j : Nat) (seen : UInt32) (nonEmpty : Bool) (out : String) : String :=
   if j <= K_HEIGHT then
-    if !has seen j then xywhAppends ov d (j + 1) seen true (xywh ov d j (appendedKey out nonEmpty j))
+    if !has seen j then xywhAppends ov d (j + 1) seen true (xywh ov d j nonEmpty out)
     else xywhAppends ov d (j + 1) seen nonEmpty out
   else out
 
@@ -197,26 +219,26 @@ partial def shapeMembers (c : Ctx) (kind : UInt8) (id d : Nat) (kvs : Array (Str
     let kv := kvs[i]
     let j := keyId kv.1
     let first := !has seen j
-    let out := memberKey out (i != 0) kv.1 j
+    let ne := i != 0
     let out :=
-      if j <= K_HEIGHT && j >= K_X && first && c.ov.isDone d then xywh c.ov d j out
+      if j <= K_HEIGHT && j >= K_X && first && c.ov.isDone d then xywh c.ov d j ne out
       else if first && j == K_LABELS && kind != 2 then
         match kv.2 with
         | .arr xs =>
           let firstLabel := if kind == 0 then c.ix.nodeFirstLabel.getD id 0 else c.ix.portFirstLabel.getD id 0
-          labelItems c xs 0 firstLabel (out ++ "[") ++ "]"
-        | v => compact false v out
+          labelItems c xs 0 firstLabel (memberKey out ne kv.1 j ++ "[") ++ "]"
+        | v => plainMember out ne kv.1 j v
       else if first && kind == 0 && (j == K_PORTS || j == K_CHILDREN || j == K_EDGES) then
         match kv.2 with
         | .arr xs =>
-          let out := out ++ "["
+          let out := memberKey out ne kv.1 j ++ "["
           let out :=
             if j == K_PORTS then portItems c xs 0 (c.ix.nodeFirstPort.getD id 0) out
             else if j == K_CHILDREN then childItems c xs 0 (id + 1) out
             else edgeItems c xs 0 (c.ix.nodeFirstEdge.getD id 0) out
           out ++ "]"
-        | v => compact false v out
-      else compact false kv.2 out
+        | v => plainMember out ne kv.1 j v
+      else plainMember out ne kv.1 j kv.2
     shapeMembers c kind id d kvs (i + 1) (seen ||| bitOf j) out
   else if c.ov.isDone d then xywhAppends c.ov d K_X seen (kvs.size != 0) out
   else out
@@ -279,24 +301,24 @@ partial def edgeMembers (c : Ctx) (e : Nat) (eo? : Option EdgeOut) (input : Opti
       if j == K_SECTIONS && !eo.sections.isEmpty then
         if first then edgeMembers c e eo? input kvs (i + 1) seen' nonEmpty out
         else if seen &&& BIT_SECTIONS_SET == 0 then
-          let out := sectionItems input eo.sections 0 (memberKey out nonEmpty kv.1 j ++ "[") ++ "]"
+          let out := sectionItems eo.edgeId input eo.sections 0 (memberKey out nonEmpty kv.1 j ++ "[") ++ "]"
           edgeMembers c e eo? input kvs (i + 1) (seen' ||| BIT_SECTIONS_SET) true out
-        else edgeMembers c e eo? input kvs (i + 1) seen' true (compact false kv.2 (memberKey out nonEmpty kv.1 j))
+        else edgeMembers c e eo? input kvs (i + 1) seen' true (plainMember out nonEmpty kv.1 j kv.2)
       else
-        let out := memberKey out nonEmpty kv.1 j
         let out :=
-          if first && j == K_JUNCTION && eo.junction.isSome then points out (eo.junction.getD .empty)
-          else if first && j == K_CONTAINER && eo.container.isSome then escapeInto out (eo.container.getD "")
-          else edgeValue c e first j kv.2 out
+          if first && j == K_JUNCTION && eo.junction.isSome then points (memberKey out nonEmpty kv.1 j) (eo.junction.getD .empty)
+          else if first && j == K_CONTAINER && eo.container.isSome then
+            plainMember out nonEmpty kv.1 j (.str (eo.container.getD ""))
+          else edgeValue c e first nonEmpty kv.1 j kv.2 out
         edgeMembers c e eo? input kvs (i + 1) seen' true out
     | none =>
-      let out := edgeValue c e first j kv.2 (memberKey out nonEmpty kv.1 j)
+      let out := edgeValue c e first nonEmpty kv.1 j kv.2 out
       edgeMembers c e eo? input kvs (i + 1) seen' true out
   else
     match eo? with
     | some eo =>
       let replaced := !eo.sections.isEmpty && seen &&& BIT_SECTIONS_SET == 0
-      let out := if replaced then sectionItems input eo.sections 0 (appendedKey out nonEmpty K_SECTIONS ++ "[") ++ "]" else out
+      let out := if replaced then sectionItems eo.edgeId input eo.sections 0 (appendedKey out nonEmpty K_SECTIONS ++ "[") ++ "]" else out
       let nonEmpty := nonEmpty || replaced
       let jp := eo.junction.isSome && !has seen K_JUNCTION
       let out := match eo.junction with
@@ -304,17 +326,19 @@ partial def edgeMembers (c : Ctx) (e : Nat) (eo? : Option EdgeOut) (input : Opti
         | none => out
       let nonEmpty := nonEmpty || jp
       match eo.container with
-      | some cid => if !has seen K_CONTAINER then escapeInto (appendedKey out nonEmpty K_CONTAINER) cid else out
+      | some cid => if !has seen K_CONTAINER then plainMember out nonEmpty Key.container K_CONTAINER (.str cid) else out
       | none => out
     | none => out
 
-/-- An edge member's value other than the transfer's writes: the edge labels, or the value itself. -/
-partial def edgeValue (c : Ctx) (e : Nat) (first : Bool) (j : Nat) (v : Value) (out : String) : String :=
+/-- An edge member other than the transfer's writes, with its key: the edge labels, or the member
+itself. -/
+partial def edgeValue (c : Ctx) (e : Nat) (first nonEmpty : Bool) (k : String) (j : Nat) (v : Value) (out : String) :
+    String :=
   if first && j == K_LABELS then
     match v with
-    | .arr xs => labelItems c xs 0 (c.ix.edgeFirstLabel.getD e 0) (out ++ "[") ++ "]"
-    | v => compact false v out
-  else compact false v out
+    | .arr xs => labelItems c xs 0 (c.ix.edgeFirstLabel.getD e 0) (memberKey out nonEmpty k j ++ "[") ++ "]"
+    | v => plainMember out nonEmpty k j v
+  else plainMember out nonEmpty k j v
 
 end
 

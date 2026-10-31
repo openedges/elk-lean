@@ -33,7 +33,7 @@ private def pushEscaped (out : String) (c : Char) : String :=
 
 /-- Whether `s` has a character that serde_json escapes (`"`, `\`, control characters), checked on
 the UTF-8 bytes from byte `i` (bytes of multi-byte characters are `≥ 0x80`). -/
-private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) (i : USize) : Bool :=
+partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) (i : USize) : Bool :=
   if h : i < n then
     let b := Utf8.uget s i (hn ▸ h)
     if b < 0x20 || b == 0x22 || b == 0x5c then true else hasEscapes s n hn (i + 1)
@@ -44,7 +44,7 @@ private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) 
 and the punctuation around the literal, so a plain string costs three appends. -/
 @[inline] def appendQuoted (out pre s post : String) : String :=
   if hasEscapes s (Utf8.usize s) rfl 0 then s.foldl pushEscaped (out ++ pre) ++ post
-  else out ++ pre ++ s ++ post
+  else append3 out pre s post
 
 /-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
 def escapeInto (out s : String) : String := appendQuoted out "\"" s "\""
@@ -56,6 +56,10 @@ key is one append (no escape scan). -/
 def compactKeysFirst : Array String := Key.all.map fun k => "\"" ++ k ++ "\":"
 /-- `,"key":` (later members, compact). -/
 def compactKeysNext : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":"
+/-- `"key":"` (first member with a string value, compact). -/
+def compactKeysFirstQ : Array String := Key.all.map fun k => "\"" ++ k ++ "\":\""
+/-- `,"key":"` (later members with a string value, compact). -/
+def compactKeysNextQ : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":\""
 /-- `"key": ` (pretty). -/
 private def prettyKeys : Array String := Key.all.map fun k => "\"" ++ k ++ "\": "
 
@@ -95,6 +99,10 @@ decreasing_by omega
   | .int (.negSucc k) => pushNat (out ++ "-") (k + 1)
   | .float f => appendJsonFloat out f
 
+/-- The key of compact member `i` (`"key":` or `,"key":`). -/
+@[inline] private def memberKey (out : String) (i : Nat) (k : String) : String :=
+  if i == 0 then appendKey out compactKeysFirst "\"" k "\":" else appendKey out compactKeysNext ",\"" k "\":"
+
 mutual
 
 /-- Compact rendering (`serde_json::to_string`). The element loops are plain tail recursions (a
@@ -121,9 +129,18 @@ partial def compactItems (sortKeys : Bool) (xs : Array Value) (i : Nat) (out : S
 partial def compactMembers (sortKeys : Bool) (kvs : Array (String × Value)) (i : Nat) (out : String) : String :=
   if h : i < kvs.size then
     let kv := kvs[i]
-    let out := if i == 0 then appendKey out compactKeysFirst "\"" kv.1 "\":"
-      else appendKey out compactKeysNext ",\"" kv.1 "\":"
-    compactMembers sortKeys kvs (i + 1) (compact sortKeys kv.2 out)
+    match kv.2 with
+    | .str s =>
+      -- an ELK member name and a string without escapes: one append (`"key":"` `s` `"`)
+      let k := kv.1
+      let j := Key.candidateIndex k 0 k.utf8ByteSize
+      if h : j < compactKeysFirstQ.size then
+        if k == Key.all.getD j "" && !hasEscapes s (Utf8.usize s) rfl 0 then
+          compactMembers sortKeys kvs (i + 1)
+            (append3 out (if i == 0 then compactKeysFirstQ[j] else compactKeysNextQ.getD j "") s "\"")
+        else compactMembers sortKeys kvs (i + 1) (escapeInto (memberKey out i k) s)
+      else compactMembers sortKeys kvs (i + 1) (escapeInto (memberKey out i k) s)
+    | v => compactMembers sortKeys kvs (i + 1) (compact sortKeys v (memberKey out i kv.1))
   else out
 
 end

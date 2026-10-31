@@ -227,36 +227,45 @@ structure EdgeAdjust where
   delta : Float := fl0p0
   err : UInt8 := 0
 
-/-- `EdgeAdjust` of an edge (no state change; the values it reads are fixed during the edge's
-transfer: global coordinates and compaction deltas of nodes are recorded before any edge). -/
-def edgeAdjust (e : EdgeId) : ImportM EdgeAdjust := do
-  let st ← getI
-  let g ← getG
+/-- `EdgeAdjust` of edge `e` on the importer state and graph (pure; the values it reads are fixed
+during the edge's transfer: global coordinates and compaction deltas of nodes are recorded before any
+edge). -/
+def edgeAdjustOf (st : ImporterState) (g : ElkGraph) (e : EdgeId) : EdgeAdjust :=
+  let t := st.tables
   let original := tableGet? st.edgeOriginalParent e.idx
-  let mode ← match original with
-    | some p => edgeCoordsMode (.node p)
-    | none => pure .container
+  let mode : EdgeCoords := match original with
+    | some p => t.edgeCoords.getD (t.index (.node p)) .container
+    | none => .container
   let edge := g.edge e
   let yo := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
-  let some containing := edge.containingNode | return { err := 1 }
-  let cx ← globalX (.node containing)
-  let cy ← globalY (.node containing)
-  let base : EdgeAdjust ← match mode with
-    | .root => pure (if yo then {} else { kind := 1, cx, cy })
-    | .parent =>
-      if yo then pure {}
-      else
-        match original with
-        | some orig => pure { kind := 2, cx, cy, ox := ← globalX (.node orig), oy := ← globalY (.node orig) }
-        | none => pure { err := 2 }
-    | _ => pure {}
-  let sourceNode := (edge.sources[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
-  let targetNode := (edge.targets[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
-  if let (some s, some t) := (sourceNode, targetNode) then
-    if s == t then
-      if let some delta := st.insideSelfLoopNodeXDelta.get? s then
-        return { base with selfLoop := true, sourceX := ← globalX (.node s), delta }
-  return base
+  match edge.containingNode with
+  | none => { err := 1 }
+  | some containing =>
+    let cx := tableGX t (.node containing)
+    let cy := tableGY t (.node containing)
+    let base : EdgeAdjust := match mode with
+      | .root => if yo then {} else { kind := 1, cx, cy }
+      | .parent =>
+        if yo then {}
+        else
+          match original with
+          | some orig => { kind := 2, cx, cy, ox := tableGX t (.node orig), oy := tableGY t (.node orig) }
+          | none => { err := 2 }
+      | _ => {}
+    let sourceNode := (edge.sources[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
+    let targetNode := (edge.targets[0]?).bind (ElkGraphUtil.connectableShapeToNode g)
+    match sourceNode, targetNode with
+    | some s, some tn =>
+      if s == tn then
+        match st.insideSelfLoopNodeXDelta.get? s with
+        | some delta => { base with selfLoop := true, sourceX := tableGX t (.node s), delta }
+        | none => base
+      else base
+    | _, _ => base
+
+/-- `EdgeAdjust` of an edge (no state change). -/
+def edgeAdjust (e : EdgeId) : ImportM EdgeAdjust := do
+  return edgeAdjustOf (← getI) (← getG) e
 
 /-- Throws the error recorded in an `EdgeAdjust`. -/
 @[noinline] def EdgeAdjust.throwErr (a : EdgeAdjust) : ImportM Float :=

@@ -101,6 +101,14 @@ def transformProperties (obj : Value) (props : PropertyMap) : ImportM PropertyMa
     return props
   | none => transformAuthoredProperties obj props
 
+/-- Whether `transformProperties obj` can change the properties: per-call defaults, or an options
+object (`layoutOptions` or `properties`) on the element. -/
+def hasProperties (obj : Value) : ImportM Bool := do
+  match (← getI).defaults with
+  | some g => if !g.values.isEmpty then return true
+  | none => pure ()
+  return (JsonAdapter.optObject obj Key.layoutOptions).isSome || (JsonAdapter.optObject obj Key.properties).isSome
+
 /-- `transform_individual_spacings`: the `individualSpacings` object. -/
 def transformIndividualSpacings (obj : Value) (props : PropertyMap) : ImportM PropertyMap := do
   match JsonAdapter.optObject obj Key.individualSpacings with
@@ -324,8 +332,9 @@ def transformPrimitiveEdge (obj : Value) (parent : NodeId) (path : JPath) : Impo
   let edge := (← getG).edge e
   if edge.sources.isEmpty || edge.targets.isEmpty then
     throwJsonImport "An edge must have at least one source and one target."
-  let props ← transformProperties obj edge.props
-  modG (·.modifyEdge e fun x => { x with props })
+  if ← hasProperties obj then
+    let props ← transformProperties obj edge.props
+    modG (·.modifyEdge e fun x => { x with props })
   transformPrimitiveEdgeLayout obj e
   let firstLabel := (← getG).labels.size
   modI (·.modifyIndex (·.setEdgeFirstLabel e.idx firstLabel))
@@ -353,9 +362,11 @@ def fillEdgeSectionCoordinates (obj : Value) (sec : SectionId) : ImportM Unit :=
 
 /-- `transform_edge_sections`. -/
 def transformEdgeSections (obj : Value) (e : EdgeId) : ImportM Unit := do
+  -- without a `sections` array the edge has no sections (they are only created below)
+  let some sections := JsonAdapter.optArray obj Key.sections | return
   let mut incomingIds : Array (SectionId × Array JsonId) := #[]
   let mut outgoingIds : Array (SectionId × Array JsonId) := #[]
-  if let some sections := JsonAdapter.optArray obj Key.sections then
+  do
     let edgePath := pathGet (← getI).edgePath e.idx
     for h : i in [0:sections.size] do
       let secObj := sections[i]
@@ -422,8 +433,9 @@ def transformEdge (obj : Value) (parent : NodeId) (path : JPath) : ImportM EdgeI
   let edge := (← getG).edge e
   if edge.sources.isEmpty || edge.targets.isEmpty then
     throwJsonImport "An edge must have at least one source and one target."
-  let props ← transformProperties obj edge.props
-  modG (·.modifyEdge e fun x => { x with props })
+  if ← hasProperties obj then
+    let props ← transformProperties obj edge.props
+    modG (·.modifyEdge e fun x => { x with props })
   transformEdgeSections obj e
   let firstLabel := (← getG).labels.size
   modI (·.modifyIndex (·.setEdgeFirstLabel e.idx firstLabel))

@@ -32,6 +32,19 @@ as `Float.toJsonNumber`, non-finite ones as `null`; appended like `appendJsonFlo
 @[extern "elk_string_append_elk_number"]
 opaque appendElkNumber (out : String) (x : Float) : String
 
+/-- `out ++ pre ++` the JSON rendering of the layout number `x` (`appendElkNumber`), in one call. -/
+@[extern "elk_string_append_pre_elk_number"]
+opaque appendPreElkNumber (out : String) (pre : @& String) (x : Float) : String
+
+/-- `out ++ pre ++ "{\"x\":" ++ X ++ ",\"y\":" ++ Y ++ "}"` with the layout numbers `X`, `Y` of `x`, `y`
+(`appendElkNumber`): a point object of the layout transfer, in one call. -/
+@[extern "elk_string_append_point"]
+opaque appendPoint (out : String) (pre : @& String) (x y : Float) : String
+
+/-- `out ++ a ++ b ++ c` in one call (the capacity is ensured once). -/
+@[extern "elk_string_append3"]
+opaque append3 (out : String) (a b c : @& String) : String
+
 /-- JSON number: integer lexemes stay `Int`, everything else is a double. -/
 inductive Number where
   | int (i : Int)

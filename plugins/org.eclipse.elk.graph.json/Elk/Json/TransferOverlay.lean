@@ -31,13 +31,15 @@ open Elk Elk.Graph Elk.Core Elk.Core.Util Elk.Core.Math Elk.Core.Options Elk.Cor
 open ImportM
 
 /-- One edge section as `transfer_layout_edge` writes it: the input section object (`base`, its
-index in the edge's first `sections` array) or a new `{"id": fallbackId}` object, with
+index in the edge's first `sections` array) or a new `{"id": …}` object (the section's identifier
+`ident`, else `<edge id>_s<index>`), with
 `startPoint`, `endPoint`, `bendPoints` (when there are any), `incomingShape`/`outgoingShape` (when
 the shape has a JSON id) and `incomingSections`/`outgoingSections` (when the section has any) set
 in this order. -/
 structure SectionOut where
   base : Option Nat
-  fallbackId : String
+  ident : Option String
+  index : Nat
   sx : Float
   sy : Float
   ex : Float
@@ -50,13 +52,18 @@ structure SectionOut where
   outSecs : Option (Array JsonId)
 
 instance : Inhabited SectionOut :=
-  ⟨{ base := none, fallbackId := "", sx := 0, sy := 0, ex := 0, ey := 0, bends := .empty, inShape := none,
+  ⟨{ base := none, ident := none, index := 0, sx := 0, sy := 0, ex := 0, ey := 0, bends := .empty, inShape := none,
      outShape := none, inSecs := none, outSecs := none }⟩
+
+/-- The id of a new section object: the section's identifier, else `<edgeId>_s<index>`. -/
+def SectionOut.fallbackId (so : SectionOut) (edgeId : String) : String :=
+  so.ident.getD s!"{edgeId}_s{so.index}"
 
 /-- The writes of `transfer_layout_edge` into an edge object, in this order: `sections` (the first
 member removed, then set; only when `sections` is not empty), `junctionPoints` (`x₀, y₀, …`) and
-`container`. -/
+`container`. `edgeId` is the edge's JSON id as a string (`""` without one). -/
 structure EdgeOut where
+  edgeId : String
   sections : Array SectionOut
   junction : Option FloatArray
   container : Option String
@@ -252,7 +259,6 @@ def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
         match sectionIndexIn path sp with
         | some j => pure (some j)
         | none => modO Overlay.markBad; pure none
-    let fallbackId := if base.isSome then "" else s.identifier.getD s!"{edgeId}_s{i}"
     let mut startX ← adj.adjX s.startX
     let mut startY ← adj.adjY s.startY
     let mut endX ← adj.adjX s.endX
@@ -276,7 +282,7 @@ def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
     let outSecs := if s.outgoingSections.isEmpty then none
       else some (s.outgoingSections.filterMap fun sid => tableGet? st.sectionIds sid.idx)
     sections := sections.push
-      { base, fallbackId, sx := startX, sy := startY, ex := endX, ey := endY, bends, inShape, outShape, inSecs, outSecs }
+      { base, ident := s.identifier, index := i, sx := startX, sy := startY, ex := endX, ey := endY, bends, inShape, outShape, inSecs, outSecs }
   let junctionPoints : Option KVectorChain :=
     if edge.props.has CoreOptions.JUNCTION_POINTS then edge.props.get CoreOptions.JUNCTION_POINTS else none
   let containerId ← match tableGet? st.edgeOriginalParent e.idx with
@@ -294,7 +300,7 @@ def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
         let jy ← adj.adjY jp.y
         arr := (arr.push jx).push jy
       junction := some arr
-  modO (·.setEdge e.idx { sections, junction, container := containerId })
+  modO (·.setEdge e.idx { edgeId, sections, junction, container := containerId })
 where
   /-- `adjustXForShiftedEastPort` on a state read once. -/
   shiftedEastX (st : ImporterState) (shape : ConnectableId) (x : Float) : Float :=
@@ -406,7 +412,7 @@ def pointsValue (xs : FloatArray) : Value := Id.run do
   return .arr out
 
 /-- The section object of `transfer_layout_edge` (`input`: the edge's first `sections` member). -/
-def sectionValue (input : Option Value) (so : SectionOut) : Value :=
+def sectionValue (edgeId : String) (input : Option Value) (so : SectionOut) : Value :=
   let base : Value := match so.base with
     | some j =>
       match input with
@@ -415,7 +421,7 @@ def sectionValue (input : Option Value) (so : SectionOut) : Value :=
         | some v@(.obj _) => v
         | _ => .obj #[]
       | _ => .obj #[]
-    | none => .obj #[(Key.id, .str so.fallbackId)]
+    | none => .obj #[(Key.id, .str (so.fallbackId edgeId))]
   let obj := base.set Key.startPoint (pointValue so.sx so.sy)
   let obj := obj.set Key.endPoint (pointValue so.ex so.ey)
   let obj := if so.bends.size == 0 then obj else obj.set Key.bendPoints (pointsValue so.bends)
@@ -483,7 +489,7 @@ def matEdge (c : Ctx) (e : Nat) (v : Value) : Value :=
       let o := if eo.sections.isEmpty then o
         else
           let input := Value.lookup kvs Key.sections
-          (o.remove Key.sections).set Key.sections (.arr (eo.sections.map (sectionValue input)))
+          (o.remove Key.sections).set Key.sections (.arr (eo.sections.map (sectionValue eo.edgeId input)))
       let o := match eo.junction with
         | some j => o.set Key.junctionPoints (pointsValue j)
         | none => o
