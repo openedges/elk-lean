@@ -21,8 +21,11 @@ boxed `Integer`s compared by identity (`!=`), the node ids only when a predecess
 heap yields first depends on its structure. elk-rs takes the first minimum of a list
 (`pop_best_by` with `swap_remove`), compares the numbers by value and falls back to the ids.
 
-Like Rust and Java the transitive reduction does not terminate on self-loops (the DFS revisits
-the unfinished node); self-loops are hidden by the `SelfLoopPreprocessor` before this phase runs.
+The transitive reduction does not terminate on a cycle (the DFS revisits an unfinished node; a
+self-loop is hidden by the `SelfLoopPreprocessor` before this phase runs, but cycles that the cycle
+breaker leaves, e.g. edges between nodes of different model order groups, remain): Java's recursion
+overflows the stack, so Lean reports `java.lang.StackOverflowError` when the walk reaches a node whose
+call is still running (elk-rs recurses until its own stack overflows).
 -/
 namespace Elk.Alg.Layered.P2Layers
 
@@ -56,14 +59,20 @@ private def edgeTargetNode (a : LGraphArena) (e : LEdgeId) : Option LNodeId :=
   (a.edge e).target.bind fun p => (a.port p).owner
 
 /-- `dfs(start, node)` of the transitive reduction: marks every edge `start → w` for which `w`
-is also reachable through a longer path. Iterative version of the Rust recursion (a node is
-marked when all its successors are done). -/
+is also reachable through a longer path. Iterative version of the Java recursion (a node is
+marked when all its successors are done). `none` when the walk reaches a node whose own call is
+still running: Java's recursion (whose marks only change on return) then repeats itself until
+the stack overflows (`java.lang.StackOverflowError`, agent HMO; before, the explicit stack grew
+without bound). -/
 def dfs (a : LGraphArena) (start node : LNodeId) (nodeMark edgeMark : Array Bool) :
-    Array Bool × Array Bool := Id.run do
+    Option (Array Bool × Array Bool) := Id.run do
   let mut nodeMark := nodeMark
   let mut edgeMark := edgeMark
   if nodeMark.getD (nodeId a node) false then
-    return (nodeMark, edgeMark)
+    return some (nodeMark, edgeMark)
+  let mut onStack := Array.replicate nodeMark.size false
+  let ni := nodeId a node
+  if ni < onStack.size then onStack := onStack.set! ni true
   -- frames: (node, its outgoing edges, index of the next edge)
   let mut stack : Array (LNodeId × Array LEdgeId × Nat) := #[(node, a.nodeOutgoingEdges node, 0)]
   while !stack.isEmpty do
@@ -75,25 +84,31 @@ def dfs (a : LGraphArena) (start node : LNodeId) (nodeMark edgeMark : Array Bool
         if edgeSourceNode a transitive == some start then
           let ei := edgeId a transitive
           if ei < edgeMark.size then edgeMark := edgeMark.set! ei true
-      if !nodeMark.getD (nodeId a target) false then
+      let ti := nodeId a target
+      if !nodeMark.getD ti false then
+        if onStack.getD ti false then return none
+        if ti < onStack.size then onStack := onStack.set! ti true
         stack := stack.push (target, a.nodeOutgoingEdges target, 0)
     else
       stack := stack.pop
       let vi := nodeId a v
       if vi < nodeMark.size then nodeMark := nodeMark.set! vi true
-  return (nodeMark, edgeMark)
+      if vi < onStack.size then onStack := onStack.set! vi false
+  return some (nodeMark, edgeMark)
 
-/-- `transitiveReduction(graph)`: the edge marks of all transitive edges. -/
-def transitiveReduction (a : LGraphArena) (nodes : Array LNodeId) (nodeCount edgeCount : Nat) : Array Bool := Id.run do
+/-- `transitiveReduction(graph)`: the edge marks of all transitive edges (`none`: Java's
+`StackOverflowError`, see `dfs`). -/
+def transitiveReduction (a : LGraphArena) (nodes : Array LNodeId) (nodeCount edgeCount : Nat) :
+    Option (Array Bool) := Id.run do
   let mut edgeMark := Array.replicate edgeCount false
   for start in nodes do
     let mut nodeMark := Array.replicate nodeCount false
     for edge in a.nodeOutgoingEdges start do
       if let some target := edgeTargetNode a edge then
-        let (nodeMark', edgeMark') := dfs a start target nodeMark edgeMark
+        let some (nodeMark', edgeMark') := dfs a start target nodeMark edgeMark | return none
         nodeMark := nodeMark'
         edgeMark := edgeMark'
-  return edgeMark
+  return some edgeMark
 
 /-- Java `compareNodesInTopo(u, v)` (`int` result): walks both `inTopo` lists from the end with
 `ListIterator.previous()`. The elements are `Integer`s boxed by every `inTopo.put` (`!=` is identity:
@@ -237,7 +252,8 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
       modifyEdge edge fun x => { x with id := id }
       edgeIndex := edgeIndex + 1
   -- #1 remove transitive edges, #2 compute topological ordering
-  let edgeMark ← withArena (transitiveReduction · nodes nodes.size edgeIndex)
+  let some edgeMark ← withArena (transitiveReduction · nodes nodes.size edgeIndex)
+    | throw (IO.userError "java.lang.StackOverflowError")
   let (topoOrd, outDeg, initialSinks) ← withArena (topologicalNumbering · nodes edgeMark)
   let mut outDeg := outDeg
   -- `new PriorityQueue<LNode>((n1, n2) -> -Integer.compare(topoOrd[n1.id], topoOrd[n2.id]))`: the ids

@@ -1,0 +1,131 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+  "elk.layered.cycleBreaking.strategy": "SCC_NODE_TYPE",
+  "elk.layered.layering.strategy": "BF_MODEL_ORDER"
+ },
+ "children": [
+  {
+   "id": "g687_n1",
+   "width": 40,
+   "height": 30,
+   "children": [
+    {
+     "id": "g687_n1_n3",
+     "width": 55,
+     "height": 20,
+     "children": [
+      {
+       "id": "g687_n1_n3_n5",
+       "width": 55,
+       "height": 40
+      }
+     ],
+     "edges": []
+    },
+    {
+     "id": "g687_n1_n10",
+     "width": 20,
+     "height": 20
+    }
+   ],
+   "edges": []
+  },
+  {
+   "id": "g687_n11",
+   "width": 30,
+   "height": 20
+  },
+  {
+   "id": "g687_n12",
+   "width": 30,
+   "height": 40
+  },
+  {
+   "id": "g687_n13",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "g687_n16",
+   "width": 20,
+   "height": 40
+  }
+ ],
+ "edges": [
+  {
+   "id": "g687_e3",
+   "sources": [
+    "g687_n1"
+   ],
+   "targets": [
+    "g687_n13"
+   ]
+  },
+  {
+   "id": "g687_e5",
+   "sources": [
+    "g687_n16"
+   ],
+   "targets": [
+    "g687_n1_n10"
+   ]
+  },
+  {
+   "id": "g687_e7",
+   "sources": [
+    "g687_n13"
+   ],
+   "targets": [
+    "g687_n16"
+   ]
+  },
+  {
+   "id": "g687_e9",
+   "sources": [
+    "g687_n1_n3_n5"
+   ],
+   "targets": [
+    "g687_n13"
+   ]
+  },
+  {
+   "id": "g687_e12",
+   "sources": [
+    "g687_n12"
+   ],
+   "targets": [
+    "g687_n1_n3_n5"
+   ]
+  },
+  {
+   "id": "g687_e13",
+   "sources": [
+    "g687_n13"
+   ],
+   "targets": [
+    "g687_n12"
+   ]
+  },
+  {
+   "id": "g687_e14",
+   "sources": [
+    "g687_n11"
+   ],
+   "targets": [
+    "g687_n12"
+   ]
+  },
+  {
+   "id": "g687_e16",
+   "sources": [
+    "g687_n16"
+   ],
+   "targets": [
+    "g687_n13"
+   ]
+  }
+ ]
+}

@@ -1,6 +1,7 @@
 import Elk.Alg.Layered.P4Nodes.BK.ThresholdStrategy
 import Elk.Alg.Layered.P4Nodes.BK.ICompactor
 import Std.Data.HashMap
+import Std.Data.HashSet
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.bk.BKCompactor` (elk-rs `compactor.rs`)
 
@@ -16,6 +17,11 @@ Order notes (Rust is followed where it differs from Java):
   the class nodes of in-degree 0 **in `sinkOrder`** (Java iterates a `HashMap`) and writes the
   shifts back in `sinkOrder` (only defined class shifts are written);
 * `f64::min`/`f64::max` (`fmin`/`fmax`) instead of `Math.min`/`Math.max`.
+
+Java followed where elk-rs differs (agent HMO): a class node that the sweep never reaches (on or
+behind a cycle of the class graph) keeps `classShift == null`, `placeClasses` stores that `null` in
+`bal.shift`, and the final coordinate loop's unboxing of a block root's sink shift fails with Java's
+`NullPointerException` (elk-rs keeps the initial infinite shift and lays the graph out).
 
 Not ported: the `ELK_BK_REVERSE_SINK_QUEUE` debug switch of elk-rs (reverses the seed order).
 
@@ -270,8 +276,10 @@ private def sweepClasses (vdir : VDirection) (sinkNodes : Std.HashMap Nat ClassN
   return nodes
 
 /-- `placeClasses(bal)`: places the classes and stores each class shift at its sink
-(`bal.shift`). -/
-private def placeClasses (vdir : VDirection) : CompactM Unit := do
+(`bal.shift`). Returns the sinks whose class was never placed (a class node on or behind a cycle
+of the class graph keeps `classShift == null`, which Java stores into `bal.shift`; elk-rs keeps
+the initial shift). -/
+private def placeClasses (vdir : VDirection) : CompactM (Std.HashSet Nat) := do
   -- take the class graph out of the state so that the sweep updates it in place
   let (sinkNodes, order) ← modifyGetThe BKCompactor fun c => ((c.sinkNodes, c.sinkOrder), { c with sinkNodes := {} })
   if ElkTrace.global.bkClasses then
@@ -286,6 +294,11 @@ private def placeClasses (vdir : VDirection) : CompactM Unit := do
       if let some shift := (nodes.get? id).bind (·.classShift) then
         b := { b with shift := b.shift.set! id shift }
     return b
+  let mut unplaced : Std.HashSet Nat := {}
+  for id in order do
+    if let some node := nodes.get? id then
+      if node.classShift.isNone then unplaced := unplaced.insert id
+  return unplaced
 
 /-- `apply_final_coordinates`: every node gets the y coordinate of its root; roots are
 additionally moved by their class shift (if finite in the compaction direction). Nodes are
@@ -345,7 +358,18 @@ def horizontalCompaction (ctx : BKContext) (ni : NeighborhoodInformation) : Comp
       let id := ctx.nodeId n
       if (← getThe BKAlignedLayout).rootOf id == id then
         placeBlock ctx ni id
-  placeClasses vdir
+  let unplaced ← placeClasses vdir
+  if !unplaced.isEmpty then
+    -- Java's final loop unboxes `bal.shift[bal.sink[v.id].id]` for every block root (the y
+    -- assignments before it change neither roots nor sinks): a root whose class was never placed
+    -- fails there
+    let bal ← getThe BKAlignedLayout
+    for l in layers do
+      for n in (ctx.arena.layer l).nodes do
+        let idx := ctx.nodeId n
+        if bal.rootOf idx == idx && unplaced.contains (bal.sinkOf idx) then
+          throw (IO.userError ("java.lang.NullPointerException: Cannot invoke \"java.lang.Double.doubleValue()\" " ++
+            "because \"bal.shift[bal.sink[v.id].id]\" is null"))
   for l in layers do
     let nodes := (ctx.arena.layer l).nodes
     modifyThe BKAlignedLayout (applyFinalCoordinates ctx vdir nodes)

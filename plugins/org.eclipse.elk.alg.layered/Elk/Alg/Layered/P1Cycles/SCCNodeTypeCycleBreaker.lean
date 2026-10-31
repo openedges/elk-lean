@@ -9,12 +9,14 @@ Port of elk-rs `p1cycles/scc_node_type_cycle_breaker.rs` (`SccNodeTypeCycleBreak
 maximum node whose id equals `GROUP_MODEL_ORDER_CB_PREFERRED_TARGET_ID` gets its outgoing edges
 reversed; only then connectivity decides.
 
-Rust semantics kept (they differ from Java):
-- the preferred ids default to `0` when unset (`unwrap_or(0)`), so with default options every
-  component takes the preferred-source branch (Java compares boxed `Integer`s with `==`, so an
-  unset preference never matches);
+Java semantics (agent HMO; elk-rs differs):
+- Java compares the boxed `Integer`s with `==` (`javaBoxedIdEq`): the preferred ids have no default,
+  so an unset preference never matches (elk-rs `unwrap_or(0)` made every component with default
+  options take the preferred-source branch), and equal set values are the same object only inside
+  the `Integer` cache `[-128, 127]` (node and graph values come from separate `Integer.valueOf`
+  calls of the JSON import);
 - in the preferred-target branch the filter tests the edge's *source* node (always the maximum
-  node itself), so all its outgoing edges are reversed (same as Java).
+  node itself), so all its outgoing edges are reversed (same as elk-rs).
 
 The phase name is the Rust `type_name` `SccNodeTypeCycleBreaker`.
 -/
@@ -34,19 +36,27 @@ private def outgoingFromComponentSource (component : Array LNodeId) (node : LNod
     if containsNode component sourceNode then result := result.push edge
   return result
 
-/-- `findNodes(...)` (Rust `SccNodeTypeCycleBreaker::find_nodes`). -/
+/-- Java's `nodeId == graphPreferredId` on boxed `Integer`s: false for an unset preference (`null`),
+and for equal values only inside the `Integer` cache `[-128, 127]` (distinct boxes otherwise). -/
+def javaBoxedIdEq (nodeId : Int) (preferred : Option Int) : Bool :=
+  match preferred with
+  | some p => nodeId == p && -128 <= p && p <= 127
+  | none => false
+
+/-- `findNodes(...)` (Java `SCCNodeTypeCycleBreaker.findNodes`, Rust
+`SccNodeTypeCycleBreaker::find_nodes` with Java's preferred id comparison). -/
 def findNodes : FindNodes := fun graph components offset bigOffset => do
   let gr ← getGraph graph
-  let preferredSource := gr.props.getD LayeredOptions.GROUP_MODEL_ORDER_CB_PREFERRED_SOURCE_ID 0
-  let preferredTarget := gr.props.getD LayeredOptions.GROUP_MODEL_ORDER_CB_PREFERRED_TARGET_ID 0
+  let preferredSource := gr.props.get LayeredOptions.GROUP_MODEL_ORDER_CB_PREFERRED_SOURCE_ID
+  let preferredTarget := gr.props.get LayeredOptions.GROUP_MODEL_ORDER_CB_PREFERRED_TARGET_ID
   let mut revEdges : Array LEdgeId := #[]
   for component in components do
     if component.size <= 1 then continue
     let some (minNode, maxNode) ← minMaxNodes graph component offset bigOffset | continue
-    if (← nodeGroupModelOrderId minNode) == preferredSource then
+    if javaBoxedIdEq (← nodeGroupModelOrderId minNode) preferredSource then
       revEdges := revEdges ++ (← incomingFromComponent component minNode)
       continue
-    if (← nodeGroupModelOrderId maxNode) == preferredTarget then
+    if javaBoxedIdEq (← nodeGroupModelOrderId maxNode) preferredTarget then
       revEdges := revEdges ++ (← outgoingFromComponentSource component maxNode)
       continue
     let minInDegree := (← withArena (·.nodeIncomingEdges minNode)).size
