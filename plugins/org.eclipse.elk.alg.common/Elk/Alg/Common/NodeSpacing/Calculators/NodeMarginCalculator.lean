@@ -20,6 +20,11 @@ of `allIncomingEdges`/`allOutgoingEdges`. Every read is an adapter read without 
 only write is the margin of each node in the same order, so the result is the same; a differential
 test compares both on random graphs (`alg.common.nodespacing.marginFastPath`).
 -/
+/-! Float literals as global constants (FL): inside branches and folds the compiler can share a
+literal's `Nat`/`Bool` arguments with unrelated variables and parse it on every evaluation
+(`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.NodeSpacing
 
 open Elk Elk.Graph Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
@@ -249,7 +254,7 @@ def requiredPortLabelSpaceOf (g : ElkGraph) (nd : ElkNode) (pt : ElkPort) (label
         let lb := g.label label
         ⟨space.x + (lb.width + labelSpacing), space.y + (lb.height + labelSpacing)⟩
     else space
-  ⟨fmax space.x 0.0, fmax space.y 0.0⟩
+  ⟨fmax space.x fl0p0, fmax space.y fl0p0⟩
 
 /-- `addPortBoxes` on an `ElkGraph`. -/
 def portBoxesOf (c : NodeMarginCalculator) (g : ElkGraph) (nd : ElkNode) (port : PortId) (labelSpacing : Float)
@@ -292,10 +297,10 @@ def nodeMarginOf (c : NodeMarginCalculator) (g : ElkGraph) (node : NodeId) (labe
       nd.ports.foldl (init := bb) fun bb p =>
         edgeLabelBoxesFrom g (g.port p).incomingEdges 0 .head true nd none none labelSpacing bb
     else boundingBox
-  { top := fmax (nd.y - boundingBox.y) 0.0
-    bottom := fmax (boundingBox.y + boundingBox.height - (nd.y + nd.height)) 0.0
-    left := fmax (nd.x - boundingBox.x) 0.0
-    right := fmax (boundingBox.x + boundingBox.width - (nd.x + nd.width)) 0.0 }
+  { top := fmax (nd.y - boundingBox.y) fl0p0
+    bottom := fmax (boundingBox.y + boundingBox.height - (nd.y + nd.height)) fl0p0
+    left := fmax (nd.x - boundingBox.x) fl0p0
+    right := fmax (boundingBox.x + boundingBox.width - (nd.x + nd.width)) fl0p0 }
 
 /-- `NodeAdapter.setMargin(margin)` of the `ElkGraphAdapters` (not inlined: the node is updated in place). -/
 @[noinline] def setMarginsOf (margin : ElkMargin) (nd : ElkNode) : ElkNode :=
@@ -306,7 +311,7 @@ def nodeMarginOf (c : NodeMarginCalculator) (g : ElkGraph) (node : NodeId) (labe
 def processElkGraph (c : NodeMarginCalculator) (graph : NodeId) : ElkM Unit := do
   let (children, spacing) ← ElkM.withGraph fun g =>
     let nd := g.node graph
-    (nd.children, nd.props.getD CoreOptions.SPACING_LABEL_NODE 0.0)
+    (nd.children, nd.props.getD CoreOptions.SPACING_LABEL_NODE fl0p0)
   for node in children do
     let margin ← ElkM.withGraph fun g => c.nodeMarginOf g node spacing
     ElkM.modifyNode node (setMarginsOf margin)
