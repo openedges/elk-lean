@@ -71,7 +71,7 @@ def createPolyominoes (graph : DCGraph) (cellSizeX cellSizeY : Float) :
   for i in [0:graph.components.size] do
     match DCPolyomino.new graph ⟨i⟩ cellSizeX cellSizeY with
     | .ok p => polys := polys.push p
-    | .error e => throw (javaException indexOutOfBoundsExceptionClass e)
+    | .error e => throw (IO.userError e)
   return polys
 
 /-- `packPolyominoes()`: numbers the components (debug ids), packs the polyominoes and returns
@@ -83,7 +83,9 @@ def packPolyominoes (graph : DCGraph) (polys : Array DCPolyomino) (aspectRatio :
   for poly in polys do
     graph := graph.setComponentId poly.representee id
     id := id + 1
-  let polyHolder := Polyominoes.new polys aspectRatio fill
+  let polyHolder ← match Polyominoes.newChecked polys aspectRatio fill with
+    | .ok h => pure h
+    | .error e => throw (IO.userError e)
   let packed ← PolyominoCompactor.packPolyominoesIO polyHolder
   return (graph, packed.polys, packed.grid)
 
@@ -116,9 +118,9 @@ def compactWithPolys (self : DisCoPolyominoCompactor) (graph : DCGraph) :
   let mut gridCellSizeX := gridCellRecommendation
   let mut gridCellSizeY := gridCellRecommendation
   let fill := (graph.properties.get PolyominoOptions.POLYOMINO_FILL).getD false
-  let mut aspectRatio := (graph.properties.get DisCoOptions.ASPECT_RATIO).getD 1.0
-  if aspectRatio == 0.0 then
-    aspectRatio := 1.0
+  -- Java: `null` → 1.0; any other value is used as is (no option validation on the JSON path: `0`
+  -- gives an infinite cell height, a negative value Java's `NegativeArraySizeException`)
+  let aspectRatio := (graph.properties.get DisCoOptions.ASPECT_RATIO).getD 1.0
   if aspectRatio > 1.0 then
     gridCellSizeX := gridCellSizeX * aspectRatio
   else

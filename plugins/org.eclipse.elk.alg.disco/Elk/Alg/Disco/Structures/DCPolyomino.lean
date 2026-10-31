@@ -10,8 +10,7 @@ extensions and weakly block the area between the element and the border.
 
 Rust holds the represented component as `Arc<Mutex<DCComponent>>`; here it is a
 `DCComponentId` and every operation that reads the component takes the `DCGraph` (its
-arena). The grid operations that can run out of bounds (a Rust panic) make `new` return
-`Except String`.
+arena). `new` returns `Except String` with Java's exception text (grid bounds, negative sizes).
 -/
 namespace Elk.Alg.Disco.Structures
 
@@ -46,18 +45,18 @@ instance : PolyominoLike DCPolyomino where
   y p := PolyominoLike.y p.poly
   addExtension p dir offset width := { p with poly := PolyominoLike.addExtension p.poly dir offset width }
 
-/-- `compute_low_res_dimension`: `ceil(dim / cellSize)` computed as truncation (saturating cast
-to `usize`: NaN and negative values give `0`) plus one if the quotient is larger than the
-truncated value. -/
-def computeLowResDimension (dim cellSize : Float) : Nat :=
-  let cellFit := dim / cellSize
-  let fitTruncated : UInt64 := cellFit.toUInt64
-  if cellFit > fitTruncated.toFloat then (fitTruncated + 1).toNat else fitTruncated.toNat
-
-/-- Rust `x as i32` for an `f64`: truncation toward zero, saturating, NaN gives `0`. -/
-private def toI32 (x : Float) : Int :=
+/-- Java `(int) x` for a `double`: truncation toward zero, saturating, NaN gives `0`. -/
+def toI32 (x : Float) : Int :=
   let v := Float.toIntTrunc x
   if v > 2147483647 then 2147483647 else if v < -2147483648 then -2147483648 else v
+
+/-- `computeLowResDimension(dim, cellSize)`: `(int) (dim / cellSize)` plus one if the quotient is
+larger than the truncated value (Java `int`: a negative quotient, i.e. a negative aspect ratio,
+gives a negative size). -/
+def computeLowResDimension (dim cellSize : Float) : Int :=
+  let cellFit := dim / cellSize
+  let fitTruncated := toI32 cellFit
+  if cellFit > Float.ofInt fitTruncated then Int.wrap32 (fitTruncated + 1) else fitTruncated
 
 /-- `getOffset()`: `-0.5 * (boundingRectangle - gridSize)`, the shift between the component and
 its low resolution grid. -/
@@ -142,19 +141,30 @@ private def addExtensionsToPoly (g : DCGraph) (poly : DCPolyomino) (elem : DCEle
   return poly
 
 /-- `new DCPolyomino(comp, cellSizeX, cellSizeY)`: computes the low resolution size, blocks the
-cells covered by the component and adds the extensions (elements in component order). -/
+cells covered by the component and adds the extensions (elements in component order). Errors are
+Java's exception texts: `reinitialize` allocates `long[pHeight][(int) Math.ceil(pWidth / 32.0)]`
+(`NegativeArraySizeException` for a negative size, e.g. from a negative aspect ratio), extensions
+reaching outside the grid fail with `IndexOutOfBoundsException`. -/
 def new (g : DCGraph) (comp : DCComponentId) (cellSizeX cellSizeY : Float) :
     Except String DCPolyomino := do
   let dims := g.componentDimensions comp
-  let pWidth := computeLowResDimension dims.x cellSizeX
-  let pHeight := computeLowResDimension dims.y cellSizeY
+  let pWidthI := computeLowResDimension dims.x cellSizeX
+  let pHeightI := computeLowResDimension dims.y cellSizeY
+  if pHeightI < 0 then throw s!"java.lang.NegativeArraySizeException: {pHeightI}"
+  let words := toI32 (Float.ceil (Float.ofInt pWidthI / 32.0))
+  if words < 0 then throw s!"java.lang.NegativeArraySizeException: {words}"
+  -- a width in (-32, 0) allocates no word; the cell loops then do nothing (`pWidth` stays `0`)
+  let pWidth := pWidthI.toNat
+  let pHeight := pHeightI.toNat
   let poly := (Polyomino.new pWidth pHeight).reinitialize pWidth pHeight
   let mut result : DCPolyomino := { poly, representee := comp, pWidth, pHeight, cellSizeX, cellSizeY }
   result := fillCells g result
   for elemId in g.components[comp.idx]!.shapes do
     let elem := g.elements[elemId.idx]!
     if !elem.extensions.isEmpty then
-      result ← addExtensionsToPoly g result elem
+      match addExtensionsToPoly g result elem with
+      | .ok r => result := r
+      | .error e => throw s!"java.lang.IndexOutOfBoundsException: {e}"
   return result
 
 end DCPolyomino
