@@ -41,35 +41,70 @@ namespace Elk.Alg.Layered.Intermediate.Preserveorder
 
 open Elk.Graph Elk.Core.Util Elk.Core.Options Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
 
-/-- Bit `i` of a `Nat` bit set. -/
-@[inline] def bitSetBit (i : Nat) : Nat := 1 <<< i
+/-! ### Bit set rows
 
-/-- Members of a `Nat` bit set in ascending order (Rust `set_members`: per 64-bit word, the lowest
-set bit is isolated and cleared until the word is empty). -/
-def bitSetMembers (words : Nat) : Array Nat := Id.run do
-  let mut out : Array Nat := #[]
-  let mut x := words
-  let mut base := 0
-  while x != 0 do
-    let mut w : UInt64 := x.toUInt64
-    while w != 0 do
-      let lowest := w &&& (0 - w)
-      out := out.push (base + lowest.log2.toNat)
-      w := w ^^^ lowest
-    x := x >>> 64
-    base := base + 64
-  return out
+A row is a bit set over dense key indices stored as 32-bit words in an `Array Nat` (word `j >>> 5`,
+bit `j &&& 31`; every word is a small, unboxed `Nat`). Rust uses `Vec<u64>` words; an earlier Lean
+version used one `Nat` per row, whose `1 <<< j` and wide `|||` went through GMP (`lean_nat_shiftl`
+is out of line, and rows of more than 62 keys are big numbers). Only set membership is observable. -/
+
+/-- Whether bit `j` of a row is set. -/
+@[inline] def rowTest (row : Array Nat) (j : Nat) : Bool :=
+  let w := j >>> 5
+  if h : w < row.size then (row[w].toUInt64 >>> (j &&& 31).toUInt64) &&& 1 != 0 else false
+
+/-- `row` with at least `n` words (zeros appended). -/
+@[inline] def rowGrow (row : Array Nat) (n : Nat) : Array Nat :=
+  if n <= row.size then row else row ++ Array.replicate (n - row.size) 0
+
+/-- Sets bit `j` of a row. -/
+@[inline] def rowSet (row : Array Nat) (j : Nat) : Array Nat :=
+  let w := j >>> 5
+  let bit : UInt64 := (1 : UInt64) <<< (j &&& 31).toUInt64
+  (rowGrow row (w + 1)).modify w fun x => (x.toUInt64 ||| bit).toNat
+
+/-- `dst[i:] ||| src[i:]` word by word (`dst` grown to `src`'s size). -/
+partial def rowOrFrom (src : Array Nat) (i : Nat) (dst : Array Nat) : Array Nat :=
+  if h : i < src.size then
+    let x := src[i]
+    if x == 0 then rowOrFrom src (i + 1) dst
+    else rowOrFrom src (i + 1) (dst.modify i fun y => (y.toUInt64 ||| x.toUInt64).toNat)
+  else dst
+
+/-- `dst ||| src`. -/
+@[inline] def rowOr (dst src : Array Nat) : Array Nat := rowOrFrom src 0 (rowGrow dst src.size)
+
+/-- Folds `f` over the set bits of `row` in ascending order (per word, the lowest set bit is isolated
+and cleared until the word is empty). -/
+@[specialize] partial def rowFoldFrom {σ : Type} (f : σ → Nat → σ) (row : Array Nat) (i : Nat) (w : UInt64) (acc : σ) : σ :=
+  if w != 0 then
+    let lowest := w &&& (0 - w)
+    rowFoldFrom f row i (w ^^^ lowest) (f acc (32 * i + lowest.log2.toNat))
+  else if h : i + 1 < row.size then rowFoldFrom f row (i + 1) row[i + 1].toUInt64 acc
+  else acc
+
+/-- Folds `f` over the members of a row in ascending order. -/
+@[inline] def rowFold {σ : Type} (f : σ → Nat → σ) (row : Array Nat) (acc : σ) : σ :=
+  if h : 0 < row.size then rowFoldFrom f row 0 row[0].toUInt64 acc else acc
+
+/-- The members of a row in ascending order. -/
+def rowMembers (row : Array Nat) : Array Nat := rowFold (fun out j => out.push j) row #[]
 
 /-- Rust `ModelOrderRelations<Key>`: Java's `biggerThan`/`smallerThan` maps (`HashMap<K, HashSet<K>>`)
-stored as dense bit sets over key indices (Rust uses `Vec<u64>` words, Lean a `Nat` per key). Keys get
-indices in order of first use; only set membership is observable. -/
+stored as dense bit set rows over key indices (see "Bit set rows"). Keys get indices in order of
+first use; only set membership is observable. -/
 structure ModelOrderRelations (κ : Type) [BEq κ] [Hashable κ] where
-  /-- Key → dense index (Rust `indices`). -/
+  /-- The keys by dense index (Rust `indices`, inverted). -/
+  keys : Array κ := #[]
+  /-- Key → dense index (Rust `indices`), only built once there are more than
+  `ModelOrderRelations.linearKeys` keys (before, `keys` is searched linearly: the comparators are
+  reset per node or layer and usually see a handful of keys, for which a fresh hash map costs more
+  than the scan). -/
   indices : Std.HashMap κ Nat := {}
   /-- `bigger[i]`: the keys key `i` is bigger than (Java `biggerThan.get(k)`). -/
-  bigger : Array Nat := #[]
+  bigger : Array (Array Nat) := #[]
   /-- `smaller[i]`: the keys key `i` is smaller than (Java `smallerThan.get(k)`). -/
-  smaller : Array Nat := #[]
+  smaller : Array (Array Nat) := #[]
 
 namespace ModelOrderRelations
 
@@ -77,39 +112,68 @@ variable {κ : Type} [BEq κ] [Hashable κ]
 
 instance : Inhabited (ModelOrderRelations κ) := ⟨{}⟩
 
-/-- Rust `index(key)`: the dense index of `key`, allocating empty sets for a new key. -/
+/-- Up to this many keys `index` searches `keys` linearly (no `indices` map). -/
+def linearKeys : Nat := 32
+
+/-- The dense index of `key` in `keys[i:]` (`keys.size` when absent). -/
+@[specialize] partial def findKey (keys : Array κ) (key : κ) (i : Nat) : Nat :=
+  if h : i < keys.size then (if keys[i] == key then i else findKey keys key (i + 1)) else keys.size
+
+/-- `indices` of `keys[i:]` added to `m`. -/
+@[specialize] partial def indexKeys (keys : Array κ) (i : Nat) (m : Std.HashMap κ Nat) : Std.HashMap κ Nat :=
+  if h : i < keys.size then indexKeys keys (i + 1) (m.insert keys[i] i) else m
+
+/-- Rust `index(key)`: the dense index of `key`, allocating empty sets for a new key (indices in order
+of first use, as before; a linear search while there are at most `linearKeys` keys). -/
 def index (r : ModelOrderRelations κ) (key : κ) : Nat × ModelOrderRelations κ :=
-  match r.indices.get? key with
-  | some i => (i, r)
-  | none =>
-    let ⟨indices, bigger, smaller⟩ := r
-    let i := indices.size
-    (i, ⟨indices.insert key i, bigger.push 0, smaller.push 0⟩)
+  match r with
+  | ⟨keys, indices, bigger, smaller⟩ =>
+    if keys.size ≤ linearKeys then
+      let i := findKey keys key 0
+      if i < keys.size then (i, ⟨keys, indices, bigger, smaller⟩)
+      else
+        let keys := keys.push key
+        let indices := if keys.size > linearKeys then indexKeys keys 0 indices else indices
+        (i, ⟨keys, indices, bigger.push #[], smaller.push #[]⟩)
+    else
+      match indices.get? key with
+      | some i => (i, ⟨keys, indices, bigger, smaller⟩)
+      | none =>
+        let i := keys.size
+        (i, ⟨keys.push key, indices.insert key i, bigger.push #[], smaller.push #[]⟩)
 
 /-- Rust `bigger(left, right)`: `right ∈ biggerThan(left)`. -/
 @[inline] def isBigger (r : ModelOrderRelations κ) (left right : Nat) : Bool :=
-  (r.bigger[left]?.getD 0).testBit right
+  rowTest (r.bigger[left]?.getD #[]) right
 
 /-- Rust `smaller(left, right)`: `right ∈ smallerThan(left)`. -/
 @[inline] def isSmaller (r : ModelOrderRelations κ) (left right : Nat) : Bool :=
-  (r.smaller[left]?.getD 0).testBit right
+  rowTest (r.smaller[left]?.getD #[]) right
+
+/-- The members of `biggerThan(i)` (dense indices, ascending). -/
+def biggerMembers (r : ModelOrderRelations κ) (i : Nat) : Array Nat := rowMembers (r.bigger[i]?.getD #[])
+
+/-- The members of `smallerThan(i)` (dense indices, ascending). -/
+def smallerMembers (r : ModelOrderRelations κ) (i : Nat) : Array Nat := rowMembers (r.smaller[i]?.getD #[])
 
 /-- Rust `record(bigger, smaller)` = Java `updateBiggerAndSmallerAssociations(bigger, smaller)`:
 snapshots `biggerThan(smaller)` and `smallerThan(bigger)` before the direct insertion, then
-propagates (also for inconsistent/cyclic observations, exactly as the set-based original). -/
-def record (r : ModelOrderRelations κ) (bigger smaller : Nat) : ModelOrderRelations κ := Id.run do
-  let ⟨indices, bs, ss⟩ := r
-  let below := bs[smaller]?.getD 0
-  let above := ss[bigger]?.getD 0
-  let mut bs := bs.modify bigger (· ||| bitSetBit smaller)
-  let mut ss := ss.modify smaller (· ||| bitSetBit bigger)
-  for verySmall in bitSetMembers below do
-    bs := bs.modify bigger (· ||| bitSetBit verySmall)
-    ss := ss.modify verySmall (fun w => (w ||| bitSetBit bigger) ||| above)
-  for veryBig in bitSetMembers above do
-    ss := ss.modify smaller (· ||| bitSetBit veryBig)
-    bs := bs.modify veryBig (fun w => (w ||| bitSetBit smaller) ||| below)
-  return ⟨indices, bs, ss⟩
+propagates (also for inconsistent/cyclic observations, exactly as the set-based original; the
+updates are unions of snapshots, so their order does not matter). -/
+def record (r : ModelOrderRelations κ) (bigger smaller : Nat) : ModelOrderRelations κ :=
+  match r with
+  | ⟨keys, indices, bs, ss⟩ =>
+    let below := bs[smaller]?.getD #[]
+    let above := ss[bigger]?.getD #[]
+    let bs := bs.modify bigger (rowSet · smaller)
+    let ss := ss.modify smaller (rowSet · bigger)
+    let (bs, ss) := rowFold (fun (bs, ss) verySmall =>
+        (bs.modify bigger (rowSet · verySmall), ss.modify verySmall fun w => rowOr (rowSet w bigger) above))
+      below (bs, ss)
+    let (bs, ss) := rowFold (fun (bs, ss) veryBig =>
+        (bs.modify veryBig (fun w => rowOr (rowSet w smaller) below), ss.modify smaller (rowSet · veryBig)))
+      above (bs, ss)
+    ⟨keys, indices, bs, ss⟩
 
 end ModelOrderRelations
 

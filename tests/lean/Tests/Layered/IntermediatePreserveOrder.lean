@@ -441,9 +441,8 @@ def RefRelations.update (r : RefRelations) (bigger smaller : Nat) : RefRelations
     bt := bt.modify veryBig fun x => (x.insert smaller).insertMany smallerSet
   return ⟨bt, st⟩
 
-/-- Whether the dense bit set `bits` (over dense indices, `keyOf` maps them back) equals `ref`. -/
-def bitsMatchSet (bits : Nat) (keyOf : Array Nat) (ref : Std.HashSet Nat) : Bool :=
-  let members := bitSetMembers bits
+/-- Whether the dense bit set `members` (over dense indices, `keyOf` maps them back) equals `ref`. -/
+def bitsMatchSet (members : Array Nat) (keyOf : Array Nat) (ref : Std.HashSet Nat) : Bool :=
   members.size == ref.size && members.all fun j =>
     match keyOf[j]? with
     | some k => ref.contains k
@@ -453,13 +452,16 @@ def bitsMatchSet (bits : Nat) (keyOf : Array Nat) (ref : Std.HashSet Nat) : Bool
 over `dense.indices`). -/
 def relationsMatch {κ : Type} [BEq κ] [Hashable κ] (dense : ModelOrderRelations κ) (keyNat : κ → Nat)
     (ref : RefRelations) : Bool := Id.run do
-  let mut keyOf : Array Nat := Array.replicate dense.indices.size 0
-  for (k, i) in dense.indices.toList do
-    keyOf := keyOf.set! i (keyNat k)
+  let keyOf : Array Nat := dense.keys.map keyNat
+  -- beyond `linearKeys` keys the hash map must agree with `keys`
+  if dense.keys.size > ModelOrderRelations.linearKeys then
+    if dense.indices.size != dense.keys.size then return false
+    for h : i in [0:dense.keys.size] do
+      if dense.indices.get? dense.keys[i] != some i then return false
   for i in [0:keyOf.size] do
     let k := keyOf[i]!
-    if !bitsMatchSet (dense.bigger[i]?.getD 0) keyOf (ref.biggerThan[k]?.getD {}) ||
-        !bitsMatchSet (dense.smaller[i]?.getD 0) keyOf (ref.smallerThan[k]?.getD {}) then
+    if !bitsMatchSet (dense.biggerMembers i) keyOf (ref.biggerThan[k]?.getD {}) ||
+        !bitsMatchSet (dense.smallerMembers i) keyOf (ref.smallerThan[k]?.getD {}) then
       return false
   return true
 
@@ -469,7 +471,9 @@ def lcgPair (state : UInt64) (len : Nat) : UInt64 × Nat × Nat :=
   (state, (state >>> 32).toNat % len, state.toNat % len)
 
 def relationTests : Suite := suite "layered.intermediate.preserveorder.relations" do
-  checkEq "bit set members across words" (bitSetMembers (bitSetBit 3 ||| bitSetBit 64 ||| bitSetBit 129)) #[3, 64, 129]
+  checkEq "bit set members across words" (rowMembers (rowSet (rowSet (rowSet #[] 129) 3) 64)) #[3, 64, 129]
+  checkEq "bit set row union" (rowMembers (rowOr (rowSet (rowSet #[] 31) 32) (rowSet (rowSet #[] 0) 95))) #[0, 31, 32, 95]
+  check "bit set row test" (rowTest (rowSet #[] 70) 70 && !rowTest (rowSet #[] 70) 69 && !rowTest #[] 0)
   -- dense_relations_match_original_sets_through_word_growth_and_cycles
   let mut dense : ModelOrderRelations LNodeId := {}
   let mut original : RefRelations := {}
