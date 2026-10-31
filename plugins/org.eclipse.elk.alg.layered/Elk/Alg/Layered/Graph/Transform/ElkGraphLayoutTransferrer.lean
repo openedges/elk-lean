@@ -172,8 +172,9 @@ private def applyContentAlignmentOffset (a : LGraphArena) (lgraph : LGraphId) (o
 coordinates of an edge must be relative to a different node than they are in the algorithm,
 this method returns the correct offset to translate from the algorithm's coordinate system to
 the necessary target coordinate system." Starting at the source node's graph, each level up adds
-`representingNode.position + parentGraph.offset + parentGraph.padding.(left, top)` until the
-edge's `COORDINATE_SYSTEM_ORIGIN` graph is reached (at most 512 levels; missing links stop). -/
+`representingNode.position`, `parentGraph.offset` and `parentGraph.padding.(left, top)` in Java's
+order until the edge's `COORDINATE_SYSTEM_ORIGIN` graph is reached (at most 512 levels; missing
+links stop). -/
 private def calculateHierarchicalOffset (a : LGraphArena) (ledge : LEdgeId) : KVector := Id.run do
   let ed := a.edge ledge
   let some targetGraph := ed.internal.coordinateSystemOrigin | return KVector.zero
@@ -188,8 +189,10 @@ private def calculateHierarchicalOffset (a : LGraphArena) (ledge : LEdgeId) : KV
     let parentPos := (a.node parentNode).position
     let some parentGraph := a.nodeGraph parentNode | break
     let pg := a.graph parentGraph
-    result := ⟨result.x + (parentPos.x + pg.offset.x + pg.padding.left),
-      result.y + (parentPos.y + pg.offset.y + pg.padding.top)⟩
+    -- Java `result.add(position).add(offset).add(padding.left, padding.top)`: left to right (the
+    -- grouped sum of elk-rs differs in the last bit, agent HMO)
+    result := ⟨result.x + parentPos.x + pg.offset.x + pg.padding.left,
+      result.y + parentPos.y + pg.offset.y + pg.padding.top⟩
     currentGraph := parentGraph
   return result
 

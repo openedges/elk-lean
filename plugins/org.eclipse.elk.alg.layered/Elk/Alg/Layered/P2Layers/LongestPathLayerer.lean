@@ -1,5 +1,6 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options.LayeredOptions
+import Std.Data.HashSet
 /-!
 # `org.eclipse.elk.alg.layered.p2layers.LongestPathLayerer` (elk-rs `longest_path_layerer.rs`)
 
@@ -70,12 +71,16 @@ def putNode (graph graphRef : LGraphId) (node : LNodeId) (height : Int) (heights
   return if index < heights.size then heights.set! index height else heights
 
 /-- `visit(node)`: the height of `node` (longest path to a sink), computing and placing all
-not yet visited nodes reachable from it. -/
+not yet visited nodes reachable from it. Reaching a node whose own `visit` is still running (a
+cycle the cycle breaker left, e.g. through a `noModelOrder` node of a model order cycle breaker)
+makes Java's recursion repeat itself until the stack overflows: `java.lang.StackOverflowError`
+(agent HMO; the explicit stack grew without bound before). -/
 def visit (graph graphRef : LGraphId) (start : LNodeId) (heights : Array Int) : LayeredM (Int × Array Int) := do
   let mut heights := heights
   if let some h ← knownHeight heights start then
     return (h, heights)
   let mut stack : Array Frame := #[{ node := start, next := ← nextNodes start }]
+  let mut onStack : Std.HashSet LNodeId := ({} : Std.HashSet LNodeId).insert start
   let mut result : Int := 1
   while !stack.isEmpty do
     let top := stack.back!
@@ -86,9 +91,12 @@ def visit (graph graphRef : LGraphId) (start : LNodeId) (heights : Array Int) : 
         stack := stack.set! (stack.size - 1)
           { top with idx := top.idx + 1, maxHeight := max top.maxHeight (otherHeight + 1) }
       | none =>
+        if onStack.contains other then throw (IO.userError "java.lang.StackOverflowError")
+        onStack := onStack.insert other
         stack := stack.push { node := other, next := ← nextNodes other }
     else
       stack := stack.pop
+      onStack := onStack.erase top.node
       heights ← putNode graph graphRef top.node top.maxHeight heights
       result := top.maxHeight
       if !stack.isEmpty then
