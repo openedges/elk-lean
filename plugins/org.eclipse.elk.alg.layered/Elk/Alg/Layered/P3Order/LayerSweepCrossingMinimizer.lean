@@ -19,9 +19,9 @@ and the `ONE_SIDED_GREEDY_SWITCH`/`TWO_SIDED_GREEDY_SWITCH` intermediate process
 One `process` call runs on a fresh `LayerSweepCrossingMinimizer` value (Rust creates a new minimiser
 per call) in `SweepM := StateRefT LayerSweepCrossingMinimizer LayeredM`. The holders are kept in an
 array indexed like Rust's `graph_index` (BFS order from the root, also stored in `LGraph.id`); the
-`BTreeSet<usize>`s are membership arrays iterated in ascending index order. The crossing count cache
-(`cached_crossings_by_graph`, `graphs_dirty_for_crossing_count`) is reproduced exactly, including when
-it is invalidated (`mark_graph_dirty_for_crossing_count` walks up the parent chain).
+`BTreeSet<usize>`s are membership arrays iterated in ascending index order. Crossings are counted
+again on every request like Java (elk-rs cached the count per graph until a sweep dirtied it; the
+counters' shared position array makes a recount observable, see `countCurrentNumberOfCrossings`).
 
 ## Random numbers
 elk-rs `Random` clones share their state (`Arc<Mutex<u64>>`). `initialize` takes the root graph's
@@ -39,8 +39,11 @@ else reads a `RANDOM` while the minimiser runs, so every shared state is written
 * `initialize`: BFS from the root over `GraphInfoHolder.childGraphs` (nodes in layer order); a graph
   with `dontSweepInto` is *prepended* to the sweep list, so the deepest/last such graph comes first
   and decides the minimising method.
-* `count_current_number_of_crossings`: a stack (`push_back`/`pop_back`) over the child graphs that are
-  swept into.
+* `countCurrentNumberOfCrossings`: the graph, then recursively the child graphs that are swept into,
+  in `childGraphs` order (Java). The model-order variant adds only the start graph's model order
+  changes; `countModelOrderNodeChanges`/`…PortChanges` follow Java: layer `0` is its own previous
+  layer, a fresh comparator per layer (per node for ports), every node's long edge targets are
+  preprocessed.
 * `sweep_reducing_crossings`: the first layer's ports are distributed, the hierarchical nodes of the
   first layer are swept into, then every further layer is minimised, its ports distributed and its
   hierarchical nodes swept into; `|=` always evaluates the right-hand side.
@@ -49,14 +52,6 @@ else reads a `RANDOM` while the minimiser runs, so every shared state is written
 ## Rust semantics kept where they differ from Java
 * The `FIRST_TRY_WITH_INITIAL_ORDER`/`SECOND_TRY_WITH_INITIAL_ORDER` flags are holder fields (Java:
   graph properties, which survive the call).
-* `count_model_order_node_changes`/`_port_changes`: the previous layer of layer `0` is empty (Java:
-  layer `0` itself); one comparator per count, reset per layer (and per node for ports); nodes with
-  fewer than two ports are skipped *before* `longEdgeTargetNodePreprocessing` (Java preprocesses every
-  node); the strategy and the port model order flag are the swept graph's (Java: each node's graph).
-  The comparators get the swept graph's own options (`ModelOrderGraphContext.ofGraph`, Java; elk-rs held
-  the processed graph locked and used the defaults there).
-* The model-order crossing count of nested graphs is the plain crossing count (only the start graph's
-  model order changes are added).
 * `compare_different_randomized_layouts` resets the heuristic's sweep iteration and increments it
   after every iteration (tracing only).
 * The greedy switch processors are not hierarchy aware (`LayerSweepAsProcessor` keeps the
@@ -224,12 +219,14 @@ held the processed graph locked, so its `try_lock` fell back to the defaults the
 def graphContext (g : LGraphId) : LayeredM ModelOrderGraphContext :=
   ModelOrderGraphContext.ofGraph g
 
-/-- The previous layer of `layerIndex` (`[]` for layer `0`). -/
+/-- The previous layer of `layerIndex`: Java's `previousLayer == -1 ? layers[0] : layers[previousLayer]`,
+so layer `0` is its own previous layer (elk-rs: empty). -/
 @[inline] def previousLayerOf (layers : Array (Array LNodeId)) (layerIndex : Nat) : Array LNodeId :=
-  if layerIndex == 0 then #[] else layers[layerIndex - 1]?.getD #[]
+  (if layerIndex == 0 then layers[0]? else layers[layerIndex - 1]?).getD #[]
 
-/-- `count_model_order_node_changes(graph, layers, strategy, group_strategy)`: pairs `i < j` of nodes
-with `MODEL_ORDER` of each layer that the node comparator orders the other way round. -/
+/-- `countModelOrderNodeChanges(graph, layers, strategy, cmGroupOrderStrategy)`: pairs `i < j` of
+nodes with `MODEL_ORDER` of each layer that the node comparator orders the other way round (a fresh
+comparator per layer, here: reset; `previousLayerOf`). -/
 def countModelOrderNodeChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
     (strategy : OrderingStrategy) (groupStrategy : GroupOrderStrategy) : LayeredM Int := do
   let mut wrongModelOrder : Int := 0
@@ -250,8 +247,11 @@ def countModelOrderNodeChanges (graph : ModelOrderGraphContext) (layers : Array 
         if value > 0 then wrongModelOrder := wrongModelOrder + 1
   return wrongModelOrder
 
-/-- `count_model_order_port_changes(graph, layers, strategy, port_model_order, _)`: pairs `i < j` of
-ports of every node with at least two ports that the port comparator orders the other way round. -/
+/-- `countModelOrderPortChanges(graph, layers, groupOrderStrategy)`: pairs `i < j` of ports of every
+node that the port comparator orders the other way round. Like Java a fresh comparator per node
+(here: reset), and `longEdgeTargetNodePreprocessing` for every node — it caches
+`TARGET_NODE_MODEL_ORDER` and sets `LONG_EDGE_TARGET_NODE` also on nodes with fewer than two ports
+(elk-rs skipped those first). -/
 def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
     (strategy : OrderingStrategy) (portModelOrder : Bool) : LayeredM Int := do
   let mut wrongModelOrder : Int := 0
@@ -259,9 +259,9 @@ def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array 
   for h : layerIndex in [0:layers.size] do
     comp := comp.resetForPreviousLayerSlice (previousLayerOf layers layerIndex)
     for node in layers[layerIndex] do
+      let longEdgeTargets ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
       let ports := (← getNode node).ports
       if ports.size < 2 then continue
-      let longEdgeTargets ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
       comp := comp.resetForNodeTargetModelOrder (some longEdgeTargets)
       for h2 : i in [0:ports.size] do
         for h3 : j in [i + 1:ports.size] do
