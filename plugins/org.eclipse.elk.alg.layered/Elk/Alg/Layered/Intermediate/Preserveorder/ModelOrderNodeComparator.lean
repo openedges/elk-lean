@@ -591,11 +591,12 @@ def beforePortsDecision (a : LGraphArena) (env : NodeCmpEnv) (rel : ModelOrderRe
 
 mutual
 
-/-- `compareM n1 n2` on the arena; `visiting` holds the pairs of the enclosing comparisons. -/
+/-- `compareM n1 n2` on the arena; `visiting` holds the pairs of the enclosing comparisons (a recursing
+comparison pushes its own pair at the call, so one that does not recurse allocates no stack). -/
 partial def cmp (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array (LNodeId × LNodeId))
     (rel : ModelOrderRelations LNodeId) (n1 n2 : LNodeId) : Int × ModelOrderRelations LNodeId :=
   if visiting.any (fun kv => kv.1.idx == n1.idx && kv.2.idx == n2.idx) then (0, rel)
-  else body a env (visiting.push (n1, n2)) rel n1 n2
+  else body a env visiting rel n1 n2
 
 /-- `compareBody` on the arena. -/
 partial def body (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array (LNodeId × LNodeId))
@@ -647,7 +648,7 @@ partial def helperDummies (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array
       let l := PortCmpEnv.layerIdIn a n1
       if PortCmpEnv.layerIdIn a src != l && PortCmpEnv.layerIdIn a tgt != l then (0, rel)
       else if src.idx == n2.idx || tgt.idx == n2.idx then (1, upd rel n1 n2)
-      else cmp a env visiting rel src n2
+      else cmp a env (visiting.push (n1, n2)) rel src n2
     | none => (0, rel)
   | .normal, .longEdge =>
     match dummyEndsIn a n2 with
@@ -656,7 +657,7 @@ partial def helperDummies (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array
       let l := PortCmpEnv.layerIdIn a n1
       if PortCmpEnv.layerIdIn a src != l && PortCmpEnv.layerIdIn a tgt != l then (0, rel)
       else if src.idx == n1.idx || tgt.idx == n1.idx then (-1, upd rel n2 n1)
-      else cmp a env visiting rel n1 src
+      else cmp a env (visiting.push (n1, n2)) rel n1 src
     | none => (0, rel)
   | .longEdge, .longEdge => longEdgePair a env visiting rel n1 n2
   | _, _ => (0, rel)
@@ -669,13 +670,13 @@ partial def longEdgePair (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array 
     if r1.idx == r2.idx then
       if env.beforePorts then
         let (v, rel) := beforePortsDecision a env rel n1 n2 sp1 sp2 sf1 tf1 sf2 tf2
-        if v != fallThrough then (v, rel) else cmp a env visiting rel r1 r2
+        if v != fallThrough then (v, rel) else cmp a env (visiting.push (n1, n2)) rel r1 r2
       else
         match firstOfTwo (a.node r1).ports sp1 sp2 0 with
         | 1 => (-1, upd rel n2 n1)
         | 2 => (1, upd rel n1 n2)
-        | _ => cmp a env visiting rel r1 r2
-    else cmp a env visiting rel r1 r2
+        | _ => cmp a env (visiting.push (n1, n2)) rel r1 r2
+    else cmp a env (visiting.push (n1, n2)) rel r1 r2
   | _, _ => (0, rel)
 
 end
