@@ -21,6 +21,9 @@ Strategies run on the `CompactorState` part of the compactor (see `ICompactionAl
 `reverse_constraints` hash map (keyed by node pointer, only used for lookups) is an array
 indexed by `CNodeId`.
 -/
+/-! Float literal as a global constant (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.Compaction.OneD
 
 open Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -36,9 +39,9 @@ structure OneDimensionalCompactor extends CompactorState where
 
 namespace CGraph
 
-/-- `calculateGroupOffsets` on the graph: the reference of each group becomes its left-most node
-(first one on ties) and every node stores its offset to the reference. -/
-def calculateGroupOffsets (g : CGraph) : CGraph := Id.run do
+/-- The original `calculateGroupOffsets` on the graph (reference of the fast path
+`calculateGroupOffsets`). -/
+def calculateGroupOffsetsReference (g : CGraph) : CGraph := Id.run do
   let mut g := g
   for gi in g.cGroupIds do
     let groupNodes := (g.cGroup gi).cNodes
@@ -59,6 +62,42 @@ def calculateGroupOffsets (g : CGraph) : CGraph := Id.run do
       g := g.modifyCNode n fun c =>
         { c with cGroupOffset := ⟨c.hitbox.x - refX, c.hitbox.y - refY⟩ }
   return g
+
+/-- `calculateGroupOffsets` on the graph: the reference of each group becomes its left-most node
+(first one on ties) and every node stores its offset to the reference.
+
+Fast path of `calculateGroupOffsetsReference` (differential test
+`alg.common.compaction.cgraphFast`): the reference updates and the zero offsets the original writes
+first are overwritten before anything reads them (a group without reference has no nodes), so
+only the final reference and offsets are written, on the unpacked arenas. -/
+def calculateGroupOffsets (g : CGraph) : CGraph :=
+  match g with
+  | ⟨nodes, groups, sd, ph, pv⟩ => Id.run do
+    let mut nodes := nodes
+    let mut groups := groups
+    for gi in [0:groups.size] do
+      let groupNodes := groups[gi]!.cNodes
+      let mut reference : Option CNodeId := none
+      let mut referenceX := fl0p0
+      for n in groupNodes do
+        let x := (nodes[n.idx]?.getD default).hitbox.x
+        match reference with
+        | some _ =>
+          if x < referenceX then
+            reference := some n
+            referenceX := x
+        | none =>
+          reference := some n
+          referenceX := x
+      groups := groups.modifyIn gi fun grp => { grp with reference := reference }
+      if let some r := reference then
+        let rh := (nodes[r.idx]?.getD default).hitbox
+        let refX := rh.x
+        let refY := rh.y
+        for n in groupNodes do
+          nodes := nodes.modifyIn n.idx fun c =>
+            { c with cGroupOffset := ⟨c.hitbox.x - refX, c.hitbox.y - refY⟩ }
+    return ⟨nodes, groups, sd, ph, pv⟩
 
 /-- `mirrorHitboxes`: `x := -x - width` for all nodes, then `calculateGroupOffsets`. -/
 def mirrorHitboxes (g : CGraph) : CGraph := Id.run do
@@ -107,7 +146,7 @@ def reverseConstraints (g : CGraph) : CGraph := Id.run do
   for n in nodes do
     g := g.modifyCNode n fun c => { c with startPos := Float.negInf }
     for inc in (g.cNode n).constraints do
-      incoming := incoming.modify inc.idx (·.push n)
+      incoming := incoming.modifyIn inc.idx (·.push n)
   for n in nodes do
     let cs := incoming[n.idx]?.getD #[]
     g := g.modifyCNode n fun c => { c with constraints := cs }

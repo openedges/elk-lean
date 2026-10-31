@@ -191,7 +191,7 @@ def sweep (filter : CNodeId → Bool) : CompactM Unit := do
       points := (points.push (2 * i + 1)).push (2 * i)
   if points.isEmpty then return
   let (ys, _) := ScanlineConstraintCalculator.eventKeys (← get).cGraph allNodes
-  let events := stableSortTR points (keyCmp ys)
+  let events := stableSort points (keyCmp ys)
   ScanlineConstraintCalculator.runKernel allNodes events false
 
 /-- Rust `alter_hitbox(node, spacing, fac)` (Java `alterHitbox`): segments are enlarged upwards

@@ -37,9 +37,13 @@ elements out of the master (`projectMove`: the master keeps `default` placeholde
 so the moved elements are unshared and their renumbering updates them in place) and `sync` moves
 them back (`writeBackMove`, which takes the projection out of the compactor). Every element read
 after a `sync` is the same as with the copying `project` / `writeBack`, which are kept as the
-reference (`pack … (moveMembers := false)`; differential test
-`layered.components.packMoveMembers`). A membership listing an element twice (never produced by
+reference (`pack … (fastPath := false)`; differential test
+`layered.components.packFastPath`). A membership listing an element twice (never produced by
 `pack`) falls back to copying.
+
+The vertical pass of `compactPass` repeats the constraint calculation right after
+`changeDirection(UP)`, which has just calculated them from `LEFT`; the calculation is idempotent,
+so the fast path skips the repetition (the reference keeps it).
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -249,9 +253,10 @@ structure Packer where
   /-- Rust `node_locks` (master-indexed). -/
   nodeLocks : Array (Array Bool)
   spacing : Float
-  /-- `rebuild` / `sync` move the members out of / back into the master (fast path) instead of
-  copying them (reference). -/
-  moveMembers : Bool := true
+  /-- Fast path: `rebuild` / `sync` move the members out of / back into the master instead of
+  copying them, and `compactPass` skips the repeated constraint calculation (see the module doc);
+  `false` is the reference. -/
+  fastPath : Bool := true
 
 namespace Packer
 
@@ -260,27 +265,27 @@ def sync (p : Packer) : IO Packer := do
   if p.compactor.cGraph.cNodes.size != p.members.nodes.size ||
       p.compactor.cGraph.cGroups.size != p.members.groups.size then
     throw (IO.userError "java.lang.IllegalStateException: compaction graph membership changed unexpectedly")
-  if p.moveMembers && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
+  if p.fastPath && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
       !hasDuplicates (p.members.groups.map (·.idx)) p.master.cGroups.size then
     match p with
-    | ⟨master, members, compactor, isPlaceholder, nodeLocks, spacing, moveMembers⟩ =>
+    | ⟨master, members, compactor, isPlaceholder, nodeLocks, spacing, fastPath⟩ =>
       let phase := compactor.cGraph
       let compactor := { compactor with cGraph := {} }
       return ⟨writeBackMove master members phase, members, compactor, isPlaceholder, nodeLocks, spacing,
-        moveMembers⟩
+        fastPath⟩
   else
     return { p with master := writeBack p.master p.members p.compactor.cGraph }
 
 /-- Hands the compactor the projection of the current membership. -/
 def rebuild (p : Packer) : Packer :=
   let handler := spacingsFor p.isPlaceholder p.members p.spacing
-  if p.moveMembers && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
+  if p.fastPath && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
       !hasDuplicates (p.members.groups.map (·.idx)) p.master.cGroups.size then
     match p with
-    | ⟨master, members, compactor, isPlaceholder, nodeLocks, spacing, moveMembers⟩ =>
+    | ⟨master, members, compactor, isPlaceholder, nodeLocks, spacing, fastPath⟩ =>
       let (master, g) := projectMove master members
       ⟨master, members, { compactor with cGraph := g, spacingsHandler := handler }, isPlaceholder,
-        nodeLocks, spacing, moveMembers⟩
+        nodeLocks, spacing, fastPath⟩
   else
     let g := project p.master p.members
     { p with compactor := { p.compactor with cGraph := g, spacingsHandler := handler } }
@@ -332,8 +337,16 @@ def compactPass (p : Packer) (extensions : Array PackExtension) (topLeft : KVect
     c := { c with cGraph := resetDeltas c.cGraph }
   let forward : Direction := if isHorizontal then .left else .up
   let backward : Direction := if isHorizontal then .right else .down
+  let before := c.direction
   c ← c.changeDirection forward
-  if !isHorizontal then
+  -- Rust recalculates the constraints right after `change_direction(UP)`. Coming from `LEFT`,
+  -- `RIGHT` or `UNDEFINED`, `changeDirection` has just calculated them on the same state, and the
+  -- calculation is idempotent (it clears and rebuilds the constraints, ids and group degrees from
+  -- hitboxes and groups it does not change), so the repetition is skipped.
+  let recalculated := match before with
+    | .left | .right | .undefined => true
+    | .up | .down => false
+  if !isHorizontal && !(p.fastPath && recalculated) then
     c ← c.forceConstraintsRecalculation
   c ← (c.setLockFunction none).compact
   for direction in #[backward, forward] do
@@ -396,9 +409,9 @@ def compactRound (p : Packer) (extensions : Array PackExtension) (topLeft : KVec
   return (p, delta)
 
 /-- Rust `pack(components, spacing)`: compacts the components and returns the offset of every
-component (input order) and the size of the compacted drawing. `moveMembers := false` selects the
-copying projection (reference of the fast path, see the module doc). -/
-def pack (components : Array Component) (spacing : Float) (moveMembers : Bool := true) :
+component (input order) and the size of the compacted drawing. `fastPath := false` selects the
+reference behaviour (copying projection, repeated constraint calculation; see the module doc). -/
+def pack (components : Array Component) (spacing : Float) (fastPath : Bool := true) :
     IO (Array KVector × KVector) := do
   let mut graph := CGraph.allDirections
   let mut references : Array (CNodeId × ElkRectangle) := #[]
@@ -444,7 +457,7 @@ def pack (components : Array Component) (spacing : Float) (moveMembers : Bool :=
   let compactor := (OneDimensionalCompactor.new (project graph members)).setSpacingsHandler
     (spacingsFor isPlaceholder members spacing)
   let mut p : Packer :=
-    { master := graph, members, compactor, isPlaceholder, nodeLocks, spacing, moveMembers }
+    { master := graph, members, compactor, isPlaceholder, nodeLocks, spacing, fastPath }
   p ← p.sync
   for extension in extensions do
     p := p.removeMember extension.node

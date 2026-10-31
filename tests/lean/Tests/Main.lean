@@ -19,6 +19,7 @@ import Tests.Json.Zmij
 import Tests.Text.All
 import Tests.AlgCommon.NetworkSimplex
 import Tests.AlgCommon.Compaction
+import Tests.AlgCommon.CompactionFast
 import Tests.AlgCommon.Polyomino
 import Tests.AlgCommon.Spore
 import Tests.AlgCommon.Geometry
@@ -56,7 +57,7 @@ def main (args : List String) : IO UInt32 := do
     Tests.Core.RustSort.suites ++ Tests.Core.JavaSort.suites ++ Tests.Core.FastFloat.suites ++ Tests.Core.Meta.suites ++ Tests.Core.Validation.suites ++
     Tests.Graph.suites ++ Tests.Json.suites ++ Tests.Json.Importer.suites ++ Tests.Json.ParserFuzz.suites ++ Tests.Json.Overlay.suites ++
     Tests.Json.Zmij.suites ++ Tests.Text.suites ++
-    Tests.AlgCommon.NetworkSimplex.suites ++ Tests.AlgCommon.Compaction.suites ++ Tests.AlgCommon.Polyomino.suites ++
+    Tests.AlgCommon.NetworkSimplex.suites ++ Tests.AlgCommon.Compaction.suites ++ Tests.AlgCommon.CompactionFast.suites ++ Tests.AlgCommon.Polyomino.suites ++
     Tests.AlgCommon.Spore.suites ++ Tests.AlgCommon.Geometry.suites ++ Tests.AlgCommon.NodeSpacing.suites ++
     Tests.Layered.suites ++
     Tests.TopdownPacking.suites ++

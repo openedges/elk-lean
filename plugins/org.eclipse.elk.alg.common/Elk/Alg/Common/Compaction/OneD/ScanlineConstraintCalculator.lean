@@ -19,8 +19,7 @@ Kept elk-rs specifics:
 ## Fast path (`sweep`)
 The handler only adds constraints; the hitboxes and groups it reads do not change during a sweep.
 `sweep` therefore precomputes the sort keys (y of every event, its zero-height/low/high rank) and
-the x centres and groups of the nodes once, sorts the event codes with `stableSortTR` (the
-`stableSort` algorithm with tail-recursive loops: same comparison sequence) and a
+the x centres and groups of the nodes once, sorts the event codes with the same `stableSort` and a
 comparator that yields the same result for every pair as `timestampCmp` (hence the same
 permutation), runs the handler as the pure kernel `Kernel.run` on position-indexed arrays and then
 appends the recorded constraints to the nodes in the order the handler adds them. The original
@@ -285,7 +284,7 @@ def sweep (nodes : Array CNodeId) : CompactM Unit := do
   for i in [0:nodes.size] do
     modifyCNode nodes[i]! fun c => { c with id := i }
   let (ys, ranks) := eventKeys (← get).cGraph nodes
-  let events := stableSortTR (eventCodes nodes.size) (keyCmp ys ranks)
+  let events := stableSort (eventCodes nodes.size) (keyCmp ys ranks)
   runKernel nodes events true
 
 /-- `ScanlineConstraintCalculator.calculateConstraints(compactor)`: sweeps over all nodes. -/

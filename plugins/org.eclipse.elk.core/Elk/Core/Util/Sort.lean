@@ -8,9 +8,9 @@ Java-style comparator returning `Ordering`.
 -/
 namespace Elk.Core.Util
 
-/-- Stable merge sort (insertion sort on runs of 16, then bottom-up merges).
-Elements comparing equal keep their input order. -/
-@[specialize] def stableSort {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α := Id.run do
+/-- The original `while`-loop formulation of `stableSort` (reference of the tail-recursive
+`stableSort`; differential test `core.util.sort.stableSortTR`). -/
+def stableSortReference {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α := Id.run do
   let n := as.size
   if n < 2 then return as
   let run := 16
@@ -126,11 +126,14 @@ left one compares `.gt` to it). -/
 
 end StableSortTR
 
-/-- `stableSort` written with tail-recursive loops (no loop state tuples): the same algorithm
-(insertion sort on runs of 16, then bottom-up merges), so the comparator is called on the same
-pairs in the same order and the result is the same as `stableSort` for every comparator,
+/-- Stable merge sort (insertion sort on runs of 16, then bottom-up merges).
+Elements comparing equal keep their input order.
+
+The loops are tail-recursive functions (`StableSortTR`): no loop state tuples per iteration.
+The algorithm is that of `stableSortReference` (the former `while` formulation), so the comparator
+is called on the same pairs in the same order and the result is the same for every comparator,
 including inconsistent ones (differential test `core.util.sort.stableSortTR`). -/
-@[specialize] def stableSortTR {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α :=
+@[specialize] def stableSort {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α :=
   let n := as.size
   if n < 2 then as
   else
