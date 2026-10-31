@@ -92,7 +92,13 @@ def rowMembers (row : Array Nat) : Array Nat := rowFold (fun out j => out.push j
 
 /-- Rust `ModelOrderRelations<Key>`: Java's `biggerThan`/`smallerThan` maps (`HashMap<K, HashSet<K>>`)
 stored as dense bit set rows over key indices (see "Bit set rows"). Keys get indices in order of
-first use; only set membership is observable. -/
+first use; only set membership is observable.
+
+Layout (Lean only): all rows of a relation are one flat word array, row `i` is
+`words[i * stride : (i + 1) * stride]` (`stride` words of 32 bits, so `32 * stride` keys fit; it
+doubles when a key does not fit, which re-lays out the rows). With at most 32 keys (the usual case:
+the comparators are reset per node or layer) a row is one word and `record` works on scalars; an
+earlier version kept one `Array Nat` per row, which allocated, grew and freed a row array per key. -/
 structure ModelOrderRelations (κ : Type) [BEq κ] [Hashable κ] where
   /-- The keys by dense index (Rust `indices`, inverted). -/
   keys : Array κ := #[]
@@ -101,10 +107,12 @@ structure ModelOrderRelations (κ : Type) [BEq κ] [Hashable κ] where
   reset per node or layer and usually see a handful of keys, for which a fresh hash map costs more
   than the scan). -/
   indices : Std.HashMap κ Nat := {}
-  /-- `bigger[i]`: the keys key `i` is bigger than (Java `biggerThan.get(k)`). -/
-  bigger : Array (Array Nat) := #[]
-  /-- `smaller[i]`: the keys key `i` is smaller than (Java `smallerThan.get(k)`). -/
-  smaller : Array (Array Nat) := #[]
+  /-- Words per row (`32 * stride` keys fit). -/
+  stride : Nat := 1
+  /-- The rows `bigger[i]` (the keys key `i` is bigger than, Java `biggerThan.get(k)`), flat. -/
+  bigger : Array Nat := #[]
+  /-- The rows `smaller[i]` (the keys key `i` is smaller than, Java `smallerThan.get(k)`), flat. -/
+  smaller : Array Nat := #[]
 
 namespace ModelOrderRelations
 
@@ -115,6 +123,10 @@ instance : Inhabited (ModelOrderRelations κ) := ⟨{}⟩
 /-- Up to this many keys `index` searches `keys` linearly (no `indices` map). -/
 def linearKeys : Nat := 32
 
+/-- Empty relations with room for `n` keys of one word rows (Lean only; the same as `{}`). -/
+def emptyWithCapacity (n : Nat) : ModelOrderRelations κ :=
+  { keys := Array.emptyWithCapacity n, bigger := Array.emptyWithCapacity n, smaller := Array.emptyWithCapacity n }
+
 /-- The dense index of `key` in `keys[i:]` (`keys.size` when absent). -/
 @[specialize] partial def findKey (keys : Array κ) (key : κ) (i : Nat) : Nat :=
   if h : i < keys.size then (if keys[i] == key then i else findKey keys key (i + 1)) else keys.size
@@ -123,38 +135,129 @@ def linearKeys : Nat := 32
 @[specialize] partial def indexKeys (keys : Array κ) (i : Nat) (m : Std.HashMap κ Nat) : Std.HashMap κ Nat :=
   if h : i < keys.size then indexKeys keys (i + 1) (m.insert keys[i] i) else m
 
+/-- `k` zero words pushed onto `words`. -/
+partial def pushZeros (words : Array Nat) (k : Nat) : Array Nat :=
+  match k with
+  | 0 => words
+  | k + 1 => pushZeros (words.push 0) k
+
+/-- The rows of `src` (`rows` rows of `oldStride` words) with `newStride ≥ oldStride` words each,
+pushed onto `dst` from row `i` on. -/
+partial def restrideFrom (src : Array Nat) (rows oldStride newStride i : Nat) (dst : Array Nat) : Array Nat :=
+  if i < rows then
+    let dst := (src.extract (i * oldStride) ((i + 1) * oldStride)).foldl (·.push ·) dst
+    restrideFrom src rows oldStride newStride (i + 1) (pushZeros dst (newStride - oldStride))
+  else dst
+
+/-- The flat rows for a new key: the stride doubled while `n` keys do not fit, plus one zero row. -/
+@[inline] def growRows (words : Array Nat) (rows stride newStride : Nat) : Array Nat :=
+  let words := if newStride == stride then words
+    else restrideFrom words rows stride newStride 0 (Array.emptyWithCapacity ((rows + 1) * newStride))
+  pushZeros words newStride
+
+/-- The smallest stride `≥ stride` (doubling) with `32 * stride ≥ n`. -/
+partial def strideFor (stride n : Nat) : Nat :=
+  if 32 * stride >= n then stride else strideFor (2 * stride) n
+
 /-- Rust `index(key)`: the dense index of `key`, allocating empty sets for a new key (indices in order
 of first use, as before; a linear search while there are at most `linearKeys` keys). -/
 def index (r : ModelOrderRelations κ) (key : κ) : Nat × ModelOrderRelations κ :=
   match r with
-  | ⟨keys, indices, bigger, smaller⟩ =>
+  | ⟨keys, indices, stride, bigger, smaller⟩ =>
     if keys.size ≤ linearKeys then
       let i := findKey keys key 0
-      if i < keys.size then (i, ⟨keys, indices, bigger, smaller⟩)
+      if i < keys.size then (i, ⟨keys, indices, stride, bigger, smaller⟩)
       else
+        let rows := keys.size
         let keys := keys.push key
         let indices := if keys.size > linearKeys then indexKeys keys 0 indices else indices
-        (i, ⟨keys, indices, bigger.push #[], smaller.push #[]⟩)
+        let newStride := strideFor stride keys.size
+        (i, ⟨keys, indices, newStride, growRows bigger rows stride newStride, growRows smaller rows stride newStride⟩)
     else
       match indices.get? key with
-      | some i => (i, ⟨keys, indices, bigger, smaller⟩)
+      | some i => (i, ⟨keys, indices, stride, bigger, smaller⟩)
       | none =>
         let i := keys.size
-        (i, ⟨keys.push key, indices.insert key i, bigger.push #[], smaller.push #[]⟩)
+        let newStride := strideFor stride (i + 1)
+        (i, ⟨keys.push key, indices.insert key i, newStride, growRows bigger i stride newStride,
+          growRows smaller i stride newStride⟩)
+
+/-- Bit `j` of row `i` of flat rows of `stride` words. -/
+@[inline] def testAt (words : Array Nat) (stride i j : Nat) : Bool :=
+  let w := j >>> 5
+  if w < stride then
+    let k := i * stride + w
+    if h : k < words.size then (words[k].toUInt64 >>> (j &&& 31).toUInt64) &&& 1 != 0 else false
+  else false
 
 /-- Rust `bigger(left, right)`: `right ∈ biggerThan(left)`. -/
-@[inline] def isBigger (r : ModelOrderRelations κ) (left right : Nat) : Bool :=
-  rowTest (r.bigger[left]?.getD #[]) right
+@[inline] def isBigger (r : ModelOrderRelations κ) (left right : Nat) : Bool := testAt r.bigger r.stride left right
 
 /-- Rust `smaller(left, right)`: `right ∈ smallerThan(left)`. -/
-@[inline] def isSmaller (r : ModelOrderRelations κ) (left right : Nat) : Bool :=
-  rowTest (r.smaller[left]?.getD #[]) right
+@[inline] def isSmaller (r : ModelOrderRelations κ) (left right : Nat) : Bool := testAt r.smaller r.stride left right
+
+/-- Row `i` of flat rows of `stride` words (zeros out of range). -/
+def rowOf (words : Array Nat) (stride i : Nat) : Array Nat :=
+  if (i + 1) * stride <= words.size then words.extract (i * stride) ((i + 1) * stride) else #[]
 
 /-- The members of `biggerThan(i)` (dense indices, ascending). -/
-def biggerMembers (r : ModelOrderRelations κ) (i : Nat) : Array Nat := rowMembers (r.bigger[i]?.getD #[])
+def biggerMembers (r : ModelOrderRelations κ) (i : Nat) : Array Nat := rowMembers (rowOf r.bigger r.stride i)
 
 /-- The members of `smallerThan(i)` (dense indices, ascending). -/
-def smallerMembers (r : ModelOrderRelations κ) (i : Nat) : Array Nat := rowMembers (r.smaller[i]?.getD #[])
+def smallerMembers (r : ModelOrderRelations κ) (i : Nat) : Array Nat := rowMembers (rowOf r.smaller r.stride i)
+
+/-- `words[k] |= x` (unchanged out of range). -/
+@[inline] def orAt (words : Array Nat) (k : Nat) (x : UInt64) : Array Nat :=
+  if h : k < words.size then words.set k (words[k].toUInt64 ||| x).toNat else words
+
+/-- `words[k]` as `UInt64` (`0` out of range). -/
+@[inline] def wordAt (words : Array Nat) (k : Nat) : UInt64 :=
+  if h : k < words.size then words[k].toUInt64 else 0
+
+/-- `record` with one word rows: the `verySmall` loop over the bits `w` of the `below` snapshot. -/
+partial def recordBelow1 (bs ss : Array Nat) (bigger : Nat) (biggerBit above w : UInt64) : Array Nat × Array Nat :=
+  if w == 0 then (bs, ss)
+  else
+    let lowest := w &&& (0 - w)
+    recordBelow1 (orAt bs bigger lowest) (orAt ss lowest.log2.toNat (biggerBit ||| above)) bigger biggerBit above
+      (w ^^^ lowest)
+
+/-- `record` with one word rows: the `veryBig` loop over the bits `w` of the `above` snapshot. -/
+partial def recordAbove1 (bs ss : Array Nat) (smaller : Nat) (smallerBit below w : UInt64) : Array Nat × Array Nat :=
+  if w == 0 then (bs, ss)
+  else
+    let lowest := w &&& (0 - w)
+    recordAbove1 (orAt bs lowest.log2.toNat (smallerBit ||| below)) (orAt ss smaller lowest) smaller smallerBit below
+      (w ^^^ lowest)
+
+/-- `words[start + k] |= row[k]` for every word `k ≥ i` of `row`. -/
+partial def orRowFrom (words : Array Nat) (start : Nat) (row : Array Nat) (i : Nat) : Array Nat :=
+  if h : i < row.size then
+    let x := row[i]
+    orRowFrom (if x == 0 then words else orAt words (start + i) x.toUInt64) start row (i + 1)
+  else words
+
+/-- Sets bit `j` of row `i` (flat rows of `stride` words). -/
+@[inline] def setAt (words : Array Nat) (stride i j : Nat) : Array Nat :=
+  orAt words (i * stride + (j >>> 5)) ((1 : UInt64) <<< (j &&& 31).toUInt64)
+
+/-- `record` with wide rows: the `verySmall` loop over the members `ms[k:]` of the `below` snapshot. -/
+partial def recordBelowWide (bs ss : Array Nat) (stride bigger : Nat) (above : Array Nat) (ms : Array Nat) (k : Nat) :
+    Array Nat × Array Nat :=
+  if h : k < ms.size then
+    let verySmall := ms[k]
+    recordBelowWide (setAt bs stride bigger verySmall)
+      (orRowFrom (setAt ss stride verySmall bigger) (verySmall * stride) above 0) stride bigger above ms (k + 1)
+  else (bs, ss)
+
+/-- `record` with wide rows: the `veryBig` loop over the members `ms[k:]` of the `above` snapshot. -/
+partial def recordAboveWide (bs ss : Array Nat) (stride smaller : Nat) (below : Array Nat) (ms : Array Nat) (k : Nat) :
+    Array Nat × Array Nat :=
+  if h : k < ms.size then
+    let veryBig := ms[k]
+    recordAboveWide (orRowFrom (setAt bs stride veryBig smaller) (veryBig * stride) below 0)
+      (setAt ss stride smaller veryBig) stride smaller below ms (k + 1)
+  else (bs, ss)
 
 /-- Rust `record(bigger, smaller)` = Java `updateBiggerAndSmallerAssociations(bigger, smaller)`:
 snapshots `biggerThan(smaller)` and `smallerThan(bigger)` before the direct insertion, then
@@ -162,18 +265,25 @@ propagates (also for inconsistent/cyclic observations, exactly as the set-based 
 updates are unions of snapshots, so their order does not matter). -/
 def record (r : ModelOrderRelations κ) (bigger smaller : Nat) : ModelOrderRelations κ :=
   match r with
-  | ⟨keys, indices, bs, ss⟩ =>
-    let below := bs[smaller]?.getD #[]
-    let above := ss[bigger]?.getD #[]
-    let bs := bs.modify bigger (rowSet · smaller)
-    let ss := ss.modify smaller (rowSet · bigger)
-    let (bs, ss) := rowFold (fun (bs, ss) verySmall =>
-        (bs.modify bigger (rowSet · verySmall), ss.modify verySmall fun w => rowOr (rowSet w bigger) above))
-      below (bs, ss)
-    let (bs, ss) := rowFold (fun (bs, ss) veryBig =>
-        (bs.modify veryBig (fun w => rowOr (rowSet w smaller) below), ss.modify smaller (rowSet · veryBig)))
-      above (bs, ss)
-    ⟨keys, indices, bs, ss⟩
+  | ⟨keys, indices, stride, bs, ss⟩ =>
+    if stride == 1 then
+      let below := wordAt bs smaller
+      let above := wordAt ss bigger
+      let biggerBit : UInt64 := (1 : UInt64) <<< bigger.toUInt64
+      let smallerBit : UInt64 := (1 : UInt64) <<< smaller.toUInt64
+      let bs := orAt bs bigger smallerBit
+      let ss := orAt ss smaller biggerBit
+      let (bs, ss) := recordBelow1 bs ss bigger biggerBit above below
+      let (bs, ss) := recordAbove1 bs ss smaller smallerBit below above
+      ⟨keys, indices, stride, bs, ss⟩
+    else
+      let below := rowOf bs stride smaller
+      let above := rowOf ss stride bigger
+      let bs := setAt bs stride bigger smaller
+      let ss := setAt ss stride smaller bigger
+      let (bs, ss) := recordBelowWide bs ss stride bigger above (rowMembers below) 0
+      let (bs, ss) := recordAboveWide bs ss stride smaller below (rowMembers above) 0
+      ⟨keys, indices, stride, bs, ss⟩
 
 end ModelOrderRelations
 
@@ -492,5 +602,307 @@ def compare (c : ModelOrderPortComparator) (p1 p2 : LPortId) : LayeredM (Int × 
   (compareM p1 p2).run c
 
 end ModelOrderPortComparator
+
+/-! ## Pure comparison on the arena (Lean only)
+
+`ModelOrderPortComparator.compareM` threads the comparator through `StateT` over `LayeredM`: every
+read of a port, edge or node and every relation update is a monadic step (a closure call and a
+result tuple). The comparator never writes the arena, so `PortCmpEnv.compare` does the same
+comparison as a pure function of the arena. The read-only fields (`PortCmpEnv`) and the relations are
+separate arguments; the decision after the transitivity checks is computed without touching the
+relations (`PortCmpEnv.decide`, a small code) and then recorded once. The relations see the same
+`index` calls (`p1`, then `p2`; the `index` calls of `updateBiggerAndSmaller` find both keys) and the
+same `record`, so results, relations and exceptions equal those of `compareM` (kept as the reference;
+differential test `layered.intermediate.preserveorder.pureComparators`). `resetForNodeTargetModelOrder`
+keeps the target node pairs and builds the hash map only for more than `ModelOrderRelations.linearKeys`
+pairs; a lookup takes the last pair with the key, like the map `toTargetNodePositionMap` builds. -/
+
+/-- The read-only part of a `ModelOrderPortComparator` (for `PortCmpEnv.compare`). -/
+structure PortCmpEnv where
+  /-- `graph`. -/
+  graph : ModelOrderGraphContext := {}
+  /-- `previous_layer`. -/
+  previousLayer : Array LNodeId := #[]
+  /-- `strategy == PREFER_NODES`. -/
+  preferNodes : Bool := false
+  /-- `port_model_order`. -/
+  portModelOrder : Bool := false
+  /-- `target_node_model_order` as pairs (`none` = Java `null`). -/
+  targets : Option (Array (LNodeId × Int)) := none
+  /-- `targets` as a map (a later pair wins), only built for more than `linearKeys` pairs. -/
+  targetMap : Std.HashMap LNodeId Int := {}
+  deriving Inhabited
+
+namespace PortCmpEnv
+
+/-- The map of more than `linearKeys` target pairs (`toTargetNodePositionMap`), else empty. -/
+def targetMapOf (targetNodeModelOrder : Option (Array (LNodeId × Int))) : Std.HashMap LNodeId Int :=
+  match targetNodeModelOrder with
+  | some pairs =>
+    if pairs.size > ModelOrderRelations.linearKeys then pairs.foldl (fun acc (k, v) => acc.insert k v) {} else {}
+  | none => {}
+
+/-- `new ModelOrderPortComparator(graph, previousLayer, strategy, targetNodeModelOrder, portModelOrder)`
+without the relations. -/
+def new (graph : ModelOrderGraphContext) (previousLayer : Array LNodeId) (strategy : OrderingStrategy)
+    (targetNodeModelOrder : Option (Array (LNodeId × Int))) (portModelOrder : Bool) : PortCmpEnv :=
+  { graph, previousLayer, preferNodes := strategy == .preferNodes, portModelOrder,
+    targets := targetNodeModelOrder, targetMap := targetMapOf targetNodeModelOrder }
+
+/-- `resetForPreviousLayer(previousLayer)` (the caller resets the relations). -/
+def resetForPreviousLayer (env : PortCmpEnv) (previousLayer : Array LNodeId) : PortCmpEnv :=
+  { env with previousLayer, targets := none, targetMap := {} }
+
+/-- `resetForNodeTargetModelOrder(targetNodeModelOrder)` (the caller resets the relations). -/
+def resetForNodeTargetModelOrder (env : PortCmpEnv) (targetNodeModelOrder : Option (Array (LNodeId × Int))) :
+    PortCmpEnv :=
+  { env with targets := targetNodeModelOrder, targetMap := targetMapOf targetNodeModelOrder }
+
+/-- The value of the last pair of `pairs[:i]` with key `t`, else `dflt`. -/
+partial def lastPairValue (pairs : Array (LNodeId × Int)) (t : LNodeId) (i : Nat) (dflt : Int) : Int :=
+  match i with
+  | 0 => dflt
+  | j + 1 =>
+    if h : j < pairs.size then
+      let kv := pairs[j]
+      if kv.1.idx == t.idx then kv.2 else lastPairValue pairs t j dflt
+    else dflt
+
+/-- `targetNodeModelOrder.get(t)` when the map contains `t`, else `dflt` (`pairs` = `targets`). -/
+@[inline] def targetOrderOr (env : PortCmpEnv) (pairs : Array (LNodeId × Int)) (t : LNodeId) (dflt : Int) : Int :=
+  if pairs.size > ModelOrderRelations.linearKeys then (env.targetMap.get? t).getD dflt
+  else lastPairValue pairs t pairs.size dflt
+
+/-- `PortSide` ordinal (`ElkEnum.ordinal`: UNDEFINED, NORTH, EAST, SOUTH, WEST). -/
+@[inline] def sideCode : PortSide → UInt8
+  | .undefined => 0
+  | .north => 1
+  | .east => 2
+  | .south => 3
+  | .west => 4
+
+/-- `layerIdOf` on the arena. -/
+@[inline] def layerIdIn (a : LGraphArena) (n : LNodeId) : Nat :=
+  match (a.node n).layer with
+  | some l => i32AsUsize (a.layer l).id
+  | none => 0
+
+/-- A decision of `decide`: bit `0` the update order (`1`: `update(p1, p2, r)`, `0`: `update(p2, p1, r)`),
+bit `1` `reverseOrder < 0`, bits `2..3` the result (`0`: `-1`, `1`: `0`, `2`: `1`). -/
+@[inline] def code (first rev : Bool) (result : UInt8) : UInt8 :=
+  (if first then (1 : UInt8) else 0) ||| (if rev then (2 : UInt8) else 0) ||| (result <<< 2)
+
+/-- No decision (fall through). -/
+@[inline] def noDecision : UInt8 := 254
+
+/-- `MAX_MODEL_ORDER_NODES` is `null` where Java unboxes it (`maxModelOrderNodesNullError`). -/
+@[inline] def nullOffset : UInt8 := 255
+
+/-- `recordDecision(p1, p2, p1Bigger, reverseOrder)`: `update(p1, p2, r)` and `r`, or `update(p2, p1, r)`
+and `-r` (`r = -1` iff `rev`). -/
+@[inline] def decision (p1Bigger rev : Bool) : UInt8 :=
+  code p1Bigger rev (if p1Bigger != rev then 2 else 0)
+
+/-- `portModelOrderValue` on the arena. -/
+def portModelOrderIn (a : LGraphArena) (port other : LPortId) (graph : ModelOrderGraphContext) (offset : Int) : Int :=
+  let pt := a.port port
+  match pt.internal.modelOrder with
+  | none => -1
+  | some order =>
+    if graph.enforceGroupModelOrder then
+      let groupId := pt.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
+      let otherGroupId := (a.port other).props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
+      if graph.enforcedGroupOrders.contains groupId && graph.enforcedGroupOrders.contains otherGroupId then
+        Int.wrap32 (offset * groupId + order)
+      else order
+    else order
+
+/-- `edgeModelOrderValue` on the arena. -/
+def edgeModelOrderIn (a : LGraphArena) (edge other : LEdgeId) (graph : ModelOrderGraphContext) (offset : Int) : Int :=
+  let ed := a.edge edge
+  match ed.internal.modelOrder with
+  | none => 0
+  | some order =>
+    if graph.enforceGroupModelOrder then
+      let groupId := ed.props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
+      let otherGroupId := (a.edge other).props.getD LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID 0
+      if graph.enforcedGroupOrders.contains groupId && graph.enforcedGroupOrders.contains otherGroupId then
+        Int.wrap32 (offset * groupId + order)
+      else order
+    else order
+
+/-- `nodePortCount` on the arena. -/
+@[inline] def nodePortCountIn (a : LGraphArena) (n : Option LNodeId) : Int :=
+  match n with
+  | some n => ((a.node n).ports.size : Int)
+  | none => 0
+
+/-- `checkPortModelOrder(p1, p2, has1, has2)` on the arena. -/
+def checkPortModelOrderIn (a : LGraphArena) (env : PortCmpEnv) (p1 p2 : LPortId) (has1 has2 : Bool) : Int :=
+  if has1 && has2 then
+    let numberOfPorts := nodePortCountIn a (a.port p1).owner
+    cmpInt (portModelOrderIn a p1 p2 env.graph numberOfPorts) (portModelOrderIn a p2 p1 env.graph numberOfPorts)
+  else 0
+
+/-- `checkReferenceLayer(layer, p1Node, p2Node)` from `layer[i]` on. -/
+partial def referenceIn (layer : Array LNodeId) (p1Node p2Node : LNodeId) (i : Nat) : Int :=
+  if h : i < layer.size then
+    let n := layer[i]
+    if n.idx == p1Node.idx then -1 else if n.idx == p2Node.idx then 1 else referenceIn layer p1Node p2Node (i + 1)
+  else 0
+
+/-- The first of two source ports among `ports[i:]` (the same-node case of `compareIncoming`):
+`decision false rev` for `s1`, `decision true rev` for `s2`, `noDecision` if neither occurs. -/
+partial def sourcePortOrder (ports : Array LPortId) (s1 s2 : LPortId) (rev : Bool) (i : Nat) : UInt8 :=
+  if h : i < ports.size then
+    let p := ports[i]
+    if p.idx == s1.idx then decision false rev
+    else if p.idx == s2.idx then decision true rev
+    else sourcePortOrder ports s1 s2 rev (i + 1)
+  else noDecision
+
+/-- `compareIncoming` (both ports have incoming edges; `rev` already negated for `WEST`/`NORTH`/`SOUTH`). -/
+def decideIncoming (a : LGraphArena) (env : PortCmpEnv) (p1 p2 : LPortId) (pt1 pt2 : LPort) (rev : Bool) : UInt8 :=
+  match pt1.incomingEdges[0]?, pt2.incomingEdges[0]? with
+  | some e1, some e2 =>
+    match (a.edge e1).source, (a.edge e2).source with
+    | some s1, some s2 =>
+      match (a.port s1).owner, (a.port s2).owner with
+      | some n1, some n2 =>
+        let first := if n1.idx == n2.idx then sourcePortOrder (a.node n1).ports s1 s2 rev 0 else noDecision
+        if first != noDecision then first
+        else
+          let nd1 := a.node n1
+          let l1 := layerIdIn a n1
+          let longEdgePair := match nd1.type, (a.node n2).type with
+            | .longEdge, .longEdge => l1 == layerIdIn a n2 && l1 == layerIdIn a (pt1.owner.getD n1)
+            | _, _ => false
+          let inOwnLayer : Int := if longEdgePair then
+              let referenceLayer := match nd1.layer with
+                | some layer => (a.layer layer).nodes
+                | none => env.previousLayer
+              referenceIn referenceLayer n1 n2 0
+            else 0
+          if inOwnLayer != 0 then
+            decision (inOwnLayer > 0) (if sideCode pt1.side == 2 then !rev else rev)
+          else
+            let inPrevious := referenceIn env.previousLayer n1 n2 0
+            if inPrevious != 0 then decision (inPrevious > 0) rev
+            else if env.portModelOrder then
+              let result := checkPortModelOrderIn a env p1 p2 pt1.internal.modelOrder.isSome pt2.internal.modelOrder.isSome
+              if result != 0 then decision (result > 0) rev else noDecision
+            else noDecision
+      | _, _ => noDecision
+    | _, _ => noDecision
+  | _, _ => noDecision
+
+/-- `compareOutgoing` (both ports have outgoing edges; `rev` already negated for `WEST`/`SOUTH`). -/
+def decideOutgoing (a : LGraphArena) (env : PortCmpEnv) (p1 p2 : LPortId) (pt1 pt2 : LPort) (rev : Bool) : UInt8 :=
+  let t1 := pt1.internal.longEdgeTargetNode
+  let t2 := pt2.internal.longEdgeTargetNode
+  let byNodes : UInt8 := if env.preferNodes then
+      match t1, t2 with
+      | some t1, some t2 =>
+        let n1 := a.node t1
+        let n2 := a.node t2
+        if n1.internal.modelOrder.isSome && n2.internal.modelOrder.isSome then
+          let graph := env.graph
+          if graph.maxModelOrderNodesNull then nullOffset
+          else
+            let o1 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf graph n1 n2 graph.maxModelOrderNodes
+            let o2 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf graph n2 n1 graph.maxModelOrderNodes
+            decision (o1 > o2) rev
+        else noDecision
+      | _, _ => noDecision
+    else noDecision
+  if byNodes != noDecision then byNodes
+  else
+    let byPorts : Int := if env.portModelOrder then
+        checkPortModelOrderIn a env p1 p2 pt1.internal.modelOrder.isSome pt2.internal.modelOrder.isSome
+      else 0
+    if byPorts != 0 then decision (byPorts > 0) rev
+    else
+      let graph := env.graph
+      let e1 := pt1.outgoingEdges[0]?.getD default
+      let e2 := pt2.outgoingEdges[0]?.getD default
+      let o1 := edgeModelOrderIn a e1 e2 graph ((pt1.outgoingEdges.size + pt1.incomingEdges.size : Nat) : Int)
+      let o2 := edgeModelOrderIn a e2 e1 graph ((pt2.outgoingEdges.size + pt2.incomingEdges.size : Nat) : Int)
+      let sameTarget := match t1, t2 with
+        | some x, some y => x.idx == y.idx
+        | _, _ => false
+      if sameTarget then decision (o1 > o2) rev
+      else
+        match env.targets with
+        | some pairs =>
+          -- `targetNodeModelOrder.containsKey(target)` for each target separately
+          let o1 := match t1 with
+            | some t => env.targetOrderOr pairs t o1
+            | none => o1
+          let o2 := match t2 with
+            | some t => env.targetOrderOr pairs t o2
+            | none => o2
+          decision (o1 > o2) rev
+        | none => decision (o1 > o2) rev
+
+/-- `compareRemaining`: incoming before outgoing ports, then port model order, then `p1 < p2`. -/
+def decideRemaining (a : LGraphArena) (env : PortCmpEnv) (p1 p2 : LPortId) (pt1 pt2 : LPort) (rev : Bool) : UInt8 :=
+  if !pt1.incomingEdges.isEmpty && !pt2.outgoingEdges.isEmpty then code true rev 2
+  else if !pt1.outgoingEdges.isEmpty && !pt2.incomingEdges.isEmpty then code false rev 0
+  else if pt1.internal.modelOrder.isSome && pt2.internal.modelOrder.isSome then
+    let numberOfPorts := nodePortCountIn a pt1.owner
+    let o1 := portModelOrderIn a p1 p2 env.graph numberOfPorts
+    let o2 := portModelOrderIn a p2 p1 env.graph numberOfPorts
+    let side := sideCode pt1.side
+    decision (o1 > o2) (if side == 4 || side == 3 then !rev else rev)
+  else decision false rev
+
+/-- The decision of `compareM` after the transitivity checks (see `code`). -/
+def decide (a : LGraphArena) (env : PortCmpEnv) (p1 p2 : LPortId) : UInt8 :=
+  let pt1 := a.port p1
+  let pt2 := a.port p2
+  let side1 := sideCode pt1.side
+  let side2 := sideCode pt2.side
+  if side1 != side2 then
+    -- NORTH < EAST < SOUTH < WEST: `update(p1, p2, 1)` and `1` when `p1`'s side is bigger
+    if side1 > side2 then code true false 2 else code false false 0
+  else
+    let bothIn := !pt1.incomingEdges.isEmpty && !pt2.incomingEdges.isEmpty
+    let rev := bothIn && (side1 == 4 || side1 == 1 || side1 == 3)
+    let incoming := if bothIn then decideIncoming a env p1 p2 pt1 pt2 rev else noDecision
+    if incoming != noDecision then incoming
+    else if !pt1.outgoingEdges.isEmpty && !pt2.outgoingEdges.isEmpty then
+      decideOutgoing a env p1 p2 pt1 pt2 (if side1 == 4 || side1 == 3 then !rev else rev)
+    else decideRemaining a env p1 p2 pt1 pt2 rev
+
+/-- The result of a failed comparison (`maxModelOrderNodesNullError`); results are `-1`, `0`, `1`. -/
+@[inline] def failed : Int := 2
+
+/-- `compare(p1, p2)` on the arena with the relations `rel`: the result (`-1`, `0`, `1`, or `failed`
+for Java's `maxModelOrderNodesNullError`) and the updated relations (see the section doc). -/
+def compareCore (a : LGraphArena) (env : PortCmpEnv) (rel : ModelOrderRelations LPortId) (p1 p2 : LPortId) :
+    Int × ModelOrderRelations LPortId :=
+  let (k1, rel) := rel.index p1
+  let (k2, rel) := rel.index p2
+  if rel.isBigger k1 k2 then (1, rel)
+  else if rel.isBigger k2 k1 then (-1, rel)
+  else if rel.isSmaller k1 k2 then (-1, rel)
+  else
+    let d := decide a env p1 p2
+    if d == nullOffset then (failed, rel)
+    else
+      -- `update(bo, so, r)` records `bo > so`, swapped when `r < 0`: `p1 > p2` iff the order bit and the
+      -- reverse bit differ
+      let rel := if (d &&& 1 != 0) != (d &&& 2 != 0) then rel.record k1 k2 else rel.record k2 k1
+      let r := d >>> 2
+      ((if r == 2 then 1 else if r == 1 then 0 else -1), rel)
+
+/-- `compare(p1, p2)` on the arena: the result (`-1`, `0`, `1`) and the updated relations, or Java's
+exception text. -/
+def compare (a : LGraphArena) (env : PortCmpEnv) (rel : ModelOrderRelations LPortId) (p1 p2 : LPortId) :
+    Except String (Int × ModelOrderRelations LPortId) :=
+  let (r, rel) := compareCore a env rel p1 p2
+  if r == failed then .error maxModelOrderNodesNullError else .ok (r, rel)
+
+end PortCmpEnv
 
 end Elk.Alg.Layered.Intermediate.Preserveorder
