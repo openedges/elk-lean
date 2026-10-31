@@ -18,8 +18,9 @@ exception classes as `UnsupportedConfigurationException`).
   `layer_constraint_*` node designations of `LayerConstraintPre/Postprocessor`) or nothing
   (`fixed_edge_without_section`; `port_without_side`: Java's node size calculator validation,
   elk-rs lays it out).
-* `robustness.lenient`: inputs ELK Java rejects and elk-lean (like elk-rs) lays out; pinned so that a
-  change of that behaviour is noticed (`java_crossing_counter_aioobe`: a Java defect).
+* `java_crossing_counter_aioobe` (in `robustness.exceptions` since LM): Java's crossing counter reads a
+  stale far-end position beyond its index tree; elk-lean now checks Java's tree bounds and throws the same
+  `ArrayIndexOutOfBoundsException` (elk-rs lays it out). `robustness.lenient` pins nothing at the moment.
 
 `radial_cycle_overflow.json` (Java `StackOverflowError`, elk-rs and elk-lean overflow the stack the
 same way) aborts the process and is therefore not run here.
@@ -70,6 +71,7 @@ def hang : Suite := suite "robustness.hang" do
 
 /-- `(fixture, ELK Java 0.12.0 exception)`. -/
 private def expectedExceptions : Array (String × String) := #[
+  ("java_crossing_counter_aioobe", "java.lang.ArrayIndexOutOfBoundsException: Index 5 out of bounds for length 2"),
   ("radial_not_a_tree", "java.lang.IllegalArgumentException: The given graph is not a tree!"),
   ("layer_sweep_in_child",
     "org.eclipse.elk.core.UnsupportedGraphException: The hierarchy aware processor LAYER_SWEEP in child node " ++
@@ -102,7 +104,7 @@ def exceptions : Suite := suite "robustness.exceptions" do
     | .error e => checkEq s!"{name}: Java exception" e expected
 
 def lenient : Suite := suite "robustness.lenient" do
-  for name in #["java_crossing_counter_aioobe"] do
+  for name in (#[] : Array String) do
     match ← layoutFixture name with
     | .ok _ => check s!"{name}: laid out (ELK Java throws)" true
     | .error e => report s!"{name}: layout expected" false e
