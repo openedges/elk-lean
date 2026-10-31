@@ -325,6 +325,14 @@ private partial def numberSideViewsSnap (a : LGraphArena) (s : CrossMinSnapshot)
       numberSideViewsSnap a s nodes side topDown (k + 1) nd.ports v.lo v.hi stable len positions pids
   else (positions, pids, len)
 
+/-- Marks the packed tree `t` of `n` buckets (`2 n + 2` entries) as having seen an `add` index outside
+`[0, n)`: the extra slot `t[2 n + 1]` (Java's `numsPerIndex[index]`/`binarySums[index]` would have
+thrown; the caller turns it into Java's exception). -/
+@[inline] private def markOutOfRange (t : Array Nat) (n : Nat) : Array Nat := t.set! (2 * n + 1) 1
+
+/-- Whether `markOutOfRange` was applied to the packed tree `t` of `n` buckets. -/
+@[inline] private def outOfRangeMarked (t : Array Nat) (n : Nat) : Bool := t[2 * n + 1]?.getD 0 != 0
+
 /-- Whether a far end of `ends[k:hi]` lies above `cur`. -/
 private partial def anyEndAbove (positions : Array Int) (cur : Int) (ends : Array Nat) (k hi : Nat) : Bool :=
   if h : k < hi ∧ k < ends.size then (positions[ends[k]]?.getD 0) > cur || anyEndAbove positions cur ends (k + 1) hi
@@ -362,7 +370,7 @@ private partial def addEndsPacked (positions : Array Int) (cur : Int) (ends : Ar
         let b := n + 1 + x
         let t := t.set! b (t[b]! + 1)
         addEndsPacked positions cur ends (k + 1) hi n (BinaryIndexedTree.incLoopPacked t (n + 1).toUSize (x + 1).toUSize)
-      else addEndsPacked positions cur ends (k + 1) hi n t
+      else addEndsPacked positions cur ends (k + 1) hi n (markOutOfRange t n)
     else addEndsPacked positions cur ends (k + 1) hi n t
   else t
 
@@ -370,7 +378,7 @@ private partial def addEndsPacked (positions : Array Int) (cur : Int) (ends : Ar
 `n` buckets (deferred removals `pend[0:np]`). The far ends of a port (`port_predecessors`, then
 `port_successors`) are the range `[endLo, endHi)` of the snapshot's flattened `endIds`. -/
 private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (pids : Array Nat) (i n : Nat)
-    (t pend : Array Nat) (np crossings : Nat) : Nat :=
+    (t pend : Array Nat) (np crossings : Nat) : Nat × Array Nat :=
   if h : i < n ∧ i < pids.size then
     let pid := pids[i]
     let cur := positions[pid]?.getD 0
@@ -394,7 +402,7 @@ private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Arr
         let t := if x < n then
             let b := n + 1 + x
             BinaryIndexedTree.incLoopPacked (t.set! b (t[b]! + 1)) (n + 1).toUSize (x + 1).toUSize
-          else t
+          else markOutOfRange t n
         countBetweenSnapLoop s positions pids (i + 1) n t pend 0 crossings
       else countBetweenSnapLoop s positions pids (i + 1) n t pend np crossings
     else if anyEndAbove positions cur ends lo hi then
@@ -403,7 +411,7 @@ private partial def countBetweenSnapLoop (s : CrossMinSnapshot) (positions : Arr
       let t := addEndsPacked positions cur ends lo hi n t
       countBetweenSnapLoop s positions pids (i + 1) n t pend 0 crossings
     else countBetweenSnapLoop s positions pids (i + 1) n t pend np crossings
-  else crossings
+  else (crossings, t)
 
 /-! ### In-layer counting on the snapshot path
 
@@ -476,7 +484,7 @@ private partial def addInLayerSnap (s : CrossMinSnapshot) (positions : Array Int
           let b := n + 1 + x
           addInLayerSnap s positions cur li ends (k + 1) hi n
             (BinaryIndexedTree.incLoopPacked (t.set! b (t[b]! + 1)) (n + 1).toUSize (x + 1).toUSize) (size + 1)
-        else addInLayerSnap s positions cur li ends (k + 1) hi n t (size + 1)
+        else addInLayerSnap s positions cur li ends (k + 1) hi n (markOutOfRange t n) (size + 1)
       else addInLayerSnap s positions cur li ends (k + 1) hi n t size
     else addInLayerSnap s positions cur li ends (k + 1) hi n t size
   else (t, size)
@@ -484,7 +492,7 @@ private partial def addInLayerSnap (s : CrossMinSnapshot) (positions : Array Int
 /-- `countInLayerCrossingsOnPorts` over the captured ids `pids[i:n]` on a fresh packed tree `t` of
 `n` buckets holding `size` entries. -/
 private partial def countInLayerSnapLoop (s : CrossMinSnapshot) (positions : Array Int) (pids : Array Nat) (i n : Nat)
-    (t : Array Nat) (size : Nat) (crossings : Int) : Int :=
+    (t : Array Nat) (size : Nat) (crossings : Int) : Int × Array Nat :=
   if h : i < n ∧ i < pids.size then
     let pid := pids[i]
     let cur := positions[pid]?.getD 0
@@ -502,7 +510,7 @@ private partial def countInLayerSnapLoop (s : CrossMinSnapshot) (positions : Arr
     let crossings := crossings + (ranks : Int) + (size : Int) * (between : Int)
     let (t, size) := addInLayerSnap s positions cur li ends lo hi n t size
     countInLayerSnapLoop s positions pids (i + 1) n t size crossings
-  else crossings
+  else (crossings, t)
 
 /-- Like `rankEnds` for the in-layer edges only; also counts the between-layer edges. -/
 private partial def rankInLayerEnds (a : LGraphArena) (positions : Array Int) (tree : BinaryIndexedTree) (port : LPortId)
@@ -901,6 +909,16 @@ private def withTreeChecked (c : CrossingsCounter) (ports : Array LPortId) (inLa
       throw (IO.userError msg)
   return crossings
 
+/-- Throws Java's exception for the first failing tree access of counting `ports` on a tree of
+`ports.size` buckets (`javaTreeIndexError`); a generic one if none is found (cannot happen when a
+far end above its port lies outside the tree). -/
+private def throwJavaTreeIndexError {α : Type} (c : CrossingsCounter) (ports : Array LPortId) (inLayer : Bool) :
+    LayeredM α := do
+  let positions ← c.portPositions.get
+  match javaTreeIndexError (← get) positions ports.size ports inLayer with
+  | some msg => throw (IO.userError msg)
+  | none => throw (IO.userError "java.lang.ArrayIndexOutOfBoundsException: binary indexed tree")
+
 /-- Runs one of the pure counting loops on the counter's tree. -/
 @[inline] private def withTree (c : CrossingsCounter)
     (count : LGraphArena → Array Int → BinaryIndexedTree → Array LPortId → Int × BinaryIndexedTree)
@@ -938,13 +956,17 @@ def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : A
     let (positions, pids, len) := numberSideViewsSnap a s leftLayer .east true 0 #[] 0 0 false 0 positions pids
     let (positions, pids, n) := numberSideViewsSnap a s rightLayer .west false 0 #[] 0 0 false len positions pids
     c.portPositions.set positions
-    let crossings := countBetweenSnapLoop s positions pids 0 n (Array.replicate (2 * n + 1) 0) #[] 0 0
+    let (crossings, t) := countBetweenSnapLoop s positions pids 0 n (Array.replicate (2 * n + 2) 0) #[] 0 0
     c.idScratch.set pids
+    if outOfRangeMarked t n then
+      -- a far end's stale position beyond the tree: Java's exception (the live numbering is the same)
+      let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
+      c.throwJavaTreeIndexError ports false
     return crossings
   | none =>
     let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
     c.indexTree.set (BinaryIndexedTree.new ports.size)
-    c.withTree countCrossingsOnPorts ports
+    c.withTreeChecked ports false
 
 /-- `countInLayerCrossingsOnSide(nodes, side)`. -/
 def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (side : PortSide) : LayeredM Int := do
@@ -968,12 +990,16 @@ def countInLayerCrossingsOnSide (c : CrossingsCounter) (nodes : Array LNodeId) (
       c.portPositions.set positions
       c.idScratch.set pids
     else
-      let crossings := countInLayerSnapLoop s positions pids 0 n (Array.replicate (2 * n + 1) 0) 0 0
+      let (crossings, t) := countInLayerSnapLoop s positions pids 0 n (Array.replicate (2 * n + 2) 0) 0 0
       c.portPositions.set positions
       c.idScratch.set pids
+      if outOfRangeMarked t n then
+        -- a far end's stale position beyond the tree: Java's exception (the live numbering is the same)
+        let ports ← c.initPortPositionsForInLayerCrossings nodes side
+        c.throwJavaTreeIndexError ports true
       return crossings
   let ports ← c.initPortPositionsForInLayerCrossings nodes side
-  c.withTree countInLayerCrossingsOnPorts ports
+  c.withTreeChecked ports true
 
 /-- `countNorthSouthPortCrossingsInLayer(layer)` (with the `…Fast` loops). -/
 def countNorthSouthPortCrossingsInLayer (c : CrossingsCounter) (layer : Array LNodeId) : LayeredM Int := do

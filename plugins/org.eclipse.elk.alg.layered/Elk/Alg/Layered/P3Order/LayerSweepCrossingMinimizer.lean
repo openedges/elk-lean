@@ -95,10 +95,6 @@ structure LayerSweepCrossingMinimizer where
   graphInfoHolders : Array GraphInfoHolder := #[]
   /-- `graphs_whose_node_order_changed` (`BTreeSet<usize>` as membership by index). -/
   graphsWhoseNodeOrderChanged : Array Bool := #[]
-  /-- `graphs_dirty_for_crossing_count` (`BTreeSet<usize>`). -/
-  graphsDirtyForCrossingCount : Array Bool := #[]
-  /-- `cached_crossings_by_graph`. -/
-  cachedCrossingsByGraph : Array (Option Int) := #[]
   /-- `random`: the shared generator (see the module doc). -/
   random : IO.Ref Random
   /-- `random_seed` (`u64` in Rust; `setSeed` wraps). -/
@@ -319,14 +315,6 @@ def distributePortsWhileSweeping (index currentIndex : Nat) (isForwardSweep : Bo
 
 /-! ## Bookkeeping -/
 
-/-- `mark_graph_dirty_for_crossing_count(index)`: the graph and all its ancestors. -/
-def markGraphDirtyForCrossingCount (index : Nat) : SweepM Unit := do
-  let mut current : Option Nat := some index
-  for _ in [0:(← get).graphInfoHolders.size + 1] do
-    let some graphIndex := current | break
-    modify fun s => { s with graphsDirtyForCrossingCount := setInsert s.graphsDirtyForCrossingCount graphIndex }
-    current := ((← get).graphInfoHolders[graphIndex]?).bind (·.parentGraphIndex)
-
 /-- `graphs_whose_node_order_changed.insert(index)`. -/
 @[inline] def markNodeOrderChanged (index : Nat) : SweepM Unit :=
   modify fun s => { s with graphsWhoseNodeOrderChanged := setInsert s.graphsWhoseNodeOrderChanged index }
@@ -390,50 +378,38 @@ def setCurrentlyBestNodeOrders : SweepM Unit := do
 
 /-! ## Crossing counts -/
 
-/-- Recomputes the crossings of a graph when it has no cached count or is dirty. -/
-def cachedOrCountedCrossings (index : Nat) : SweepM Int := do
-  let s ← get
-  let needsRecompute := (s.cachedCrossingsByGraph[index]?.bind id).isNone || setContains s.graphsDirtyForCrossingCount index
-  if needsRecompute then
-    let crossings ← (← holderAt index).countCurrentCrossings
-    modify fun s => { s with cachedCrossingsByGraph := s.cachedCrossingsByGraph.setIfInBounds index (some crossings) }
-  return (((← get).cachedCrossingsByGraph[index]?).bind id).getD 0
-
-/-- `count_current_number_of_crossings(start_index)`: the crossings of the graph and of every nested
-graph swept into (cached per graph). -/
-def countCurrentNumberOfCrossings (startIndex : Nat) : SweepM Int := do
-  let n := (← get).graphInfoHolders.size
-  if (← get).cachedCrossingsByGraph.size != n then
-    modify fun s => { s with cachedCrossingsByGraph := Array.replicate n none, graphsDirtyForCrossingCount := #[] }
-  let mut totalCrossings : Int := 0
-  let mut stack : Array Nat := #[startIndex]
-  let mut visited : Array Nat := #[]
-  while !stack.isEmpty do
-    let index := stack.back!
-    stack := stack.pop
-    visited := visited.push index
-    totalCrossings := totalCrossings + (← cachedOrCountedCrossings index)
-    for childIndex in ← collectChildGraphIndices index do
-      if !(← holderAt childIndex).dontSweepInto then
-        stack := stack.push childIndex
-  for index in visited do
-    modify fun s => { s with graphsDirtyForCrossingCount := s.graphsDirtyForCrossingCount.setIfInBounds index false }
+/-- `countCurrentNumberOfCrossings(currentGraph)`: the crossings of the graph and, recursively in
+`childGraphs` order, of every nested graph swept into. Like Java every call counts again (elk-rs
+cached the count per graph until a sweep dirtied it): the counters' shared position array keeps the
+positions of the last count, and the in-layer counts read them for far ends they do not number
+themselves, so a recount of an unchanged order can differ (and fail) where the first did not. -/
+partial def countCurrentNumberOfCrossings (index : Nat) : SweepM Int := do
+  let mut totalCrossings ← (← holderAt index).countCurrentCrossings
+  for childIndex in ← collectChildGraphIndices index do
+    if !(← holderAt childIndex).dontSweepInto then
+      totalCrossings := totalCrossings + (← countCurrentNumberOfCrossings childIndex)
   return totalCrossings
 
-/-- `count_current_number_of_crossings_node_port_order(start_index)`: the crossings plus the start
-graph's model order changes weighted by its node and port influence. -/
+/-- `countCurrentNumberOfCrossingsNodePortOrder(currentGraph)`: the start graph's model order changes
+weighted by its node and port influence (counted first), plus its crossings, plus the plain
+crossings of the nested graphs swept into, summed in Java's `double` order. -/
 def countCurrentNumberOfCrossingsNodePortOrder (startIndex : Nat) : SweepM Float := do
   let h ← holderAt startIndex
-  let crossings := Float.ofInt (← countCurrentNumberOfCrossings startIndex)
+  let mut totalCrossings : Float := 0.0
   let mut modelOrderInfluence : Float := 0.0
   if h.considerModelOrderStrategy != .none then
-    let order := (← holderAt startIndex).currentNodeOrder
+    let order := h.currentNodeOrder
     let ctx ← graphContext h.lGraph
     let nodeChanges ← countModelOrderNodeChanges ctx order h.considerModelOrderStrategy h.groupOrderStrategy
     modelOrderInfluence := modelOrderInfluence + h.nodeInfluence * Float.ofInt nodeChanges
     let portChanges ← countModelOrderPortChanges ctx order h.considerModelOrderStrategy h.portModelOrder
     modelOrderInfluence := modelOrderInfluence + h.portInfluence * Float.ofInt portChanges
-  return 0.0 + (crossings + modelOrderInfluence)
+  let crossings ← (← holderAt startIndex).countCurrentCrossings
+  totalCrossings := totalCrossings + (Float.ofInt crossings + modelOrderInfluence)
+  for childIndex in ← collectChildGraphIndices startIndex do
+    if !(← holderAt childIndex).dontSweepInto then
+      totalCrossings := totalCrossings + Float.ofInt (← countCurrentNumberOfCrossings childIndex)
+  return totalCrossings
 
 /-! ## Sweeps -/
 
@@ -478,7 +454,6 @@ partial def sweepReducingCrossings (index : Nat) (forward firstSweep : Bool) : S
       improved := improved || r3
     i := i + next forward
   markNodeOrderChanged index
-  markGraphDirtyForCrossingCount index
   return improved
 
 /-- `sweep_in_hierarchical_nodes(hierarchical_nodes, is_forward_sweep, is_first_sweep)`. -/
@@ -503,11 +478,9 @@ partial def sweepInHierarchicalNode (isForwardSweep : Bool) (node : LNodeId) (ne
     if (← getNode firstNode).type == .externalPort then
       let sorted ← sortPortDummiesByPortPositions node startLayer (sideOpposedSweepDirection isForwardSweep)
       modifyHolder nestedIndex fun h => { h with currentNodeOrder := h.currentNodeOrder.setIfInBounds startIndex sorted }
-      markGraphDirtyForCrossingCount nestedIndex
     else
       prepareCrossMinimizer nestedIndex
       let _ ← setFirstLayerOrder nestedIndex isForwardSweep
-      markGraphDirtyForCrossingCount nestedIndex
   let improved ← sweepReducingCrossings nestedIndex isForwardSweep isFirstSweep
   let h ← holderAt nestedIndex
   if let some parent := h.parentNode then
@@ -544,7 +517,6 @@ def firstSweepWithCounter (index : Nat) (isForwardSweep : Bool) : SweepM Bool :=
   if !useInitial then
     prepareCrossMinimizer index
     let _ ← setFirstLayerOrder index isForwardSweep
-    markGraphDirtyForCrossingCount index
   else
     isForwardSweep := h.firstTryWithInitialOrder
   let _ ← sweepReducingCrossings index isForwardSweep true
@@ -641,8 +613,6 @@ def setPortOrderOnParentGraph (index : Nat) : SweepM Unit := do
   sortPortsByDummyPositionsInLastLayerSnap best.nodes parent true h.snapshot
   sortPortsByDummyPositionsInLastLayerSnap best.nodes parent false h.snapshot
   setNodeProp parent LayeredOptions.PORT_CONSTRAINTS PortConstraints.fixedOrder
-  if let some parentIndex := h.parentGraphIndex then
-    markGraphDirtyForCrossingCount parentIndex
 
 /-- `minimize_crossings(graphs_to_sweep_on, method)`. -/
 def minimizeCrossings (graphsToSweepOn : Array Nat) (method : MinimizingMethod) : SweepM Unit := do
@@ -689,8 +659,7 @@ def initializeRandom (root : LGraphId) : SweepM Unit := do
 /-- `initialize(root_graph, root_graph_guard)`: one holder per graph in BFS order (`LGraph.id :=
 index`); returns the graphs to sweep on (those with `dontSweepInto`, last found first). -/
 def initializeGraphs (root : LGraphId) : SweepM (Array Nat) := do
-  modify fun s => { s with graphInfoHolders := #[], graphsWhoseNodeOrderChanged := #[],
-                           graphsDirtyForCrossingCount := #[], cachedCrossingsByGraph := #[] }
+  modify fun s => { s with graphInfoHolders := #[], graphsWhoseNodeOrderChanged := #[] }
   initializeRandom root
   let crossMinType := (← get).crossMinType
   let mut graphsToSweepOn : Array Nat := #[]
