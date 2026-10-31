@@ -1,0 +1,1 @@
+org.eclipse.elk.core.UnsupportedGraphException: The DF model order layer assigner requires all real nodes to have a model order.

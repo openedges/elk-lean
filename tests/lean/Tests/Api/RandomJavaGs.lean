@@ -2,7 +2,8 @@ import Tests.Framework
 import Tests.JsonCompare
 import Elk.Api
 /-!
-Regression tests for agent GS (the greedy switch `NullPointerException` of ELK Java 0.12.0). Every
+Regression tests for agent GS (the greedy switch `NullPointerException` of ELK Java 0.12.0 and the
+hierarchical import). Every
 fixture under `tests/fixtures/gs/` is laid out with `Elk.Api.layoutJson`; it must fail with the
 exception text of unmodified ELK Java 0.12.0 (`<name>.java.error`) or equal Java's layout at
 tolerance `0` (`<name>.java.json`).
@@ -23,6 +24,20 @@ numbered the *eastern* ports of the western layer, and `AdjacencyList.addAdjacen
   index tree on the unnumbered western port first (matched since LM).
 * `pass_through_port_side_fixed`: `FIXED_SIDE` on the node sets `NON_FREE_PORTS`, the
   `InvertedPortProcessor` reroutes the edge and Java lays the graph out.
+
+The hierarchical import and its neighbours (found with GS's hierarchical model order generator):
+
+* `edge_not_found_in_no_layout_compound`: Java's edge loop of `importHierarchicalGraph` also visits
+  the graph of a `NO_LAYOUT` compound node (without `ALGORITHM`, so the engine keeps it in the run),
+  whose children were never transformed: "could not be found" `UnsupportedGraphException`.
+* `no_layout_compound_with_algorithm`: with an `ALGORITHM` the `NO_LAYOUT` node has no resolved
+  algorithm, the engine separates it and nothing inside is visited.
+* `outside_port_next_to_hierarchical_port`: the parent node's ports get the external port positions
+  as computed (elk-rs shifted the "pure self loop" dummy of the outside edge's port).
+* `bf_model_order_single_node_without_order` / `df_model_order_node_without_order`: the model order
+  layerers fail only from their sort's comparator, i.e. with two or more real nodes.
+* `origin_port_class_cast` (generated `h0143`): `sortPortsByDummyPositionsInLastLayer` reaches a
+  normal node while walking the last layer for the hierarchical ports, `(LPort) ORIGIN` fails.
 -/
 namespace Tests.Api.RandomJavaGs
 
@@ -31,12 +46,14 @@ open Tests Elk.Api
 private def fixtureDir : System.FilePath := "tests/fixtures/gs"
 
 /-- The fixtures laid out and compared with `<name>.java.json`. -/
-def fixtures : Array String := #["pass_through_port_side_fixed"]
+def fixtures : Array String := #["pass_through_port_side_fixed", "no_layout_compound_with_algorithm",
+  "outside_port_next_to_hierarchical_port", "bf_model_order_single_node_without_order"]
 
 /-- The fixtures whose layout fails with Java's exception (`<name>.java.error`). -/
 def errorFixtures : Array String := #[
   "npe_pass_through_port", "npe_random_v9_g0273", "npe_disco_layered_components",
-  "aioobe_pass_through_port_single_node_layer"]
+  "aioobe_pass_through_port_single_node_layer", "edge_not_found_in_no_layout_compound",
+  "df_model_order_node_without_order", "origin_port_class_cast"]
 
 def layouts : Suite := suite "gs.java" do
   for name in fixtures do
