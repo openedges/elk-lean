@@ -179,6 +179,7 @@ def initializable (d : GreedyPortDistributor) : Initializable where
   initAtNodeLevel := d.initAtNodeLevel
   initAtPortLevel := d.initAtPortLevel
   initAfterTraversal := d.initAfterTraversal
+  usesEdgeLevel := false
 
 /-- The `ISweepPortDistributor` implementation. -/
 def toSweepPortDistributor (d : GreedyPortDistributor) : SweepPortDistributor where

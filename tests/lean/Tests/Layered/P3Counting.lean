@@ -2094,7 +2094,39 @@ def portSetDifferential (seeds : Nat) : IO (Nat × Nat) := do
     big := big + b
   return (mismatches, big)
 
+/-- A random stored adjacency list (as `AdjacencyList.new` leaves it: sorted positions, possibly
+repeated, `currentCardinality = cardinality`, reset). -/
+def randomAdjacencyList (r : IO.Ref Random) : IO AdjacencyList := do
+  let n ← rnd r 7
+  let mut entries : Array Adjacency := #[]
+  let mut pos : Int := 0
+  let mut size := 0
+  for _ in [0:n] do
+    pos := pos + ((← rnd r 3) : Int)
+    let c := 1 + (← rnd r 3)
+    entries := entries.push { position := pos, cardinality := c, currentCardinality := c }
+    size := size + c
+  return ({ adjacencyList := entries, side := .east, size, currentSize := size } : AdjacencyList).reset
+
+/-- `countCrossingsOfStoredLists` against `countCrossingsByMergingAdjacencyLists` of the reset lists:
+the number of differing results and of pairs with crossings. -/
+def adjacencyMergeDifferential (runs : Nat) : IO (Nat × Nat) := do
+  let r ← IO.mkRef (Random.ofInt 4242)
+  let mut m := 0
+  let mut nz := 0
+  for _ in [0:runs] do
+    let u ← randomAdjacencyList r
+    let l ← randomAdjacencyList r
+    let x := countCrossingsByMergingAdjacencyLists u.reset l.reset
+    let y := countCrossingsOfStoredLists u l
+    if x != y then m := m + 1
+    if x != (0, 0) then nz := nz + 1
+  return (m, nz)
+
 def fastPathTests : Suite := suite "layered.p3counting.fast_paths" do
+  let (mismatches, nonZero) ← adjacencyMergeDifferential 20000
+  checkEq "greedy switch adjacency merge: scalar cursors = list merge (20000 random pairs)" mismatches 0
+  check s!"adjacency merge differential counts crossings ({nonZero} pairs with crossings)" (nonZero > 5000)
   let (mismatches, big) ← portSetDifferential 300
   checkEq "both-orders port sets: fast collectors = reference loops (300 random graphs)" mismatches 0
   check s!"port set differential covers sets beyond the linear search ({big} sets with more than 16 ports)" (big > 50)
