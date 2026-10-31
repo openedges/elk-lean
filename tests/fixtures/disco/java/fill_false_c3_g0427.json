@@ -1,0 +1,25 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=14,left=5,bottom=5,right=14]",
+  "org.eclipse.elk.polyomino.fill": "false",
+  "org.eclipse.elk.polyomino.traversalStrategy": "JITTER"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 108.6,
+   "y": 98.8,
+   "width": 79.4,
+   "height": 54.8
+  },
+  {
+   "id": "rc1n0",
+   "x": 17.2,
+   "y": 57.4,
+   "width": 59.4,
+   "height": 20.3
+  }
+ ]
+}

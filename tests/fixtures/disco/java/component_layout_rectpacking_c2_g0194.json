@@ -1,0 +1,86 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "rectpacking"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 55.7,
+   "y": 83.7,
+   "width": 13.6,
+   "height": 6.2
+  },
+  {
+   "id": "rc0n1",
+   "x": 23.5,
+   "y": 82.9,
+   "width": 68.1,
+   "height": 39.2,
+   "labels": [
+    {
+     "id": "rc0n1l",
+     "text": "a",
+     "x": 23.3,
+     "y": -5.8,
+     "width": 8.8,
+     "height": 3.8
+    }
+   ]
+  },
+  {
+   "id": "rc1n0",
+   "x": 146.0,
+   "y": 66.8,
+   "width": 72.0,
+   "height": 59.7
+  }
+ ],
+ "edges": [
+  {
+   "id": "re0",
+   "sources": [
+    "rc0n0"
+   ],
+   "targets": [
+    "rc0n1"
+   ],
+   "sections": [
+    {
+     "id": "re0s",
+     "startPoint": {
+      "x": 62.5,
+      "y": 86.8
+     },
+     "endPoint": {
+      "x": 57.5,
+      "y": 102.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "re1",
+   "sources": [
+    "rc0n0"
+   ],
+   "targets": [
+    "rc0n1"
+   ],
+   "sections": [
+    {
+     "id": "re1s",
+     "startPoint": {
+      "x": 62.5,
+      "y": 86.8
+     },
+     "endPoint": {
+      "x": 57.5,
+      "y": 102.5
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "fixed"
+ },
+ "children": [
+  {
+   "id": "dc",
+   "x": 10,
+   "y": 10,
+   "width": 148.5,
+   "height": 311.2,
+   "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "random",
+    "org.eclipse.elk.disco.componentCompaction.strategy": "POLYOMINO",
+    "elk.spacing.componentComponent": "20",
+    "elk.randomSeed": "7"
+   },
+   "children": [
+    {
+     "id": "dc0n0",
+     "x": 87.2,
+     "y": 248.5,
+     "width": 64.3,
+     "height": 52.1
+    },
+    {
+     "id": "dc1n0",
+     "x": 75.9,
+     "y": 118.7,
+     "width": 69.0,
+     "height": 56.5
+    },
+    {
+     "id": "dc1n1",
+     "x": 136.8,
+     "y": 102.4,
+     "width": 80.0,
+     "height": 16.0,
+     "ports": [
+      {
+       "id": "dc1n1p0",
+       "x": 0.0,
+       "y": 5.0,
+       "width": 0,
+       "height": 0
+      }
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "id": "de0",
+     "sources": [
+      "dc1n1p0"
+     ],
+     "targets": [
+      "dc1n0"
+     ],
+     "sections": [
+      {
+       "id": "de0s",
+       "startPoint": {
+        "x": 136.8,
+        "y": 107.4
+       },
+       "endPoint": {
+        "x": 110.4,
+        "y": 146.9
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o",
+   "x": 188.5,
+   "y": 10,
+   "width": 30,
+   "height": 30
+  }
+ ]
+}

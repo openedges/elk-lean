@@ -1,0 +1,63 @@
+{
+ "children": [
+  {
+   "height": 45.2,
+   "id": "rc0n0",
+   "width": 66.7,
+   "x": 90.09389638875518,
+   "y": 62.533721647417366
+  },
+  {
+   "height": 22.5,
+   "id": "rc1n0",
+   "width": 30.0,
+   "x": 94.2569788438128,
+   "y": 14.29011649422521
+  },
+  {
+   "height": 25.1,
+   "id": "rc1n1",
+   "width": 62.3,
+   "x": 11.95697579205499,
+   "y": 12.990116494225209
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "re0",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 94.2569788438128,
+      "y": 25.540116494225206
+     },
+     "id": "re0s",
+     "incomingShape": "rc1n1",
+     "outgoingShape": "rc1n0",
+     "startPoint": {
+      "x": 74.25697579205499,
+      "y": 25.540116494225206
+     }
+    }
+   ],
+   "sources": [
+    "rc1n1"
+   ],
+   "targets": [
+    "rc1n0"
+   ]
+  }
+ ],
+ "height": 159.18721030638432,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=20,left=20,bottom=20,right=14]",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "layered",
+  "org.eclipse.elk.disco.componentCompaction.strategy": "POLYOMINO"
+ },
+ "width": 204.26744329483475,
+ "x": 0.0,
+ "y": 0.0
+}

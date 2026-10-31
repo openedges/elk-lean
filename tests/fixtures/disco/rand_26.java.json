@@ -1,0 +1,115 @@
+{
+ "children": [
+  {
+   "height": 39.0,
+   "id": "n0",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 65.0,
+   "x": 182.59495773611613,
+   "y": 314.89790034739684
+  },
+  {
+   "height": 62.0,
+   "id": "n1",
+   "width": 58.0,
+   "x": 713.2028417832847,
+   "y": 294.6675231439955
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e0",
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "1"
+   },
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 134.59495773611613,
+       "y": 273.89790034739684
+      },
+      {
+       "x": 446.59495773611616,
+       "y": 82.89790034739681
+      }
+     ],
+     "endPoint": {
+      "x": 352.59495773611616,
+      "y": 365.89790034739684
+     },
+     "id": "s0",
+     "incomingShape": "n0",
+     "outgoingShape": "n0",
+     "startPoint": {
+      "x": 347.59495773611616,
+      "y": 98.89790034739681
+     }
+    }
+   ],
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "n0"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "e1",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "e",
+     "width": 12.0,
+     "x": 581.2028417832847,
+     "y": 95.66752314399548
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "7"
+   },
+   "sections": [
+    {
+     "endPoint": {
+      "x": 344.2028417832847,
+      "y": 18.66752314399548
+     },
+     "id": "e1_s0",
+     "startPoint": {
+      "x": 344.2028417832847,
+      "y": 18.66752314399548
+     }
+    }
+   ],
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n1"
+   ]
+  }
+ ],
+ "height": 415.33504628799096,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "3.71",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "org.eclipse.elk.polyomino.fill": "false",
+  "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE_AND_SHAPE",
+  "org.eclipse.elk.polyomino.traversalStrategy": "MANHATTAN"
+ },
+ "width": 824.2183454046925,
+ "x": 0.0,
+ "y": 0.0
+}

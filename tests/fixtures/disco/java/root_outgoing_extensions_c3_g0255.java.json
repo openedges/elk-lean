@@ -1,0 +1,134 @@
+{
+ "children": [
+  {
+   "height": 50.0,
+   "id": "rc0n0",
+   "labels": [
+    {
+     "height": 11.0,
+     "id": "rc0n0l",
+     "text": "a",
+     "width": 27.2,
+     "x": 4.9,
+     "y": -6.4
+    }
+   ],
+   "width": 79.8,
+   "x": 42.02708553630077,
+   "y": 18.616692299547957
+  },
+  {
+   "height": 17.4,
+   "id": "rc0n1",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "rc0n1p0",
+     "width": 4.0,
+     "x": 55.4,
+     "y": 10.5
+    },
+    {
+     "height": 0.0,
+     "id": "rc0n1p1",
+     "width": 0.0,
+     "x": 51.6,
+     "y": 17.4
+    }
+   ],
+   "width": 57.4,
+   "x": 15.030125893814017,
+   "y": 29.091652813505654
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "re0",
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 96.3682591204529,
+       "y": 24.267493630630074
+      },
+      {
+       "x": 95.65260471081669,
+       "y": 25.209186986995086
+      },
+      {
+       "x": 95.25647503911435,
+       "y": 25.59570137768728
+      },
+      {
+       "x": 95.07963468169734,
+       "y": 25.99984758240069
+      }
+     ],
+     "endPoint": {
+      "x": 94.64904679138093,
+      "y": 26.146875956135155
+     },
+     "id": "re0s",
+     "incomingShape": "rc0n1p0",
+     "outgoingShape": "rc0n0",
+     "startPoint": {
+      "x": 96.64904679138093,
+      "y": 24.146875956135155
+     }
+    }
+   ],
+   "sources": [
+    "rc0n1p0"
+   ],
+   "targets": [
+    "rc0n0"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "rx0",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 161.85721143011477,
+      "y": 48.746875956135156
+     },
+     "id": "rx0s",
+     "incomingShape": "rc0n1",
+     "outgoingShape": "rootP0",
+     "startPoint": {
+      "x": 108.31120499624708,
+      "y": 139.34687595613516
+     }
+    }
+   ],
+   "sources": [
+    "rc0n1"
+   ],
+   "targets": [
+    "rootP0"
+   ]
+  }
+ ],
+ "height": 105.23814095340985,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=14,left=5,bottom=0,right=20]",
+  "elk.randomSeed": "1",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "random"
+ },
+ "ports": [
+  {
+   "height": 4.0,
+   "id": "rootP0",
+   "width": 4.0,
+   "x": 179.72139802836892,
+   "y": 46.746875956135156
+  }
+ ],
+ "width": 161.85721143011477,
+ "x": 0.0,
+ "y": 0.0
+}

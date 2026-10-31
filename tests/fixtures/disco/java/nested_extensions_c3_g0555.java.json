@@ -1,0 +1,84 @@
+{
+ "children": [
+  {
+   "children": [
+    {
+     "height": 0.0,
+     "id": "dc0n0",
+     "width": 0.0,
+     "x": 59.18437510108026,
+     "y": 31.001339338661097
+    },
+    {
+     "height": 24.6,
+     "id": "dc1n0",
+     "width": 7.2,
+     "x": 2.6843751010802492,
+     "y": 9.61473218617725
+    },
+    {
+     "height": 40.1,
+     "id": "dc1n1",
+     "width": 60.9,
+     "x": 54.784375101080244,
+     "y": 5.3147321861772525
+    }
+   ],
+   "edges": [
+    {
+     "container": "dc",
+     "id": "de0",
+     "sections": [
+      {
+       "endPoint": {
+        "x": 85.18437510108025,
+        "y": 25.314732186177253
+       },
+       "id": "de0s",
+       "incomingShape": "dc1n0",
+       "outgoingShape": "dc1n1",
+       "startPoint": {
+        "x": 6.284375101080251,
+        "y": 21.914732186177254
+       }
+      }
+     ],
+     "sources": [
+      "dc1n0"
+     ],
+     "targets": [
+      "dc1n1"
+     ]
+    }
+   ],
+   "height": 80.7294643723545,
+   "id": "dc",
+   "layoutOptions": {
+    "elk.algorithm": "disco",
+    "elk.edge.thickness": "0",
+    "elk.spacing.componentComponent": "5",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+    "org.eclipse.elk.polyomino.fill": "false",
+    "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE_AND_SHAPE"
+   },
+   "width": 148.3687502021605,
+   "x": 10.0,
+   "y": 10.0
+  },
+  {
+   "height": 30.0,
+   "id": "o",
+   "width": 30.0,
+   "x": 366.6,
+   "y": 10.0
+  }
+ ],
+ "height": 120.7294643723545,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "fixed"
+ },
+ "width": 426.6,
+ "x": 0.0,
+ "y": 0.0
+}

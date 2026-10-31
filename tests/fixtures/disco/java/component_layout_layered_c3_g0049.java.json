@@ -1,0 +1,37 @@
+{
+ "children": [
+  {
+   "height": 8.9,
+   "id": "rc0n0",
+   "ports": [
+    {
+     "height": 0.0,
+     "id": "rc0n0p0",
+     "width": 0.0,
+     "x": -0.0,
+     "y": 4.45
+    }
+   ],
+   "width": 26.0,
+   "x": 21.716865005555412,
+   "y": 23.32349200444433
+  },
+  {
+   "height": 27.8,
+   "id": "rc1n0",
+   "width": 24.5,
+   "x": 84.95722201555515,
+   "y": 76.36384901444407
+  }
+ ],
+ "height": 148.98071401999948,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.spacing.componentComponent": "41",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "layered"
+ },
+ "width": 155.92408702111055,
+ "x": 0.0,
+ "y": 0.0
+}

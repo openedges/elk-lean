@@ -1,0 +1,60 @@
+{
+ "children": [
+  {
+   "height": 37.0,
+   "id": "n0",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n0_p0",
+     "width": 4.0,
+     "x": 7.0,
+     "y": 9.0
+    },
+    {
+     "height": 4.0,
+     "id": "n0_p1",
+     "width": 4.0,
+     "x": 0.0,
+     "y": 2.0
+    },
+    {
+     "height": 4.0,
+     "id": "n0_p2",
+     "width": 4.0,
+     "x": 9.0,
+     "y": 18.0
+    }
+   ],
+   "width": 14.0,
+   "x": 20.61880954754522,
+   "y": 22.928214321317824
+  },
+  {
+   "height": 16.0,
+   "id": "n1",
+   "width": 39.0,
+   "x": 86.37210326559,
+   "y": 116.2846429639535
+  },
+  {
+   "height": 68.0,
+   "id": "n2",
+   "width": 69.0,
+   "x": 75.97523819018087,
+   "y": 94.88777788854435
+  }
+ ],
+ "edges": [],
+ "height": 201.12539698363477,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=7,left=14,bottom=10,right=0]",
+  "elk.spacing.componentComponent": "41",
+  "org.eclipse.elk.polyomino.fill": "false"
+ },
+ "width": 179.7128572852713,
+ "x": 0.0,
+ "y": 0.0
+}

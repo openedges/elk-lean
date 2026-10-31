@@ -1,0 +1,118 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "random",
+  "elk.padding": "[top=14,left=5,bottom=0,right=20]",
+  "elk.randomSeed": "1"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 5.2,
+   "y": 115.0,
+   "width": 79.8,
+   "height": 50.0,
+   "labels": [
+    {
+     "id": "rc0n0l",
+     "text": "a",
+     "x": 4.9,
+     "y": -6.4,
+     "width": 27.2,
+     "height": 11.0
+    }
+   ]
+  },
+  {
+   "id": "rc0n1",
+   "x": 86.8,
+   "y": 119.0,
+   "width": 57.4,
+   "height": 17.4,
+   "ports": [
+    {
+     "id": "rc0n1p0",
+     "x": 55.4,
+     "y": 10.5,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "rc0n1p1",
+     "x": 51.6,
+     "y": 17.4,
+     "width": 0,
+     "height": 0
+    }
+   ]
+  }
+ ],
+ "width": 213.3,
+ "height": 359.1,
+ "ports": [
+  {
+   "id": "rootP0",
+   "x": 211.3,
+   "y": 35.1,
+   "width": 4,
+   "height": 4
+  }
+ ],
+ "edges": [
+  {
+   "id": "re0",
+   "sources": [
+    "rc0n1p0"
+   ],
+   "targets": [
+    "rc0n0"
+   ],
+   "sections": [
+    {
+     "id": "re0s",
+     "startPoint": {
+      "x": 144.2,
+      "y": 131.5
+     },
+     "endPoint": {
+      "x": 45.1,
+      "y": 140.0
+     },
+     "bendPoints": [
+      {
+       "x": 115.1,
+       "y": 110.1
+      },
+      {
+       "x": 106.7,
+       "y": 134.7
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rx0",
+   "sources": [
+    "rc0n1"
+   ],
+   "targets": [
+    "rootP0"
+   ],
+   "sections": [
+    {
+     "id": "rx0s",
+     "startPoint": {
+      "x": 115.5,
+      "y": 127.7
+     },
+     "endPoint": {
+      "x": 213.3,
+      "y": 37.1
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,132 @@
+{
+ "children": [
+  {
+   "height": 73.0,
+   "id": "n0",
+   "width": 56.0,
+   "x": 39.40092642033805,
+   "y": 79.34534228495602
+  },
+  {
+   "height": 50.0,
+   "id": "n1",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n1_p0",
+     "width": 4.0,
+     "x": 23.0,
+     "y": 13.0
+    },
+    {
+     "height": 4.0,
+     "id": "n1_p1",
+     "width": 4.0,
+     "x": 2.0,
+     "y": 42.0
+    }
+   ],
+   "width": 43.0,
+   "x": 134.36464234703175,
+   "y": 290.9418425953346
+  },
+  {
+   "height": 10.0,
+   "id": "n2",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 79.0,
+   "x": 91.08929493940497,
+   "y": 374.13021111440145
+  },
+  {
+   "height": 34.0,
+   "id": "n3",
+   "width": 38.0,
+   "x": 14.700463210169026,
+   "y": 14.594184259533456
+  },
+  {
+   "height": 55.0,
+   "id": "n4",
+   "width": 31.0,
+   "x": 26.625579012711285,
+   "y": 372.6930006207571
+  },
+  {
+   "height": 11.0,
+   "id": "n5",
+   "width": 74.0,
+   "x": 85.16417913686271,
+   "y": 36.62557901271128
+  },
+  {
+   "height": 58.0,
+   "id": "n6",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n6_p0",
+     "width": 4.0,
+     "x": 38.0,
+     "y": 6.0
+    },
+    {
+     "height": 4.0,
+     "id": "n6_p1",
+     "width": 4.0,
+     "x": 1.0,
+     "y": 23.0
+    }
+   ],
+   "width": 40.0,
+   "x": 126.4395265444895,
+   "y": 86.84534228495602
+  },
+  {
+   "height": 41.0,
+   "id": "n7",
+   "width": 55.0,
+   "x": 48.32604222288031,
+   "y": 295.4418425953346
+  },
+  {
+   "height": 73.0,
+   "id": "n8",
+   "width": 64.0,
+   "x": 73.31394753177821,
+   "y": 184.6592898167342
+  }
+ ],
+ "edges": [],
+ "height": 462.3185796334684,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "0.4",
+  "elk.padding": "[top=14,left=15,bottom=6,right=10]",
+  "elk.spacing.componentComponent": "28",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "org.eclipse.elk.polyomino.fill": "true",
+  "org.eclipse.elk.polyomino.traversalStrategy": "QUADRANTS_JITTER"
+ },
+ "width": 218.7776634584719,
+ "x": 0.0,
+ "y": 0.0
+}

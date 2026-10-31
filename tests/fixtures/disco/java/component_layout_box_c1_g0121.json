@@ -1,0 +1,18 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "elk.edge.thickness": "5",
+  "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE_AND_SHAPE"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 439.3,
+   "y": 353.1,
+   "width": 0,
+   "height": 0
+  }
+ ]
+}

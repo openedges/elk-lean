@@ -5,9 +5,10 @@ import Elk.Alg.Common.Polyomino
 * `twoBitGrid`: port of elk-rs `tests/all/two_bit_grid_test.rs` (`dimension_test`,
   `in_bounds_test`, `cell_test`) plus rendering/word-boundary checks.
 * `planarGrid`, `polyomino`, `profileFill`, `pack`: own checks. The expected values of
-  `profileFill` and `pack` were produced by a throw-away Rust program linked against elk-rs
-  `org-eclipse-elk-alg-common` 0.12.1 (same polyominoes, every traversal strategy, two sorting
-  configurations), i.e. they are oracle values. -/
+  `profileFill`, `pack` and the grid bounds were printed by a throw-away Java program against the
+  unmodified ELK 0.12.0 jars (same polyominoes, every traversal strategy, two sorting
+  configurations; agent DIS). They first came from elk-rs 0.12.1, which sorts the polyominoes
+  ascending where Java sorts with the low-level comparator `.reversed()`. -/
 namespace Tests.AlgCommon.Polyomino
 
 open Tests Elk.Alg.Common.Polyomino Elk.Alg.Common.Polyomino.Structures
@@ -93,10 +94,32 @@ def planarGrid : Suite := suite "alg.common.polyomino.PlanarGrid" do
   checkEq "isBlockedCenterBased (0,0)" (g.isBlockedCenterBased 0 0 |>.toOption) (some true)
   check "inBoundsCenterBased" (g.inBoundsCenterBased (-2) (-1) && g.inBoundsCenterBased 2 2 &&
     !g.inBoundsCenterBased (-3) 0 && !g.inBoundsCenterBased 3 0 && !g.inBoundsCenterBased 0 3)
-  check "toIndex out of bounds message" (match g.toIndex 3 0 with
-    | .error m => m == "Grid is only of size 5*4. Requested point (3, 0) is out of bounds."
+  check "toIndex out of bounds message (Java: translated point, then the center-based one)"
+    (match g.toIndex 0 3 with
+      | .error m => m == "Grid is only of size 5*4. Requested point (2, 4) is out of bounds. " ++
+          "Given center based coordinates were (0, 3)."
+      | .ok _ => false)
+  -- Java: a read right of the width inside the last 32-cell word sees an empty cell, a write fails
+  checkEq "isEmptyCenterBased right of the width (Java)" (g.isEmptyCenterBased 3 0 |>.toOption) (some true)
+  check "setBlockedCenterBased right of the width fails (Java)" (match g.setBlockedCenterBased 3 0 with
+    | .error m => m == "Grid is only of size 5*4. Requested point (5, 1) is out of bounds. " ++
+        "Given center based coordinates were (3, 0)."
     | .ok _ => false)
-  checkEq "filled bounds of empty grid" (PlanarGrid.new 4 4).filledBounds ((0 : Int), (0 : Int), (0 : Int), (0 : Int))
+  check "isEmptyCenterBased below the grid fails (Java)" (match g.isEmptyCenterBased 0 3 with
+    | .error m => m == "Grid is only of size 5*4. Requested point (2, 4) is out of bounds. " ++
+        "Given center based coordinates were (0, 3)."
+    | .ok _ => false)
+  checkEq "weaklyIntersectsArea right of the width inside the word (Java)"
+    (g.weaklyIntersectsArea 5 0 31 0 |>.toOption) (some false)
+  check "weaklyIntersectsArea beyond the word fails (Java)" (match g.weaklyIntersectsArea 5 0 32 0 with
+    | .error m => m == "Grid is only of size 5*4. Requested point (32, 0) is out of bounds."
+    | .ok _ => false)
+  check "weaklyBlockArea right of the width fails (Java)" (match g.weaklyBlockArea 4 0 5 0 with
+    | .error m => m == "Grid is only of size 5*4. Requested point (5, 0) is out of bounds."
+    | .ok _ => false)
+  -- Java `int` arithmetic: no blocked cell gives (MAX, MAX, MIN - MAX + 1 = 2, 2)
+  checkEq "filled bounds of empty grid (Java)" (PlanarGrid.new 4 4).filledBounds
+    ((2147483647 : Int), (2147483647 : Int), (2 : Int), (2 : Int))
   let g := (g.setBlocked 4 3).setBlocked 1 2
   checkEq "filled bounds" g.filledBounds ((1 : Int), (1 : Int), (4 : Int), (3 : Int))
   let w := match g.weaklyBlockArea 0 1 4 1 with | .ok w => w | .error _ => g
@@ -106,7 +129,8 @@ def planarGrid : Suite := suite "alg.common.polyomino.PlanarGrid" do
   checkEq "weaklyIntersectsArea miss" (w.weaklyIntersectsArea 0 0 4 0 |>.toOption) (some false)
   checkEq "weaklyIntersectsArea empty area" (w.weaklyIntersectsArea 3 0 2 0 |>.toOption) (some false)
   check "weaklyIntersectsArea out of bounds fails" (match w.weaklyIntersectsArea (-1) 0 0 0 with
-    | .error _ => true | .ok _ => false)
+    | .error m => m == "Grid is only of size 5*4. Requested point (-1, 0) is out of bounds."
+    | .ok _ => false)
   -- grid intersection: a 1x1 blocked other grid against the blocked center cell
   let other := (PlanarGrid.new 1 1).setBlocked 0 0
   check "intersectsWithCenterBasedGrid at center" (g.intersectsWithCenterBasedGrid other 0 0)
@@ -172,10 +196,10 @@ private def makePolys : Array Polyomino :=
   #[p0, p1, ring, p3]
 
 def profileFill : Suite := suite "alg.common.polyomino.ProfileFill" do
-  checkEq "ring is filled (oracle)" (render (ProfileFill.fillPolyomino ring).grid) "XXXX|XXXX|XXXX|"
+  checkEq "ring is filled (Java)" (render (ProfileFill.fillPolyomino ring).grid) "XXXX|XXXX|XXXX|"
   let u := blockAll (Polyomino.new 5 4) #[(0, 0), (0, 1), (0, 2), (0, 3), (4, 0), (4, 1), (4, 2),
     (4, 3), (1, 3), (2, 3), (3, 3), (2, 1)]
-  checkEq "U shape (oracle)" (render (ProfileFill.fillPolyomino u).grid) "X___X|X_X_X|X_X_X|XXXXX|"
+  checkEq "U shape (Java)" (render (ProfileFill.fillPolyomino u).grid) "X___X|X_X_X|X_X_X|XXXXX|"
   let empty := Polyomino.new 3 3
   checkEq "empty polyomino unchanged" (render (ProfileFill.fillPolyomino empty).grid) "___|___|___|"
 
@@ -187,35 +211,36 @@ private def packLine (i j : Nat) (h : Polyominoes Polyomino) : String := Id.run 
   line := line ++ s!" grid {h.grid.width}x{h.grid.height} bounds {bx} {byy} {bw} {bh}"
   return line
 
-/-- Oracle output (elk-rs 0.12.1) of the pack runs: strategy index (Java ordinal) × sorting
-configuration (0 = BY_SIZE_AND_SHAPE / NUM_OF_EXTERNAL_SIDES…, 1 = BY_SIZE / CORNER_CASES…). -/
+/-- ELK Java 0.12.0 output of the pack runs: strategy index (Java ordinal) × sorting configuration
+(0 = BY_SIZE_AND_SHAPE / NUM_OF_EXTERNAL_SIDES…, 1 = BY_SIZE / CORNER_CASES…). The low-level sort is
+descending (`.reversed()`), so the 4x3 ring comes first in every run. -/
 private def expectedPack : Array String := #[
-    "pack 0 0 (2x4@12,12) (3x3@9,13) (4x3@13,10) (1x1@13,13) grid 26x28 bounds 9 10 8 6",
-    "pack 0 1 (3x3@11,12) (2x4@10,13) (4x3@8,9) (1x1@12,11) grid 26x28 bounds 8 9 6 8",
-    "pack 1 0 (2x4@12,12) (3x3@9,10) (4x3@13,10) (1x1@13,13) grid 26x28 bounds 9 10 8 6",
-    "pack 1 1 (3x3@11,12) (2x4@14,10) (4x3@8,9) (1x1@14,14) grid 26x28 bounds 8 9 8 6",
-    "pack 2 0 (2x4@12,12) (3x3@13,12) (4x3@11,9) (1x1@12,16) grid 26x28 bounds 11 9 5 8",
-    "pack 2 1 (3x3@11,12) (2x4@14,12) (4x3@11,9) (1x1@15,13) grid 26x28 bounds 11 9 5 7",
-    "pack 3 0 (2x4@12,12) (3x3@13,12) (4x3@11,9) (1x1@14,15) grid 26x28 bounds 11 9 5 7",
-    "pack 3 1 (3x3@11,12) (2x4@14,12) (4x3@11,9) (1x1@15,13) grid 26x28 bounds 11 9 5 7",
-    "pack 4 0 (2x4@12,12) (3x3@9,10) (4x3@13,10) (1x1@13,13) grid 26x28 bounds 9 10 8 6",
-    "pack 4 1 (3x3@11,12) (2x4@14,10) (4x3@8,9) (1x1@14,14) grid 26x28 bounds 8 9 8 6",
-    "pack 5 0 (2x4@12,12) (3x3@13,12) (4x3@11,9) (1x1@12,16) grid 26x28 bounds 11 9 5 8",
-    "pack 5 1 (3x3@11,12) (2x4@14,12) (4x3@11,9) (1x1@15,13) grid 26x28 bounds 11 9 5 7",
-    "pack 6 0 (2x4@12,12) (3x3@13,12) (4x3@11,9) (1x1@14,15) grid 26x28 bounds 11 9 5 7",
-    "pack 6 1 (3x3@11,12) (2x4@14,12) (4x3@11,9) (1x1@15,13) grid 26x28 bounds 11 9 5 7",
-    "pack 7 0 (2x4@12,12) (3x3@9,10) (4x3@13,10) (1x1@13,13) grid 26x28 bounds 9 10 8 6",
-    "pack 7 1 (3x3@11,12) (2x4@14,10) (4x3@8,9) (1x1@12,15) grid 26x28 bounds 8 9 8 7",
-    "pack 8 0 (2x4@12,12) (3x3@13,12) (4x3@11,9) (1x1@12,16) grid 26x28 bounds 11 9 5 8",
-    "pack 8 1 (3x3@11,12) (2x4@14,12) (4x3@11,9) (1x1@15,13) grid 26x28 bounds 11 9 5 7"]
+    "pack 0 0 (4x3@11,12) (3x3@8,14) (2x4@9,10) (1x1@10,11) grid 26x28 bounds 8 10 7 7",
+    "pack 0 1 (4x3@11,12) (3x3@8,14) (2x4@9,10) (1x1@10,11) grid 26x28 bounds 8 10 7 7",
+    "pack 1 0 (4x3@11,12) (3x3@8,9) (2x4@10,12) (1x1@11,11) grid 26x28 bounds 8 9 7 7",
+    "pack 1 1 (4x3@11,12) (3x3@8,9) (2x4@10,12) (1x1@11,11) grid 26x28 bounds 8 9 7 7",
+    "pack 2 0 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 2 1 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 3 0 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 3 1 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 4 0 (4x3@11,12) (3x3@8,9) (2x4@10,12) (1x1@12,11) grid 26x28 bounds 8 9 7 7",
+    "pack 4 1 (4x3@11,12) (3x3@8,9) (2x4@10,12) (1x1@12,11) grid 26x28 bounds 8 9 7 7",
+    "pack 5 0 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 5 1 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 6 0 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 6 1 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 7 0 (4x3@11,12) (3x3@8,9) (2x4@10,12) (1x1@12,11) grid 26x28 bounds 8 9 7 7",
+    "pack 7 1 (4x3@11,12) (3x3@8,9) (2x4@10,12) (1x1@12,11) grid 26x28 bounds 8 9 7 7",
+    "pack 8 0 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7",
+    "pack 8 1 (4x3@11,12) (3x3@11,9) (2x4@10,12) (1x1@12,15) grid 26x28 bounds 10 9 5 7"]
 
 private def expectedDefaultGrid : String :=
   "__________________________|__________________________|__________________________|" ++
   "__________________________|__________________________|__________________________|" ++
   "__________________________|__________________________|__________________________|" ++
-  "__________________________|_________XXX_XXXX_________|_________XXX_XXXX_________|" ++
-  "_________XXXXXXXX_________|____________XX000000000000|____________X_____________|" ++
-  "____________XX____________|__________________________|__________________________|" ++
+  "________XXX_______________|________XXX_______________|________XXX_X0000000000000|" ++
+  "__________XXXXX___________|__________XXXXX___________|__________XXXXX___________|" ++
+  "__________XX______________|__________________________|__________________________|" ++
   "__________________________|__________________________|__________________________|" ++
   "__________________________|__________________________|__________________________|" ++
   "__________________________|__________________________|__________________________|" ++
@@ -234,16 +259,16 @@ def pack : Suite := suite "alg.common.polyomino.PolyominoCompactor" do
       let h := h.setProperty PolyominoOptions.POLYOMINO_LOW_LEVEL_SORT (some low)
       let h := h.setProperty PolyominoOptions.POLYOMINO_HIGH_LEVEL_SORT (some high)
       let h ← PolyominoCompactor.packPolyominoesIO h
-      checkEq s!"packPolyominoes {strategies[i]!} config {j} (oracle)" (packLine i j h)
+      checkEq s!"packPolyominoes {strategies[i]!} config {j} (Java)" (packLine i j h)
         (expectedPack[i * 2 + j]!)
   -- default options (property defaults: QUADRANTS_LINE_BY_LINE, BY_SIZE_AND_SHAPE, NUM_OF_...)
   let h ← PolyominoCompactor.packPolyominoesIO (Polyominoes.new makePolys 1.0 true)
-  checkEq "packPolyominoes default grid (oracle)" (render h.grid) expectedDefaultGrid
+  checkEq "packPolyominoes default grid (Java)" (render h.grid) expectedDefaultGrid
   checkEq "default options = config 0" (packLine 4 0 h) (expectedPack[8]!)
-  -- grid sizing by aspect ratio (oracle: 65x28 and 26x94)
+  -- grid sizing by aspect ratio (Java: 65x28 and 26x94)
   let h2 := Polyominoes.new makePolys 2.5 false
   let h3 := Polyominoes.new makePolys 0.3 false
-  checkEq "aspect ratio sizes (oracle)" (h2.grid.width, h2.grid.height, h3.grid.width, h3.grid.height)
+  checkEq "aspect ratio sizes (Java)" (h2.grid.width, h2.grid.height, h3.grid.width, h3.grid.height)
     (65, 28, 26, 94)
   -- options metadata
   let r := PolyominoOptions.metaDataProvider.apply {}

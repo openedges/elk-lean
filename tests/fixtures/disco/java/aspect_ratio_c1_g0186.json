@@ -1,0 +1,31 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "3.0",
+  "elk.edge.thickness": "2"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 234.1,
+   "y": 64.0,
+   "width": 48.5,
+   "height": 30.4
+  },
+  {
+   "id": "rc1n0",
+   "x": 224.4,
+   "y": 234.0,
+   "width": 77.6,
+   "height": 56.7
+  },
+  {
+   "id": "rc2n0",
+   "x": 45.3,
+   "y": 12.8,
+   "width": 12.7,
+   "height": 54.6
+  }
+ ]
+}

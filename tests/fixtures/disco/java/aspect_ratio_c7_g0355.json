@@ -1,0 +1,24 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "3.0",
+  "org.eclipse.elk.polyomino.fill": "true"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 562.6,
+   "y": 406.7,
+   "width": 6.5,
+   "height": 27.1
+  },
+  {
+   "id": "rc1n0",
+   "x": 9.5,
+   "y": 424.2,
+   "width": 51.6,
+   "height": 14.5
+  }
+ ]
+}
