@@ -482,6 +482,17 @@ def segmentGraphDiffTests : Suite := suite "layered.p5edges.orthogonal.segmentGr
     if !segmentGraphDiffRun { segments := big } { segments := big } (seed.toUInt64 * 104729 + 3) 1500 then
       bigAgree := false
   check "10 random sequences of 1500 operations on 40 segments agree with the reference" bigAgree
+  -- past the flat head of the dependency columns (2^20 - 2 words): the chunked part
+  let (g, r) := (List.range 1100000).foldl (init := (({ segments := big } : SegmentGraph),
+      ({ segments := big } : Tests.Layered.SegmentGraphRef.SegmentGraph))) fun (g, r) i =>
+    let s := i % 40
+    let t := (i * 7 + 3) % 40
+    let critical := i % 11 == 0
+    let w : Int := (i % 13 : Nat)
+    (g.addDependency critical s t w, r.addDependency critical s t w)
+  check "1.1 million dependencies (chunked columns) agree with the reference" (segmentGraphsAgree g r)
+  check "chunked columns: random removals and reversals agree with the reference"
+    (segmentGraphDiffRun g r 12345 12)
 
 def generatorTests : Suite := suite "layered.p5edges.orthogonal.generator" do
   checkEq "countCrossings" (OrthogonalRoutingGenerator.countCrossings #[10, 20, 30, 40] 15 30) 2
