@@ -176,8 +176,69 @@ def sortPortsOfLayer (nodes : Array LNodeId) (comparator : ModelOrderPortCompara
     cachePortSides node
   return comparator
 
-/-- `process(graph, progressMonitor)` body. -/
-def run (graph : LGraphId) : LayeredM Unit := do
+/-! ### Pure comparators (Lean only)
+
+`run` sorts with the pure comparators on the arena (`NodeCmpEnv`, `PortCmpEnv`; see their module
+sections): the same comparison sequences (the insertion sort, JDK `TimSort` through `javaSortByM`),
+the same relations and the same exceptions as `runRef`, which uses the monadic comparators and is
+kept as the reference (differential test `layered.intermediate.sortByInputModelProcessor.pure`). The
+comparators only read the arena, so each sort reads it once. -/
+
+/-- The insertion sort loop of `insertionSortM` from element `i` on (`temp` moves left while
+`compare(left, temp) > 0`); the sorted nodes, or a failed comparison result (`NodeCmpEnv.isFailure`). -/
+partial def insertionSortFrom (a : LGraphArena) (env : NodeCmpEnv) (layer : Array LNodeId) (i : Nat)
+    (rel : ModelOrderRelations LNodeId) : Except Int (Array LNodeId) :=
+  if h : i < layer.size then
+    let temp := layer[i]
+    let rec shift (layer : Array LNodeId) (j : Nat) (rel : ModelOrderRelations LNodeId) :
+        Except Int (Array LNodeId × Nat × ModelOrderRelations LNodeId) :=
+      match j with
+      | 0 => .ok (layer, 0, rel)
+      | j' + 1 =>
+        let left := layer[j']!
+        let (r, rel) := NodeCmpEnv.compareCore a env rel left temp
+        if NodeCmpEnv.isFailure r then .error r
+        else if r > 0 then shift (layer.set! j left) j' rel
+        else .ok (layer, j, rel)
+    match shift layer i rel with
+    | .ok (layer, j, rel) => insertionSortFrom a env (layer.set! j temp) (i + 1) rel
+    | .error r => .error r
+  else .ok layer
+
+/-- `insertionSort(layer, comparator)` with the pure node comparator (fresh relations; the relations
+after the sort are cleared, as `clearTransitiveOrdering` does). -/
+def insertionSortIn (env : NodeCmpEnv) (layer : Array LNodeId) : LayeredM (Array LNodeId) := do
+  match insertionSortFrom (← get) env layer 1 (ModelOrderRelations.emptyWithCapacity layer.size) with
+  | .ok sorted => return sorted
+  | .error r => throw (IO.userError (NodeCmpEnv.failureText r))
+
+/-- `Collections.sort(ports, comparator)` with the pure port comparator (fresh relations per node). -/
+def javaSortPortsIn (env : PortCmpEnv) (ports : Array LPortId) : LayeredM (Array LPortId) := do
+  let a ← get
+  let cmp (p q : LPortId) : StateT (ModelOrderRelations LPortId) (Except String) Ordering := do
+    let r ← modifyGet fun rel => PortCmpEnv.compareCore a env rel p q
+    if r == PortCmpEnv.failed then throw maxModelOrderNodesNullError
+    return compare r 0
+  match (javaSortByM ports cmp).run' (ModelOrderRelations.emptyWithCapacity ports.size) with
+  | .ok (.ok sorted) => return sorted
+  | .ok (.error _) => throw (IO.userError JavaSort.contractViolationError)
+  | .error msg => throw (IO.userError msg)
+
+/-- `sortPortsOfLayer` with the pure port comparator; returns the comparator environment. -/
+def sortPortsOfLayerIn (nodes : Array LNodeId) (env : PortCmpEnv) : LayeredM PortCmpEnv := do
+  let mut env := env
+  for node in nodes do
+    let constraints := (← getNode node).props.getD LayeredOptions.PORT_CONSTRAINTS .undefined
+    if constraints == .fixedOrder || constraints == .fixedPos then continue
+    let longEdgeTargets ← longEdgeTargetNodePreprocessing node
+    env := env.resetForNodeTargetModelOrder (some longEdgeTargets)
+    let ports ← javaSortPortsIn env (← getNode node).ports
+    modifyNode node fun n => { n with ports := ports }
+    cachePortSides node
+  return env
+
+/-- `process(graph, progressMonitor)` body with the monadic comparators (the reference of `run`). -/
+def runRef (graph : LGraphId) : LayeredM Unit := do
   let gr ← getGraph graph
   let layers := gr.layers
   if layers.isEmpty then return
@@ -214,6 +275,38 @@ def run (graph : LGraphId) : LayeredM Unit := do
     let (sorted, c) ← insertionSort nodes postPortsNodeComparator
     nodes := sorted
     postPortsNodeComparator := c
+    modifyLayer layer fun l => { l with nodes := nodes }
+    previousLayerNodes := nodes
+    layerIndex := layerIndex + 1
+
+/-- `process(graph, progressMonitor)` body: `runRef` with the pure comparators (see "Pure comparators"). -/
+def run (graph : LGraphId) : LayeredM Unit := do
+  let gr ← getGraph graph
+  let layers := gr.layers
+  if layers.isEmpty then return
+  let orderingStrategy := gr.props.getD LayeredOptions.CONSIDER_MODEL_ORDER_STRATEGY .none
+  let longEdgeStrategy := gr.props.getD LayeredOptions.CONSIDER_MODEL_ORDER_LONG_EDGE_STRATEGY .equal
+  let portModelOrder := gr.props.getD LayeredOptions.CONSIDER_MODEL_ORDER_PORT_MODEL_ORDER false
+  let context ← ModelOrderGraphContext.ofGraph graph
+  let prePorts := NodeCmpEnv.new context #[] orderingStrategy longEdgeStrategy true
+  let postPorts := NodeCmpEnv.new context #[] orderingStrategy longEdgeStrategy false
+  let mut portEnv := PortCmpEnv.new context #[] orderingStrategy none portModelOrder
+  let mut previousLayerNodes : Array LNodeId := #[]
+  let mut layerIndex := 0
+  for layer in layers do
+    modifyLayer layer fun l => { l with id := (layerIndex : Int) }
+    let mut nodes := (← getLayer layer).nodes
+    -- Java semantics: for the first layer, previousLayer is the layer itself
+    if layerIndex == 0 then
+      previousLayerNodes := nodes
+    nodes ← insertionSortIn (prePorts.resetForPreviousLayer previousLayerNodes) nodes
+    modifyLayer layer fun l => { l with nodes := nodes }
+    -- Java: the later comparators copy the previous layer when they are created; for layer `0` that is
+    -- the layer itself, now sorted
+    if layerIndex == 0 then
+      previousLayerNodes := nodes
+    portEnv ← sortPortsOfLayerIn nodes (portEnv.resetForPreviousLayer previousLayerNodes)
+    nodes ← insertionSortIn (postPorts.resetForPreviousLayer previousLayerNodes) nodes
     modifyLayer layer fun l => { l with nodes := nodes }
     previousLayerNodes := nodes
     layerIndex := layerIndex + 1

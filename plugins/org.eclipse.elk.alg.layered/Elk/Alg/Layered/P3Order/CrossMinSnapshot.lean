@@ -261,8 +261,8 @@ private partial def buildNodes (a : LGraphArena) (nPorts : Nat) (order : Array (
     else buildNodes a nPorts order (li + 1) 0 flat b
   else (flat, b)
 
-/-- `CrossMinSnapshot::build(order, n_ports)` on an arena. -/
-def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : CrossMinSnapshot := Id.run do
+/-- `CrossMinSnapshot::build(order, n_ports)` on an arena, line by line (the reference of `ofArena`). -/
+def ofArenaRef (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : CrossMinSnapshot := Id.run do
   let b0 : Builder := {
     nodeRefs := #[], nodeGraphIds := #[], nodeLayers := #[], nodeTypes := #[], nodeNested := #[], nodePortIds := #[],
     nodeKeys := #[], nodeValues := #[], portKeys := #[], portValues := #[]
@@ -343,6 +343,286 @@ def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : C
                   nodeMaxPortIds := maxIds, nodeOrderFixed, nodeEndFlags, nodePredCounts := predCounts,
                   nodeSuccCounts := succCounts, portFlags, endIds, endStart, endMid,
                   portMap := IdIndex.ofPairs portKeys portValues }
+
+/-! ### Fewer allocations and passes (Lean only)
+
+`ofArena` builds the same snapshot as `ofArenaRef` (kept as the reference; differential test
+`layered.p3.crossMinSnapshot`): the far end ids are pushed straight from the edges (no intermediate
+port arrays), no per-port check tuple is kept (`portEndsOk` reads the arena's ports again in the
+capture order: it only reads, and a port id's flag only goes from `0` to `1`, so the order of the
+checks does not matter), and the per-port values (flags, far end ranges) and the per-node values
+(side mask, counts, flags) are computed in one pass each, with the loop state in arguments. The
+per-node "a far end lies in the node's layer" bits reuse the per-port ones when the port id's
+captured owner is the node (then both use the same layer). -/
+
+/-- The arrays of the node and port pass of `ofArena` (`Builder` without the check tuples). -/
+structure FastBuilder where
+  nodeRefs : Array LNodeId
+  nodeGraphIds : Array Nat
+  nodeLayers : Array Nat
+  nodeTypes : Array NodeType
+  nodeNested : Array Bool
+  nodePortIds : Array (Array Nat)
+  nodeKeys : Array Nat
+  nodeValues : Array Nat
+  portKeys : Array Nat
+  portValues : Array Nat
+  portSides : Array PortSide
+  portOwners : Array Nat
+  portRefs : Array (Option LPortId)
+  portIns : Array (Array Nat)
+  portOuts : Array (Array Nat)
+  deriving Inhabited
+
+namespace FastBuilder
+
+/-- `Builder.addNode`. -/
+@[noinline] def addNode (b : FastBuilder) (node : LNodeId) (nd : LNode) (layerIndex flat : Nat) : FastBuilder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout⟩ =>
+    ⟨nr.push node, ng.push (toU32 nd.id), nl.push layerIndex, nt.push nd.type, nn.push nd.nestedGraph.isSome, npi,
+      nk.push node.idx, nv.push flat, pk, pv, ps, po, pr, pin, pout⟩
+
+/-- `Builder.addPortIds`. -/
+@[noinline] def addPortIds (b : FastBuilder) (ids : Array Nat) : FastBuilder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout⟩ =>
+    ⟨nr, ng, nl, nt, nn, npi.push ids, nk, nv, pk, pv, ps, po, pr, pin, pout⟩
+
+/-- `Builder.addPortKey`. -/
+@[noinline] def addPortKey (b : FastBuilder) (port : LPortId) (pid : Nat) : FastBuilder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout⟩ =>
+    ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk.push port.idx, pv.push pid, ps, po, pr, pin, pout⟩
+
+/-- `Builder.capture` without the check tuple. -/
+@[noinline] def capture (b : FastBuilder) (pid flat : Nat) (port : LPortId) (side : PortSide) (preds succs : Array Nat) :
+    FastBuilder :=
+  match b with
+  | ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps, po, pr, pin, pout⟩ =>
+    ⟨nr, ng, nl, nt, nn, npi, nk, nv, pk, pv, ps.set! pid side, po.set! pid flat, pr.set! pid (some port),
+      Builder.appendEnds pin pid preds, Builder.appendEnds pout pid succs⟩
+
+end FastBuilder
+
+/-- The captured ids of the sources (`incoming`) or targets of `edges[k:]` that have one, pushed onto `acc`. -/
+partial def pushEndIds (a : LGraphArena) (edges : Array LEdgeId) (incoming : Bool) (k : Nat) (acc : Array Nat) : Array Nat :=
+  if h : k < edges.size then
+    let ed := a.edge edges[k]
+    match (if incoming then ed.source else ed.target) with
+    | some p => pushEndIds a edges incoming (k + 1) (acc.push (toU32 (a.port p).id))
+    | none => pushEndIds a edges incoming (k + 1) acc
+  else acc
+
+/-- The port loop of `ofArena` over `ports[j:]` of flat node `flat`. -/
+private partial def buildPortsFast (a : LGraphArena) (nPorts : Nat) (ports : Array LPortId) (j flat : Nat)
+    (portIds : Array Nat) (b : FastBuilder) : Array Nat × FastBuilder :=
+  if h : j < ports.size then
+    let port := ports[j]
+    let pt := a.port port
+    let pid := toU32 pt.id
+    let b := b.addPortKey port pid
+    let portIds := portIds.push pid
+    if pid < nPorts then
+      let preds := pushEndIds a pt.incomingEdges true 0 (Array.emptyWithCapacity pt.incomingEdges.size)
+      let succs := pushEndIds a pt.outgoingEdges false 0 (Array.emptyWithCapacity pt.outgoingEdges.size)
+      buildPortsFast a nPorts ports (j + 1) flat portIds (b.capture pid flat port pt.side preds succs)
+    else buildPortsFast a nPorts ports (j + 1) flat portIds b
+  else (portIds, b)
+
+/-- The node loop of `ofArena` over `order[li][k:]` and the following layers. -/
+private partial def buildNodesFast (a : LGraphArena) (nPorts : Nat) (order : Array (Array LNodeId)) (li k flat : Nat)
+    (b : FastBuilder) : Nat × FastBuilder :=
+  if h : li < order.size then
+    let layer := order[li]
+    if h2 : k < layer.size then
+      let node := layer[k]
+      let nd := a.node node
+      let b := b.addNode node nd li flat
+      let (portIds, b) := buildPortsFast a nPorts nd.ports 0 flat (Array.emptyWithCapacity nd.ports.size) b
+      buildNodesFast a nPorts order li (k + 1) (flat + 1) (b.addPortIds portIds)
+    else buildNodesFast a nPorts order (li + 1) 0 flat b
+  else (flat, b)
+
+/-- Whether a far end of `ends[k:]` has its captured owner in layer `li` (`ofArenaRef`'s `endInLayer`). -/
+partial def endInLayerFrom (portOwners nodeLayers : Array Nat) (ends : Array Nat) (li k : Nat) : Bool :=
+  if h : k < ends.size then
+    if nodeLayers[portOwners[ends[k]]?.getD 0]?.getD 0 == li then true
+    else endInLayerFrom portOwners nodeLayers ends li (k + 1)
+  else false
+
+/-- The per-port pass of `ofArena` from port id `pid` on: `portFlags`, the "far end in the owner's layer"
+bits (`1`: a predecessor, `2`: a successor) and the far end ranges. -/
+partial def portPass (portSides : Array PortSide) (portOwners nodeLayers : Array Nat) (portIns portOuts : Array (Array Nat))
+    (nPorts pid : Nat) (flags layerBits : ByteArray) (endIds endStart endMid : Array Nat) :
+    ByteArray × ByteArray × Array Nat × Array Nat × Array Nat :=
+  if pid < nPorts then
+    let ins := portIns[pid]?.getD #[]
+    let outs := portOuts[pid]?.getD #[]
+    let li := nodeLayers[portOwners[pid]?.getD 0]?.getD 0
+    let insIn := endInLayerFrom portOwners nodeLayers ins li 0
+    let outsIn := endInLayerFrom portOwners nodeLayers outs li 0
+    let hasIns : UInt8 := if ins.isEmpty then 0 else 1
+    let hasOuts : UInt8 := if outs.isEmpty then 0 else 2
+    let inLayer : UInt8 := if outsIn || insIn then 4 else 0
+    let sideOrd : UInt8 := (ElkEnum.ordinal (portSides[pid]?.getD .undefined)).toUInt8
+    let f : UInt8 := hasIns ||| hasOuts ||| inLayer ||| (sideOrd <<< 3)
+    let bits : UInt8 := (if insIn then 1 else 0) ||| (if outsIn then 2 else 0)
+    let endStart := endStart.push endIds.size
+    let endIds := endIds ++ ins
+    let endMid := endMid.push endIds.size
+    portPass portSides portOwners nodeLayers portIns portOuts nPorts (pid + 1) (flags.push f) (layerBits.push bits)
+      (endIds ++ outs) endStart endMid
+  else (flags, layerBits, endIds, endStart.push endIds.size, endMid)
+
+/-- The per-node values of one flat node (`ofArenaRef`'s side mask, counts and "far end in the node's
+layer" bits). -/
+structure NodeValues where
+  mask : UInt8
+  inCount : Nat
+  northInCount : Nat
+  outCount : Nat
+  maxId : Nat
+  predInLayer : Bool
+  succInLayer : Bool
+  predCount : Nat
+  succCount : Nat
+  deriving Inhabited
+
+/-- The port id loop of the node pass over `pids[k:]` of flat node `f` in layer `li`. -/
+partial def nodePortsPass (portSides : Array PortSide) (portOwners nodeLayers : Array Nat)
+    (portIns portOuts : Array (Array Nat)) (layerBits : ByteArray) (f li : Nat) (pids : Array Nat) (k : Nat)
+    (mask : UInt8) (inCount northInCount outCount maxId : Nat) (predIn succIn : Bool) (predCount succCount : Nat) :
+    NodeValues :=
+  if h : k < pids.size then
+    let pid := pids[k]
+    let side := portSides[pid]?.getD .undefined
+    let ins := portIns[pid]?.getD #[]
+    let outs := portOuts[pid]?.getD #[]
+    let hasIn := !ins.isEmpty
+    let isNorth := match side with
+      | .north => true
+      | _ => false
+    let own := portOwners[pid]?.getD 0 == f && pid < layerBits.size
+    let bits := if h : pid < layerBits.size then layerBits[pid] else 0
+    let pIn := predIn || (if own then bits &&& 1 != 0 else endInLayerFrom portOwners nodeLayers ins li 0)
+    let sIn := succIn || (if own then bits &&& 2 != 0 else endInLayerFrom portOwners nodeLayers outs li 0)
+    nodePortsPass portSides portOwners nodeLayers portIns portOuts layerBits f li pids (k + 1)
+      (mask ||| sideBit side) (if hasIn then inCount + 1 else inCount) (if hasIn && isNorth then northInCount + 1 else northInCount)
+      (if outs.isEmpty then outCount else outCount + 1) (max maxId (pid + 1)) pIn sIn (predCount + ins.size)
+      (succCount + outs.size)
+  else ⟨mask, inCount, northInCount, outCount, maxId, predIn, succIn, predCount, succCount⟩
+
+/-- The output arrays of the node pass. -/
+structure NodeArrays where
+  masks : Array UInt8
+  inCounts : Array Nat
+  northInCounts : Array Nat
+  outCounts : Array Nat
+  maxIds : Array Nat
+  orderFixed : ByteArray
+  endFlags : ByteArray
+  predCounts : Array Nat
+  succCounts : Array Nat
+  deriving Inhabited
+
+/-- Appends the values of one node (a constructor match in a function that is not inlined, so that the
+cell and its arrays are reused). -/
+@[noinline] def NodeArrays.push (n : NodeArrays) (v : NodeValues) (fixed : Bool) (assoc : UInt8) : NodeArrays :=
+  match n with
+  | ⟨masks, ins, norths, outs, maxIds, fixedB, flags, preds, succs⟩ =>
+    ⟨masks.push v.mask, ins.push v.inCount, norths.push v.northInCount, outs.push v.outCount, maxIds.push v.maxId,
+      fixedB.push (if fixed then 1 else 0),
+      flags.push ((if v.predInLayer then 1 else 0) ||| (if v.succInLayer then 2 else 0) ||| assoc),
+      preds.push v.predCount, succs.push v.succCount⟩
+
+/-- The node pass of `ofArena` from flat node `f` on. -/
+partial def nodePass (a : LGraphArena) (nodeRefs : Array LNodeId) (nodePortIds : Array (Array Nat))
+    (portSides : Array PortSide) (portOwners nodeLayers : Array Nat) (portIns portOuts : Array (Array Nat))
+    (layerBits : ByteArray) (f : Nat) (acc : NodeArrays) : NodeArrays :=
+  if h : f < nodeRefs.size then
+    let nd := a.node nodeRefs[f]
+    let fixed := (nd.props.getD LayeredOptions.PORT_CONSTRAINTS PortConstraints.undefined).isOrderFixed
+    let li := nodeLayers[f]?.getD 0
+    let v := nodePortsPass portSides portOwners nodeLayers portIns portOuts layerBits f li (nodePortIds[f]?.getD #[]) 0
+      0 0 0 0 0 false false 0 0
+    let assoc : UInt8 := if nd.internal.barycenterAssociates.isEmpty then 0 else 4
+    nodePass a nodeRefs nodePortIds portSides portOwners nodeLayers portIns portOuts layerBits (f + 1)
+      (acc.push v fixed assoc)
+  else acc
+
+/-- Whether port `fp` is the captured port of its id (`portRefs`). -/
+@[inline] def isCapturedPort (a : LGraphArena) (portRefs : Array (Option LPortId)) (nPorts : Nat) (fp : LPortId) : Bool :=
+  let fid := toU32 (a.port fp).id
+  fid < nPorts && (match portRefs[fid]? with
+    | some (some p) => p.idx == fp.idx
+    | _ => false)
+
+/-- Over `edges[k:]`: whether every edge has its source (`incoming`) or target, and that end is a
+captured port (`portEndsOk`'s `complete` and `farOk`). -/
+partial def endsCaptured (a : LGraphArena) (portRefs : Array (Option LPortId)) (nPorts : Nat) (edges : Array LEdgeId)
+    (incoming : Bool) (k : Nat) : Bool :=
+  if h : k < edges.size then
+    let ed := a.edge edges[k]
+    match (if incoming then ed.source else ed.target) with
+    | some p => isCapturedPort a portRefs nPorts p && endsCaptured a portRefs nPorts edges incoming (k + 1)
+    | none => false
+  else true
+
+/-- The `portEndsOk` checks of the ports `ports[j:]` (`ofArenaRef`'s `endChecks` loop). -/
+partial def endsOkPorts (a : LGraphArena) (portRefs : Array (Option LPortId)) (portIns portOuts : Array (Array Nat))
+    (nPorts : Nat) (ports : Array LPortId) (j : Nat) (ok : ByteArray) : ByteArray :=
+  if h : j < ports.size then
+    let port := ports[j]
+    let pt := a.port port
+    let pid := toU32 pt.id
+    if pid < nPorts then
+      let own := match portRefs[pid]? with
+        | some (some p) => p.idx == port.idx
+        | _ => false
+      -- every edge complete: the far ends are `incoming ++ outgoing` (one per edge)
+      let single := (portIns[pid]?.getD #[]).size + (portOuts[pid]?.getD #[]).size ==
+        pt.incomingEdges.size + pt.outgoingEdges.size
+      let good := own && single && endsCaptured a portRefs nPorts pt.incomingEdges true 0 &&
+        endsCaptured a portRefs nPorts pt.outgoingEdges false 0
+      endsOkPorts a portRefs portIns portOuts nPorts ports (j + 1) (if good then ok.set! pid 1 else ok)
+    else endsOkPorts a portRefs portIns portOuts nPorts ports (j + 1) ok
+  else ok
+
+/-- The `portEndsOk` checks of the flat nodes `nodeRefs[f:]`. -/
+partial def endsOkNodes (a : LGraphArena) (portRefs : Array (Option LPortId)) (portIns portOuts : Array (Array Nat))
+    (nPorts : Nat) (nodeRefs : Array LNodeId) (f : Nat) (ok : ByteArray) : ByteArray :=
+  if h : f < nodeRefs.size then
+    endsOkNodes a portRefs portIns portOuts nPorts nodeRefs (f + 1)
+      (endsOkPorts a portRefs portIns portOuts nPorts (a.node nodeRefs[f]).ports 0 ok)
+  else ok
+
+/-- `CrossMinSnapshot::build(order, n_ports)` on an arena (see "Fewer allocations and passes"). -/
+def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : CrossMinSnapshot :=
+  let b0 : FastBuilder := {
+    nodeRefs := #[], nodeGraphIds := #[], nodeLayers := #[], nodeTypes := #[], nodeNested := #[], nodePortIds := #[],
+    nodeKeys := #[], nodeValues := #[], portKeys := #[], portValues := #[]
+    portSides := Array.replicate nPorts .undefined, portOwners := Array.replicate nPorts 0,
+    portRefs := Array.replicate nPorts none, portIns := Array.replicate nPorts #[], portOuts := Array.replicate nPorts #[] }
+  let (flat, b) := buildNodesFast a nPorts order 0 0 0 b0
+  match b with
+  | ⟨nodeRefs, nodeGraphIds, nodeLayers, nodeTypes, nodeNested, nodePortIds, nodeKeys, nodeValues, portKeys, portValues,
+      portSides, portOwners, portRefs, portIns, portOuts⟩ =>
+    let (portFlags, layerBits, endIds, endStart, endMid) :=
+      portPass portSides portOwners nodeLayers portIns portOuts nPorts 0 (ByteArray.emptyWithCapacity nPorts)
+        (ByteArray.emptyWithCapacity nPorts) #[] (Array.emptyWithCapacity (nPorts + 1)) (Array.emptyWithCapacity nPorts)
+    let n := nodeRefs.size
+    let nv := nodePass a nodeRefs nodePortIds portSides portOwners nodeLayers portIns portOuts layerBits 0
+      ⟨Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n, Array.emptyWithCapacity n,
+        Array.emptyWithCapacity n, ByteArray.emptyWithCapacity n, ByteArray.emptyWithCapacity n,
+        Array.emptyWithCapacity n, Array.emptyWithCapacity n⟩
+    let endsOk := endsOkNodes a portRefs portIns portOuts nPorts nodeRefs 0 (ByteArray.mk (Array.replicate nPorts 0))
+    { nodeMap := IdIndex.ofPairs nodeKeys nodeValues, portMap := IdIndex.ofPairs portKeys portValues
+      nodeGraphIds, nodeLayers, nodeTypes, nodeNested, nodePortIds, nodeSideMasks := nv.masks
+      nodeInputCounts := nv.inCounts, nodeNorthInputCounts := nv.northInCounts, nodeOutputCounts := nv.outCounts
+      nodeMaxPortIds := nv.maxIds, nodeOrderFixed := nv.orderFixed, nodeEndFlags := nv.endFlags
+      nodePredCounts := nv.predCounts, nodeSuccCounts := nv.succCounts, portFlags, endIds, endStart, endMid
+      portEndsOk := endsOk, portSides, portOwners, portIns, portOuts, nodeRefs, portRefs, nNodes := flat, nPorts }
 
 /-- `CrossMinSnapshot::build(order, n_ports)`: built from the current arena. -/
 def build (order : Array (Array LNodeId)) (nPorts : Nat) : LayeredM CrossMinSnapshot := do

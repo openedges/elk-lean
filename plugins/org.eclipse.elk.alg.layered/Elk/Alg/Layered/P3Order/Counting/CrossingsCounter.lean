@@ -1082,6 +1082,12 @@ private def throwJavaTreeIndexError {α : Type} (c : CrossingsCounter) (ports : 
   c.indexTree.set tree
   return crossings
 
+/-- `indexTree = new BinaryIndexedTree(n)`, reusing the previous tree's arrays when they have the
+sizes (`BinaryIndexedTree.renew`, the same value without allocating). -/
+@[inline] private def renewTree (c : CrossingsCounter) (n : Nat) : BaseIO Unit := do
+  let t ← c.indexTree.swap {}
+  c.indexTree.set (t.renew n)
+
 /-! ## Public API -/
 
 /-- `initPortPositionsForInLayerCrossings(nodes, side)`: numbers the side's ports top-down,
@@ -1089,13 +1095,13 @@ records the node cardinalities and resets the tree; returns the ports. -/
 def initPortPositionsForInLayerCrossings (c : CrossingsCounter) (nodes : Array LNodeId) (side : PortSide) :
     LayeredM (Array LPortId) := do
   let ports ← c.initPositionsM nodes #[] side true true
-  c.indexTree.set (BinaryIndexedTree.new ports.size)
+  c.renewTree ports.size
   return ports
 
 /-- `initForCountingBetween(leftLayerNodes, rightLayerNodes)`. -/
 def initForCountingBetween (c : CrossingsCounter) (leftLayer rightLayer : Array LNodeId) : LayeredM Unit := do
   let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
-  c.indexTree.set (BinaryIndexedTree.new ports.size)
+  c.renewTree ports.size
 
 /-- `countCrossingsBetweenLayers(leftLayerNodes, rightLayerNodes)` (with a snapshot: see
 "Between-layer counting on the snapshot path"). -/
@@ -1117,7 +1123,7 @@ def countCrossingsBetweenLayers (c : CrossingsCounter) (leftLayer rightLayer : A
     return crossings
   | none =>
     let ports ← c.initPortPositionsCounterClockwise leftLayer rightLayer
-    c.indexTree.set (BinaryIndexedTree.new ports.size)
+    c.renewTree ports.size
     c.withTreeChecked ports false
 
 /-- `countInLayerCrossingsOnSide(nodes, side)`. -/
@@ -1159,7 +1165,7 @@ def countNorthSouthPortCrossingsInLayer (c : CrossingsCounter) (layer : Array LN
   let positions ← c.portPositions.swap #[]
   let (positions, ports) := initPositionsForNorthSouthCountingFast a positions layer
   c.portPositions.set positions
-  c.indexTree.set (BinaryIndexedTree.new ports.size)
+  c.renewTree ports.size
   c.withTree countNorthSouthCrossingsOnPortsFast ports
 
 /-- `countNorthSouthPortCrossingsInLayer(layer)` with the line-by-line port loops (reference of the

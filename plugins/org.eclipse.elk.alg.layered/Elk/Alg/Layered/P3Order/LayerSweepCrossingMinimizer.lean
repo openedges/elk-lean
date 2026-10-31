@@ -276,13 +276,48 @@ partial def nodeChangeLayers (layers : Array (Array LNodeId)) (li : Nat) (comp :
     nodeChangeLayers layers (li + 1) comp acc
   else return acc
 
-/-- `countModelOrderNodeChanges(graph, layers, strategy, cmGroupOrderStrategy)`: pairs `i < j` of
-nodes with `MODEL_ORDER` of each layer that the node comparator orders the other way round (a fresh
-comparator per layer, here: reset; `previousLayerOf`). The loops are tail-recursive functions
-(`nodeChangeLayers`, `nodeChangePairs`) with the same comparison sequence. -/
-def countModelOrderNodeChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
+/-- `countModelOrderNodeChanges(graph, layers, strategy, cmGroupOrderStrategy)` with the monadic
+`ModelOrderNodeComparator.compare` (the reference of `countModelOrderNodeChanges`, differential test
+`layered.p3.modelOrderChangeCounts`): pairs `i < j` of nodes with `MODEL_ORDER` of each layer that the
+node comparator orders the other way round (a fresh comparator per layer, here: reset;
+`previousLayerOf`). The loops are tail-recursive functions (`nodeChangeLayers`, `nodeChangePairs`)
+with the same comparison sequence. -/
+def countModelOrderNodeChangesRef (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
     (strategy : OrderingStrategy) (groupStrategy : GroupOrderStrategy) : LayeredM Int :=
   nodeChangeLayers layers 0 (ModelOrderNodeComparator.new graph #[] strategy .equal groupStrategy false) 0
+
+/-- `nodeChangePairs` with the pure `NodeCmpEnv.compareCore` (the number of pairs, or Java's exception
+text). -/
+partial def nodeChangePairsIn (a : LGraphArena) (env : NodeCmpEnv) (layer : Array LNodeId) (active : Array Nat)
+    (p k : Nat) (rel : ModelOrderRelations LNodeId) (acc : Nat) : Except String Nat :=
+  if h : p < active.size then
+    if h2 : k < active.size then
+      let (value, rel) := NodeCmpEnv.compareCore a env rel layer[active[p]]! layer[active[k]]!
+      if NodeCmpEnv.isFailure value then .error (NodeCmpEnv.failureText value)
+      else nodeChangePairsIn a env layer active p (k + 1) rel (if value > 0 then acc + 1 else acc)
+    else nodeChangePairsIn a env layer active (p + 1) (p + 2) rel acc
+  else .ok acc
+
+/-- `nodeChangeLayers` with the pure comparator (fresh relations per layer). -/
+partial def nodeChangeLayersIn (a : LGraphArena) (env : NodeCmpEnv) (layers : Array (Array LNodeId)) (li : Nat)
+    (acc : Nat) : Except String Nat :=
+  if h : li < layers.size then
+    let layer := layers[li]
+    let env := env.resetForPreviousLayer (previousLayerOf layers li)
+    let active := modelOrderIndices a layer 0 #[]
+    match nodeChangePairsIn a env layer active 0 1 (ModelOrderRelations.emptyWithCapacity active.size) acc with
+    | .ok acc => nodeChangeLayersIn a env layers (li + 1) acc
+    | .error msg => .error msg
+  else .ok acc
+
+/-- `countModelOrderNodeChanges(graph, layers, strategy, cmGroupOrderStrategy)`: `countModelOrderNodeChangesRef`
+with the pure comparator on the arena (`NodeCmpEnv`; the comparator does not write the arena): the
+same comparisons in the same order with the same relations, and the same exception. -/
+def countModelOrderNodeChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
+    (strategy : OrderingStrategy) (_groupStrategy : GroupOrderStrategy) : LayeredM Int := do
+  match nodeChangeLayersIn (← get) (NodeCmpEnv.new graph #[] strategy .equal false) layers 0 0 with
+  | .ok n => return n
+  | .error msg => throw (IO.userError msg)
 
 /-- The pairs `(ports[i], ports[j])`, `j > i`, of `countModelOrderPortChanges` from `(i, j)` on. -/
 partial def portChangePairs (ports : Array LPortId) (i j : Nat) (comp : ModelOrderPortComparator) (acc : Int) :
@@ -320,10 +355,59 @@ node that the port comparator orders the other way round. Like Java a fresh comp
 (here: reset), and `longEdgeTargetNodePreprocessing` for every node — it caches
 `TARGET_NODE_MODEL_ORDER` and sets `LONG_EDGE_TARGET_NODE` also on nodes with fewer than two ports
 (elk-rs skipped those first). The loops are tail-recursive functions (`portChangeLayers`,
-`portChangeNodes`, `portChangePairs`) with the same calls in the same order. -/
-def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
+`portChangeNodes`, `portChangePairs`) with the same calls in the same order. The monadic reference of
+`countModelOrderPortChanges` (differential test `layered.p3.modelOrderChangeCounts`). -/
+def countModelOrderPortChangesRef (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
     (strategy : OrderingStrategy) (portModelOrder : Bool) : LayeredM Int :=
   portChangeLayers layers 0 (ModelOrderPortComparator.new graph #[] strategy none portModelOrder) 0
+
+/-- `portChangePairs` with the pure `PortCmpEnv.compareCore` (the number of pairs, or Java's exception
+text). -/
+partial def portChangePairsIn (a : LGraphArena) (env : PortCmpEnv) (ports : Array LPortId) (i j : Nat)
+    (rel : ModelOrderRelations LPortId) (acc : Nat) : Except String Nat :=
+  if h : i < ports.size then
+    if h2 : j < ports.size then
+      let (value, rel) := PortCmpEnv.compareCore a env rel ports[i] ports[j]
+      if value == PortCmpEnv.failed then .error maxModelOrderNodesNullError
+      else portChangePairsIn a env ports i (j + 1) rel (if value > 0 then acc + 1 else acc)
+    else portChangePairsIn a env ports (i + 1) (i + 2) rel acc
+  else .ok acc
+
+/-- `portChangeNodes` with the pure comparator: `longEdgeTargetNodePreprocessing` (which writes the
+arena) for every node, then the pairs of its ports on the arena after it (fresh relations per node). -/
+partial def portChangeNodesIn (nodes : Array LNodeId) (k : Nat) (env : PortCmpEnv) (acc : Nat) : LayeredM Nat := do
+  if h : k < nodes.size then
+    let node := nodes[k]
+    -- `longEdgeTargetNodePreprocessing` returns a stored map without writing anything: read it directly
+    let a ← get
+    let (longEdgeTargets, a) ← match (a.node node).internal.targetNodeModelOrder with
+      | some existing => pure (existing, a)
+      | none => do
+        let m ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
+        pure (m, ← get)
+    let ports := (a.node node).ports
+    if ports.size < 2 then portChangeNodesIn nodes (k + 1) env acc
+    else
+      match portChangePairsIn a (env.resetForNodeTargetModelOrder (some longEdgeTargets)) ports 0 1
+          (ModelOrderRelations.emptyWithCapacity ports.size) acc with
+      | .ok acc => portChangeNodesIn nodes (k + 1) env acc
+      | .error msg => throw (IO.userError msg)
+  else return acc
+
+/-- `portChangeLayers` with the pure comparator. -/
+partial def portChangeLayersIn (layers : Array (Array LNodeId)) (li : Nat) (env : PortCmpEnv) (acc : Nat) :
+    LayeredM Nat := do
+  if h : li < layers.size then
+    let acc ← portChangeNodesIn layers[li] 0 (env.resetForPreviousLayer (previousLayerOf layers li)) acc
+    portChangeLayersIn layers (li + 1) env acc
+  else return acc
+
+/-- `countModelOrderPortChanges(graph, layers, groupOrderStrategy)`: `countModelOrderPortChangesRef` with
+the pure comparator on the arena (`PortCmpEnv`): the same preprocessing, comparisons, relations and
+exception in the same order. -/
+def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array (Array LNodeId))
+    (strategy : OrderingStrategy) (portModelOrder : Bool) : LayeredM Int := do
+  return ((← portChangeLayersIn layers 0 (PortCmpEnv.new graph #[] strategy none portModelOrder) 0 : Nat) : Int)
 
 /-! ## Holder access -/
 

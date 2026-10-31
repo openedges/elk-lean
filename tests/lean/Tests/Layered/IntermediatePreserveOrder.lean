@@ -494,6 +494,27 @@ def relationTests : Suite := suite "layered.intermediate.preserveorder.relations
     if !relationsMatch dense (·.idx) original then
       allMatch := false
   check "dense_relations_match_original_sets_through_word_growth_and_cycles" allMatch
+  -- Lean only: `find` + `ensure` (the pure comparators) is `index`, through the linear/map switch
+  let mut viaIndex : ModelOrderRelations LNodeId := {}
+  let mut viaFind : ModelOrderRelations LNodeId := ModelOrderRelations.emptyWithCapacity 4
+  let mut fstate : UInt64 := 41
+  let mut findSame := true
+  for _ in [0:500] do
+    let (s, b, sm) := lcgPair fstate 90
+    fstate := s
+    let (i1, r1) := viaIndex.index ⟨b⟩
+    let (i2, r2) := r1.index ⟨sm⟩
+    viaIndex := r2.record i1 i2
+    let j1 := viaFind.find ⟨b⟩
+    let f1 := viaFind.ensure ⟨b⟩ j1
+    let j2 := f1.find ⟨sm⟩
+    let f2 := f1.ensure ⟨sm⟩ j2
+    viaFind := f2.record j1 j2
+    if i1 != j1 || i2 != j2 || viaIndex.keys != viaFind.keys || viaIndex.stride != viaFind.stride ||
+        viaIndex.bigger != viaFind.bigger || viaIndex.smaller != viaFind.smaller ||
+        viaIndex.indices.toList.length != viaFind.indices.toList.length then
+      findSame := false
+  check "find and ensure equal index (90 keys)" findSame
   -- port_relations_match_original_sets_through_reversal_growth_and_resets
   let ports : Array LPortId := (Array.range 130).map fun i => ⟨i⟩
   let indexAll : PortComparatorM Unit := do
@@ -724,7 +745,367 @@ def sortProcessorTests : Suite := suite "layered.intermediate.sortByInputModelPr
     catch e => pure (toString e)
   checkEq "edge without MODEL_ORDER: Java's unboxing NullPointerException" npe edgeModelOrderNullError
 
+/-! ## Pure comparators against the monadic ones (P3C)
+
+Random layered graphs (normal and long edge dummies, nodes/ports/edges with and without model order
+and group ids, ports on every side, edges in every direction, `LONG_EDGE_TARGET_NODE`s, reversed
+edges) and random comparator settings (strategies, previous layers, target node pairs including
+duplicate keys and more than `linearKeys` pairs, enforced group orders, a `null` `MAX_MODEL_ORDER_NODES`,
+edges without model order): sequences of comparisons with the monadic comparators
+(`ModelOrderPortComparator.compare`, `ModelOrderNodeComparator.compare`) and the pure ones
+(`PortCmpEnv.compare`, `NodeCmpEnv.compare`) must give the same results, the same relations after every
+step and the same exception texts; the model order change counts and `SortByInputModelProcessor`
+must agree with their monadic references. -/
+
+/-- A 64-bit LCG step. -/
+def lcgNext (s : UInt64) : UInt64 := s * 6364136223846793005 + 1442695040888963407
+
+/-- A pseudo-random number in `[0, n)` and the next state. -/
+def rnd (s : UInt64) (n : Nat) : Nat × UInt64 :=
+  let s := lcgNext s
+  ((s >>> 33).toNat % (max n 1), s)
+
+/-- A random graph of the differential tests. -/
+structure RandGraph where
+  graph : LGraphId
+  layers : Array LayerId
+  nodes : Array LNodeId
+  ports : Array LPortId
+  deriving Inhabited
+
+/-- Builds a random graph (see the section doc). -/
+def randomGraph (seed : UInt64) : LayeredM RandGraph := do
+  let mut s := seed
+  let (nl, s1) := rnd s 3
+  s := s1
+  let (g, layers) ← graphWithLayers (nl + 2)
+  let mut nodes : Array LNodeId := #[]
+  let mut ports : Array LPortId := #[]
+  -- per port: its layer index and whether its node is a dummy (dummies get only forward edges, so
+  -- that `getTargetNodeFromEdge`, which follows dummies' outgoing edges, terminates)
+  let mut portLayer : Array Nat := #[]
+  let mut portDummy : Array Bool := #[]
+  for h : li in [0:layers.size] do
+    let l := layers[li]
+    let (nn, s1) := rnd s 6
+    s := s1
+    for _ in [0:nn + 1] do
+      let (t, s1) := rnd s 10
+      let (mo, s2) := rnd s1 10
+      let (hasMo, s3) := rnd s2 5
+      let (grp, s4) := rnd s3 4
+      let (np, s5) := rnd s4 5
+      s := s5
+      let n ← addNode g l (if hasMo == 0 then none else some (mo : Int)) (if t < 3 then .longEdge else .normal)
+      if grp != 0 then LayeredM.setNodeProp n LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID (grp : Int)
+      nodes := nodes.push n
+      for _ in [0:np] do
+        let (side, s1) := rnd s 5
+        let (pmo, s2) := rnd s1 8
+        let (pg, s3) := rnd s2 4
+        s := s3
+        let sd : PortSide := match side with
+          | 0 => .north | 1 => .east | 2 => .south | 3 => .west | _ => .undefined
+        let p ← addPort n sd (if pmo == 0 then none else some ((pmo : Int) - 1))
+        if pg != 0 then LayeredM.setPortProp p LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID (pg : Int)
+        ports := ports.push p
+        portLayer := portLayer.push li
+        portDummy := portDummy.push (t < 3)
+  if !ports.isEmpty then
+    let (ne, s1) := rnd s (2 * ports.size + 1)
+    s := s1
+    for _ in [0:ne] do
+      let (i, s1) := rnd s ports.size
+      let (j, s2) := rnd s1 ports.size
+      let (emo, s3) := rnd s2 12
+      let (eg, s4) := rnd s3 4
+      let (rev, s5) := rnd s4 6
+      s := s5
+      if portDummy[i]! && portLayer[j]! <= portLayer[i]! then continue
+      let e ← connect ports[i]! ports[j]! (if emo == 0 then none else some ((emo : Int) - 1))
+      if eg != 0 then LayeredM.setEdgeProp e LayeredOptions.GROUP_MODEL_ORDER_CROSSING_MINIMIZATION_ID (eg : Int)
+      if rev == 0 then LayeredM.modifyEdge e fun x => { x with internal.reversed := true }
+    for p in ports do
+      let (lt, s1) := rnd s (3 * nodes.size)
+      s := s1
+      if h : lt < nodes.size then setLongEdgeTargetNode p nodes[lt]
+  setLayerIds layers
+  return { graph := g, layers, nodes, ports }
+
+/-- A random comparator context (enforced group orders, a `null` `MAX_MODEL_ORDER_NODES`). -/
+def randomContext (s : UInt64) : ModelOrderGraphContext × UInt64 :=
+  let (m, s) := rnd s 12
+  let (isNull, s) := rnd s 8
+  let (enf, s) := rnd s 2
+  ({ maxModelOrderNodes := m, maxModelOrderNodesNull := isNull == 0,
+     groupOrderStrategy := if enf == 0 then .enforced else .onlyWithinGroup, enforcedGroupOrders := #[1, 2] }, s)
+
+/-- A random ordering strategy. -/
+def randomStrategy (s : UInt64) : OrderingStrategy × UInt64 :=
+  let (k, s) := rnd s 4
+  ((match k with | 0 => .none | 1 => .nodesAndEdges | 2 => .preferEdges | _ => .preferNodes), s)
+
+/-- Random target node pairs (`none`, or up to 40 pairs with repeated keys). -/
+def randomTargets (nodes : Array LNodeId) (s : UInt64) : Option (Array (LNodeId × Int)) × UInt64 := Id.run do
+  let (kind, s) := rnd s 4
+  if kind == 0 then return (none, s)
+  let (count, s) := rnd s (if kind == 1 then 41 else 6)
+  let mut s := s
+  let mut pairs : Array (LNodeId × Int) := #[]
+  for _ in [0:count] do
+    let (i, s1) := rnd s nodes.size
+    let (v, s2) := rnd s1 20
+    s := s2
+    pairs := pairs.push (nodes[i]!, (v : Int) - 3)
+  return (some pairs, s)
+
+/-- Whether two relations have the same keys and the same members per key. -/
+def sameRelations {κ : Type} [BEq κ] [Hashable κ] (r1 r2 : ModelOrderRelations κ) : Bool :=
+  r1.keys == r2.keys && (Array.range r1.keys.size).all fun i =>
+    r1.biggerMembers i == r2.biggerMembers i && r1.smallerMembers i == r2.smallerMembers i
+
+/-- The nodes of a random layer of the arena (or none). -/
+def randomPreviousLayer (a : LGraphArena) (rg : RandGraph) (s : UInt64) : Array LNodeId × UInt64 :=
+  let (k, s) := rnd s (rg.layers.size + 1)
+  ((if h : k < rg.layers.size then (a.layer rg.layers[k]).nodes else #[]), s)
+
+/-- Port comparator sequences on one random graph: `(comparisons, exceptions, mismatches)`. -/
+def portComparatorDiff (seed : UInt64) : IO (Nat × Nat × Nat) := do
+  let (rg, a) ← LayeredM.run (randomGraph seed)
+  if rg.ports.isEmpty then return (0, 0, 0)
+  let mut s := lcgNext (seed ^^^ 0x9e3779b97f4a7c15)
+  let mut compares := 0
+  let mut errors := 0
+  let mut bad := 0
+  for _ in [0:4] do
+    let (ctx, s1) := randomContext s
+    let (strategy, s2) := randomStrategy s1
+    let (prev, s3) := randomPreviousLayer a rg s2
+    let (targets, s4) := randomTargets rg.nodes s3
+    let (pmo, s5) := rnd s4 2
+    s := s5
+    let mut c := ModelOrderPortComparator.new ctx prev strategy targets (pmo == 0)
+    let mut env := PortCmpEnv.new ctx prev strategy targets (pmo == 0)
+    let mut rel : ModelOrderRelations LPortId := {}
+    for step in [0:80] do
+      if step % 23 == 22 then
+        let (t, s1) := randomTargets rg.nodes s
+        s := s1
+        c := c.resetForNodeTargetModelOrder t
+        env := env.resetForNodeTargetModelOrder t
+        rel := {}
+      else if step % 31 == 30 then
+        let (p, s1) := randomPreviousLayer a rg s
+        s := s1
+        c := c.resetForPreviousLayer p
+        env := env.resetForPreviousLayer p
+        rel := {}
+      let (i, s1) := rnd s rg.ports.size
+      let (j, s2) := rnd s1 rg.ports.size
+      s := s2
+      let p1 := rg.ports[i]!
+      let p2 := rg.ports[j]!
+      let reference ← try
+          let ((r, c'), _) ← LayeredM.run (c.compare p1 p2) a
+          pure (Except.ok (r, c') : Except String (Int × ModelOrderPortComparator))
+        catch e => pure (.error (toString e))
+      compares := compares + 1
+      match reference, PortCmpEnv.compare a env rel p1 p2 with
+      | .ok (r1, c'), .ok (r2, rel') =>
+        if r1 != r2 || !sameRelations c'.relations rel' then bad := bad + 1
+        c := c'
+        rel := rel'
+      | .error e1, .error e2 =>
+        errors := errors + 1
+        if e1 != e2 then
+          bad := bad + 1
+        break
+      | _, _ =>
+        bad := bad + 1
+        break
+  return (compares, errors, bad)
+
+/-- Node comparator sequences on one random graph: `(comparisons, exceptions, mismatches)`. -/
+def nodeComparatorDiff (seed : UInt64) : IO (Nat × Nat × Nat) := do
+  let (rg, a) ← LayeredM.run (randomGraph seed)
+  let mut s := lcgNext (seed ^^^ 0x51ed270b27a3c1d5)
+  let mut compares := 0
+  let mut errors := 0
+  let mut bad := 0
+  for _ in [0:4] do
+    let (ctx, s1) := randomContext s
+    let (strategy, s2) := randomStrategy s1
+    let (prev, s3) := randomPreviousLayer a rg s2
+    let (le, s4) := rnd s3 3
+    let (bp, s5) := rnd s4 2
+    s := s5
+    let longEdge : LongEdgeOrderingStrategy := match le with
+      | 0 => .dummyNodeOver | 1 => .dummyNodeUnder | _ => .equal
+    let mut c := ModelOrderNodeComparator.new ctx prev strategy longEdge .onlyWithinGroup (bp == 0)
+    let mut env := NodeCmpEnv.new ctx prev strategy longEdge (bp == 0)
+    let mut rel : ModelOrderRelations LNodeId := {}
+    for step in [0:80] do
+      if step % 29 == 28 then
+        let (p, s1) := randomPreviousLayer a rg s
+        s := s1
+        c := c.resetForPreviousLayer p
+        env := env.resetForPreviousLayer p
+        rel := {}
+      let (i, s1) := rnd s rg.nodes.size
+      let (j, s2) := rnd s1 rg.nodes.size
+      s := s2
+      let n1 := rg.nodes[i]!
+      let n2 := rg.nodes[j]!
+      let reference ← try
+          let ((r, c'), _) ← LayeredM.run (c.compare n1 n2) a
+          pure (Except.ok (r, c') : Except String (Int × ModelOrderNodeComparator))
+        catch e => pure (.error (toString e))
+      compares := compares + 1
+      match reference, NodeCmpEnv.compare a env rel n1 n2 with
+      | .ok (r1, c'), .ok (r2, rel') =>
+        if r1 != r2 || !sameRelations c'.relations rel' || !c'.visiting.isEmpty then bad := bad + 1
+        c := c'
+        rel := rel'
+      | .error e1, .error e2 =>
+        errors := errors + 1
+        if e1 != e2 then bad := bad + 1
+        break
+      | _, _ =>
+        bad := bad + 1
+        break
+  return (compares, errors, bad)
+
+/-- The observable results of a run on a copy of the arena: the result or the exception text, the layer
+orders, every node's port order and target node model order, every port's long edge target node. -/
+def observeRun (rg : RandGraph) (a : LGraphArena) (x : LayeredM String) : IO String := do
+  try
+    let (r, a) ← LayeredM.run x a
+    let layers := rg.layers.map fun l => (a.layer l).nodes.map (·.idx)
+    let ports := rg.nodes.map fun n => (a.node n).ports.map (·.idx)
+    let targets := rg.nodes.map fun n => ((a.node n).internal.targetNodeModelOrder.map fun ps => ps.map fun (k, v) => (k.idx, v))
+    let longEdge := rg.ports.map fun p => (a.port p).internal.longEdgeTargetNode.map (·.idx)
+    return s!"{r} {layers} {ports} {targets} {longEdge}"
+  catch e => return s!"error {e}"
+
+/-- Model order change counts and `SortByInputModelProcessor` against their monadic references on one
+random graph: `(runs, exceptions, mismatches)`. -/
+def countAndSortDiff (seed : UInt64) : IO (Nat × Nat × Nat) := do
+  let (rg, a) ← LayeredM.run (randomGraph seed)
+  let s := lcgNext (seed ^^^ 0x2545f4914f6cdd1d)
+  let (ctx, s) := randomContext s
+  let (strategy, s) := randomStrategy s
+  let (pmo, s) := rnd s 2
+  let (le, s) := rnd s 3
+  let (fixed, _) := rnd s 3
+  let order := rg.layers.map fun l => (a.layer l).nodes
+  let mut runs := 0
+  let mut errors := 0
+  let mut bad := 0
+  let pairs : Array (LayeredM String × LayeredM String) := #[
+    ((return toString (← Elk.Alg.Layered.P3Order.LayerSweepCrossingMinimizer.countModelOrderNodeChanges ctx order strategy .onlyWithinGroup)),
+     (return toString (← Elk.Alg.Layered.P3Order.LayerSweepCrossingMinimizer.countModelOrderNodeChangesRef ctx order strategy .onlyWithinGroup))),
+    ((return toString (← Elk.Alg.Layered.P3Order.LayerSweepCrossingMinimizer.countModelOrderPortChanges ctx order strategy (pmo == 0))),
+     (return toString (← Elk.Alg.Layered.P3Order.LayerSweepCrossingMinimizer.countModelOrderPortChangesRef ctx order strategy (pmo == 0))))]
+  for (x, y) in pairs do
+    let rx ← observeRun rg a x
+    let ry ← observeRun rg a y
+    runs := runs + 1
+    if rx.startsWith "error" then errors := errors + 1
+    if rx != ry then bad := bad + 1
+  -- the processor, with the graph options set from the same draws
+  let setup : LayeredM Unit := do
+    LayeredM.setGraphProp rg.graph LayeredOptions.CONSIDER_MODEL_ORDER_STRATEGY strategy
+    LayeredM.setGraphProp rg.graph LayeredOptions.CONSIDER_MODEL_ORDER_PORT_MODEL_ORDER (pmo == 0)
+    LayeredM.setGraphProp rg.graph LayeredOptions.CONSIDER_MODEL_ORDER_LONG_EDGE_STRATEGY
+      (match le with | 0 => LongEdgeOrderingStrategy.dummyNodeOver | 1 => .dummyNodeUnder | _ => .equal)
+    LayeredM.setGraphProp rg.graph LayeredOptions.GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY ctx.groupOrderStrategy
+    LayeredM.setGraphProp rg.graph LayeredOptions.GROUP_MODEL_ORDER_CM_ENFORCED_GROUP_ORDERS ctx.enforcedGroupOrders
+    LayeredM.modifyGraph rg.graph fun x => { x with internal.maxModelOrderNodes := ctx.maxModelOrderNodes,
+                                                    internal.maxModelOrderNodesNull := ctx.maxModelOrderNodesNull }
+    if fixed == 0 then
+      if h : 0 < rg.nodes.size then LayeredM.setNodeProp rg.nodes[0] LayeredOptions.PORT_CONSTRAINTS PortConstraints.fixedOrder
+  let (_, a) ← LayeredM.run setup a
+  let rx ← observeRun rg a (do SortByInputModelProcessor.run rg.graph; return "")
+  let ry ← observeRun rg a (do SortByInputModelProcessor.runRef rg.graph; return "")
+  runs := runs + 1
+  if rx.startsWith "error" then errors := errors + 1
+  if rx != ry then bad := bad + 1
+  return (runs, errors, bad)
+
+def pureComparatorTests : Suite := suite "layered.intermediate.preserveorder.pureComparators" do
+  let mut totals : Array (Nat × Nat × Nat) := #[(0, 0, 0), (0, 0, 0), (0, 0, 0)]
+  for k in [0:400] do
+    let seed : UInt64 := (k.toUInt64 + 1) * 0x9e3779b97f4a7c15
+    let add (t : Nat × Nat × Nat) (r : Nat × Nat × Nat) : Nat × Nat × Nat := (t.1 + r.1, t.2.1 + r.2.1, t.2.2 + r.2.2)
+    totals := totals.modify 0 (add · (← portComparatorDiff seed))
+    totals := totals.modify 1 (add · (← nodeComparatorDiff seed))
+    totals := totals.modify 2 (add · (← countAndSortDiff seed))
+  let names := #["port comparator", "node comparator", "change counts and SortByInputModelProcessor"]
+  for h : i in [0:totals.size] do
+    let (n, e, bad) := totals[i]
+    checkEq s!"{names[i]!}: pure = monadic ({n} runs, {e} exceptions)" bad 0
+    check s!"{names[i]!}: the exception cases are exercised" (e > 0 && n > e)
+
+/-! ## `CrossMinSnapshot.ofArena` against `ofArenaRef` (P3C)
+
+On the random graphs above, with random `LNode.id`/`LPort.id`s (duplicates, ids beyond the port
+count, negative ids), half-connected edges, `PORT_CONSTRAINTS` and `BARYCENTER_ASSOCIATES`, and
+random port counts, both builders must give the same snapshot (every field; the id indices are
+compared on every key of the arena range). -/
+
+open Elk.Alg.Layered.P3Order in
+/-- Whether two snapshots are equal (every field). -/
+def sameSnapshot (s t : CrossMinSnapshot) (keys : Nat) : Bool :=
+  (Array.range keys).all (fun k => s.nodeMap.get k == t.nodeMap.get k && s.portMap.get k == t.portMap.get k) &&
+  s.nodeGraphIds == t.nodeGraphIds && s.nodeLayers == t.nodeLayers && s.nodeTypes == t.nodeTypes &&
+  s.nodeNested == t.nodeNested && s.nodePortIds == t.nodePortIds && s.nodeSideMasks == t.nodeSideMasks &&
+  s.nodeInputCounts == t.nodeInputCounts && s.nodeNorthInputCounts == t.nodeNorthInputCounts &&
+  s.nodeOutputCounts == t.nodeOutputCounts && s.nodeMaxPortIds == t.nodeMaxPortIds &&
+  s.nodeOrderFixed.data == t.nodeOrderFixed.data && s.nodeEndFlags.data == t.nodeEndFlags.data &&
+  s.nodePredCounts == t.nodePredCounts && s.nodeSuccCounts == t.nodeSuccCounts &&
+  s.portFlags.data == t.portFlags.data && s.endIds == t.endIds && s.endStart == t.endStart && s.endMid == t.endMid &&
+  s.portEndsOk.data == t.portEndsOk.data && s.portSides == t.portSides && s.portOwners == t.portOwners &&
+  s.portIns == t.portIns && s.portOuts == t.portOuts && s.nodeRefs == t.nodeRefs && s.portRefs == t.portRefs &&
+  s.nNodes == t.nNodes && s.nPorts == t.nPorts
+
+open Elk.Alg.Layered.P3Order in
+def crossMinSnapshotTests : Suite := suite "layered.p3.crossMinSnapshot" do
+  let mut bad := 0
+  let mut withPorts := 0
+  for k in [0:600] do
+    let seed : UInt64 := (k.toUInt64 + 7) * 0xbf58476d1ce4e5b9
+    let (rg, a) ← LayeredM.run (do
+      let rg ← randomGraph seed
+      let mut s := lcgNext seed
+      let n := rg.ports.size
+      for p in rg.ports do
+        let (v, s1) := rnd s (n + 4)
+        s := s1
+        let id : Int := if v == n + 3 then -1 else if v == n + 2 then (v : Int) else (v % (n + 1) : Nat)
+        LayeredM.modifyPort p fun x => { x with id := id }
+      for nd in rg.nodes do
+        let (v, s1) := rnd s 9
+        s := s1
+        LayeredM.modifyNode nd fun x => { x with id := (v : Int) - 1 }
+        if v == 0 then LayeredM.setNodeProp nd LayeredOptions.PORT_CONSTRAINTS PortConstraints.fixedOrder
+        if v == 1 then LayeredM.modifyNode nd fun x => { x with internal.barycenterAssociates := #[nd] }
+      -- half-connected edges
+      if h : 0 < rg.ports.size then
+        let e ← LayeredM.createEdge
+        LayeredM.setEdgeSource e (some rg.ports[0])
+        let e2 ← LayeredM.createEdge
+        LayeredM.setEdgeTarget e2 (some rg.ports[rg.ports.size - 1]!)
+      return rg)
+    if !rg.ports.isEmpty then withPorts := withPorts + 1
+    let order := rg.layers.map fun l => (a.layer l).nodes
+    let keys := a.nodes.size + a.ports.size + 8
+    for nPorts in #[rg.ports.size, rg.ports.size / 2, rg.ports.size + 3] do
+      if !sameSnapshot (CrossMinSnapshot.ofArena a order nPorts) (CrossMinSnapshot.ofArenaRef a order nPorts) keys then
+        bad := bad + 1
+  checkEq s!"ofArena = ofArenaRef ({withPorts} graphs with ports, 3 port counts each)" bad 0
+
 def suites : Array Suite :=
-  #[cmGroupTests, nodeComparatorTests, portComparatorTests, relationTests, sortProcessorRustTests, sortProcessorTests]
+  #[cmGroupTests, nodeComparatorTests, portComparatorTests, relationTests, sortProcessorRustTests, sortProcessorTests,
+    pureComparatorTests, crossMinSnapshotTests]
 
 end Tests.Layered.IntermediatePreserveOrder

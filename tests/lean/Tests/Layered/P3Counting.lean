@@ -211,6 +211,21 @@ def bitTests : Suite := suite "layered.p3counting.binary_indexed_tree" do
   checkEq "rank_with_out_of_bounds_index_returns_prefix_sum_up_to_max" (ft.rank 18446744073709551615) 3
   let ft := ft.clear
   checkEq "clear empties" (ft.isEmpty, ft.rank 2) (true, 0)
+  -- `renew` (Lean only) is `new` on reused arrays: after random operations (also out of range) on a
+  -- tree of `m` buckets, `renew n` equals `new n` field by field
+  let fields (t : BinaryIndexedTree) := (t.binarySums, t.numsPerIndex, t.size, t.maxNum, t.outOfRange)
+  let mut s : UInt64 := 7
+  let mut allSame := true
+  for _ in [0:300] do
+    s := s * 6364136223846793005 + 1442695040888963407
+    let m := (s >>> 40).toNat % 9
+    let n := if (s >>> 20) % 3 == 0 then (s >>> 50).toNat % 9 else m
+    let mut t := BinaryIndexedTree.new m
+    for k in [0:12] do
+      let i := ((s >>> (k.toUInt64 * 4)) % 11).toNat
+      t := if k % 3 == 2 then t.removeAll i else t.add i
+    if fields (t.renew n) != fields (BinaryIndexedTree.new n) then allSame := false
+  check "renew equals new (random trees, same and other sizes)" allSame
 
 /-! ## `cross_min_util_test.rs` -/
 
