@@ -448,10 +448,12 @@ def selfLoopGraph (third : Bool) : LayeredM (Array LPortId) := do
 
 def selfLoopTests : Suite := suite "layered.intermediate.hierarchicalNodeResizing.selfLoops" do
   let (ps, a) ← LayeredM.run (selfLoopGraph false)
-  checkFloat "hand: pure self-loop east dummy: y = 24 - 4 - 20" (a.port ps[0]!).position.y 0.0
-  checkFloat "hand: the only edge-less east dummy counts as pure: y = 34 - 4 - 30" (a.port ps[1]!).position.y 0.0
+  -- Java: the external port position is used as computed (elk-rs subtracted the dummy's y for
+  -- eastern "pure self loop" dummies)
+  checkFloat "java: self-loop east dummy: y = 24 - 4" (a.port ps[0]!).position.y 20.0
+  checkFloat "java: the only edge-less east dummy: y = 34 - 4" (a.port ps[1]!).position.y 30.0
   let (ps2, a2) ← LayeredM.run (selfLoopGraph true)
-  checkFloat "hand: self loop still pure with two edge-less dummies" (a2.port ps2[0]!).position.y 0.0
+  checkFloat "java: self loop with two edge-less dummies: y = 24 - 4" (a2.port ps2[0]!).position.y 20.0
   checkFloat "hand: two edge-less east dummies are not pure: y = 34 - 4" (a2.port ps2[1]!).position.y 30.0
   checkFloat "hand: third edge-less dummy: y = 44 - 4" (a2.port ps2[2]!).position.y 40.0
   checkFloat "hand: east x = graph width" (a2.port ps2[2]!).position.x 100.0
