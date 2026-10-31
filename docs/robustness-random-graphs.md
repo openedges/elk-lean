@@ -1163,3 +1163,132 @@ fast throw, 계층 그래프 처리 순서에 따른 `LGraph`/`LEdge` NPE 순서
 - 새 생성기 시드 1·2의 결정적 소수(19.3 끝): 드리프트 몇 개(시드 1 `h0008`), BF model order 층 배정 뒤 P3 계수기 AIOOBE의 인덱스
   (`h1104`·`h1314`), 예외 순서(`h0323`). 생성기는 `run_random_java_parity.sh`에 편입하지 않았다(수동: 생성 → `ElkJavaBaseline` → 비교).
 - 계층 임포트의 노드 변환 순서는 여전히 재귀(DFS)다(Java: BFS). arena id 순서만 다르고 관찰된 출력 차이는 없다.
+
+## 20. HMO: 계층 model order 세트 `h`의 남은 차이, 파이프라인 편입, 계층 노드 변환 BFS (2026-11-01)
+
+방법: 라운드 11 병합본(`78f1794`, `elk_base`)으로 GS의 생성기(`scripts/gen_hierarchical_mo_graphs.py`) 시드 1·2 × 2,000을 새
+파이프라인 세트 `h`로 돌리고(`--sets h --seeds 1,2 --count 2000`; Java는 세트마다 JVM 하나), Java와 다른 입력마다 Java를 여러
+실행 컨텍스트 — 파이프라인의 순방향 배치 JVM, 세트 전체의 역순 배치 JVM(`ElkJavaBaseline --reverse true`), 입력마다 새 JVM,
+새 JVM + identity hash 생성 방식 `-XX:+UnlockExperimentalVMOptions -XX:hashCode=0/2/3/4`, 새 JVM + GS의 플래그
+(`-Xss64m --add-opens java.base/java.util=ALL-UNNAMED`) — 에서 다시 돌려 비교했다. 컨텍스트마다 Java 결과가 갈리면 "Java 실행
+컨텍스트 의존", 모두 같으면 결정적 차이로 보고 Java 디버그 섀도 클래스(`BKCompactor`·`SortByInputModelProcessor`에 출력,
+하네스에 스택 트레이스; 서명 없는 ELK jar 사본 앞에 둠)와 Java/Lean 단계별 trace로 원인을 찾았다. 고정 입력은 Java 결과를
+유지하는 탐욕 축소(노드·간선·옵션 제거)로 줄여 `tests/fixtures/hmo/`에 두었다(`Tests/Api/RandomJavaHmo.lean`, `hmo.*` 8개).
+`-XX:hashCode` 모드는 identity hash 의존을 가장 싸게 드러낸다: 같은 입력이 모드에 따라 다른 결과를 내면 그 차이는 Java 쪽
+`HashMap`/`HashSet`(키가 `hashCode`를 재정의하지 않은 객체) 순회 순서에서 온다.
+
+### 20.1 GS가 남긴 22개와 기준 바이너리의 분류
+
+GS의 수치(시드 1 1,993/2,000·시드 2 1,985/2,000)는 GS의 Java 실행(위 GS 플래그, 다른 입력 경로) 기준이고, 기준 바이너리로 같은
+Java 출력과 비교하면 22개가 그대로 재현된다. 같은 입력을 파이프라인 JVM으로 다시 돌리면 Java 자신이 레이아웃 96개·예외 문구
+여러 개를 다르게 내므로 파이프라인 기준 불일치는 112개(시드 1 50·시드 2 62)였다. 분류(기준 바이너리, 시드 1·2):
+
+| 분류 | 입력 | 처리 |
+|---|---|---|
+| 결정적: `SCCNodeTypeCycleBreaker`의 선호 group id 비교 | 시드 1 `h0008`(드리프트)·`h1104`(Java "could not be found" vs Lean AIOOBE: 분리 레이아웃 `n13`에서 Lean만 실패)·`h1314`(AIOOBE 인덱스), 시드 2 `h0234`·`h0732`·`h1489`·`h1949`(드리프트)·`h0323`(BF model order 예외 vs Lean `LAST_SEPARATE` 예외) | 20.2 |
+| 결정적: BK 클래스 그래프 순환 | 시드 2 `h0687`(Java NPE vs Lean AIOOBE, SCC 수정 뒤에는 Lean 레이아웃) | 20.3 |
+| 결정적: Coffman–Graham DFS의 순환(Java `StackOverflowError`, Lean timeout) | 시드 1 `h1143`, 시드 2 `h0207` | 20.4 |
+| Java 실행 컨텍스트 의존 — 레이아웃 | 시드 1 44개·시드 2 51개(역순·새 JVM·GS 실행 중 둘 이상이 서로 다름; 시드 1 `h0916`은 세 컨텍스트가 모두 다름) | 문서화 |
+| Java 실행 컨텍스트 의존 — 예외 | `h1/h1012`(예외 문구 속 `ElkNode` 좌표: 앞선 분리 레이아웃의 결과가 컨텍스트마다 다름), `h1/h1049`(`LGraph`/`LEdge` NPE: 기본 JVM은 `LGraph`, `-XX:hashCode=0/2/3/4`는 Lean과 같은 `LEdge`), `h2/h1257`·`h2/h1429`·`h2/h1688`·`h2/h1921`(메시지 없는 `ArrayIndexOutOfBoundsException` = HotSpot fast throw; 새 JVM·역순에서는 Lean과 같은 `Index i out of bounds for length n`) | 문서화 |
+
+SCC 수정 뒤에는 컨텍스트 의존이던 `h1/h0916`·`h1/h1177`·`h2/h0284`·`h2/h1731`도 파이프라인 Java와 같아졌다(Java의 여러 결과 중
+하나가 SCC 차이로 가려져 있었다). `h1049`는 중첩 그래프의 `SortByInputModelProcessor`에서 층마다 노드 정렬(비교자가 중첩 그래프의
+`MAX_MODEL_ORDER_NODES` = `null`을 언박싱 → `LGraph` NPE)과 포트 정렬 전처리(`longEdgeTargetNodePreprocessing`이 model order 없는 간선을
+언박싱 → `LEdge` NPE) 중 어느 쪽이 먼저 오는지가 Java 쪽 층 내용에 달려 있고, 그것이 identity hash 생성 방식에 따라 바뀐다(노드 8개
+축소본도 기본 JVM `LEdge`, 서명 없는 jar 경로·`-XX:hashCode=0` `LGraph`, `hashCode=2/3/4` `LEdge`).
+
+레이아웃이 갈리는 입력에서 Java 두 컨텍스트(배치 trace 실행 vs 새 JVM trace 실행)의 단계별 trace를 맞대 보면 첫 차이는
+`SelfLoopRouter`(9)·`InLayerConstraintProcessor`(4)·`SelfLoopPortRestorer`(2)였다(시드 1의 44개 중 두 traced 컨텍스트에서 최종 결과가
+갈린 16개; 1개는 trace에 없는 중첩 그래프에서) — 코퍼스의 self-loop 실행 컨텍스트 의존(identity hash 순서)과 같은 범주다.
+
+### 20.2 `SCCNodeTypeCycleBreaker`: 선호 group id는 박싱된 `Integer`의 `==`
+
+Java `findNodes`는 `min.getProperty(CYCLE_BREAKING_ID) == graph.getProperty(CB_PREFERRED_SOURCE_ID)`(대상 쪽도 같음)로 `Integer`
+객체를 비교한다. `cbPreferredSourceId`/`cbPreferredTargetId`는 기본값이 없어 설정하지 않으면 `null`이고 절대 같지 않으므로 연결도
+(최소 노드의 들어오는 간선 수 vs 최대 노드의 나가는 간선 수)가 정한다. elk-rs(그리고 Lean)는 `unwrap_or(0)`으로 두 선호 id를 `0`으로
+두어, 기본 옵션의 모든 강연결 성분이 "선호 source" 가지(최소 노드의 들어오는 간선 뒤집기)로 갔다. 설정된 값끼리는 JSON 임포트가
+노드와 그래프에서 따로 `Integer.valueOf`를 부르므로 `Integer` 캐시 `[-128, 127]` 안에서만 같은 객체다 → `javaBoxedIdEq`. 고정:
+`scc_node_type_no_preferred_ids`(3-순환, 시드 1 `h1104`의 분리 레이아웃 `n13`에서 축소), `..._preferred_source_uncached`(둘 다 `200` →
+연결도), `..._cached`(둘 다 `1` → 선호 source; 이전과 같은 결과). trace 단계 이름은 elk-rs의 `SccNodeTypeCycleBreaker` 그대로다
+(Java trace는 `SCCNodeTypeCycleBreaker`; 코퍼스에는 이 전략이 없다).
+
+### 20.3 `BKCompactor`: 놓이지 않은 클래스의 `null` 시프트
+
+`placeClasses`는 클래스 그래프를 들어오는 차수 0인 클래스부터 위상 순서로 훑는다. 클래스 그래프에 순환이 있으면 순환 위·뒤의
+클래스는 한 번도 꺼내지지 않아 `classShift == null`로 남고, Java는 그 `null`을 `bal.shift[sink.id]`에 쓴다. 최종 좌표 루프가 블록
+루트마다 `double sinkShift = bal.shift[bal.sink[v.id].id]`로 언박싱하므로 `NullPointerException: Cannot invoke
+"java.lang.Double.doubleValue()" because "bal.shift[bal.sink[v.id].id]" is null`. elk-rs/Lean은 정의된 시프트만 쓰고 초기값(±∞)을
+남겨 레이아웃을 끝냈다 → `placeClasses`가 놓이지 않은 sink 집합을 돌려주고, 최종 루프 전에 그 sink를 가진 블록 루트가 있으면 같은
+문구를 던진다(루프의 y 대입은 루트·sink를 바꾸지 않으므로 미리 검사해도 같다). 어떤 클래스가 남는지는 `sinkNodes`(`HashMap`)
+순회 순서와 무관하므로 결정적이다(7개 컨텍스트 동일). 고정: `bk_class_graph_cycle_npe`(시드 2 `h0687`에서 축소, 노드 8개;
+`SCC_NODE_TYPE` + `BF_MODEL_ORDER`의 계층 그래프, 루트 그래프의 `UP`/`RIGHT` 정렬에서 실패).
+
+### 20.4 층 배정의 무한 재귀: Coffman–Graham과 longest path
+
+`MODEL_ORDER` 등 model order 순환 제거기는 `noModelOrder` 노드가 낀 순환을 남긴다. Coffman–Graham의 transitive reduction
+`dfs(start, v)`와 `LongestPathLayerer`/`LongestPathSourceLayerer`의 `visit(node)`는 노드를 반환할 때만 표시하므로, 실행 중인 노드를 다시
+만나면 같은 재귀를 끝없이 되풀이해 `java.lang.StackOverflowError`. Lean의 명시적 스택은 같은 경로를 끝없이 쌓아(메모리 증가) 15초
+제한에 걸렸다 → 실행 중인 노드를 다시 만나면(그 뒤 Java는 반드시 같은 순환을 되풀이한다) `java.lang.StackOverflowError`를 던진다
+(mrtree `NodePlacer.secondWalk`와 같은 방식; 파이프라인은 Java와 같은 `overflow`로 센다). 고정: `coffman_graham_cycle_stack_overflow`
+(시드 1 `h1143`에서 축소: 노드 2개, 한쪽이 `noModelOrder`인 2-순환), `longest_path_cycle_stack_overflow`(시드 6 `h0433`에서 축소). 대상:
+시드 1·2 × 2,000의 `h1/h1143`·`h2/h0207`(Coffman–Graham), 시드 1~10 × 600의 `h2/h0207`·`h9/h0113`·`h9/h0162`·`h10/h0387`·`h10/h0394`
+(Coffman–Graham)과 `h3/h0214`·`h6/h0433`·`h7/h0268`(longest path).
+
+### 20.5 시드 1~10 × 600에서 더 찾은 결정적 차이
+
+| 차이 | Java | 수정 | 대상 |
+|---|---|---|---|
+| 계층 레이어 스윕의 빈 중첩 그래프 | `sweepInHierarchicalNode`가 `nestedGraphNodeOrder[startIndex][0]`을 검사 없이 읽는다: 층이 없으면 `Index 0`(역방향 `-1`) `out of bounds for length 0`, 첫 층이 비면 `Index 0 out of bounds for length 0` | 같은 `ArrayIndexOutOfBoundsException`(elk-rs는 첫 층 정렬을 건너뛰고 빈 그래프를 훑었다) | P3 변형 `p2/v2_g0045`(GS 이전부터 Lean ok / Java 예외; 고정 `hierarchical_sweep_empty_nested_order_aioobe`) |
+| 계층 간선의 좌표계 오프셋 합 | `calculateHierarchicalOffset`: `result.add(position).add(offset).add(padding.left, padding.top)`(왼쪽부터) | 같은 순서로 더함(elk-rs는 세 항을 먼저 묶어 마지막 비트가 달랐다) | `h3/h0190`(두 단계 위 그래프 좌표의 간선, 1e-6 안 차이; 고정 `hierarchical_edge_offset_summation`) |
+
+### 20.6 계층 노드 변환 순서(과제 3)
+
+`importHierarchicalGraph`의 노드 루프를 Java처럼 하나의 BFS 큐로 바꿨다(최상위 자식, 그다음 중첩 그래프를 얻은 노드의 자식을 그
+노드를 변환할 때 큐 뒤에 붙임; 부모 `LNode`의 중첩 그래프에 변환; 중첩 그래프의 `DIRECTION`은 최상위 그래프 값). 그래프마다 노드가
+만들어지는 순서는 같고 arena의 `LNode`/`LGraph` 번호만 달라진다(단위 테스트 `layered.import.hierarchical`의 노드 id를 Java 순서로
+바꿈). 바이트 비교(수정 20.2~20.4를 넣은 바이너리 vs 여기에 BFS를 더한 바이너리): 코퍼스 Lean 출력 1,997개와 Java trace용 Lean
+trace 196,407개 동일, 합성 26개 동일, 무작위 `v`·`p`(시드 1~10; BFS 바이너리와 기준 바이너리 비교) 동일, `h` 시드 1~10 × 600·시드 1·2 × 2,000과 변형 세트
+npa/npb/mob/p3a(7,208개) 16,008개 동일 → 관찰 가능한 차이 없음(Java 실행 불필요).
+
+### 20.7 파이프라인 세트 `h`
+
+`run_random_java_parity.sh --sets h`: gen 단계가 `gen_hierarchical_mo_graphs.py <dir> <count> <seed>`를 부르고(그래프 k는 COUNT와
+무관하므로 `--count 600`은 GS의 2,000개 세트의 앞부분), Java·Lean·분류·보고서의 세트별/`h (all)` 행은 다른 세트와 같다. `TESTING.md`
+2B와 `scripts/README.md`에 적었고, 추적 전체 실행은 `--sets s,v,d,o,p,c,h`다. 기본 시드 1~10 × 600(6,000개)은 Java 약 1분(JVM 둘),
+Lean 약 70초(3 프로세스), 보고서 수십 초다. 입력의 약 62%는 양쪽 모두 예외(간선 "could not be found", model order 층 배정의 요구
+조건, `LAST_SEPARATE` 등)로 끝나고 그 문구를 비교한다.
+
+### 20.8 결과
+
+`h` 세트(Java와 같은 것 = 정확 일치 레이아웃, 같은 예외 문구, 양쪽 `StackOverflowError`; Java는 파이프라인 배치 JVM):
+
+| 세트 | 입력 | 기준(`78f1794`) | HMO | 나빠진 것 | 남은 것 |
+|---|---:|---:|---:|---:|---|
+| 시드 1 × 2,000 | 2,000 | 1,950 | **1,956** | 0 | 44, 모두 Java 실행 컨텍스트 의존 |
+| 시드 2 × 2,000 | 2,000 | 1,938 | **1,947** | 0 | 53, 모두 Java 실행 컨텍스트 의존 |
+| 시드 1~10 × 600 | 6,000 | 5,886 | **5,901** | 0* | 99, 모두 Java 실행 컨텍스트 의존 |
+
+GS의 Java 출력 기준으로는 시드 1 1,993 → **1,999**(남은 `h1049`는 20.1의 NPE 순서), 시드 2 1,985 → **1,992**. *시드 5 `h0520`은
+기준 바이너리가 파이프라인 Java와 같았지만 SCC 수정 뒤에는 새 JVM·`-XX:hashCode=2/3/4`·GS 플래그의 Java와 같고 파이프라인 JVM과만
+다르다(컨텍스트 의존). 남은 99개는 8개 컨텍스트(파이프라인 배치·역순 배치·새 JVM·`hashCode` 4종·GS 플래그) 중 Java 결과가 갈리는
+입력이고 Lean은 그중 하나 이상과 같다. 시드 1~10 × 600의 세부: 정확 일치 2,175/2,271(1e-6 2,175), 예외 문구 3,718/3,721(남은 3개는
+메시지 없는 fast throw AIOOBE 2·컨텍스트에 따라 바뀌는 NPE 1), `StackOverflowError` 8/8, timeout 0.
+
+다른 세트: 무작위 `v`(시드 1~10) Lean 출력 바이트 동일(정확 일치 5,711/5,761, 예외 문구 227/227), `p`는 `p2/v2_g0045`(20.5)만
+바뀌어 Lean ok/exc 1,373/428 = Java(이전 1,374/427), 예외 문구 427/428(남은 1개 `p3/v3_g0491`은 fast throw AIOOBE), 정확 일치
+1,359/1,373 그대로; `p`의 남은 15개도 모두 컨텍스트 의존이다(`p9/v9_g0493`은 8개 컨텍스트에서 같았지만 `-XX:hashCode=1 -Xint`에서는
+Lean과 같고, 원인 단위 `n4_n2`만 떼면 `SelfLoopRouter`의 self-loop 쪽이 `hashCode` 모드마다 바뀐다). 코퍼스(ELK Java 기준): Lean 출력 1,997개(1개는 양쪽 예외)와 Java trace용 Lean trace 모두 기준 바이너리와 바이트
+동일, 정확 일치 1878/119(드리프트 집합 동일), Java 단계별 trace 1,743/1,997(같음). 합성 26개 바이트 동일(23/3). elk-rs 보조: model parity(1e-6) 1447/1447, strict trace 1447/1447.
+`lake build` 경고 0, `lake test` 17,096 통과/0 실패(기준 17,088 + `hmo.*` 8; `layered.import.hierarchical`의 노드 id 6개는 BFS 순서로 바꿈).
+성능(`elk bench --scenarios hierarchy_nested,hierarchy_flat,layered_medium --iterations 20 --warmup 3`, 기준 바이너리와 번갈아 5회,
+중앙값): `hierarchy_flat` 0.998배, `layered_medium` 0.997배, `hierarchy_nested` 1.026배 → `hierarchy_nested`만 `--iterations 50`으로
+7회 다시 재면 최종 1.000배(BFS만 넣은 중간 바이너리 1.004배) — 잡음 범위.
+
+### 20.9 남은 것
+
+- 재현하지 않는 것(Java 실행 컨텍스트 의존): `h` 세트의 self-loop 처리 순서(`SelfLoopRouter`·`SelfLoopPortRestorer`)와 node
+  promotion에서 갈리는 레이아웃, 메시지 없는 fast throw AIOOBE, 컨텍스트에 따라 순서가 바뀌는 `LGraph`/`LEdge` NPE, 앞선 분리
+  레이아웃 결과가 들어가는 예외 문구 좌표(`h1/h1012`).
+- trace 단계 이름 `SccNodeTypeCycleBreaker`·`DfsNodeOrderCycleBreaker`(Java `SCCNodeTypeCycleBreaker`·`DFSNodeOrderCycleBreaker`):
+  elk-rs trace parity가 이 이름을 쓰므로 그대로 두었다(Java trace 비교에서 이름 차이 1개로 보고되지만 코퍼스에는 두 전략이 없다).
+- `LongestPathLayerer`류에서 `LNode.id`가 범위를 벗어나는 경우(Java는 `nodeHeights[node.id]`에서 AIOOBE) — 관찰된 입력 없음.
