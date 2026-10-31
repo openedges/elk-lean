@@ -915,7 +915,7 @@ Java: 중첩 그래프(포트 17개)의 첫 계수(`minimizeCrossingsWithCounter
 
 결과: `npb/v1_g0132` Java와 같은 예외 문구. 같은 원인으로 Java만 실패하던 무작위·변형 입력이 대거 Java와 같아졌다:
 `robustness/java_crossing_counter_aioobe`(“Java 결함, 재현하지 않음”으로 두었던 fixture — 이제 `robustness.exceptions`),
-무작위 s 6·v 10·d 10·p 30(17.5).
+무작위 s 6·v 10·d 10·p 26(17.5).
 
 ### 17.3 HotSpot `sin`/`cos`의 큰 인자 축소
 
@@ -969,7 +969,7 @@ NPE)는 값을 주고 NPE 검사를 따로 뒀다.
 | P3J `p3a` | 1,376 | 1,354 → 1,354 | 426 | 376 → 412 |
 
 모든 세트에서 정확 → 비정확 0, 예외 문구 일치 → 불일치 0, Java가 성공하는 입력이 Lean에서 실패로 바뀐 것 0. 바뀐 입력은 전부
-"Java만 예외/다른 예외 → 같은 예외"이다(무작위 s·v·d·p 73개: 교차 계수 AIOOBE 46·NPE 19 등, 루트 알고리즘이 box/force/mrtree/
+"Java만 예외/다른 예외 → 같은 예외"이다(무작위 s·v·d·p 71개: 교차 계수 트리의 AIOOBE 52·model order NPE 19, 루트 알고리즘이 box/force/mrtree/
 radial/stress인 입력은 그 안의 layered 자식 그래프). s 세트의 Java 예외는 이제 전부 문구까지 같고, v 세트에 남은 것은 위
 greedy switch `Map.get` NPE 1개다. 기본 세트(s, v)가 바뀌어 `tests/random_parity/report.md`를 기본 실행으로 다시 게시했다.
 
