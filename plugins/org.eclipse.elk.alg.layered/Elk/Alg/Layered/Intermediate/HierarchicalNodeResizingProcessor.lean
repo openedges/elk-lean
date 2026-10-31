@@ -9,7 +9,10 @@ non-hierarchical processor of a (nested) graph: moves all nodes back to `layerle
 the layers, resizes the graph (minimum size, `CONTENT_ALIGNMENT`, eastern/southern external port
 dummies moved with the growth) and, for a nested graph, transfers the layout to the parent node:
 every external port dummy whose `ORIGIN` is an `LPort` of the parent node gets the port's position
-on the parent border and its side, and the parent node is resized to the graph's actual size.
+on the parent border and its side, and the parent node is resized to the graph's actual size. Like
+Java, the position is used as computed: elk-rs subtracted the dummy's y coordinate for eastern "pure
+self loop" dummies (only self loops or, as the only eastern dummy without edges, none), which moved
+e.g. the outside port of a compound node next to a hierarchical one (removed by GS).
 
 The `ORIGIN` read here is an `LPort` of the parent graph (same arena), so no `ElkGraph` access is
 needed.
@@ -18,9 +21,6 @@ Differences to Java (Rust is followed):
 * the external port position is computed by a local copy of `getExternalPortPosition` (Rust
   `get_external_port_position_for_graph`) that groups the additions as `x += (a + b - c)` and has no
   connected-components compaction quirk (unlike `LGraphUtil.getExternalPortPosition`);
-* eastern "pure self loop" dummies (all incident edges are self loops, or, when they are the only
-  eastern dummy without edges, no edge at all) have their y coordinate before the transfer subtracted
-  from the port's y position (elk-rs parity fix, absent in Java);
 * the elk-rs `ELK_TRACE*` diagnostics written to stderr (`[hierarchical-resize]`, `[ext-port]`,
   `[hnr]`, `TRACE resize_graph`) are not ported.
 
@@ -38,35 +38,6 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Uti
   Elk.Alg.Layered.Graph Elk.Alg.Layered.Options LayeredM
 
 namespace HierarchicalNodeResizingProcessor
-
-/-- Rust `external_dummy_edges`: the edges incident to the node's ports (per port incoming then
-outgoing, each edge once, first occurrence order). -/
-def externalDummyEdges (node : LNodeId) : LayeredM (Array LEdgeId) := do
-  let mut allEdges : Array LEdgeId := #[]
-  for port in (← getNode node).ports do
-    let pt ← getPort port
-    for edge in pt.incomingEdges ++ pt.outgoingEdges do
-      if !allEdges.contains edge then allEdges := allEdges.push edge
-  return allEdges
-
-/-- Rust `external_dummy_edge_count`. -/
-def externalDummyEdgeCount (node : LNodeId) : LayeredM Nat := do
-  return (← externalDummyEdges node).size
-
-/-- Rust `edge_represents_self_loop`: the edge is a self loop, or its `ORIGIN` is an `LEdge` that is. -/
-def edgeRepresentsSelfLoop (edge : LEdgeId) : LayeredM Bool := withArena fun a =>
-  if a.edgeIsSelfLoop edge then true
-  else match (a.edge edge).internal.origin with
-    | some (.lEdge originEdge) => a.edgeIsSelfLoop originEdge
-    | _ => false
-
-/-- Rust `is_pure_self_loop_external_dummy`. -/
-def isPureSelfLoopExternalDummy (node : LNodeId) (allowEdgeLess : Bool) : LayeredM Bool := do
-  let allEdges ← externalDummyEdges node
-  if allEdges.isEmpty then return allowEdgeLess
-  for edge in allEdges do
-    if !(← edgeRepresentsSelfLoop edge) then return false
-  return true
 
 /-- Rust `get_external_port_position_for_graph` (`LGraphUtil.getExternalPortPosition`): the external
 port's position in the parent's coordinates; also moves the dummy onto the graph border. -/
@@ -109,26 +80,12 @@ def getExternalPortPositionForGraph (graph : LGraphId) (portDummy : LNodeId) (po
 /-- `graphLayoutToNode(node, lgraph)` (Rust `graph_layout_to_node`): transfers the external port
 positions to the parent node's ports and resizes the parent node. -/
 def graphLayoutToNode (node : LNodeId) (lgraph : LGraphId) : LayeredM Unit := do
-  let layerlessNodes := (← getGraph lgraph).layerlessNodes
-  let mut eastEdgeLessExternalDummyCount : Nat := 0
-  for child in layerlessNodes do
-    if (← getNode child).internal.extPortSide == .east && (← externalDummyEdgeCount child) == 0 then
-      eastEdgeLessExternalDummyCount := eastEdgeLessExternalDummyCount + 1
-  for child in layerlessNodes do
+  for child in (← getGraph lgraph).layerlessNodes do
     let childNode ← getNode child
     let some (.lPort portRef) := childNode.internal.origin | continue
-    let extPortSide := childNode.internal.extPortSide
-    let dummyPosY := childNode.position.y
     let portSize := (← getPort portRef).size
-    let mut portPosition ← getExternalPortPositionForGraph lgraph child portSize.x portSize.y
-    let allowEdgeLessSelfLoop :=
-      eastEdgeLessExternalDummyCount == 1 && (← externalDummyEdgeCount child) == 0
-    let pureSelfLoop ← (do
-      if extPortSide == .east then isPureSelfLoopExternalDummy child allowEdgeLessSelfLoop
-      else pure false)
-    if pureSelfLoop then portPosition := { portPosition with y := portPosition.y - dummyPosY }
-    let finalPosition := portPosition
-    modifyPort portRef fun p => LPort.setSide { p with position := finalPosition } extPortSide
+    let portPosition ← getExternalPortPositionForGraph lgraph child portSize.x portSize.y
+    modifyPort portRef fun p => LPort.setSide { p with position := portPosition } childNode.internal.extPortSide
   let actualGraphSize := (← getGraph lgraph).actualSize
   let hasExternalPorts := (← getGraph lgraph).internal.graphProperties.contains .externalPorts
   if hasExternalPorts then

@@ -32,16 +32,16 @@ elk-rs behaviour reproduced where it differs from Java (Rust is the oracle):
   (Java applies `LayeredSpacings.withBaseValue`). `RANDOM` is left to `GraphConfigurator`.
 * `checkExternalPorts` also treats a root graph with ports and side-fixed `PORT_CONSTRAINTS` as
   having external ports.
-* Hierarchical import is recursive: per level the children are transformed (a child's nested
-  graph is imported right after its node, also for `INHERIT` hierarchy handling), then the level's
-  edges with `importFlatGraphEdges`. The model orders follow Java instead: one breadth-first index
-  over the hierarchy for nodes (`assignHierarchicalNodeModelOrders`, `NO_LAYOUT` nodes included) and
-  one for edges (`assignHierarchicalEdgeModelOrders`); `MAX_MODEL_ORDER_NODES` and
-  `CB_NUM_MODEL_ORDER_GROUPS` only on the top-level graph (nested graphs: `maxModelOrderNodesNull`).
-* The edge loop of one hierarchical level (`importFlatGraphEdges`) imports every contained edge
-  whose end points are laid out; an edge into a node outside the layout scope throws (Java's
-  `transformEdge` text, `throwEdgeEndNotFound`). Inside self loops of the graph itself are
-  collected from the parent's edges. The flat import follows Java instead
+* Hierarchical import is recursive for the nodes: per level the children are transformed, a
+  child's nested graph imported right after its node (also for `INHERIT` hierarchy handling). The
+  rest follows Java: one breadth-first index over the hierarchy for node model orders
+  (`assignHierarchicalNodeModelOrders`, `NO_LAYOUT` nodes included) and one for edges
+  (`assignHierarchicalEdgeModelOrders`); `MAX_MODEL_ORDER_NODES` and `CB_NUM_MODEL_ORDER_GROUPS` only
+  on the top-level graph (nested graphs: `maxModelOrderNodesNull`); the edges once all nodes exist, in
+  Java's breadth-first graph order (`importHierarchicalEdges`, which also visits the edges inside a
+  `NO_LAYOUT` compound node without `ALGORITHM` and fails on them with Java's "could not be found"
+  `UnsupportedGraphException`). elk-rs imported a level's edges right after its nodes (nested levels
+  first) with per-level model orders. The flat import follows Java as well
   (`importFlatGraphEdgesJava`: only edges between children or between a child and the graph,
   hierarchy-crossing edges are left to no run without an error).
 * `COMPOUND_NODE` on a node requires children or an actual inside self loop edge.
@@ -834,31 +834,6 @@ private def importParentInsideSelfLoops (imp : ElkGraphImporter) (elkgraph : Nod
     let insideSelfLoopsEnabled := (← elkNode sourceNode).props.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
     if insideSelfLoopsEnabled && edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false then
       transformEdge imp e lgraph (some elkgraph)
-
-/-- Rust `import_flat_graph_edges(elkgraph, lgraph)`, the edge loop of one level of
-`importHierarchicalGraph` (Java's hierarchical edge loop): the contained edges (edge model order by
-index when needed; Java's `checkEdgeValidity` first) whose edge and end nodes are laid out, each
-placed by `edgeParentLGraph`; then the inside self loops of `elkgraph` contained in its parent. -/
-def importFlatGraphEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
-  let graphNode ← elkNode elkgraph
-  for e in graphNode.containedEdges do
-    -- Java: hyperedges and edges without an end are rejected before anything else (the edge model
-    -- orders are assigned beforehand by `assignHierarchicalEdgeModelOrders`)
-    checkEdgeValidity e
-    let edge ← elkEdge e
-    let some sourceNode ← withElk (firstNode · edge.sources) | continue
-    let some targetNode ← withElk (firstNode · edge.targets) | continue
-    let isSelfLoop ← withElk (ElkGraphUtil.isSelfloop · e)
-    let insideSelfLoopYo := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
-    let edgeNoLayout := edge.props.getD CoreOptions.NO_LAYOUT false
-    let sourceProps := (← elkNode sourceNode).props
-    let targetNoLayout := (← elkNode targetNode).props.getD CoreOptions.NO_LAYOUT false
-    if edgeNoLayout || sourceProps.getD CoreOptions.NO_LAYOUT false || targetNoLayout then continue
-    let insideSelfLoopsEnabled := sourceProps.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
-    let isInsideSelfLoop := isSelfLoop && insideSelfLoopsEnabled && insideSelfLoopYo
-    let (parentElkGraph, parentLGraph) ← edgeParentLGraph imp elkgraph lgraph sourceNode targetNode isInsideSelfLoop
-    transformEdge imp e parentLGraph (some parentElkGraph)
-  importParentInsideSelfLoops imp elkgraph lgraph
 
 /-- The edge loop of Java `importFlatGraph(elkgraph, lgraph)`: for every contained edge (edge model
 order by index when needed) `ElkGraphUtil.getSourceNode/getTargetNode` (Java
