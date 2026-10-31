@@ -154,13 +154,14 @@ private def overlayXywh (i : Nat) (x y w h : Float) (parent : Option ElementId) 
 
 /-- `transferLayoutNode` into the overlay. -/
 def overlayLayoutNode (n : NodeId) : OverlayM Unit := do
-  let some path := tableGet? (← getI).nodePath n.idx | throwJsonImport "Node did not exist in input."
+  let path := pathGet (← getI).nodePath n.idx
+  if !pathExists (← getI).nodePath n.idx then throwJsonImport "Node did not exist in input."
   let g ← getG
   let node := g.node n
   -- the document is unchanged, and `transferLayout` reads only the options of this object (which
   -- it never writes); `nodeCompaction` does not look at them for a node without ports (and the path
   -- of an imported node always leads to its object)
-  let jsonObj ← if node.ports.isEmpty then pure Value.null else objectAt path
+  let jsonObj ← if node.ports.isEmpty then pure Value.null else objectAt path.segs
   let c := nodeCompaction jsonObj g node (← getI).rootIncludeChildrenHint
   let parent := node.parent.map ElementId.node
   recordShape (.node n) parent node.x node.y node.props
@@ -192,7 +193,7 @@ def overlayLayoutNode (n : NodeId) : OverlayM Unit := do
 
 /-- `transferLayoutPort` into the overlay. -/
 def overlayLayoutPort (p : PortId) : OverlayM Unit := do
-  let some _ := tableGet? (← getI).portPath p.idx | throwJsonImport "Port did not exist in input."
+  if !pathExists (← getI).portPath p.idx then throwJsonImport "Port did not exist in input."
   let port := (← getG).port p
   let parent := port.parent.map ElementId.node
   recordShape (.port p) parent port.x port.y port.props
@@ -215,23 +216,16 @@ def overlayLayoutPort (p : PortId) : OverlayM Unit := do
           modO (·.setY i (y - delta))
           modI fun s => { s with shiftedSouthPortYDelta := s.shiftedSouthPortYDelta.insert p delta }
 
-/-- Whether `sp` starts with the segments `edgePath[k:]` (from `k`). -/
-private def samePrefix (edgePath sp : JsonPath) (k : Nat) : Bool :=
-  if h : k < edgePath.size then (sp.getD k (.idx 0) == edgePath[k]) && samePrefix edgePath sp (k + 1) else true
-termination_by edgePath.size - k
-
-/-- The index `j` of a section path `edgePath ++ [sections, j]`. -/
-private def sectionIndexIn (edgePath sp : JsonPath) : Option Nat :=
-  let n := edgePath.size
-  if sp.size == n + 2 && sp.getD n (.idx 0) == .key Key.sections && samePrefix edgePath sp 0 then
-    match sp.getD (n + 1) (.key "") with
-    | .idx j => some j
-    | _ => none
-  else none
+/-- The index `j` of a section path `child edgePath sections j`. -/
+private def sectionIndexIn (edgePath sp : JPath) : Option Nat :=
+  match sp with
+  | .child p k j => if k == Key.sections && p == edgePath then some j else none
+  | _ => none
 
 /-- `transferLayoutEdge` into the overlay. -/
 def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
-  let some path := tableGet? (← getI).edgePath e.idx | throwJsonImport "Edge did not exist in input."
+  let path := pathGet (← getI).edgePath e.idx
+  if !pathExists (← getI).edgePath e.idx then throwJsonImport "Edge did not exist in input."
   let g ← getG
   let edge := g.edge e
   -- `recordCoordinateModes (.edge e)`: the JSON parent of an edge is its original parent
@@ -252,12 +246,12 @@ def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
   for h : i in [0:edge.sections.size] do
     let sec := edge.sections[i]
     let s := g.edgeSection sec
-    let base ← match tableGet? st.sectionPath sec.idx with
-      | some sp =>
+    let base ← match pathGet st.sectionPath sec.idx with
+      | .missing => pure none
+      | sp =>
         match sectionIndexIn path sp with
         | some j => pure (some j)
         | none => modO Overlay.markBad; pure none
-      | none => pure none
     let fallbackId := if base.isSome then "" else s.identifier.getD s!"{edgeId}_s{i}"
     let mut startX ← adj.adjX s.startX
     let mut startY ← adj.adjY s.startY
@@ -322,7 +316,7 @@ where
 
 /-- `transferLayoutLabel` into the overlay. -/
 def overlayLayoutLabel (l : LabelId) : OverlayM Unit := do
-  let some _ := tableGet? (← getI).labelPath l.idx | throwJsonImport "Label did not exist in input."
+  if !pathExists (← getI).labelPath l.idx then throwJsonImport "Label did not exist in input."
   let label := (← getG).label l
   let parent := label.parent
   recordShape (.label l) parent label.x label.y label.props

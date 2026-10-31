@@ -440,7 +440,7 @@ def nodeCompaction (jsonObj : Value) (g : ElkGraph) (node : ElkNode) (rootHint :
 
 /-- `transfer_layout_node` including the elk-rs compaction corrections. -/
 def transferLayoutNode (n : NodeId) : ImportM Unit := do
-  let some path := tableGet? (← getI).nodePath n.idx | throwJsonImport "Node did not exist in input."
+  let some path := (pathGet (← getI).nodePath n.idx).segs? | throwJsonImport "Node did not exist in input."
   -- the members read below (`layoutOptions`/`properties`) are not touched by `transferXywh`, and
   -- `width`/`height` read back the values it writes
   let jsonObj ← objectAt path
@@ -476,7 +476,7 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
 
 /-- `transfer_layout_port`. -/
 def transferLayoutPort (p : PortId) : ImportM Unit := do
-  let some path := tableGet? (← getI).portPath p.idx | throwJsonImport "Port did not exist in input."
+  let some path := (pathGet (← getI).portPath p.idx).segs? | throwJsonImport "Port did not exist in input."
   -- (the importer registers paths of JSON objects only, and the transfer never replaces them, so
   -- the `json_object_mut` check of the reference always succeeds here)
   let port := (← getG).port p
@@ -516,7 +516,7 @@ private def pointObject (x y : Float) : Value := .obj #[(Key.x, .ofFloatElk x), 
 
 /-- `transfer_layout_edge`. -/
 def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
-  let some path := tableGet? (← getI).edgePath e.idx | throwJsonImport "Edge did not exist in input."
+  let some path := (pathGet (← getI).edgePath e.idx).segs? | throwJsonImport "Edge did not exist in input."
   recordCoordinateModes (.edge e)
   let st ← getI
   let g ← getG
@@ -531,7 +531,7 @@ def transferLayoutEdge (e : EdgeId) : ImportM Unit := do
   for h : i in [0:edge.sections.size] do
     let sec := edge.sections[i]
     let s := g.edgeSection sec
-    let base : Value ← match tableGet? st.sectionPath sec.idx with
+    let base : Value ← match (pathGet st.sectionPath sec.idx).segs? with
       | some sp => do
         match ← getAt sp with
         | some v@(.obj _) => pure v
@@ -593,7 +593,7 @@ where
 
 /-- `transfer_layout_label`. -/
 def transferLayoutLabel (l : LabelId) : ImportM Unit := do
-  let some path := tableGet? (← getI).labelPath l.idx | throwJsonImport "Label did not exist in input."
+  let some path := (pathGet (← getI).labelPath l.idx).segs? | throwJsonImport "Label did not exist in input."
   -- (`path` holds a JSON object, see `transferLayoutPort`)
   let label := (← getG).label l
   let parent := label.parent
@@ -647,7 +647,7 @@ def fixParentWidthsForCompactedPassthroughNodes : ImportM Unit := do
   let st ← getI
   if st.passthroughCompactedParentKeys.isEmpty || st.rootIncludeChildrenHint then return
   for parentKey in dedup st.passthroughCompactedParentKeys do
-    let some path := tableGet? st.nodePath parentKey.idx | continue
+    let some path := (pathGet st.nodePath parentKey.idx).segs? | continue
     let parentObj ← objectAt path
     let hasPorts := (JsonAdapter.optArray parentObj Key.ports).any (!·.isEmpty)
     if hasPorts then continue
@@ -661,7 +661,7 @@ def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
   let st ← getI
   if st.verticalCompactedParentKeys.isEmpty || st.rootIncludeChildrenHint then return
   for parentKey in dedup st.verticalCompactedParentKeys do
-    let some path := tableGet? st.nodePath parentKey.idx | continue
+    let some path := (pathGet st.nodePath parentKey.idx).segs? | continue
     let parentObj ← objectAt path
     let hasPorts := (JsonAdapter.optArray parentObj Key.ports).any (!·.isEmpty)
     if hasPorts then continue
@@ -673,7 +673,7 @@ def fixParentHeightsForCompactedVerticalNodes : ImportM Unit := do
       let child := children[i]
       let some y := (child.get? Key.y).bind (·.getFloat?) | continue
       let childPath := childPrefix ++ #[.idx i]
-      let childKey := (st.nodePath.findIdx? fun p => p == some childPath).map (⟨·⟩ : Nat → NodeId)
+      let childKey := (st.nodePath.findIdx? fun p => p.segs? == some childPath).map (⟨·⟩ : Nat → NodeId)
       let delta := (childKey.bind fun k => st.compactedVerticalNodeYDelta.get? k).getD fl0p0
       ordered := ordered.push (i, y, delta)
     let sortedChildren := stableSort ordered (fun a b => Float.comparePartial a.2.1 b.2.1)
