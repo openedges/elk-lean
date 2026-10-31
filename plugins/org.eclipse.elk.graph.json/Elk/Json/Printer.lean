@@ -33,7 +33,7 @@ private def pushEscaped (out : String) (c : Char) : String :=
 
 /-- Whether `s` has a character that serde_json escapes (`"`, `\`, control characters), checked on
 the UTF-8 bytes from byte `i` (bytes of multi-byte characters are `≥ 0x80`). -/
-private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) (i : USize) : Bool :=
+partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) (i : USize) : Bool :=
   if h : i < n then
     let b := Utf8.uget s i (hn ▸ h)
     if b < 0x20 || b == 0x22 || b == 0x5c then true else hasEscapes s n hn (i + 1)
@@ -42,9 +42,9 @@ private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) 
 
 /-- Appends `pre`, `s` with serde_json escaping and `post` to `out`: `pre`/`post` carry the quotes
 and the punctuation around the literal, so a plain string costs three appends. -/
-@[inline] private def appendQuoted (out pre s post : String) : String :=
+@[inline] def appendQuoted (out pre s post : String) : String :=
   if hasEscapes s (Utf8.usize s) rfl 0 then s.foldl pushEscaped (out ++ pre) ++ post
-  else out ++ pre ++ s ++ post
+  else append3 out pre s post
 
 /-- Appends `s` as a JSON string literal (serde_json escaping) to `out`. -/
 def escapeInto (out s : String) : String := appendQuoted out "\"" s "\""
@@ -53,16 +53,20 @@ def escapeInto (out s : String) : String := appendQuoted out "\"" s "\""
 key is one append (no escape scan). -/
 
 /-- `"key":` (first member, compact). -/
-private def compactKeysFirst : Array String := Key.all.map fun k => "\"" ++ k ++ "\":"
+def compactKeysFirst : Array String := Key.all.map fun k => "\"" ++ k ++ "\":"
 /-- `,"key":` (later members, compact). -/
-private def compactKeysNext : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":"
+def compactKeysNext : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":"
+/-- `"key":"` (first member with a string value, compact). -/
+def compactKeysFirstQ : Array String := Key.all.map fun k => "\"" ++ k ++ "\":\""
+/-- `,"key":"` (later members with a string value, compact). -/
+def compactKeysNextQ : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":\""
 /-- `"key": ` (pretty). -/
 private def prettyKeys : Array String := Key.all.map fun k => "\"" ++ k ++ "\": "
 
 /-- Appends the key `k` between `pre` and `post` (`appendQuoted`), from `lits` (`pre ++ k ++ post`
 for each `Key.all` entry) when `k` is one of the ELK member names (the parser shares their objects,
 so the equality test is usually a pointer comparison). -/
-@[inline] private def appendKey (out : String) (lits : Array String) (pre k post : String) : String :=
+@[inline] def appendKey (out : String) (lits : Array String) (pre k post : String) : String :=
   let j := Key.candidateIndex k 0 k.utf8ByteSize
   if h : j < lits.size then
     if k == Key.all.getD j "" then out ++ lits[j] else appendQuoted out pre k post
@@ -82,18 +86,22 @@ private def digitPairs : Array String := (Array.range 100).map fun n => if n < 1
 
 /-- Appends the decimal representation of `n` (`Nat.repr` without the intermediate string), two
 digits per append. -/
-private def pushNat (out : String) (n : Nat) : String :=
+def pushNat (out : String) (n : Nat) : String :=
   if n < 100 then out ++ smallNats.getD n ""
   else pushNat out (n / 100) ++ digitPairs.getD (n % 100) ""
 termination_by n
 decreasing_by omega
 
-/-- Appends `n.render`; integers are written in place. -/
-@[inline] private def pushNumber (out : String) (n : Number) : String :=
+/-- Appends `n.render`; integers and doubles are written in place (no temporary string). -/
+@[inline] def pushNumber (out : String) (n : Number) : String :=
   match n with
   | .int (.ofNat k) => pushNat out k
   | .int (.negSucc k) => pushNat (out ++ "-") (k + 1)
-  | n => out ++ n.render
+  | .float f => appendJsonFloat out f
+
+/-- The key of compact member `i` (`"key":` or `,"key":`). -/
+@[inline] private def memberKey (out : String) (i : Nat) (k : String) : String :=
+  if i == 0 then appendKey out compactKeysFirst "\"" k "\":" else appendKey out compactKeysNext ",\"" k "\":"
 
 mutual
 
@@ -121,9 +129,18 @@ partial def compactItems (sortKeys : Bool) (xs : Array Value) (i : Nat) (out : S
 partial def compactMembers (sortKeys : Bool) (kvs : Array (String × Value)) (i : Nat) (out : String) : String :=
   if h : i < kvs.size then
     let kv := kvs[i]
-    let out := if i == 0 then appendKey out compactKeysFirst "\"" kv.1 "\":"
-      else appendKey out compactKeysNext ",\"" kv.1 "\":"
-    compactMembers sortKeys kvs (i + 1) (compact sortKeys kv.2 out)
+    match kv.2 with
+    | .str s =>
+      -- an ELK member name and a string without escapes: one append (`"key":"` `s` `"`)
+      let k := kv.1
+      let j := Key.candidateIndex k 0 k.utf8ByteSize
+      if h : j < compactKeysFirstQ.size then
+        if k == Key.all.getD j "" && !hasEscapes s (Utf8.usize s) rfl 0 then
+          compactMembers sortKeys kvs (i + 1)
+            (append3 out (if i == 0 then compactKeysFirstQ[j] else compactKeysNextQ.getD j "") s "\"")
+        else compactMembers sortKeys kvs (i + 1) (escapeInto (memberKey out i k) s)
+      else compactMembers sortKeys kvs (i + 1) (escapeInto (memberKey out i k) s)
+    | v => compactMembers sortKeys kvs (i + 1) (compact sortKeys v (memberKey out i kv.1))
   else out
 
 end
@@ -190,11 +207,13 @@ end Printer
 
 namespace Value
 
-/-- `serde_json::to_string`. -/
-def render (v : Value) (sortKeys : Bool := false) : String := Printer.compact sortKeys v ""
+/-- `serde_json::to_string` (`cap`: room reserved for the output, see `stringWithCapacity`). -/
+def render (v : Value) (sortKeys : Bool := false) (cap : Nat := 0) : String :=
+  Printer.compact sortKeys v (stringWithCapacity cap.toUSize)
 
-/-- `serde_json::to_string_pretty`. -/
-def renderPretty (v : Value) (sortKeys : Bool := false) : String := Printer.pretty sortKeys v 0 ""
+/-- `serde_json::to_string_pretty` (`cap`: room reserved for the output). -/
+def renderPretty (v : Value) (sortKeys : Bool := false) (cap : Nat := 0) : String :=
+  Printer.pretty sortKeys v 0 (stringWithCapacity cap.toUSize)
 
 instance : ToString Value := ⟨fun v => v.render⟩
 

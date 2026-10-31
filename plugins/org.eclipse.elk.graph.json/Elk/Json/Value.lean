@@ -13,6 +13,38 @@ namespace Elk.Json
 
 open Elk.Core.Util
 
+/-! Appending number renderings to the output string (C shim `elk_core_ffi.c`; declared here so that
+only the JSON modules depend on them). -/
+
+/-- `""` with room for `cap` bytes, so that a printer appending to it does not reallocate (and copy)
+the growing output. -/
+@[extern "elk_string_with_capacity"]
+opaque stringWithCapacity (cap : USize) : String
+
+/-- `out ++ (if x.isFinite then Float.toJsonNumber x else "null")`, appended in place when `out` is
+unshared and has the capacity (no temporary string; JSON printer). -/
+@[extern "elk_string_append_json_float"]
+opaque appendJsonFloat (out : String) (x : Float) : String
+
+/-- `out ++` the JSON rendering of the layout number `x` (`Number.ofFloatElk x |>.render`): exactly
+integral finite values other than `-0.0` below `2^63` in magnitude as integers, other finite values
+as `Float.toJsonNumber`, non-finite ones as `null`; appended like `appendJsonFloat`. -/
+@[extern "elk_string_append_elk_number"]
+opaque appendElkNumber (out : String) (x : Float) : String
+
+/-- `out ++ pre ++` the JSON rendering of the layout number `x` (`appendElkNumber`), in one call. -/
+@[extern "elk_string_append_pre_elk_number"]
+opaque appendPreElkNumber (out : String) (pre : @& String) (x : Float) : String
+
+/-- `out ++ pre ++ "{\"x\":" ++ X ++ ",\"y\":" ++ Y ++ "}"` with the layout numbers `X`, `Y` of `x`, `y`
+(`appendElkNumber`): a point object of the layout transfer, in one call. -/
+@[extern "elk_string_append_point"]
+opaque appendPoint (out : String) (pre : @& String) (x y : Float) : String
+
+/-- `out ++ a ++ b ++ c` in one call (the capacity is ensured once). -/
+@[extern "elk_string_append3"]
+opaque append3 (out : String) (a b c : @& String) : String
+
 /-- JSON number: integer lexemes stay `Int`, everything else is a double. -/
 inductive Number where
   | int (i : Int)

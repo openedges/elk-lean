@@ -772,6 +772,141 @@ LEAN_EXPORT lean_obj_res elk_float_to_json(double x) {
     return lean_mk_string_unchecked(buf, n, n);
 }
 
+/* ---- Output buffers of the JSON printer ------------------------------------------------------
+ * The printer threads one string through all appends. These helpers append several pieces (or a
+ * formatted number) in one call: the capacity is ensured once, and no temporary string is made. */
+
+/* `s` (consumed) unshared with room for `extra` more bytes: `s` itself when it is exclusive and has
+ * the capacity, otherwise a copy with the capacity grown geometrically (like `lean_string_append`). */
+static lean_obj_res elk_string_reserve(lean_obj_arg s, size_t extra) {
+    size_t sz = lean_string_size(s); /* bytes including the terminator */
+    size_t cap = lean_string_capacity(s);
+    if (lean_is_exclusive(s) && cap >= sz + extra) {
+        return s;
+    }
+    size_t ncap = cap + sz + extra;
+    lean_object *r = lean_alloc_string(sz, ncap, lean_string_len(s));
+    memcpy(lean_to_string(r)->m_data, lean_string_cstr(s), sz);
+    lean_dec_ref(s);
+    return r;
+}
+
+/* Appends `n` bytes (`len` characters) to a string reserved by `elk_string_reserve`. */
+static inline void elk_string_put(lean_object *s, const char *p, size_t n, size_t len) {
+    lean_string_object *o = lean_to_string(s);
+    memcpy(o->m_data + o->m_size - 1, p, n);
+    o->m_size += n;
+    o->m_length += len;
+    o->m_data[o->m_size - 1] = 0;
+}
+
+/* Appends the Lean string `a`. */
+static inline void elk_string_put_str(lean_object *s, b_lean_obj_arg a) {
+    elk_string_put(s, lean_string_cstr(a), lean_string_size(a) - 1, lean_string_len(a));
+}
+
+/* `elk_float_to_json` of a finite x, `null` otherwise, into `buf` (>= 32 bytes); returns the length. */
+static size_t elk_json_float_write(double x, char *buf) {
+    if (!isfinite(x)) {
+        memcpy(buf, "null", 4);
+        return 4;
+    }
+    return (size_t)(elk_zmij_write(x, buf, 1) - buf);
+}
+
+/* `(Number.ofFloatElk x).render` into `buf` (>= 32 bytes); returns the length: a finite, exactly
+ * integral x other than `-0.0` with |x| < 2^63 as a decimal integer, any other finite x as
+ * `elk_float_to_json`, a non-finite one as `null`. */
+static size_t elk_elk_number_write(double x, char *buf) {
+    if (!isfinite(x)) {
+        memcpy(buf, "null", 4);
+        return 4;
+    }
+    uint64_t bits;
+    memcpy(&bits, &x, sizeof bits);
+    if (x == round(x) && bits != 0x8000000000000000ULL && fabs(x) < 9223372036854775808.0) {
+        int64_t v = (int64_t)x;
+        uint64_t u = v < 0 ? (uint64_t)0 - (uint64_t)v : (uint64_t)v;
+        char tmp[24];
+        size_t k = 0;
+        do {
+            tmp[k++] = (char)('0' + (int)(u % 10));
+            u /= 10;
+        } while (u != 0);
+        size_t n = 0;
+        if (v < 0) {
+            buf[n++] = '-';
+        }
+        while (k > 0) {
+            buf[n++] = tmp[--k];
+        }
+        return n;
+    }
+    return (size_t)(elk_zmij_write(x, buf, 1) - buf);
+}
+
+/* An empty string with room for `cap` bytes (output buffers of the JSON printer). */
+LEAN_EXPORT lean_obj_res elk_string_with_capacity(size_t cap) {
+    lean_object *r = lean_alloc_string(1, cap + 1, 0);
+    lean_to_string(r)->m_data[0] = 0;
+    return r;
+}
+
+/* `s ++ Number.render (.float x)`: `elk_float_to_json` for a finite x, `null` otherwise. */
+LEAN_EXPORT lean_obj_res elk_string_append_json_float(lean_obj_arg s, double x) {
+    char buf[32];
+    size_t n = elk_json_float_write(x, buf);
+    s = elk_string_reserve(s, n);
+    elk_string_put(s, buf, n, n);
+    return s;
+}
+
+/* `s ++ (Number.ofFloatElk x).render`. */
+LEAN_EXPORT lean_obj_res elk_string_append_elk_number(lean_obj_arg s, double x) {
+    char buf[32];
+    size_t n = elk_elk_number_write(x, buf);
+    s = elk_string_reserve(s, n);
+    elk_string_put(s, buf, n, n);
+    return s;
+}
+
+/* `s ++ pre ++ (Number.ofFloatElk x).render`. */
+LEAN_EXPORT lean_obj_res elk_string_append_pre_elk_number(lean_obj_arg s, b_lean_obj_arg pre, double x) {
+    char buf[32];
+    size_t n = elk_elk_number_write(x, buf);
+    s = elk_string_reserve(s, lean_string_size(pre) - 1 + n);
+    elk_string_put_str(s, pre);
+    elk_string_put(s, buf, n, n);
+    return s;
+}
+
+/* `s ++ pre ++ "{\"x\":" ++ X ++ ",\"y\":" ++ Y ++ "}"` with the layout numbers X, Y of x, y
+ * (`Number.ofFloatElk`): a point object of the transfer. */
+LEAN_EXPORT lean_obj_res elk_string_append_point(lean_obj_arg s, b_lean_obj_arg pre, double x, double y) {
+    char buf[96];
+    size_t n = 0;
+    memcpy(buf, "{\"x\":", 5);
+    n = 5;
+    n += elk_elk_number_write(x, buf + n);
+    memcpy(buf + n, ",\"y\":", 5);
+    n += 5;
+    n += elk_elk_number_write(y, buf + n);
+    buf[n++] = '}';
+    s = elk_string_reserve(s, lean_string_size(pre) - 1 + n);
+    elk_string_put_str(s, pre);
+    elk_string_put(s, buf, n, n);
+    return s;
+}
+
+/* `s ++ a ++ b ++ c`. */
+LEAN_EXPORT lean_obj_res elk_string_append3(lean_obj_arg s, b_lean_obj_arg a, b_lean_obj_arg b, b_lean_obj_arg c) {
+    s = elk_string_reserve(s, lean_string_size(a) + lean_string_size(b) + lean_string_size(c) - 3);
+    elk_string_put_str(s, a);
+    elk_string_put_str(s, b);
+    elk_string_put_str(s, c);
+    return s;
+}
+
 /* Java `Double.toString` style is not needed for JSON, but `%.17g` is handy for traces. */
 LEAN_EXPORT lean_obj_res elk_float_to_g17(double x) {
     char out[64];

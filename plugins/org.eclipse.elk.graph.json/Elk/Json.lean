@@ -5,5 +5,7 @@ import Elk.Json.Parser
 import Elk.Json.ImporterState
 import Elk.Json.Importer
 import Elk.Json.TransferLayout
+import Elk.Json.TransferOverlay
+import Elk.Json.OverlayPrinter
 import Elk.Json.Exporter
 /-! Root module of the `org.eclipse.elk.graph.json` plugin. -/

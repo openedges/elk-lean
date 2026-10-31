@@ -40,6 +40,44 @@ end JsonId
 /-- JSON path (replaces elk-rs JSON pointers). -/
 abbrev JsonPath := Array Seg
 
+/-- Where the importer found an element object, as a parent link: `child parent key i` is element
+`i` of the (first) member `key` of the object at `parent`. One object per element (a `JsonPath`
+would copy its parent's segments); `missing` for elements that do not come from the document. -/
+inductive JPath where
+  | missing
+  | root
+  | child (parent : JPath) (key : String) (idx : Nat)
+  deriving Inhabited, BEq
+
+namespace JPath
+
+/-- The segments from the root. -/
+def segs : JPath → JsonPath
+  | .missing | .root => #[]
+  | .child p k i => ((segs p).push (.key k)).push (.idx i)
+
+/-- The segments, `none` for `missing`. -/
+def segs? : JPath → Option JsonPath
+  | .missing => none
+  | p => some p.segs
+
+end JPath
+
+/-- Entry `i` of a path table (`missing` past its end). -/
+@[inline] def pathGet (t : Array JPath) (i : Nat) : JPath := t.getD i .missing
+
+/-- Whether element `i` has a path (it was imported from a JSON object). -/
+@[inline] def pathExists (t : Array JPath) (i : Nat) : Bool :=
+  match pathGet t i with
+  | .missing => false
+  | _ => true
+
+/-- Stores `v` at index `i` of a path table, growing it with `missing`. -/
+def pathSet (t : Array JPath) (i : Nat) (v : JPath) : Array JPath :=
+  if i < t.size then t.set! i v
+  else if i == t.size then t.push v
+  else (t ++ Array.replicate (i - t.size) JPath.missing).push v
+
 /-- Per-call option defaults (`GlobalOptions`): the first spelling of every
 canonical option id wins; canonical lookups are cached. -/
 structure GlobalOptions where
@@ -107,6 +145,77 @@ constructor match, so the update reuses the table object.) -/
 
 end TransferTables
 
+/-- Where the importer created the elements of each JSON element object, for the overlay transfer
+(`Elk.Json.TransferOverlay`): an element's `ports`, `labels` and `edges` arrays become elements with
+consecutive ids (the object entries in array order), and node ids are the preorder of the `children`
+objects. Indexed by element id; `regular` is cleared when an element was not created in id order or
+two nodes share a JSON id (edges are then attached through the id map to another node's object). -/
+structure ElemIndex where
+  /-- Port id of the first object of a node's `ports` array. -/
+  nodeFirstPort : Array Nat := #[]
+  /-- Label id of the first object of a node's `labels` array. -/
+  nodeFirstLabel : Array Nat := #[]
+  /-- Edge id of the first object of a node's `edges` array. -/
+  nodeFirstEdge : Array Nat := #[]
+  /-- One past the last node id of a node's subtree (`children`, recursively). -/
+  nodeSubtreeEnd : Array Nat := #[]
+  /-- Label id of the first object of a port's `labels` array. -/
+  portFirstLabel : Array Nat := #[]
+  /-- Label id of the first object of an edge's `labels` array. -/
+  edgeFirstLabel : Array Nat := #[]
+  regular : Bool := true
+
+namespace ElemIndex
+
+/-- Stores `v` at `i` of an index table that is filled in id order (`regular` cleared otherwise). -/
+@[inline] private def put (t : Array Nat) (i v : Nat) (regular : Bool) : Array Nat × Bool :=
+  if i == t.size then (t.push v, regular)
+  else if i < t.size then (t.set! i v, regular)
+  else (t, false)
+
+/-- Records `nodeFirstPort` (when node `n` is created). -/
+def setNodeFirstPort (x : ElemIndex) (n v : Nat) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, r⟩ =>
+    let (a, r) := put a n v r
+    let (d, r) := put d n 0 r
+    ⟨a, b, c, d, e, f, r⟩
+
+/-- Records `nodeFirstLabel`. -/
+def setNodeFirstLabel (x : ElemIndex) (n v : Nat) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, r⟩ => let (b, r) := put b n v r; ⟨a, b, c, d, e, f, r⟩
+
+/-- Records `nodeFirstEdge`. -/
+def setNodeFirstEdge (x : ElemIndex) (n v : Nat) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, r⟩ =>
+    -- `transformEdges` visits the nodes in creation order, so the table is filled in order
+    let (c, r) := put c n v r
+    ⟨a, b, c, d, e, f, r⟩
+
+/-- Records `nodeSubtreeEnd` (after the children of node `n`). -/
+def setNodeSubtreeEnd (x : ElemIndex) (n v : Nat) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, r⟩ => let (d, r) := put d n v r; ⟨a, b, c, d, e, f, r⟩
+
+/-- Records `portFirstLabel`. -/
+def setPortFirstLabel (x : ElemIndex) (p v : Nat) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, r⟩ => let (e, r) := put e p v r; ⟨a, b, c, d, e, f, r⟩
+
+/-- Records `edgeFirstLabel`. -/
+def setEdgeFirstLabel (x : ElemIndex) (ed v : Nat) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, r⟩ => let (f, r) := put f ed v r; ⟨a, b, c, d, e, f, r⟩
+
+/-- Clears `regular`. -/
+def markIrregular (x : ElemIndex) : ElemIndex :=
+  match x with
+  | ⟨a, b, c, d, e, f, _⟩ => ⟨a, b, c, d, e, f, false⟩
+
+end ElemIndex
+
 /-- Importer scratch state (one import + one transfer). Element-keyed tables are arrays indexed by
 the element id (the importer creates the elements densely). -/
 structure ImporterState where
@@ -117,11 +226,11 @@ structure ImporterState where
   portIdMap : Std.HashMap JsonId PortId := {}
   edgeIdMap : Std.HashMap JsonId EdgeId := {}
   sectionIdMap : Std.HashMap JsonId SectionId := {}
-  nodePath : Array (Option JsonPath) := #[]
-  portPath : Array (Option JsonPath) := #[]
-  edgePath : Array (Option JsonPath) := #[]
-  sectionPath : Array (Option JsonPath) := #[]
-  labelPath : Array (Option JsonPath) := #[]
+  nodePath : Array JPath := #[]
+  portPath : Array JPath := #[]
+  edgePath : Array JPath := #[]
+  sectionPath : Array JPath := #[]
+  labelPath : Array JPath := #[]
   nodeIds : Array (Option JsonId) := #[]
   portIds : Array (Option JsonId) := #[]
   edgeIds : Array (Option JsonId) := #[]
@@ -139,67 +248,75 @@ structure ImporterState where
   /-- Values of ENUM/ENUMSET options parsed during this import: `(option id, value string, value)`
   (the option parsers are pure, so equal inputs give equal values; see `JsonImporter.setOption`). -/
   enumMemo : Array (String × String × PropValue) := #[]
+  /-- Element placement in the JSON document (`ElemIndex`). -/
+  index : ElemIndex := {}
 
 instance : Inhabited ImporterState := ⟨{}⟩
 
 namespace ImporterState
 
 /-! Updates of single fields written as a constructor match: the compiler reuses the state
-object (a `{ s with … }` update projects the fields and allocates a new 27-field object). -/
+object (a `{ s with … }` update projects the fields and allocates a new 28-field object). -/
 
 /-- Applies `f` to `model`. -/
 @[inline] def modifyModel (s : ImporterState) (f : Value → Value) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨(f model), defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨(f model), defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- Applies `f` to `tables`. -/
 @[inline] def modifyTables (s : ImporterState) (f : TransferTables → TransferTables) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, (f tables), insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, (f tables), insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- `registerNode`: id map, JSON id and path of a node. -/
-@[inline] def addNode (s : ImporterState) (id : JsonId) (n : NodeId) (path : JsonPath) : ImporterState :=
+@[inline] def addNode (s : ImporterState) (id : JsonId) (n : NodeId) (path : JPath) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, (nodeIdMap.insert id n), portIdMap, edgeIdMap, sectionIdMap, (tableSet nodePath n.idx path), portPath, edgePath, sectionPath, labelPath, (tableSet nodeIds n.idx id), portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, (nodeIdMap.insert id n), portIdMap, edgeIdMap, sectionIdMap, (pathSet nodePath n.idx path), portPath, edgePath, sectionPath, labelPath, (tableSet nodeIds n.idx id), portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- `registerPort`: id map, JSON id and path of a port. -/
-@[inline] def addPort (s : ImporterState) (id : JsonId) (p : PortId) (path : JsonPath) : ImporterState :=
+@[inline] def addPort (s : ImporterState) (id : JsonId) (p : PortId) (path : JPath) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, nodeIdMap, (portIdMap.insert id p), edgeIdMap, sectionIdMap, nodePath, (tableSet portPath p.idx path), edgePath, sectionPath, labelPath, nodeIds, (tableSet portIds p.idx id), edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, (portIdMap.insert id p), edgeIdMap, sectionIdMap, nodePath, (pathSet portPath p.idx path), edgePath, sectionPath, labelPath, nodeIds, (tableSet portIds p.idx id), edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- `registerEdge`: id map, JSON id, path and original parent of an edge. -/
-@[inline] def addEdge (s : ImporterState) (id : JsonId) (e : EdgeId) (path : JsonPath) (containing : Option NodeId) : ImporterState :=
+@[inline] def addEdge (s : ImporterState) (id : JsonId) (e : EdgeId) (path : JPath) (containing : Option NodeId) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, (edgeIdMap.insert id e), sectionIdMap, nodePath, portPath, (tableSet edgePath e.idx path), sectionPath, labelPath, nodeIds, portIds, (tableSet edgeIds e.idx id), sectionIds, (tableSetOpt edgeOriginalParent e.idx containing), tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, (edgeIdMap.insert id e), sectionIdMap, nodePath, portPath, (pathSet edgePath e.idx path), sectionPath, labelPath, nodeIds, portIds, (tableSet edgeIds e.idx id), sectionIds, (tableSetOpt edgeOriginalParent e.idx containing), tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- `registerSection`: id map, JSON id and path of a section. -/
-@[inline] def addSection (s : ImporterState) (id : JsonId) (sec : SectionId) (path : JsonPath) : ImporterState :=
+@[inline] def addSection (s : ImporterState) (id : JsonId) (sec : SectionId) (path : JPath) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, (sectionIdMap.insert id sec), nodePath, portPath, edgePath, (tableSet sectionPath sec.idx path), labelPath, nodeIds, portIds, edgeIds, (tableSet sectionIds sec.idx id), edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, (sectionIdMap.insert id sec), nodePath, portPath, edgePath, (pathSet sectionPath sec.idx path), labelPath, nodeIds, portIds, edgeIds, (tableSet sectionIds sec.idx id), edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- Path of a label. -/
-@[inline] def addLabelPath (s : ImporterState) (l : LabelId) (path : JsonPath) : ImporterState :=
+@[inline] def addLabelPath (s : ImporterState) (l : LabelId) (path : JPath) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, (tableSet labelPath l.idx path), nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, (pathSet labelPath l.idx path), nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
 
 /-- Records a parsed ENUM/ENUMSET option value (`enumMemo`). -/
 @[inline] def pushEnumMemo (s : ImporterState) (entry : String × String × PropValue) : ImporterState :=
   match s with
-  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, (enumMemo.push entry)⟩
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, (enumMemo.push entry), index⟩
 
 /-- Stores the (cache-updated) per-call defaults. -/
 @[inline] def setDefaults (s : ImporterState) (g : GlobalOptions) : ImporterState :=
   match s with
-  | ⟨model, _defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩ =>
-    ⟨model, (some g), optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo⟩
+  | ⟨model, _defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, (some g), optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩
+
+/-- Applies `f` to `index`. -/
+@[inline] def modifyIndex (s : ImporterState) (f : ElemIndex → ElemIndex) : ImporterState :=
+  match s with
+  | ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, index⟩ =>
+    ⟨model, defaults, optionCache, nodeIdMap, portIdMap, edgeIdMap, sectionIdMap, nodePath, portPath, edgePath, sectionPath, labelPath, nodeIds, portIds, edgeIds, sectionIds, edgeOriginalParent, tables, insideSelfLoopNodeXDelta, shiftedEastPortXDelta, compactedVerticalNodeYDelta, shiftedSouthPortYDelta, passthroughCompactedParentKeys, verticalCompactedParentKeys, rootIncludeChildrenHint, rootNode, enumMemo, (f index)⟩
 
 end ImporterState
 
