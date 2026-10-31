@@ -402,9 +402,10 @@ def resizeNodeWith (g : ElkGraph) (node : NodeId) (newWidth newHeight : Float)
   let oldSize := n.size
   let fixedPorts := (n.props.get CoreOptions.PORT_CONSTRAINTS).getD .undefined == .fixedPos
   let ports := n.ports
-  let mut newSize := effectiveMinSizeConstraintFor g node
-  if newWidth > newSize.x then newSize := { newSize with x := newWidth }
-  if newHeight > newSize.y then newSize := { newSize with y := newHeight }
+  -- Java `newSize.x = Math.max(newSize.x, newWidth)`: a NaN size propagates (e.g. force with
+  -- `iterations = 0`)
+  let minSize := effectiveMinSizeConstraintFor g node
+  let newSize : KVector := ⟨javaMax minSize.x newWidth, javaMax minSize.y newHeight⟩
   -- a collapsed axis has no scale; keep its port coordinates until placement
   let widthRatio := if oldSize.x == fl0p0 then fl1p0 else newSize.x / oldSize.x
   let heightRatio := if oldSize.y == fl0p0 then fl1p0 else newSize.y / oldSize.y

@@ -1,2 +1,0 @@
-org.eclipse.elk.core.UnsupportedConfigurationException: ERROR: The assigned value 0 of the option 'Iterations' is less than the lower bound 1.
-	at Root Node root
