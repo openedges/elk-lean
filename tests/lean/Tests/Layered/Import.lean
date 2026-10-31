@@ -292,9 +292,10 @@ def hierarchicalImport : Suite := suite "layered.import.hierarchical" do
   let a := r.a
   checkEq "hand: graphs root + h" a.graphs.size 2
   checkEq "hand: nodes h, i, j, k, z (z1 belongs to another algorithm)" a.nodes.size 5
-  checkEq "root layerless nodes" (a.graph r.lgraph).layerlessNodes #[n 0, n 3, n 4]
+  -- Java order: the nodes breadth-first over the hierarchy (h, k, z, then h's children i, j)
+  checkEq "root layerless nodes" (a.graph r.lgraph).layerlessNodes #[n 0, n 1, n 2]
   let g1 : LGraphId := ⟨1⟩
-  checkEq "nested layerless nodes" (a.graph g1).layerlessNodes #[n 1, n 2]
+  checkEq "nested layerless nodes" (a.graph g1).layerlessNodes #[n 3, n 4]
   checkEq "h nested graph" (a.node (n 0)).nestedGraph (some g1)
   checkEq "nested graph parent" (a.graph g1).parentNode (some (n 0))
   check "h COMPOUND_NODE" (a.node (n 0)).internal.compoundNode
@@ -302,7 +303,7 @@ def hierarchicalImport : Suite := suite "layered.import.hierarchical" do
   checkPadding "nested graph padding" (a.graph g1).padding 5.0 5.0 5.0 5.0
   checkEq "hand: nested DIRECTION from the parent level" ((a.graph g1).props.get? CoreOptions.DIRECTION) (some .down)
   check "hand: z COMPOUND_NODE (children) without nested graph"
-    ((a.node (n 4)).internal.compoundNode && (a.node (n 4)).nestedGraph.isNone)
+    ((a.node (n 2)).internal.compoundNode && (a.node (n 2)).nestedGraph.isNone)
   check "hand: hp INSIDE_CONNECTIONS" (a.port (p 0)).internal.insideConnections
   checkEq "hand: edges eij, ehp, ejk, ehk" a.edges.size 4
   -- Java order: all nodes first, then the edges graph by graph breadth-first (root: ejk, ehk; h: eij, ehp)
@@ -310,10 +311,10 @@ def hierarchicalImport : Suite := suite "layered.import.hierarchical" do
   checkEq "hand: eij source port side SOUTH" ((a.edge (e 2)).source.map fun q => (a.port q).side) (some .south)
   checkEq "hand: eij target port side NORTH" ((a.edge (e 2)).target.map fun q => (a.port q).side) (some .north)
   checkEq "hand: ehp source is h's port hp" (a.edge (e 3)).source (some (p 0))
-  checkEq "ehp target owner i" ((a.edge (e 3)).target.bind fun q => (a.port q).owner) (some (n 1))
+  checkEq "ehp target owner i" ((a.edge (e 3)).target.bind fun q => (a.port q).owner) (some (n 3))
   -- ejk crosses the hierarchy
-  checkEq "ejk source owner j" ((a.edge (e 0)).source.bind fun q => (a.port q).owner) (some (n 2))
-  checkEq "ejk target owner k" ((a.edge (e 0)).target.bind fun q => (a.port q).owner) (some (n 3))
+  checkEq "ejk source owner j" ((a.edge (e 0)).source.bind fun q => (a.port q).owner) (some (n 4))
+  checkEq "ejk target owner k" ((a.edge (e 0)).target.bind fun q => (a.port q).owner) (some (n 1))
   checkEq "hand: ejk COORDINATE_SYSTEM_ORIGIN = root graph" (a.edge (e 0)).internal.coordinateSystemOrigin (some r.lgraph)
   checkNone "ehk coordinate origin (siblings)" (a.edge (e 1)).internal.coordinateSystemOrigin
   checkEq "h ports: hp, ehk source" (a.node (n 0)).ports #[p 0, p 3]

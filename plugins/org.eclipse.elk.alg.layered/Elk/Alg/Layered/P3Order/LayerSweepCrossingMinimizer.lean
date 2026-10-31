@@ -492,12 +492,20 @@ partial def sweepInHierarchicalNodes (hierarchicalNodes : Array (LNodeId × Nat)
 
 /-- `sweep_in_hierarchical_node(is_forward_sweep, node, nested_index, is_first_sweep)`: the first
 layer of the nested graph is ordered by the parent's port positions (external port dummies) or by
-the heuristic, then the nested graph is swept and the parent's ports follow its last layer. -/
+the heuristic, then the nested graph is swept and the parent's ports follow its last layer. Java
+reads `nestedGraphNodeOrder[startIndex][0]` unguarded: a nested graph without layers (index `0`,
+or `-1` backwards) or with an empty first layer fails with `ArrayIndexOutOfBoundsException`
+(agent HMO; elk-rs skipped the first layer's ordering and swept the empty graph). -/
 partial def sweepInHierarchicalNode (isForwardSweep : Bool) (node : LNodeId) (nestedIndex : Nat) (isFirstSweep : Bool) :
     SweepM Bool := do
   let order := (← holderAt nestedIndex).currentNodeOrder
+  if order.isEmpty then
+    let index : Int := if isForwardSweep then 0 else -1
+    throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {index} out of bounds for length 0")
   let startIndex := firstIndex isForwardSweep order.size
   let startLayer := order[startIndex]?.getD #[]
+  if startLayer.isEmpty then
+    throw (IO.userError "java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0")
   if let some firstNode := startLayer[0]? then
     if (← getNode firstNode).type == .externalPort then
       let sorted ← sortPortDummiesByPortPositions node startLayer (sideOpposedSweepDirection isForwardSweep)

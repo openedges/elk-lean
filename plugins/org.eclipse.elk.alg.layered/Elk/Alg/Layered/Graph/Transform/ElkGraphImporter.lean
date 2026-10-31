@@ -32,9 +32,10 @@ elk-rs behaviour reproduced where it differs from Java (Rust is the oracle):
   (Java applies `LayeredSpacings.withBaseValue`). `RANDOM` is left to `GraphConfigurator`.
 * `checkExternalPorts` also treats a root graph with ports and side-fixed `PORT_CONSTRAINTS` as
   having external ports.
-* Hierarchical import is recursive for the nodes: per level the children are transformed, a
-  child's nested graph imported right after its node (also for `INHERIT` hierarchy handling). The
-  rest follows Java: one breadth-first index over the hierarchy for node model orders
+* Hierarchical import follows Java (agent HMO for the nodes, GS for the rest): the nodes in one
+  breadth-first queue over the hierarchy (`importHierarchicalGraph`, also for `INHERIT` hierarchy
+  handling; elk-rs recursed depth first, a child's nested graph imported right after its node), one
+  breadth-first index over the hierarchy for node model orders
   (`assignHierarchicalNodeModelOrders`, `NO_LAYOUT` nodes included) and one for edges
   (`assignHierarchicalEdgeModelOrders`); `MAX_MODEL_ORDER_NODES` and `CB_NUM_MODEL_ORDER_GROUPS` only
   on the top-level graph (nested graphs: `maxModelOrderNodesNull`); the edges once all nodes exist, in
@@ -1002,24 +1003,39 @@ private def importHierarchicalEdges (imp : ElkGraphImporter) (elkgraph : NodeId)
         if partOfSameLayoutRun (← elkNode child).props then
           queue := queue.push child
 
-/-- Rust `import_hierarchical_graph(elkgraph, lgraph)` (Java `importHierarchicalGraph`, but
-recursive): the children that are laid out (their model orders were assigned beforehand by
-`assignHierarchicalNodeModelOrders`), each child's nested graph imported right after its node
-(`COMPOUND_NODE`, parent/nested links). The edges follow once all nodes exist
-(`importHierarchicalEdges`, like Java). -/
-partial def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
+/-- The node loop of Java `importHierarchicalGraph(elkgraph, lgraph)`: one breadth-first queue over
+the hierarchy (the top-level graph's children, then the children of every polled node that gets a
+nested graph in the same run, appended when that node is transformed). A polled node that is not
+`NO_LAYOUT` gets its nested graph first (`createNestedGraph`, `DIRECTION` of the top-level graph),
+is transformed into the nested graph of its parent's `LNode` (the top-level `lgraph` for the
+top-level children) and linked to its nested graph (`COMPOUND_NODE`, parent/nested links). Model
+orders were assigned beforehand in the same order (`assignHierarchicalNodeModelOrders`); the edges
+follow once all nodes exist (`importHierarchicalEdges`). elk-rs recurses depth first (a child's
+nested graph is imported right after its node), which creates the same nodes per graph in the same
+order but numbers the `LNode`s and `LGraph`s of the arena differently (agent HMO). -/
+def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
   let parentGraphDirection ← LGraphUtil.getDirection lgraph
-  for child in (← elkNode elkgraph).children do
+  let mut queue : Array NodeId := (← elkNode elkgraph).children
+  let mut head := 0
+  while h : head < queue.size do
+    let child := queue[head]
+    head := head + 1
     if ← shouldSkipNode child then continue
     let nested ← createNestedGraph child parentGraphDirection
-    let lnode ← transformNode imp child lgraph
+    let parentLGraph ← match (← elkNode child).parent with
+      | some parent =>
+        match ← nodeFor imp parent with
+        | some parentLNode => pure ((← getNode parentLNode).nestedGraph.getD lgraph)
+        | none => pure lgraph
+      | none => pure lgraph
+    let lnode ← transformNode imp child parentLGraph
     if let some nestedGraph := nested then
-      modifyGraph nestedGraph fun g => { g with parentNode := some lnode }
+      -- Java sets `MAX_MODEL_ORDER_NODES` only on the top-level graph of a hierarchical import
+      modifyGraph nestedGraph fun g =>
+        { g with parentNode := some lnode, internal := { g.internal with maxModelOrderNodesNull := true } }
       modifyNode lnode fun n => { n with
         nestedGraph := some nestedGraph, internal := { n.internal with compoundNode := true } }
-      importHierarchicalGraph imp child nestedGraph
-      -- Java sets `MAX_MODEL_ORDER_NODES` only on the top-level graph of a hierarchical import
-      modifyGraph nestedGraph fun g => { g with internal := { g.internal with maxModelOrderNodesNull := true } }
+      queue := queue ++ (← elkNode child).children
 
 /-- `importGraph(elkgraph)` (Rust `import_graph`): creates the top-level `LGraph` (`PARTITIONS`
 when partitioning is active), defines the sides of the graph's ports, transforms them into external

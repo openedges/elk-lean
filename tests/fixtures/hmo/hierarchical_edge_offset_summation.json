@@ -1,0 +1,223 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+  "elk.layered.cycleBreaking.strategy": "DFS_NODE_ORDER",
+  "elk.layered.mergeEdges": true
+ },
+ "children": [
+  {
+   "id": "g190_n1",
+   "width": 30,
+   "height": 40,
+   "children": [
+    {
+     "id": "g190_n1_n2",
+     "width": 40,
+     "height": 40,
+     "edges": []
+    }
+   ],
+   "edges": [
+    {
+     "id": "g190_n1_e0",
+     "sources": [
+      "g190_n1_n2"
+     ],
+     "targets": [
+      "g190_n1_n2"
+     ]
+    },
+    {
+     "id": "g190_n1_e1",
+     "sources": [
+      "g190_n1_n2"
+     ],
+     "targets": [
+      "g190_n1_n2"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "g190_n6",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "id": "g190_n7",
+   "width": 30,
+   "height": 20
+  },
+  {
+   "id": "g190_n8",
+   "width": 40,
+   "height": 40,
+   "children": [
+    {
+     "id": "g190_n8_n9",
+     "width": 20,
+     "height": 20
+    },
+    {
+     "id": "g190_n8_n10",
+     "width": 55,
+     "height": 40
+    },
+    {
+     "id": "g190_n8_n11",
+     "width": 55,
+     "height": 40,
+     "children": [
+      {
+       "id": "g190_n8_n11_n12",
+       "width": 40,
+       "height": 40
+      },
+      {
+       "id": "g190_n8_n11_n13",
+       "width": 55,
+       "height": 40
+      }
+     ],
+     "edges": [
+      {
+       "id": "g190_n8_n11_e0",
+       "sources": [
+        "g190_n8_n11_n12"
+       ],
+       "targets": [
+        "g190_n8_n11_n12"
+       ]
+      },
+      {
+       "id": "g190_n8_n11_e1",
+       "sources": [
+        "g190_n8_n11_n13"
+       ],
+       "targets": [
+        "g190_n8_n11_n13"
+       ]
+      },
+      {
+       "id": "g190_n8_n11_e2",
+       "sources": [
+        "g190_n8_n11_n12"
+       ],
+       "targets": [
+        "g190_n8_n11_n12"
+       ]
+      },
+      {
+       "id": "g190_n8_n11_e3",
+       "sources": [
+        "g190_n8_n11_n12"
+       ],
+       "targets": [
+        "g190_n8_n11_n13"
+       ]
+      }
+     ],
+     "layoutOptions": {
+      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "g190_n8_e0",
+     "sources": [
+      "g190_n8_n10"
+     ],
+     "targets": [
+      "g190_n8_n10"
+     ]
+    },
+    {
+     "id": "g190_n8_e1",
+     "sources": [
+      "g190_n8_n11"
+     ],
+     "targets": [
+      "g190_n8_n10"
+     ]
+    },
+    {
+     "id": "g190_n8_e2",
+     "sources": [
+      "g190_n8_n10"
+     ],
+     "targets": [
+      "g190_n8_n10"
+     ]
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "g190_e0",
+   "sources": [
+    "g190_n7"
+   ],
+   "targets": [
+    "g190_n8"
+   ]
+  },
+  {
+   "id": "g190_e4",
+   "sources": [
+    "g190_n8"
+   ],
+   "targets": [
+    "g190_n1"
+   ]
+  },
+  {
+   "id": "g190_e5",
+   "sources": [
+    "g190_n6"
+   ],
+   "targets": [
+    "g190_n1"
+   ]
+  },
+  {
+   "id": "g190_e6",
+   "sources": [
+    "g190_n1"
+   ],
+   "targets": [
+    "g190_n7"
+   ]
+  },
+  {
+   "id": "g190_e7",
+   "sources": [
+    "g190_n7"
+   ],
+   "targets": [
+    "g190_n1"
+   ]
+  },
+  {
+   "id": "g190_e9",
+   "sources": [
+    "g190_n1"
+   ],
+   "targets": [
+    "g190_n8"
+   ]
+  },
+  {
+   "id": "g190_e11",
+   "sources": [
+    "g190_n8_n11_n12"
+   ],
+   "targets": [
+    "g190_n1_n2"
+   ]
+  }
+ ]
+}

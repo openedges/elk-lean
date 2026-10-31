@@ -1,0 +1,59 @@
+{
+ "id": "root",
+ "width": 20,
+ "height": 40,
+ "children": [
+  {
+   "id": "g1104_n13_n14",
+   "width": 40,
+   "height": 20,
+   "layoutOptions": {
+    "elk.layered.considerModelOrder.groupModelOrder.cycleBreakingId": 200
+   }
+  },
+  {
+   "id": "g1104_n13_n15",
+   "width": 20,
+   "height": 40
+  },
+  {
+   "id": "g1104_n13_n16",
+   "width": 55,
+   "height": 20,
+   "edges": []
+  }
+ ],
+ "edges": [
+  {
+   "id": "g1104_n13_e0",
+   "sources": [
+    "g1104_n13_n14"
+   ],
+   "targets": [
+    "g1104_n13_n16"
+   ]
+  },
+  {
+   "id": "g1104_n13_e1",
+   "sources": [
+    "g1104_n13_n16"
+   ],
+   "targets": [
+    "g1104_n13_n15"
+   ]
+  },
+  {
+   "id": "g1104_n13_e2",
+   "sources": [
+    "g1104_n13_n15"
+   ],
+   "targets": [
+    "g1104_n13_n14"
+   ]
+  }
+ ],
+ "layoutOptions": {
+  "elk.layered.cycleBreaking.strategy": "SCC_NODE_TYPE",
+  "elk.layered.considerModelOrder.groupModelOrder.cbPreferredSourceId": 200
+ }
+}

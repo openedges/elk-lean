@@ -5,7 +5,9 @@ Stages (each skipped when its result is already in <out_dir> unless --force):
   gen    <out>/gen/s<seed> (gen_nodesize_graphs.py OUT COUNT SEED), <out>/gen/v<seed> (sanitize_for_java.py),
          <out>/gen/d<seed> (--explicit-defaults), <out>/gen/o<seed> (gen_option_graphs.py OUT COUNT SEED),
          <out>/gen/p<seed> (gen_p3_graphs.py OUT SEED <out>/gen/v<seed>: layered roots only),
-         <out>/gen/c<seed> (gen_disco_graphs.py OUT COUNT SEED: DisCo layout nodes)
+         <out>/gen/c<seed> (gen_disco_graphs.py OUT COUNT SEED: DisCo layout nodes),
+         <out>/gen/h<seed> (gen_hierarchical_mo_graphs.py OUT COUNT SEED: INCLUDE_CHILDREN layered graphs
+         with model order options and NO_LAYOUT nodes)
   java   <out>/java/<set>/ : ELK Java 0.12.0 (`ElkJavaBaseline`), one JVM per set with a watchdog: a
          model that makes no progress for --java-timeout seconds is recorded as `timeout`, the JVM is
          killed and restarted on the remaining models (chunk directories of symlinks); a per-set alarm
@@ -89,6 +91,15 @@ def stage_gen(a, seeds, sets):
             if a.force or not os.path.isdir(c_dir) or len(inputs_of(c_dir)) != a.count:
                 shutil.rmtree(c_dir, ignore_errors=True)
                 subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_disco_graphs.py"), c_dir,
+                                str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
+        if "h" in sets:
+            # hierarchical (INCLUDE_CHILDREN) layered graphs with model order options, NO_LAYOUT nodes,
+            # group ids and layer constraints (gen_hierarchical_mo_graphs.py; graph k of a seed does not
+            # depend on COUNT, so a smaller count is a prefix of a larger one)
+            h_dir = os.path.join(a.out, "gen", f"h{seed}")
+            if a.force or not os.path.isdir(h_dir) or len(inputs_of(h_dir)) != a.count:
+                shutil.rmtree(h_dir, ignore_errors=True)
+                subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_hierarchical_mo_graphs.py"), h_dir,
                                 str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
         if not {"s", "v", "d", "p"} & set(sets):
             continue
@@ -410,7 +421,9 @@ def write_report(a, rows, set_names):
       "(`sanitize_for_java.py --explicit-defaults`), `o` = flat graphs of the non-layered algorithms with "
       "random values of their own options (`gen_option_graphs.py`), `p` = the layered roots of `v` with "
       "random crossing minimisation / layering options (`gen_p3_graphs.py`, seed = set seed), `c` = DisCo "
-      "layout nodes with random components and DisCo options (`gen_disco_graphs.py`).")
+      "layout nodes with random components and DisCo options (`gen_disco_graphs.py`), `h` = hierarchical "
+      "(`INCLUDE_CHILDREN`) layered graphs with model order options, `NO_LAYOUT` nodes, group ids and layer "
+      "constraints (`gen_hierarchical_mo_graphs.py`).")
     w("")
     w("## Per set")
     w("")
