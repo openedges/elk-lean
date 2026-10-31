@@ -114,11 +114,15 @@ def layout (layoutGraph : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
       maxx := fmax maxx maxv.x
       maxy := fmax maxy maxv.y
     for e in ElkGraphUtil.allIncomingEdges (← get) n do
-      if let some sourceParent := firstEndpointParent (← get) e true then
-        if sourceParent != layoutGraph then
-          let maxv ← processEdge e
-          maxx := fmax maxx maxv.x
-          maxy := fmax maxy maxv.y
+      -- Java `ElkGraphUtil.getSourceNode(edge).getParent() != layoutNode`: a non-simple edge throws
+      -- `IllegalArgumentException`, an edge from the layout root (parent `null`) is processed
+      let edge ← ElkM.getEdge e
+      if edge.sources.size != 1 || edge.targets.size != 1 then
+        throwIllegalArgument "Passed edge is not 'simple'."
+      if firstEndpointParent (← get) e true != some layoutGraph then
+        let maxv ← processEdge e
+        maxx := fmax maxx maxv.x
+        maxy := fmax maxy maxv.y
   if edgeRouting == .orthogonal then
     for n in (← ElkM.getNode layoutGraph).children do
       for e in ElkGraphUtil.allOutgoingEdges (← get) n do

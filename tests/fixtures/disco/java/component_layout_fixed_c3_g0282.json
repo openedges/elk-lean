@@ -1,0 +1,25 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE",
+  "org.eclipse.elk.polyomino.traversalStrategy": "COMBINE_LINE_BY_LINE_MANHATTAN"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 152.4,
+   "y": 186.1,
+   "width": 26.5,
+   "height": 15.4
+  },
+  {
+   "id": "rc1n0",
+   "x": 138.3,
+   "y": 114.4,
+   "width": 62.0,
+   "height": 48.6
+  }
+ ]
+}

@@ -1,0 +1,72 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "0.5",
+  "org.eclipse.elk.polyomino.fill": "true"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 559.3,
+   "y": 333.9,
+   "width": 75.4,
+   "height": 32.0
+  }
+ ],
+ "width": 104.2,
+ "height": 163.9,
+ "ports": [
+  {
+   "id": "rootP0",
+   "x": 58.2,
+   "y": -2.0,
+   "width": 4,
+   "height": 4
+  },
+  {
+   "id": "rootP1",
+   "x": 102.2,
+   "y": 117.9,
+   "width": 4,
+   "height": 4
+  },
+  {
+   "id": "rootP2",
+   "x": -2.0,
+   "y": 26.9,
+   "width": 4,
+   "height": 4
+  }
+ ],
+ "edges": [
+  {
+   "id": "rx0",
+   "sources": [
+    "rootP1"
+   ],
+   "targets": [
+    "rc0n0"
+   ],
+   "sections": [
+    {
+     "id": "rx0s",
+     "startPoint": {
+      "x": 104.2,
+      "y": 119.9
+     },
+     "endPoint": {
+      "x": 597.0,
+      "y": 349.9
+     },
+     "bendPoints": [
+      {
+       "x": 467.9,
+       "y": 252.6
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

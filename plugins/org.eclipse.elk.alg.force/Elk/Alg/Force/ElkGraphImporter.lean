@@ -34,6 +34,8 @@ evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN 
 private def fl0p0 : Float := 0.0
 private def fl1p0 : Float := 1.0
 private def fl2p0 : Float := 2.0
+private def flIntMax : Float := 2147483647.0
+private def flIntMin : Float := -2147483648.0
 
 namespace Elk.Alg.Force
 
@@ -64,7 +66,7 @@ private def importNode (fgraph : FGraph) (child : NodeId) (index : Nat) : ElkM (
     nodeLabel := a.nodeLabel.set! i (some label)
     nodeProperties := a.nodeProperties.set! i elknode.props
     nodePosition := a.nodePosition.set! i ⟨elknode.x + w / 2.0, elknode.y + h / 2.0⟩
-    nodeSize := a.nodeSize.set! i ⟨fmax w 1.0, fmax h 1.0⟩
+    nodeSize := a.nodeSize.set! i ⟨javaMax w 1.0, javaMax h 1.0⟩
     nodeOrigin := a.nodeOrigin.set! i (some (Origin.elkNode child)) }
   return ({ fgraph with arena := a, nodes := fgraph.nodes.push nid }, nid)
 
@@ -87,7 +89,7 @@ private def importEdge (fgraph : FGraph) (g : ElkGraph) (e : EdgeId) (source tar
         labelText := a.labelText.set! j (some elklabel.text)
         labelProperties := a.labelProperties.set! j elklabel.props
         labelOrigin := a.labelOrigin.set! j (some (Origin.elkLabel l))
-        labelSize := a.labelSize.set! j ⟨fmax elklabel.width fl1p0, fmax elklabel.height fl1p0⟩ }
+        labelSize := a.labelSize.set! j ⟨javaMax elklabel.width fl1p0, javaMax elklabel.height fl1p0⟩ }
       fgraph := { fgraph with arena := a }
       fgraph := fgraph.refreshLabelPosition lid
       fgraph := { fgraph with labels := fgraph.labels.push lid }
@@ -129,24 +131,25 @@ private def ensureSingleSection (e : EdgeId) : ElkM SectionId :=
 
 /-- Minimum and maximum corner of the node and bend point boxes of a force graph. -/
 private def boundingBox (fgraph : FGraph) : Float × Float × Float × Float := Id.run do
-  let mut minX := Float.maxValue
-  let mut minY := Float.maxValue
-  let mut maxX := Float.minValue
-  let mut maxY := Float.minValue
+  -- Java `Integer.MAX_VALUE` / `Integer.MIN_VALUE` start values and `Math.min` / `Math.max`
+  let mut minX := flIntMax
+  let mut minY := flIntMax
+  let mut maxX := flIntMin
+  let mut maxY := flIntMin
   for nid in fgraph.nodes do
     let pos := fgraph.arena.nodePosition[nid.idx]!
     let size := fgraph.arena.nodeSize[nid.idx]!
-    minX := fmin minX (pos.x - size.x / fl2p0)
-    minY := fmin minY (pos.y - size.y / fl2p0)
-    maxX := fmax maxX (pos.x + size.x / fl2p0)
-    maxY := fmax maxY (pos.y + size.y / fl2p0)
+    minX := javaMin minX (pos.x - size.x / fl2p0)
+    minY := javaMin minY (pos.y - size.y / fl2p0)
+    maxX := javaMax maxX (pos.x + size.x / fl2p0)
+    maxY := javaMax maxY (pos.y + size.y / fl2p0)
   for bid in fgraph.bendpoints do
     let pos := fgraph.arena.bendPosition[bid.idx]!
     let size := fgraph.arena.bendSize[bid.idx]!
-    minX := fmin minX (pos.x - size.x / fl2p0)
-    minY := fmin minY (pos.y - size.y / fl2p0)
-    maxX := fmax maxX (pos.x + size.x / fl2p0)
-    maxY := fmax maxY (pos.y + size.y / fl2p0)
+    minX := javaMin minX (pos.x - size.x / fl2p0)
+    minY := javaMin minY (pos.y - size.y / fl2p0)
+    maxX := javaMax maxX (pos.x + size.x / fl2p0)
+    maxY := javaMax maxY (pos.y + size.y / fl2p0)
   return (minX, minY, maxX, maxY)
 
 /-- `IGraphImporter::apply_layout(graph)`. -/

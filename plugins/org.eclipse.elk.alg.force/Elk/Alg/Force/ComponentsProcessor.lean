@@ -33,6 +33,8 @@ evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN 
 private def fl0p0 : Float := 0.0
 private def fl1p0 : Float := 1.0
 private def fl2p0 : Float := 2.0
+private def flIntMax : Float := 2147483647.0
+private def flIntMin : Float := -2147483648.0
 
 namespace Elk.Alg.Force
 
@@ -277,18 +279,20 @@ private def compareComponents (graph1 graph2 : FGraph) : Ordering :=
 /-- Stores the summed node priority and the bounding box of a component. -/
 private def annotateComponent (graph : FGraph) : FGraph := Id.run do
   let mut priority : Int := 0
-  let mut minX := Float.maxValue
-  let mut minY := Float.maxValue
-  let mut maxX := Float.minValue
-  let mut maxY := Float.minValue
+  -- Java `double minx = Integer.MAX_VALUE, ..., maxx = Integer.MIN_VALUE` and `Math.min`/`Math.max`
+  -- (a NaN position, e.g. after `iterations = 0`, propagates to the whole component)
+  let mut minX := flIntMax
+  let mut minY := flIntMax
+  let mut maxX := flIntMin
+  let mut maxY := flIntMin
   for nid in graph.nodes do
     priority := priority + (graph.arena.nodeProperties[nid.idx]!).getD ForceOptions.PRIORITY 1
     let pos := graph.arena.nodePosition[nid.idx]!
     let size := graph.arena.nodeSize[nid.idx]!
-    minX := fmin minX (pos.x - size.x / fl2p0)
-    minY := fmin minY (pos.y - size.y / fl2p0)
-    maxX := fmax maxX (pos.x + size.x / fl2p0)
-    maxY := fmax maxY (pos.y + size.y / fl2p0)
+    minX := javaMin minX (pos.x - size.x / fl2p0)
+    minY := javaMin minY (pos.y - size.y / fl2p0)
+    maxX := javaMax maxX (pos.x + size.x / fl2p0)
+    maxY := javaMax maxY (pos.y + size.y / fl2p0)
   return { graph with
     props := graph.props.set ForceOptions.PRIORITY priority
     bbUpleft := some ⟨minX, minY⟩
@@ -304,12 +308,12 @@ def recombine (components : Array FGraph) : FGraph := Id.run do
   let mut totalArea : Float := fl0p0
   for graph in comps do
     let size := boundingSize graph
-    maxRowWidth := fmax maxRowWidth size.x
+    maxRowWidth := javaMax maxRowWidth size.x
     totalArea := totalArea + size.x * size.y
   -- Java `(float) Math.sqrt(totalArea) * result.getProperty(ForceOptions.ASPECT_RATIO)` (force
   -- default 1.6f) and `ForceOptions.SPACING_NODE_NODE` (force default 80)
   let aspectRatio := result.props.getD ForceOptions.ASPECT_RATIO fl1p0
-  maxRowWidth := fmax maxRowWidth (Float.toF32 (Float.sqrt totalArea) * aspectRatio)
+  maxRowWidth := javaMax maxRowWidth (Float.toF32 (Float.sqrt totalArea) * aspectRatio)
   let spacing := result.props.getD ForceOptions.SPACING_NODE_NODE fl0p0
   let mut xpos : Float := fl0p0
   let mut ypos : Float := fl0p0
@@ -321,7 +325,7 @@ def recombine (components : Array FGraph) : FGraph := Id.run do
       ypos := ypos + (highestBox + spacing)
       highestBox := fl0p0
     result := moveGraph result graph xpos ypos
-    highestBox := fmax highestBox size.y
+    highestBox := javaMax highestBox size.y
     xpos := xpos + (size.x + spacing)
   return result
 

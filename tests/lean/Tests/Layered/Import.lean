@@ -48,6 +48,14 @@ def importText (text : String) : IO Imported := do
   let ((lgraph, a), g) ← LImportM.run (imp.importGraph root) {} g
   return { g, a, root, lgraph, ledges := ← imp.ledges.get }
 
+/-- Imports the node with identifier `ident` (a compound child) of the graph `text`. -/
+def importChildText (text : String) (ident : String) : IO Imported := do
+  let (_, g) ← elkGraphOf text
+  let node : NodeId := ⟨(g.nodes.findIdx? (·.identifier == some ident)).getD 0⟩
+  let imp ← ElkGraphImporter.new
+  let ((lgraph, a), g) ← LImportM.run (imp.importGraph node) {} g
+  return { g, a, root := node, lgraph, ledges := ← imp.ledges.get }
+
 /-- The message of the exception thrown by the import, `none` on success. -/
 def importError (text : String) : IO (Option String) := do
   try
@@ -197,7 +205,13 @@ def externalJson : String := "{
 }"
 
 def externalPorts : Suite := suite "layered.import.externalPorts" do
-  let r ← importText externalJson
+  -- at the layout root, Java's `transformExternalPort` reads the label spacings through
+  -- `elkgraph.getParent()` and fails (agent DIS); the checks below import the same graph as a child
+  checkEq "external ports of the layout root: Java's NullPointerException" (← importError externalJson)
+    (some ("java.lang.NullPointerException: Cannot invoke \"org.eclipse.elk.graph.ElkNode.getProperty(" ++
+      "org.eclipse.elk.graph.properties.IProperty)\" because the return value of " ++
+      "\"org.eclipse.elk.graph.ElkNode.getParent()\" is null"))
+  let r ← importChildText s!"\{\"id\": \"top\", \"children\": [{externalJson}]}" "root"
   let a := r.a
   let gr := a.graph r.lgraph
   check "hand: EXTERNAL_PORTS" (gr.internal.graphProperties.contains .externalPorts)

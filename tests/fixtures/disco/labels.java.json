@@ -1,0 +1,107 @@
+{
+ "children": [
+  {
+   "height": 40.0,
+   "id": "a",
+   "labels": [
+    {
+     "height": 10.0,
+     "text": "A",
+     "width": 20.0,
+     "x": 5.0,
+     "y": 5.0
+    }
+   ],
+   "ports": [
+    {
+     "height": 6.0,
+     "id": "ap",
+     "labels": [
+      {
+       "height": 8.0,
+       "text": "p",
+       "width": 8.0,
+       "x": 8.0,
+       "y": 0.0
+      }
+     ],
+     "width": 6.0,
+     "x": 60.0,
+     "y": 15.0
+    }
+   ],
+   "width": 60.0,
+   "x": 11.475984325328483,
+   "y": 20.15866144177616
+  },
+  {
+   "height": 40.0,
+   "id": "b",
+   "ports": [
+    {
+     "height": 6.0,
+     "id": "bp",
+     "width": 6.0,
+     "x": -6.0,
+     "y": 15.0
+    }
+   ],
+   "width": 60.0,
+   "x": 151.47598432532848,
+   "y": 20.15866144177616
+  },
+  {
+   "height": 40.0,
+   "id": "c",
+   "width": 40.0,
+   "x": 33.083802059680224,
+   "y": 86.16760411936046
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e1",
+   "labels": [
+    {
+     "height": 10.0,
+     "text": "edge",
+     "width": 30.0,
+     "x": 91.47598432532848,
+     "y": 14.158661441776161
+    }
+   ],
+   "sections": [
+    {
+     "bendPoints": [],
+     "endPoint": {
+      "x": 145.47598432532848,
+      "y": 28.15866144177616
+     },
+     "id": "s",
+     "incomingShape": "ap",
+     "outgoingShape": "bp",
+     "startPoint": {
+      "x": 67.47598432532848,
+      "y": 28.15866144177616
+     }
+    }
+   ],
+   "sources": [
+    "ap"
+   ],
+   "targets": [
+    "bp"
+   ]
+  }
+ ],
+ "height": 168.0178853551686,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+ },
+ "width": 252.95196865065697,
+ "x": 0.0,
+ "y": 0.0
+}

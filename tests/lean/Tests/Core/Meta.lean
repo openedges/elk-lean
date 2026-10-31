@@ -64,8 +64,9 @@ def countDependencies (ds : Array LayoutOptionData) : Nat :=
 
 def counts : Suite := suite "core.meta.counts" do
   let s ← LayoutMetaDataService.getInstance
-  checkEq "option count (core 95 + layered 89 + disco 4 + force 5 + mrtree 8 + radial 12 + rectpacking 13 + spore 10 + stress 5 + vertiflex 4 + topdownpacking 2)" s.optionDataList.size 247
-  checkEq "option order size" s.optionOrder.size 247
+  -- polyomino 4: `PolyominoOptions`, registered by ELK Java's ServiceLoader entry of alg.common (DIS)
+  checkEq "option count (core 95 + layered 89 + polyomino 4 + disco 4 + force 5 + mrtree 8 + radial 12 + rectpacking 13 + spore 10 + stress 5 + vertiflex 4 + topdownpacking 2)" s.optionDataList.size 251
+  checkEq "option order size" s.optionOrder.size 251
   checkEq "category count" s.categoryDataList.size 8
   checkEq "algorithm count" s.algorithmDataList.size 14
   checkEq "dependency count" (countDependencies s.optionDataList) 10

@@ -1,0 +1,108 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 215.3,
+   "y": 162.4,
+   "width": 79.6,
+   "height": 18.5
+  }
+ ],
+ "width": 165.6,
+ "height": 279.3,
+ "ports": [
+  {
+   "id": "rootP0",
+   "x": 30.9,
+   "y": -2.0,
+   "width": 4,
+   "height": 4
+  },
+  {
+   "id": "rootP1",
+   "x": 15.8,
+   "y": 277.3,
+   "width": 4,
+   "height": 4
+  }
+ ],
+ "edges": [
+  {
+   "id": "re0",
+   "sources": [
+    "rc0n0"
+   ],
+   "targets": [
+    "rc0n0"
+   ],
+   "sections": [
+    {
+     "id": "re0s",
+     "startPoint": {
+      "x": 255.1,
+      "y": 171.7
+     },
+     "endPoint": {
+      "x": 255.1,
+      "y": 171.7
+     },
+     "bendPoints": [
+      {
+       "x": 269.9,
+       "y": 146.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rx0",
+   "sources": [
+    "rootP0"
+   ],
+   "targets": [
+    "rc0n0"
+   ],
+   "sections": [
+    {
+     "id": "rx0s",
+     "startPoint": {
+      "x": 32.9,
+      "y": 0.0
+     },
+     "endPoint": {
+      "x": 255.1,
+      "y": 171.7
+     }
+    }
+   ]
+  },
+  {
+   "id": "rx1",
+   "sources": [
+    "rootP1"
+   ],
+   "targets": [
+    "rc0n0"
+   ],
+   "sections": [
+    {
+     "id": "rx1s",
+     "startPoint": {
+      "x": 17.8,
+      "y": 279.3
+     },
+     "endPoint": {
+      "x": 255.1,
+      "y": 171.7
+     }
+    }
+   ]
+  }
+ ]
+}

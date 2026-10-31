@@ -20,14 +20,19 @@ The strategy option is registered with its choices and the enum parser like the 
 (`register_option` of elk-rs only sets the value type, so elk-rs cannot set it from a string; it has
 a single constant, `POLYOMINO`, so this changes no layout).
 
-Rust semantics kept on purpose:
-* option supports for options nobody registered (the polyomino options, unless
-  `PolyominoOptions.metaDataProvider` was applied) are dropped by
-  `LayoutMetaDataService.applyRegistry`, like `Registry::apply_dependencies` does;
-* `property_default_any` yields no default for the three polyomino enum options: their
-  `ElkReflect` clone registration only happens when the polyomino metadata provider is applied,
-  which nobody does in elk-rs, so `is_cloneable()` is false and the support default is `None`.
-  The boolean `polyomino.fill` is cloneable (default `true`).
+Java semantics (agent DIS; elk-rs differs):
+* the support default of every option is the option's own default (`DisCoOptions` passes
+  `X.getDefault()`): `spacing.componentComponent` 20, `edge.thickness` 1, `aspectRatio` none (the
+  core option has no default; elk-rs 1.0), `padding` 12 (elk-rs 0), the three polyomino enums
+  their `Polyomino.melk` defaults (elk-rs none: their `ElkReflect` registration was missing),
+  `polyomino.fill` true, `componentCompaction.strategy` `POLYOMINO`;
+* the polyomino options themselves are registered by `PolyominoOptions.metaDataProvider`, which
+  ELK Java loads through the `ServiceLoader` entry of `org.eclipse.elk.alg.common`
+  (`META-INF/services/org.eclipse.elk.core.data.ILayoutMetaDataProvider`); elk-rs never applies it,
+  so its JSON importer ignored `org.eclipse.elk.polyomino.*` and the supports were dropped.
+  `Elk.Alg.Disco.Init` registers it right before DisCo. Only `polyomino.fill` changes a layout
+  (`DisCoPolyominoCompactor` reads it from the graph); Java's `PolyominoCompactor` reads the
+  other three from an empty `Polyominoes` holder, i.e. always their defaults.
 -/
 namespace Elk.Alg.Disco.Options
 
@@ -67,20 +72,21 @@ def registerOptions (r : Registry) : Registry :=
       "Access to the polyominoes is intended for the debug view."
       targetParents).withGroup "debug")
 
-/-- `property_default_any` of a property whose type is registered with `ElkReflect`. -/
+/-- `property.getDefault()` as a raw value. -/
 def propertyDefault {α : Type} [PropCodec α] (property : Property α) : Option PropValue :=
   property.default.map PropCodec.enc
 
-/-- `register_supports`: (option id, algorithm specific default) in the Rust order. The default of
-the three polyomino enum options is `none` (see the module documentation). -/
+/-- `addOptionSupport` calls of `DisCoMetaDataProvider` (Java order): (option id, the option's
+default, `X.getDefault()`). -/
 def optionSupports : Array (String × Option PropValue) := #[
-  (CoreOptions.SPACING_COMPONENT_COMPONENT.id, some (PropValue.double 20.0)),
-  (CoreOptions.EDGE_THICKNESS.id, some (PropValue.double 1.0)),
-  (CoreOptions.ASPECT_RATIO.id, some (PropValue.double 1.0)),
-  (CoreOptions.PADDING.id, some (PropCodec.enc (ElkPadding.ofAny 0.0))),
-  (PolyominoOptions.POLYOMINO_LOW_LEVEL_SORT.id, none),
-  (PolyominoOptions.POLYOMINO_HIGH_LEVEL_SORT.id, none),
-  (PolyominoOptions.POLYOMINO_TRAVERSAL_STRATEGY.id, none),
+  (CoreOptions.SPACING_COMPONENT_COMPONENT.id, propertyDefault CoreOptions.SPACING_COMPONENT_COMPONENT),
+  (CoreOptions.EDGE_THICKNESS.id, propertyDefault CoreOptions.EDGE_THICKNESS),
+  (CoreOptions.ASPECT_RATIO.id, propertyDefault CoreOptions.ASPECT_RATIO),
+  (CoreOptions.PADDING.id, propertyDefault CoreOptions.PADDING),
+  (PolyominoOptions.POLYOMINO_LOW_LEVEL_SORT.id, propertyDefault PolyominoOptions.POLYOMINO_LOW_LEVEL_SORT),
+  (PolyominoOptions.POLYOMINO_HIGH_LEVEL_SORT.id, propertyDefault PolyominoOptions.POLYOMINO_HIGH_LEVEL_SORT),
+  (PolyominoOptions.POLYOMINO_TRAVERSAL_STRATEGY.id,
+    propertyDefault PolyominoOptions.POLYOMINO_TRAVERSAL_STRATEGY),
   (PolyominoOptions.POLYOMINO_FILL.id, propertyDefault PolyominoOptions.POLYOMINO_FILL),
   (DisCoOptions.COMPONENT_COMPACTION_STRATEGY.id, propertyDefault DisCoOptions.COMPONENT_COMPACTION_STRATEGY),
   (DisCoOptions.COMPONENT_COMPACTION_COMPONENT_LAYOUT_ALGORITHM.id, none),

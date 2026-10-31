@@ -1,0 +1,162 @@
+{
+ "children": [
+  {
+   "height": 32.0,
+   "id": "n0",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 47.0,
+   "x": 108.8805366756578,
+   "y": 7.2359060842852045
+  },
+  {
+   "height": 34.0,
+   "id": "n1",
+   "width": 74.0,
+   "x": 8.750888517069995,
+   "y": 67.78775389459666
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e0",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "e",
+     "width": 12.0,
+     "x": 422.75088851707,
+     "y": 232.78775389459668
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "8"
+   },
+   "sections": [
+    {
+     "bendPoints": [],
+     "endPoint": {
+      "x": 172.75088851707,
+      "y": 214.78775389459668
+     },
+     "id": "s0",
+     "incomingShape": "n1",
+     "outgoingShape": "n1",
+     "startPoint": {
+      "x": 389.75088851707,
+      "y": 339.7877538945967
+     }
+    }
+   ],
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "x_rp_EAST",
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 188.75088851707,
+       "y": 300.7877538945967
+      }
+     ],
+     "endPoint": {
+      "x": 444.75088851707,
+      "y": 0.0
+     },
+     "id": "x_rp_EAST",
+     "incomingShape": "n1",
+     "outgoingShape": "rp_EAST",
+     "startPoint": {
+      "x": 587.75088851707,
+      "y": 305.7877538945967
+     }
+    }
+   ],
+   "sources": [
+    "n1"
+   ],
+   "targets": [
+    "rp_EAST"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "x_rp_SOUTH",
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 183.8805366756578,
+       "y": 412.2359060842852
+      }
+     ],
+     "endPoint": {
+      "x": 623.0518984121927,
+      "y": 375.2359060842852
+     },
+     "id": "x_rp_SOUTH",
+     "incomingShape": "n0",
+     "outgoingShape": "rp_SOUTH",
+     "startPoint": {
+      "x": 393.8805366756578,
+      "y": 586.2359060842853
+     }
+    }
+   ],
+   "sources": [
+    "n0"
+   ],
+   "targets": [
+    "rp_SOUTH"
+   ]
+  }
+ ],
+ "height": 623.0518984121927,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.spacing.componentComponent": "7",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "org.eclipse.elk.polyomino.traversalStrategy": "COMBINE_JITTER_MANHATTAN"
+ },
+ "ports": [
+  {
+   "height": 6.0,
+   "id": "rp_EAST",
+   "layoutOptions": {
+    "elk.port.side": "EAST"
+   },
+   "width": 6.0,
+   "x": 441.75088851707,
+   "y": 1683.9240497626831
+  },
+  {
+   "height": 6.0,
+   "id": "rp_SOUTH",
+   "layoutOptions": {
+    "elk.port.side": "SOUTH"
+   },
+   "width": 6.0,
+   "x": 1797.2650915736328,
+   "y": 372.2359060842852
+  }
+ ],
+ "width": 623.0518984121927,
+ "x": 0.0,
+ "y": 0.0
+}

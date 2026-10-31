@@ -1,0 +1,74 @@
+{
+ "children": [
+  {
+   "height": 40.0,
+   "id": "a",
+   "width": 40.0,
+   "x": 142.8860677034403,
+   "y": 66.60885416275224
+  },
+  {
+   "height": 20.0,
+   "id": "b",
+   "width": 60.0,
+   "x": 72.88606770344028,
+   "y": 66.60885416275224
+  },
+  {
+   "height": 90.0,
+   "id": "c",
+   "width": 30.0,
+   "x": 18.643541665100898,
+   "y": 72.75239582785312
+  },
+  {
+   "height": 20.0,
+   "id": "d",
+   "width": 20.0,
+   "x": 69.90341145461461,
+   "y": 111.95783853599073
+  },
+  {
+   "height": 30.0,
+   "id": "e",
+   "width": 70.0,
+   "x": 11.259869789513722,
+   "y": 10.23265624882567
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "ab",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 27.88606770344028,
+      "y": 51.60885416275223
+     },
+     "id": "ab_s0",
+     "startPoint": {
+      "x": 27.88606770344028,
+      "y": 51.60885416275223
+     }
+    }
+   ],
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  }
+ ],
+ "height": 206.62859374177967,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "org.eclipse.elk.spacing.nodeNode": "10"
+ },
+ "width": 223.4503645743301,
+ "x": 0.0,
+ "y": 0.0
+}

@@ -1,0 +1,34 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=5,left=0,bottom=5,right=5]",
+  "org.eclipse.elk.polyomino.traversalStrategy": "QUADRANTS_JITTER"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 86.6,
+   "y": 506.2,
+   "width": 16.2,
+   "height": 54.2
+  },
+  {
+   "id": "rc1n0",
+   "x": 142.0,
+   "y": 310.8,
+   "width": 28.3,
+   "height": 5.2,
+   "labels": [
+    {
+     "id": "rc1n0l",
+     "text": "long label",
+     "x": -6.0,
+     "y": -0.6,
+     "width": 3.4,
+     "height": 11.2
+    }
+   ]
+  }
+ ]
+}

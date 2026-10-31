@@ -1,0 +1,29 @@
+{
+ "children": [
+  {
+   "height": 54.8,
+   "id": "rc0n0",
+   "width": 79.4,
+   "x": 12.859265829221812,
+   "y": 13.030204484016778
+  },
+  {
+   "height": 20.3,
+   "id": "rc1n0",
+   "width": 59.4,
+   "x": 26.902286277623492,
+   "y": 26.237184035615098
+  }
+ ],
+ "height": 99.86040896803355,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=14,left=5,bottom=5,right=14]",
+  "org.eclipse.elk.polyomino.fill": "false",
+  "org.eclipse.elk.polyomino.traversalStrategy": "JITTER"
+ },
+ "width": 124.11853165844363,
+ "x": 0.0,
+ "y": 0.0
+}

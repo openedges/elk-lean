@@ -1,0 +1,46 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 326.3,
+   "y": 508.1,
+   "width": 14.1,
+   "height": 15.4
+  },
+  {
+   "id": "rc1n0",
+   "x": 258.8,
+   "y": 536.2,
+   "width": 27.2,
+   "height": 59.2,
+   "ports": [
+    {
+     "id": "rc1n0p0",
+     "x": 16.7,
+     "y": 57.2,
+     "width": 4,
+     "height": 4
+    },
+    {
+     "id": "rc1n0p1",
+     "x": 23.2,
+     "y": 34.6,
+     "width": 8,
+     "height": 6
+    },
+    {
+     "id": "rc1n0p2",
+     "x": 6.1,
+     "y": -2.0,
+     "width": 4,
+     "height": 4
+    }
+   ]
+  }
+ ]
+}

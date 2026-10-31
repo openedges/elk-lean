@@ -115,13 +115,16 @@ def recursiveEngineTests : Suite := suite "core.engine.RecursiveGraphLayoutEngin
   let g ← layoutRoot g root
   checkFloat "NO_LAYOUT keeps width" (g.node root).width 0.0
   checkNone "NO_LAYOUT does not resolve" ((g.node root).props.get CoreOptions.RESOLVED_ALGORITHM)
-  -- (Lean) validateGraph: an unconnected edge is reported as a GraphValidationException
+  -- Java's engine runs no validator: `validateGraph` / `validateOptions` are only read by the
+  -- Eclipse `DiagramLayoutEngine`, an unconnected edge or an option below its lower bound reaches
+  -- the algorithm (agent DIS; elk-rs and elk-lean before threw a GraphValidationException)
   let (g, root, _, _) := twoChildGraph (some "org.eclipse.elk.box")
   let (g, _) := g.createEdge (some root)
   let g := g.setNodeProp root CoreOptions.VALIDATE_GRAPH true
-  match ← layoutError g root with
-  | some msg => check "validate graph: reports the edge" (has msg "Edge is not connected.")
-  | none => report "validate graph: throws" false "expected a GraphValidationException"
+  checkEq "validateGraph is ignored by the engine (Java)" (← layoutError g root) none
+  let (g, root, _, _) := twoChildGraph (some "org.eclipse.elk.box")
+  let g := g.setNodeProp root CoreOptions.SPACING_NODE_NODE (-5.0)
+  checkEq "option below its lower bound is not rejected (Java)" (← layoutError g root) none
 
 /-! ### `recursive_graph_layout_engine_integration_test.rs` -/
 

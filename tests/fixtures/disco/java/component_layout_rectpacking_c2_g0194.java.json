@@ -1,0 +1,96 @@
+{
+ "children": [
+  {
+   "height": 6.2,
+   "id": "rc0n0",
+   "width": 13.6,
+   "x": 67.21350228801934,
+   "y": 17.587104881295705
+  },
+  {
+   "height": 39.2,
+   "id": "rc0n1",
+   "labels": [
+    {
+     "height": 3.8,
+     "id": "rc0n1l",
+     "text": "a",
+     "width": 8.8,
+     "x": 23.3,
+     "y": -5.8
+    }
+   ],
+   "width": 68.1,
+   "x": 95.81350228801935,
+   "y": 17.587104881295705
+  },
+  {
+   "height": 59.7,
+   "id": "rc1n0",
+   "width": 72.0,
+   "x": 13.527215266294007,
+   "y": 91.21652620649644
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "re0",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 109.71350228801934,
+      "y": 105.0871048812957
+     },
+     "id": "re0s",
+     "incomingShape": "rc0n0",
+     "outgoingShape": "rc0n1",
+     "startPoint": {
+      "x": 114.71350228801934,
+      "y": 89.3871048812957
+     }
+    }
+   ],
+   "sources": [
+    "rc0n0"
+   ],
+   "targets": [
+    "rc0n1"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "re1",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 109.71350228801934,
+      "y": 105.0871048812957
+     },
+     "id": "re1s",
+     "incomingShape": "rc0n0",
+     "outgoingShape": "rc0n1",
+     "startPoint": {
+      "x": 114.71350228801934,
+      "y": 89.3871048812957
+     }
+    }
+   ],
+   "sources": [
+    "rc0n0"
+   ],
+   "targets": [
+    "rc0n1"
+   ]
+  }
+ ],
+ "height": 195.09071755431333,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "rectpacking"
+ },
+ "width": 206.09676539126755,
+ "x": 0.0,
+ "y": 0.0
+}

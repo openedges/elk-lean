@@ -1,0 +1,56 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "layered",
+  "org.eclipse.elk.disco.componentCompaction.strategy": "POLYOMINO",
+  "elk.padding": "[top=20,left=20,bottom=20,right=14]"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 194.7,
+   "y": 19.8,
+   "width": 66.7,
+   "height": 45.2
+  },
+  {
+   "id": "rc1n0",
+   "x": 264.6,
+   "y": 70.2,
+   "width": 30.0,
+   "height": 22.5
+  },
+  {
+   "id": "rc1n1",
+   "x": 312.6,
+   "y": -29.1,
+   "width": 62.3,
+   "height": 25.1
+  }
+ ],
+ "edges": [
+  {
+   "id": "re0",
+   "sources": [
+    "rc1n1"
+   ],
+   "targets": [
+    "rc1n0"
+   ],
+   "sections": [
+    {
+     "id": "re0s",
+     "startPoint": {
+      "x": 343.8,
+      "y": -16.6
+     },
+     "endPoint": {
+      "x": 279.6,
+      "y": 81.5
+     }
+    }
+   ]
+  }
+ ]
+}

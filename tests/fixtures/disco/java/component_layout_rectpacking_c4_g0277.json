@@ -1,0 +1,25 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "rectpacking",
+  "elk.spacing.componentComponent": "41",
+  "elk.padding": "[top=14,left=14,bottom=20,right=20]"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 69.3,
+   "y": 118.1,
+   "width": 67.0,
+   "height": 34.7
+  },
+  {
+   "id": "rc1n0",
+   "x": 104.8,
+   "y": -41.6,
+   "width": 41.5,
+   "height": 59.4
+  }
+ ]
+}

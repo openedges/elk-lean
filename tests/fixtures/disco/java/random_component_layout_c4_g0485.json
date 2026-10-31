@@ -1,0 +1,36 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "random",
+  "org.eclipse.elk.polyomino.fill": "false",
+  "elk.randomSeed": "7"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 382.9,
+   "y": 526.1,
+   "width": 56.5,
+   "height": 57.3
+  },
+  {
+   "id": "rc1n0",
+   "x": 612.3,
+   "y": 45.7,
+   "width": 21.0,
+   "height": 46.0
+  }
+ ],
+ "edges": [
+  {
+   "id": "re0",
+   "sources": [
+    "rc1n0"
+   ],
+   "targets": [
+    "rc1n0"
+   ]
+  }
+ ]
+}

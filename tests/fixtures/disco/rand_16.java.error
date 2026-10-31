@@ -1,0 +1,1 @@
+java.lang.IndexOutOfBoundsException: Grid is only of size 2*8. Requested point (2, 0) is out of bounds.

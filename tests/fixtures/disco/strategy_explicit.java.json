@@ -1,0 +1,60 @@
+{
+ "children": [
+  {
+   "height": 30.0,
+   "id": "a",
+   "width": 30.0,
+   "x": 22.070119761077546,
+   "y": 67.87375068102857
+  },
+  {
+   "height": 30.0,
+   "id": "b",
+   "width": 30.0,
+   "x": 122.07011976107755,
+   "y": 67.87375068102857
+  },
+  {
+   "height": 30.0,
+   "id": "c",
+   "width": 30.0,
+   "x": 12.624583560342856,
+   "y": 12.624583560342856
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "ab",
+   "sections": [
+    {
+     "endPoint": {
+      "x": 22.070119761077546,
+      "y": 67.87375068102857
+     },
+     "id": "ab_s0",
+     "startPoint": {
+      "x": 22.070119761077546,
+      "y": 67.87375068102857
+     }
+    }
+   ],
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  }
+ ],
+ "height": 140.49833424137142,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "org.eclipse.elk.disco.componentCompaction.strategy": "POLYOMINO"
+ },
+ "width": 195.74750136205714,
+ "x": 0.0,
+ "y": 0.0
+}

@@ -1,0 +1,1 @@
+java.lang.IndexOutOfBoundsException: Grid is only of size 86*30. Requested point (43, -5) is out of bounds. Given center based coordinates were (1, -19).

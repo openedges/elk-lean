@@ -1,0 +1,60 @@
+{
+ "children": [
+  {
+   "height": 57.3,
+   "id": "rc0n0",
+   "width": 56.5,
+   "x": 11.73027593481038,
+   "y": 62.214263488205425
+  },
+  {
+   "height": 46.0,
+   "id": "rc1n0",
+   "width": 21.0,
+   "x": 91.26797510679008,
+   "y": 13.345705395282167
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "re0",
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 107.36764249268403,
+       "y": 47.096885914993344
+      }
+     ],
+     "endPoint": {
+      "x": 101.76797510679008,
+      "y": 59.34570539528216
+     },
+     "id": "re0_s0",
+     "startPoint": {
+      "x": 112.26797510679008,
+      "y": 36.34570539528217
+     }
+    }
+   ],
+   "sources": [
+    "rc1n0"
+   ],
+   "targets": [
+    "rc1n0"
+   ]
+  }
+ ],
+ "height": 160.84453942301582,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.randomSeed": "7",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "random",
+  "org.eclipse.elk.polyomino.fill": "false"
+ },
+ "width": 153.57539834395936,
+ "x": 0.0,
+ "y": 0.0
+}

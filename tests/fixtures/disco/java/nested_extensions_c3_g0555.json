@@ -1,0 +1,77 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "fixed"
+ },
+ "children": [
+  {
+   "id": "dc",
+   "x": 10,
+   "y": 10,
+   "width": 326.6,
+   "height": 131.7,
+   "layoutOptions": {
+    "elk.algorithm": "disco",
+    "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+    "elk.spacing.componentComponent": "5",
+    "elk.edge.thickness": "0",
+    "org.eclipse.elk.polyomino.fill": "false",
+    "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE_AND_SHAPE"
+   },
+   "children": [
+    {
+     "id": "dc0n0",
+     "x": 196.7,
+     "y": 188.9,
+     "width": 0,
+     "height": 0
+    },
+    {
+     "id": "dc1n0",
+     "x": 24.5,
+     "y": 40.8,
+     "width": 7.2,
+     "height": 24.6
+    },
+    {
+     "id": "dc1n1",
+     "x": 76.6,
+     "y": 36.5,
+     "width": 60.9,
+     "height": 40.1
+    }
+   ],
+   "edges": [
+    {
+     "id": "de0",
+     "sources": [
+      "dc1n0"
+     ],
+     "targets": [
+      "dc1n1"
+     ],
+     "sections": [
+      {
+       "id": "de0s",
+       "startPoint": {
+        "x": 28.1,
+        "y": 53.1
+       },
+       "endPoint": {
+        "x": 107.0,
+        "y": 56.5
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o",
+   "x": 366.6,
+   "y": 10,
+   "width": 30,
+   "height": 30
+  }
+ ]
+}

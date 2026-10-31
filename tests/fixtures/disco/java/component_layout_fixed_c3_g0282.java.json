@@ -1,0 +1,29 @@
+{
+ "children": [
+  {
+   "height": 15.4,
+   "id": "rc0n0",
+   "width": 26.5,
+   "x": 10.049845146693798,
+   "y": 85.49938058677513
+  },
+  {
+   "height": 48.6,
+   "id": "rc1n0",
+   "width": 62.0,
+   "x": 45.55663405342244,
+   "y": 12.31404237337594
+  }
+ ],
+ "height": 143.17067642679837,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed",
+  "org.eclipse.elk.polyomino.lowLevelSort": "BY_SIZE",
+  "org.eclipse.elk.polyomino.traversalStrategy": "COMBINE_LINE_BY_LINE_MANHATTAN"
+ },
+ "width": 149.82777504013947,
+ "x": 0.0,
+ "y": 0.0
+}

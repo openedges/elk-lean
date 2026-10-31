@@ -54,11 +54,22 @@ def sourcePort (e : EdgeId) : ElkM (Option PortId) := do
 def targetPort (e : EdgeId) : ElkM (Option PortId) := do
   return ElkGraphUtil.connectableShapeToPort (← edgeEndpoints e).2
 
-/-- `same_hierarchy_level(edge)`: source and target node have the same parent (or both none). -/
+/-- Java's helpful message of the `NullPointerException` thrown by
+`getSourceNode(edge).getParent().equals(...)` when the source node is the root of the ElkGraph. -/
+def nullParentEqualsMessage : String :=
+  "Cannot invoke \"Object.equals(Object)\" because the return value of " ++
+    "\"org.eclipse.elk.graph.ElkNode.getParent()\" is null"
+
+/-- `sameHierarchyLevel` (Java predicate `getSourceNode(edge).getParent().equals(getTargetNode(edge)
+.getParent())`): source and target node have the same parent. Java dereferences the source node's
+parent, so an edge whose source node is the root of the ElkGraph (no parent; e.g. an edge from a
+port of a DisCo layout root to one of its children) throws a `NullPointerException` — every such
+graph fails in ELK Java (elk-rs compares two `Option`s and lays it out). -/
 def sameHierarchyLevel (e : EdgeId) : ElkM Bool := do
   let s ← sourceNode e
   let t ← targetNode e
-  return (← ElkM.getNode s).parent == (← ElkM.getNode t).parent
+  let some sp := (← ElkM.getNode s).parent | throwNullPointer nullParentEqualsMessage
+  return (← ElkM.getNode t).parent == some sp
 
 /-- `add_adjacent`: appends the node unless it is already in the set. -/
 private def addAdjacent (nodes : Array NodeId) (ids : Std.HashSet NodeId) (n : NodeId) :

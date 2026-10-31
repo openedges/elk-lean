@@ -1,0 +1,280 @@
+{
+ "children": [
+  {
+   "height": 73.0,
+   "id": "n0",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n0_p0",
+     "width": 4.0,
+     "x": 13.0,
+     "y": 13.0
+    },
+    {
+     "height": 4.0,
+     "id": "n0_p1",
+     "width": 4.0,
+     "x": 32.0,
+     "y": 64.0
+    }
+   ],
+   "width": 36.0,
+   "x": 84.43077631417523,
+   "y": 291.2784842053607
+  },
+  {
+   "height": 39.0,
+   "id": "n1",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 50.0,
+   "x": 267.4661828881184,
+   "y": 481.8969592022936
+  },
+  {
+   "height": 71.0,
+   "id": "n2",
+   "width": 52.0,
+   "x": 107.1600092084278,
+   "y": 169.36155262835047
+  },
+  {
+   "height": 23.0,
+   "id": "n3",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n3_p0",
+     "width": 4.0,
+     "x": 1.0,
+     "y": 6.0
+    },
+    {
+     "height": 4.0,
+     "id": "n3_p1",
+     "width": 4.0,
+     "x": 27.0,
+     "y": 3.0
+    },
+    {
+     "height": 4.0,
+     "id": "n3_p2",
+     "width": 4.0,
+     "x": 1.0,
+     "y": 20.0
+    }
+   ],
+   "width": 41.0,
+   "x": 40.95846578850512,
+   "y": 418.2092605195359
+  },
+  {
+   "height": 13.0,
+   "id": "n4",
+   "width": 8.0,
+   "x": 272.5630960482731,
+   "y": 352.0077170996133
+  },
+  {
+   "height": 41.0,
+   "id": "n5",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n5_p0",
+     "width": 4.0,
+     "x": 4.0,
+     "y": 36.0
+    },
+    {
+     "height": 4.0,
+     "id": "n5_p1",
+     "width": 4.0,
+     "x": 4.0,
+     "y": 15.0
+    },
+    {
+     "height": 4.0,
+     "id": "n5_p2",
+     "width": 4.0,
+     "x": 8.0,
+     "y": 13.0
+    }
+   ],
+   "width": 11.0,
+   "x": 270.4709159687769,
+   "y": 93.26847526764297
+  },
+  {
+   "height": 22.0,
+   "id": "n6",
+   "width": 48.0,
+   "x": 27.21538815708761,
+   "y": 101.67385394559275
+  },
+  {
+   "height": 53.0,
+   "id": "n7",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 65.0,
+   "x": 377.2231052567009,
+   "y": 106.6600092084278
+  },
+  {
+   "height": 40.0,
+   "id": "n8",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 61.0,
+   "x": 389.4661828881184,
+   "y": 205.34770789118548
+  },
+  {
+   "height": 47.0,
+   "id": "n9",
+   "width": 19.0,
+   "x": 296.4709159687769,
+   "y": 93.26847526764297
+  },
+  {
+   "height": 17.0,
+   "id": "n10",
+   "width": 11.0,
+   "x": 227.4661828881184,
+   "y": 419.8969592022936
+  },
+  {
+   "height": 9.0,
+   "id": "n11",
+   "width": 50.0,
+   "x": 128.64616447126284,
+   "y": 108.17385394559275
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "e0",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "e",
+     "width": 12.0,
+     "x": 600.4661828881184,
+     "y": 510.8969592022936
+    }
+   ],
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "7"
+   },
+   "sections": [
+    {
+     "bendPoints": [],
+     "endPoint": {
+      "x": 308.4661828881184,
+      "y": 412.8969592022936
+     },
+     "id": "s0",
+     "incomingShape": "n10",
+     "outgoingShape": "n1",
+     "startPoint": {
+      "x": 548.4661828881184,
+      "y": 631.8969592022936
+     }
+    }
+   ],
+   "sources": [
+    "n10"
+   ],
+   "targets": [
+    "n1"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "e1",
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "8"
+   },
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 248.47091596877695,
+       "y": 82.26847526764297
+      },
+      {
+       "x": 204.47091596877695,
+       "y": 303.268475267643
+      },
+      {
+       "x": 165.47091596877695,
+       "y": 397.268475267643
+      }
+     ],
+     "endPoint": {
+      "x": 235.47091596877695,
+      "y": 296.268475267643
+     },
+     "id": "s1",
+     "incomingShape": "n5",
+     "outgoingShape": "n9",
+     "startPoint": {
+      "x": 388.4709159687769,
+      "y": 397.268475267643
+     }
+    }
+   ],
+   "sources": [
+    "n5"
+   ],
+   "targets": [
+    "n9"
+   ]
+  }
+ ],
+ "height": 680.5569684107214,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=18,left=17,bottom=7,right=2]",
+  "elk.spacing.componentComponent": "38",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "org.eclipse.elk.polyomino.traversalStrategy": "COMBINE_JITTER_MANHATTAN"
+ },
+ "width": 654.0708131478864,
+ "x": 0.0,
+ "y": 0.0
+}

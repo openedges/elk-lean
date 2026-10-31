@@ -71,7 +71,10 @@ def attractive (d k : Float) : Float := d * d / k
 def initializeModel (g : FGraph) : FruchtermanReingoldModel := Id.run do
   let temperature := g.props.getD ForceOptions.TEMPERATURE fl0p001
   let iterations := g.props.getD ForceOptions.ITERATIONS 300
-  let threshold := if iterations > 0 then temperature / Float.ofInt iterations else temperature
+  -- Java `temperature / iterations`: `iterations = 0` gives an infinite threshold (one iteration at
+  -- temperature `-∞`, Java's NaN/∞ positions). A negative count makes the temperature grow and Java
+  -- never terminates; elk-lean keeps the elk-rs guard (one iteration) for it.
+  let threshold := if iterations >= 0 then temperature / Float.ofInt iterations else temperature
   let n := g.nodes.size.toFloat
   let mut totalWidth := fl0p0
   let mut totalHeight := fl0p0

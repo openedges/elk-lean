@@ -1,0 +1,27 @@
+{
+ "children": [
+  {
+   "height": 20.0,
+   "id": "a",
+   "width": 30.0,
+   "x": -11174954998.896095,
+   "y": NaN
+  },
+  {
+   "height": 40.0,
+   "id": "b",
+   "width": 20.0,
+   "x": -11174954993.896097,
+   "y": NaN
+  }
+ ],
+ "height": Infinity,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "0"
+ },
+ "width": 34.40748798735875,
+ "x": 0.0,
+ "y": 0.0
+}

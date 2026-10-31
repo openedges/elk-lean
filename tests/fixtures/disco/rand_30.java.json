@@ -1,0 +1,48 @@
+{
+ "children": [
+  {
+   "height": 25.0,
+   "id": "n0",
+   "labels": [
+    {
+     "height": 8.0,
+     "text": "L",
+     "width": 10.0,
+     "x": 2.0,
+     "y": 2.0
+    }
+   ],
+   "width": 59.0,
+   "x": 26.81333626427454,
+   "y": 26.260408441486902
+  },
+  {
+   "height": 55.0,
+   "id": "n1",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "n1_p0",
+     "width": 4.0,
+     "x": 0.0,
+     "y": 37.0
+    }
+   ],
+   "width": 70.0,
+   "x": 152.71112088091513,
+   "y": 50.020816882973804
+  }
+ ],
+ "edges": [],
+ "height": 156.8928289422408,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.aspectRatio": "3.39",
+  "elk.spacing.componentComponent": "48",
+  "org.eclipse.elk.polyomino.traversalStrategy": "SPIRAL"
+ },
+ "width": 286.7955692332812,
+ "x": 0.0,
+ "y": 0.0
+}

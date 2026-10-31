@@ -10,8 +10,9 @@
 #    `gen_option_graphs.py`) are flat graphs of the non-layered algorithms with random values of
 #    their own options (force model, stress dimension, radial compactor/sorter, mrtree routing, ...);
 #    "p" sets (`--sets p`, `gen_p3_graphs.py`) are the layered roots of the v set of the same seed
-#    with random crossing minimisation / layering options. Default `s,v` (fast); the full tracked
-#    run is `--sets s,v,d,o,p` (TESTING.md 2B);
+#    with random crossing minimisation / layering options; "c" sets (`--sets c`, `gen_disco_graphs.py`)
+#    are DisCo layout nodes with random components and DisCo options. Default `s,v` (fast); the full
+#    tracked run is `--sets s,v,d,o,p` (TESTING.md 2B), plus `c` for DisCo;
 # 2. ELK Java (`ElkJavaBaseline`, unmodified Maven Central 0.12.0) one JVM per set with a watchdog;
 # 3. elk-lean `elk layout` one process per input with a time limit; optionally elk-rs (`--with-oracle`);
 # 4. compare (tol 0 and 1e-6, error class and text) -> <out_dir>/report.md, <out_dir>/details.tsv,

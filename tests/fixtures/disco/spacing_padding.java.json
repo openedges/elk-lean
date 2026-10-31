@@ -1,0 +1,91 @@
+{
+ "children": [
+  {
+   "height": 30.0,
+   "id": "a",
+   "width": 30.0,
+   "x": 71.19892937061493,
+   "y": 23.97465586912623
+  },
+  {
+   "height": 30.0,
+   "id": "b",
+   "width": 30.0,
+   "x": 166.19892937061493,
+   "y": 23.97465586912623
+  },
+  {
+   "height": 30.0,
+   "id": "c",
+   "width": 60.0,
+   "x": 22.524579395598728,
+   "y": 109.14900584414244
+  },
+  {
+   "height": 10.0,
+   "id": "d",
+   "width": 10.0,
+   "x": 195.54839405592242,
+   "y": 100.04915879119744
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "ab",
+   "layoutOptions": {
+    "org.eclipse.elk.edge.thickness": "6"
+   },
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 126.19892937061493,
+       "y": 38.97465586912623
+      },
+      {
+       "x": 126.19892937061493,
+       "y": 58.97465586912623
+      },
+      {
+       "x": 146.19892937061493,
+       "y": 58.97465586912623
+      },
+      {
+       "x": 146.19892937061493,
+       "y": 38.97465586912623
+      }
+     ],
+     "endPoint": {
+      "x": 166.19892937061493,
+      "y": 38.97465586912623
+     },
+     "id": "s",
+     "incomingShape": "a",
+     "outgoingShape": "b",
+     "startPoint": {
+      "x": 101.19892937061493,
+      "y": 38.97465586912623
+     }
+    }
+   ],
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  }
+ ],
+ "height": 182.34869995003243,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.padding": "[top=7,left=11,bottom=13,right=17]",
+  "elk.spacing.componentComponent": "40",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+ },
+ "width": 257.1981646353399,
+ "x": 0.0,
+ "y": 0.0
+}

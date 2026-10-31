@@ -1,0 +1,12 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.spacing.componentComponent": "0",
+  "elk.padding": "[top=3,left=4,bottom=5,right=6]"
+ },
+ "children": [
+  {"id": "a", "x": 5, "y": 7, "width": 0, "height": 0},
+  {"id": "b", "x": 40, "y": 2, "width": 0, "height": 0}
+ ]
+}

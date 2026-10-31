@@ -1,0 +1,30 @@
+{
+ "children": [
+  {
+   "height": 32.9,
+   "id": "rc0n0",
+   "width": 38.6,
+   "x": 43.99928326274628,
+   "y": 20.304422539659136
+  },
+  {
+   "height": 9.7,
+   "id": "rc1n0",
+   "width": 62.8,
+   "x": 3.3125101763447375,
+   "y": 3.3176494532575855
+  }
+ ],
+ "height": 87.1735461728031,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "elk.spacing.componentComponent": "5",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "box",
+  "org.eclipse.elk.disco.componentCompaction.strategy": "POLYOMINO",
+  "org.eclipse.elk.polyomino.fill": "true"
+ },
+ "width": 115.76031925920465,
+ "x": 0.0,
+ "y": 0.0
+}

@@ -1,0 +1,33 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "layered",
+  "elk.spacing.componentComponent": "41"
+ },
+ "children": [
+  {
+   "id": "rc0n0",
+   "x": 70.8,
+   "y": 143.8,
+   "width": 26.0,
+   "height": 8.9,
+   "ports": [
+    {
+     "id": "rc0n0p0",
+     "x": 9.8,
+     "y": 8.9,
+     "width": 0,
+     "height": 0
+    }
+   ]
+  },
+  {
+   "id": "rc1n0",
+   "x": 117.1,
+   "y": 157.7,
+   "width": 24.5,
+   "height": 27.8
+  }
+ ]
+}

@@ -1,4 +1,5 @@
 import Tests.Framework
+import Tests.JsonCompare
 import Elk.Api
 import Elk.Alg.Disco
 /-!
@@ -13,13 +14,13 @@ import Elk.Alg.Disco
 * `disco.engine` — layouts through `RecursiveGraphLayoutEngine` (sub layout algorithm, component
   spacing, aspect ratio, external ports);
 * `disco.fixtures` — every `tests/fixtures/disco/<name>.json` laid out by `Elk.Api.layoutJson`
-  must reproduce `<name>.expected.json` (output of the elk-rs oracle) within `1e-6`.
+  must reproduce the layout of ELK Java 0.12.0 (`<name>.java.json`, tolerance `0`) or fail with
+  Java's exception text (`<name>.java.error`);
+* `disco.java` — the same for the random DisCo inputs of `tests/fixtures/disco/java/` (set `c` of
+  `scripts/run_random_java_parity.sh`), each of which differed from Java before agent DIS.
 
-The oracle (elk-rs `eb586b6d`) panics for every DisCo layout (`Couldn't clone property
-'org.eclipse.elk.polyomino.lowLevelSort'`: nobody registers the polyomino enum types with
-`ElkReflect`), so the expected files were produced with a build of the oracle in which
-`DisCoMetaDataProvider::init_reflect` additionally registers the three polyomino enums; the
-layout code is unchanged. See `tests/fixtures/disco/README.md`.
+The fixtures were first pinned to a patched elk-rs oracle (the stock one panics for every DisCo
+layout) and re-pinned to ELK Java by agent DIS; see `tests/fixtures/disco/README.md`.
 -/
 namespace Tests.Disco
 
@@ -98,16 +99,27 @@ def metaTests : Suite := suite "disco.meta" do
   checkEq "debug polys group" polyOption.group "debug"
   check "debug polys hidden" (polyOption.visibility == .hidden)
   checkEq "debug polys name" polyOption.name "List of Polyominoes"
-  -- option supports (algorithm specific defaults); polyomino options are not registered, so
-  -- their supports are dropped
+  -- option supports: the default of every support is the option's own default
+  -- (`DisCoOptions` passes `X.getDefault()`; elk-rs had aspect ratio 1 and padding 0)
   check "knows componentComponent spacing" (algo.knowsOption CoreOptions.SPACING_COMPONENT_COMPONENT.id)
   check "spacing default 20" (isDouble (algo.defaultValueRaw CoreOptions.SPACING_COMPONENT_COMPONENT.id) 20.0)
   check "thickness default 1" (isDouble (algo.defaultValueRaw CoreOptions.EDGE_THICKNESS.id) 1.0)
-  check "aspect ratio default 1" (isDouble (algo.defaultValueRaw CoreOptions.ASPECT_RATIO.id) 1.0)
-  check "padding default 0"
+  check "aspect ratio: no default (Java)" (algo.defaultValueRaw CoreOptions.ASPECT_RATIO.id).isNone
+  check "padding default 12 (Java)"
     (match algo.defaultValue CoreOptions.PADDING with
-      | some p => p.top == 0.0 && p.left == 0.0 && p.bottom == 0.0 && p.right == 0.0
+      | some p => p.top == 12.0 && p.left == 12.0 && p.bottom == 12.0 && p.right == 12.0
       | none => false)
+  -- the polyomino options are registered (ELK Java's ServiceLoader entry of alg.common), so their
+  -- supports are kept and the JSON importer parses them
+  for id in #["org.eclipse.elk.polyomino.traversalStrategy", "org.eclipse.elk.polyomino.lowLevelSort",
+      "org.eclipse.elk.polyomino.highLevelSort", "org.eclipse.elk.polyomino.fill"] do
+    check s!"{id} registered" (← LayoutMetaDataService.getOptionData id).isSome
+    check s!"{id} known by DisCo" (algo.knowsOption id)
+  check "fill default true" (match algo.defaultValueRaw "org.eclipse.elk.polyomino.fill" with
+    | some (.bool true) => true | _ => false)
+  check "traversal default QUADRANTS_LINE_BY_LINE"
+    ((algo.defaultValueRaw "org.eclipse.elk.polyomino.traversalStrategy").bind PropCodec.dec
+      == some Elk.Alg.Common.Compaction.Options.TraversalStrategy.quadrantsLineByLine)
   check "strategy known" (algo.knowsOption DisCoOptions.COMPONENT_COMPACTION_STRATEGY.id)
   check "layout algorithm option known"
     (algo.knowsOption DisCoOptions.COMPONENT_COMPACTION_COMPONENT_LAYOUT_ALGORITHM.id)
@@ -262,13 +274,36 @@ def transformTests : Suite := suite "disco.transform" do
     let _ ← ElkM.run (ElkGraphComponentsProcessor.split root) g2
     pure false) <|> pure true
   check "hyperedge is rejected" failed
-  -- port-connected components: two nodes attached to the same parent port belong together
-  let (g, root, ids) := discoGraph #[(10.0, 10.0), (10.0, 10.0), (10.0, 10.0)]
+  -- port-connected components: two nodes attached to the same port of the DisCo node belong
+  -- together. The DisCo node is a child here: at the layout root, Java's
+  -- `getSourceNode(edge).getParent().equals(...)` throws for the edge that starts at the root.
+  let (g, top) := ElkGraphUtil.createGraph
+  let (g, root) := g.createNode (some top)
+  let (g, ids) := (#[0, 1, 2] : Array Nat).foldl (fun (g, ids) _ =>
+    let (g, n) := g.createNode (some root)
+    (g.modifyNode n (·.setSize ⟨10.0, 10.0⟩), ids.push n)) (g, #[])
   let (g, port) := g.createPort (some root)
   let (g, _) := ElkGraphUtil.createSimpleEdge g (.port port) (.node ids[0]!)
   let (g, _) := ElkGraphUtil.createSimpleEdge g (.node ids[1]!) (.port port)
   let (cs, _) ← ElkM.run (ElkGraphComponentsProcessor.split root) g
-  checkEqR "nodes at the same parent port are one component" (cs.map (·.map (·.idx))) #[#[1, 2], #[3]]
+  checkEqR "nodes at the same parent port are one component" (cs.map (·.map (·.idx))) #[#[2, 3], #[4]]
+  -- the same at the layout root: Java's NullPointerException
+  let (g, root, ids) := discoGraph #[(10.0, 10.0), (10.0, 10.0), (10.0, 10.0)]
+  let (g, port) := g.createPort (some root)
+  let (g, _) := ElkGraphUtil.createSimpleEdge g (.port port) (.node ids[0]!)
+  let (g, _) := ElkGraphUtil.createSimpleEdge g (.node ids[1]!) (.port port)
+  let npe := "java.lang.NullPointerException: Cannot invoke \"Object.equals(Object)\" because the " ++
+    "return value of \"org.eclipse.elk.graph.ElkNode.getParent()\" is null"
+  match ← (ElkM.run (ElkGraphComponentsProcessor.split root) g).toBaseIO with
+  | .error e => checkEq "edge from a port of the layout root: Java's NullPointerException" (toString e) npe
+  | .ok _ => report "edge from a port of the layout root throws" false "split succeeded"
+  -- an edge to a port of the layout root alone is fine (Java only dereferences the source's parent)
+  let (g, root, ids) := discoGraph #[(10.0, 10.0), (10.0, 10.0), (10.0, 10.0)]
+  let (g, port) := g.createPort (some root)
+  let (g, _) := ElkGraphUtil.createSimpleEdge g (.node ids[0]!) (.port port)
+  let (g, _) := ElkGraphUtil.createSimpleEdge g (.node ids[1]!) (.port port)
+  let (cs, _) ← ElkM.run (ElkGraphComponentsProcessor.split root) g
+  checkEqR "edges to a root port join their nodes" (cs.map (·.map (·.idx))) #[#[1, 2], #[3]]
   -- contour of a straight segment: a rectangle of the given width
   let c := ElkGraphTransformer.getContour #[vec 0.0 0.0, vec 10.0 0.0] 4.0
   checkEq "contour size" c.size 4
@@ -343,95 +378,78 @@ def engineTests : Suite := suite "disco.engine" do
   check "connected nodes keep their distance"
     (((nodeOf g ids[1]!).x - (nodeOf g ids[0]!).x - 100.0).abs < 1e-9
       && ((nodeOf g ids[1]!).y - (nodeOf g ids[0]!).y).abs < 1e-9)
-  -- external edges: a port of the layout graph connected to a node makes the port snap to the edge
+  -- external edges: an edge from a node to a port of the layout graph makes the port snap to the
+  -- edge (the edge's last point lies on the border)
   let (g, root, ids) := discoGraph #[(40.0, 40.0)]
   let g := g.modifyNode root fun n => { n with width := 100.0, height := 100.0 }
   let g := g.modifyNode ids[0]! fun n => { n with x := 30.0, y := 30.0 }
   let (g, port) := g.createPort (some root)
   let g := g.modifyPort port fun p => { p with x := 0.0, y := 45.0, width := 6.0, height := 6.0 }
-  let (g, edge) := ElkGraphUtil.createSimpleEdge g (.port port) (.node ids[0]!)
+  let (g, edge) := ElkGraphUtil.createSimpleEdge g (.node ids[0]!) (.port port)
   let (g, sec) := ElkGraphUtil.firstEdgeSection g edge false false
-  let g := g.modifySection sec fun s => { s with startX := 0.0, startY := 48.0, endX := 30.0, endY := 50.0 }
+  let g := g.modifySection sec fun s => { s with startX := 30.0, startY := 50.0, endX := 0.0, endY := 48.0 }
   let g ← layoutRoot g root
   let s := g.edgeSection sec
-  check "external edge start on the west border" (s.startX == 0.0)
-  check "external edge ends at the node"
-    (((nodeOf g ids[0]!).x - s.endX).abs < 1e-9)
-  check "port centred on the first edge point"
-    (((g.port port).y - (s.startY - 3.0)).abs < 1e-9)
+  check "external edge ends on the west border" (s.endX == 0.0)
+  check "external edge starts at the node"
+    (((nodeOf g ids[0]!).x - s.startX).abs < 1e-9)
+  check "port centred on the last edge point"
+    (((g.port port).y - (s.endY - 3.0)).abs < 1e-9)
+  -- an edge from a port of the layout root into the graph: Java's NullPointerException
+  let (g, root, ids) := discoGraph #[(40.0, 40.0)]
+  let (g, port) := g.createPort (some root)
+  let (g, _) := ElkGraphUtil.createSimpleEdge g (.port port) (.node ids[0]!)
+  Elk.Api.ensureInitialized
+  let npePrefix := "java.lang.NullPointerException: Cannot invoke \"Object.equals(Object)\""
+  match ← (ElkM.run (RecursiveGraphLayoutEngine.layout root ProgressMonitor.null) g).toBaseIO with
+  | .error e => check "incoming external edge at the root: NullPointerException" ((toString e).startsWith npePrefix)
+  | .ok _ => report "incoming external edge at the root throws" false "layout succeeded"
 
-/-! ### Oracle fixtures -/
+/-! ### ELK Java fixtures -/
 
-private def fixtureDir : System.FilePath := "tests/fixtures/disco"
-
-/-- Names of the fixtures (`<name>.json` without `.expected.json`), sorted. -/
-private def fixtureNames : IO (Array String) := do
-  let entries ← System.FilePath.readDir fixtureDir
+/-- Names of the fixtures of `dir` (`<name>.json` without `.java.json`), sorted. -/
+private def fixtureNames (dir : System.FilePath) : IO (Array String) := do
+  let entries ← System.FilePath.readDir dir
   let names := entries.filterMap fun e =>
-    if e.fileName.endsWith ".json" && !e.fileName.endsWith ".expected.json" then
+    if e.fileName.endsWith ".json" && !e.fileName.endsWith ".java.json" then
       some (e.fileName.dropEnd ".json".length).toString
     else none
   return stableSort names (fun a b => compare a b)
 
-/-- First differences of two JSON values; numbers are compared with an absolute tolerance, objects
-by key (order is irrelevant), arrays element by element. -/
-private partial def jsonDiff (eps : Float) (path : String) (expected actual : Elk.Json.Value) :
-    Array String :=
-  match expected, actual with
-  | .num a, .num b =>
-    if (a.toFloat - b.toFloat).abs <= eps then #[]
-    else #[s!"{path}: expected {a.render}, got {b.render}"]
-  | .obj ekvs, .obj akvs => Id.run do
-    let mut diffs : Array String := #[]
-    for (k, ev) in ekvs do
-      match akvs.find? (·.1 == k) with
-      | some (_, av) => diffs := diffs ++ jsonDiff eps s!"{path}/{k}" ev av
-      | none => diffs := diffs.push s!"{path}/{k}: missing"
-    for (k, _) in akvs do
-      if !ekvs.any (·.1 == k) then diffs := diffs.push s!"{path}/{k}: unexpected"
-    return diffs
-  | .arr es, .arr as => Id.run do
-    if es.size != as.size then
-      return #[s!"{path}: array length {es.size} expected, got {as.size}"]
-    let mut diffs : Array String := #[]
-    for i in [0:es.size] do
-      diffs := diffs ++ jsonDiff eps s!"{path}/{i}" es[i]! as[i]!
-    return diffs
-  | .str a, .str b => if a == b then #[] else #[s!"{path}: expected \"{a}\", got \"{b}\""]
-  | .bool a, .bool b => if a == b then #[] else #[s!"{path}: expected {a}, got {b}"]
-  | .null, .null => #[]
-  | _, _ => #[s!"{path}: different kinds of value"]
-
-/-- `disco.fixtures`: layouts of `tests/fixtures/disco/<name>.json` against the oracle output
-within `1e-6` (`compare_model_parity_layouts.py` tolerance). -/
-def fixtureTests : Suite := suite "disco.fixtures" do
-  let names ← fixtureNames
-  check "fixtures found" (names.size >= 10)
+/-- Lays out every `<name>.json` of `dir` with `Elk.Api.layoutJson`: it must reproduce the layout of
+unmodified ELK Java 0.12.0 (`<name>.java.json`, tolerance `0`) or fail with Java's exception text
+(`<name>.java.error`). -/
+private def runJavaFixtures (dir : System.FilePath) (minCount : Nat) : TestM Unit := do
+  let names ← fixtureNames dir
+  check s!"fixtures found in {dir}" (names.size >= minCount)
   for name in names do
-    let input ← IO.FS.readFile (fixtureDir / s!"{name}.json")
-    let expectedPath := fixtureDir / s!"{name}.expected.json"
-    let errorPath := fixtureDir / s!"{name}.expected.error"
+    let input ← IO.FS.readFile (dir / s!"{name}.json")
+    let javaPath := dir / s!"{name}.java.json"
+    let errorPath := dir / s!"{name}.java.error"
+    let result ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := false) (sortKeys := true)
     if ← errorPath.pathExists then
-      -- the oracle panics (grid index out of bounds); the layout must fail with the same message
-      let expectedError := (← IO.FS.readFile errorPath).trimAscii.toString
-      match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
-      | .error e => report s!"{name}: fails like the oracle" ((e.splitOn expectedError).length > 1) e
-      | .ok _ => report s!"{name}: fails like the oracle" false "layout succeeded"
-    else if !(← expectedPath.pathExists) then
-      report s!"{name}: expected output exists" false s!"missing {expectedPath}"
+      let expected := (← IO.FS.readFile errorPath).trimAscii.toString
+      match result with
+      | .error e => checkEq s!"{name}: ELK Java's exception text" (javaExceptionText e) expected
+      | .ok _ => report s!"{name}: ELK Java's exception expected" false "layout succeeded"
+    else if !(← javaPath.pathExists) then
+      report s!"{name}: Java layout exists" false s!"missing {javaPath}"
     else
-      let expectedText ← IO.FS.readFile expectedPath
-      match ← Elk.Api.layoutJson input "{}" (lenient := false) (pretty := true) (sortKeys := true) with
+      match result with
       | .error e => report s!"{name}: layout" false e
-      | .ok actualText =>
-        match Elk.Json.parseString expectedText, Elk.Json.parseString actualText with
-        | .ok expected, .ok actual =>
-          let diffs := jsonDiff 1e-6 "" expected actual
-          report s!"{name}: matches oracle" diffs.isEmpty
-            (", ".intercalate (diffs.extract 0 5).toList)
-        | _, _ => report s!"{name}: output parses" false "invalid JSON"
+      | .ok out => checkJson s!"{name}: ELK Java layout (tol 0)" out (← IO.FS.readFile javaPath)
+
+/-- `disco.fixtures`: the hand-made and random fixtures of `tests/fixtures/disco/` (formerly elk-rs
+oracle outputs, re-pinned to ELK Java by agent DIS). -/
+def fixtureTests : Suite := suite "disco.fixtures" do
+  runJavaFixtures "tests/fixtures/disco" 50
+
+/-- `disco.java`: inputs of the random DisCo sets (`scripts/gen_disco_graphs.py`, set `c`) whose
+elk-lean result differed from ELK Java before agent DIS (`tests/fixtures/disco/java/README.md`). -/
+def javaTests : Suite := suite "disco.java" do
+  runJavaFixtures "tests/fixtures/disco/java" 10
 
 def suites : Array Tests.Suite :=
-  #[metaTests, graphTests, polyominoTests, transformTests, engineTests, fixtureTests]
+  #[metaTests, graphTests, polyominoTests, transformTests, engineTests, fixtureTests, javaTests]
 
 end Tests.Disco

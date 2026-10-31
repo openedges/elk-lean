@@ -1,0 +1,50 @@
+{
+ "children": [
+  {
+   "height": 15.4,
+   "id": "rc0n0",
+   "width": 14.1,
+   "x": 62.294260110265725,
+   "y": 12.525409198827504
+  },
+  {
+   "height": 59.2,
+   "id": "rc1n0",
+   "ports": [
+    {
+     "height": 4.0,
+     "id": "rc1n0p0",
+     "width": 4.0,
+     "x": 16.7,
+     "y": 57.2
+    },
+    {
+     "height": 6.0,
+     "id": "rc1n0p1",
+     "width": 8.0,
+     "x": 23.2,
+     "y": 34.6
+    },
+    {
+     "height": 4.0,
+     "id": "rc1n0p2",
+     "width": 4.0,
+     "x": 6.1,
+     "y": -2.0
+    }
+   ],
+   "width": 27.2,
+   "x": 10.404097541349671,
+   "y": 31.07622759648251
+  }
+ ],
+ "height": 134.0163901653986,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+ },
+ "width": 116.68032513783218,
+ "x": 0.0,
+ "y": 0.0
+}

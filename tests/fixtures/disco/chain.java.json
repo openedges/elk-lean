@@ -1,0 +1,134 @@
+{
+ "children": [
+  {
+   "height": 20.0,
+   "id": "a",
+   "width": 20.0,
+   "x": 11.445477382522412,
+   "y": 11.433643214756724
+  },
+  {
+   "height": 20.0,
+   "id": "b",
+   "width": 20.0,
+   "x": 61.44547738252241,
+   "y": 11.433643214756724
+  },
+  {
+   "height": 20.0,
+   "id": "c",
+   "width": 20.0,
+   "x": 111.44547738252241,
+   "y": 11.433643214756724
+  },
+  {
+   "height": 20.0,
+   "id": "d",
+   "width": 20.0,
+   "x": 106.20731155028811,
+   "y": 56.19547738252241
+  }
+ ],
+ "edges": [
+  {
+   "container": "root",
+   "id": "ab",
+   "sections": [
+    {
+     "bendPoints": [],
+     "endPoint": {
+      "x": 61.44547738252241,
+      "y": 21.433643214756724
+     },
+     "id": "s",
+     "incomingShape": "a",
+     "outgoingShape": "b",
+     "startPoint": {
+      "x": 31.445477382522412,
+      "y": 21.433643214756724
+     }
+    }
+   ],
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "bc",
+   "sections": [
+    {
+     "bendPoints": [],
+     "endPoint": {
+      "x": 111.44547738252241,
+      "y": 21.433643214756724
+     },
+     "id": "s",
+     "incomingShape": "b",
+     "outgoingShape": "c",
+     "startPoint": {
+      "x": 81.44547738252241,
+      "y": 21.433643214756724
+     }
+    }
+   ],
+   "sources": [
+    "b"
+   ],
+   "targets": [
+    "c"
+   ]
+  },
+  {
+   "container": "root",
+   "id": "aa",
+   "sections": [
+    {
+     "bendPoints": [
+      {
+       "x": 136.20731155028813,
+       "y": 66.19547738252241
+      },
+      {
+       "x": 136.20731155028813,
+       "y": 86.19547738252241
+      },
+      {
+       "x": 116.20731155028811,
+       "y": 86.19547738252241
+      }
+     ],
+     "endPoint": {
+      "x": 116.20731155028811,
+      "y": 76.19547738252241
+     },
+     "id": "s",
+     "incomingShape": "d",
+     "outgoingShape": "d",
+     "startPoint": {
+      "x": 126.20731155028811,
+      "y": 66.19547738252241
+     }
+    }
+   ],
+   "sources": [
+    "d"
+   ],
+   "targets": [
+    "d"
+   ]
+  }
+ ],
+ "height": 130.0236683355314,
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "disco",
+  "org.eclipse.elk.disco.componentCompaction.componentLayoutAlgorithm": "fixed"
+ },
+ "width": 180.03550250329707,
+ "x": 0.0,
+ "y": 0.0
+}
