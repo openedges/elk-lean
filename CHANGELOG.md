@@ -42,13 +42,15 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-10-28.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 16830 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17077 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused and crossing-minimisation variant sets): where both succeed,
-  5,711 of 5,761 layouts (99.1%) are exact; inputs Java rejects fail in elk-lean with Java's
-  exception class and message (4,787/4,792). The remaining differences come from Java's own run
-  context (identity hash codes, `HashSet` orders, HotSpot defects) and are documented in
+  5,711 of 5,761 layouts (99.1%) are exact (DisCo set: 5,073 of 5,104); every input Java rejects
+  fails in elk-lean with Java's exception class and message. Like ELK Java's JSON path, the engine
+  does not validate option ranges (out-of-range values reach the algorithm and behave as in Java).
+  The remaining differences come from Java's own run context (identity hash codes, `HashSet` and
+  `HashMap` orders, thread races, heap-size-dependent errors) and are documented in
   `docs/robustness-random-graphs.md`. To reach this, elk-lean reproduces JDK 21 `TimSort`
   (`Elk.Core.Util.JavaSort`), `HashMap` iteration order (`JavaHashSet`), fdlibm / HotSpot
   `sin`, `cos`, `asin`, `atan2`, `acos`, `log`, and ELK's option defaults per read site.

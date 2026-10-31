@@ -181,6 +181,11 @@
 
 - **10차 라운드 마감(병합본 `7e02809` = LM+DIS, 2026-10-31)**: `lake test` 17077/0, Java 코퍼스 1878/119, elk-rs 1447/1447, 무작위 v 5,711/5,761·s 1,197/1,205·o 5,224/5,236·p 1,359/1,373·새 DisCo 세트 c 5,073/5,104(99.4%), Java 예외 문구 일치 s 4,793/4,793(전부)·v 226/226, npm 59/60, 합성 기하평균 0.82배(게이트 통과, 기준선 갱신). **정책 정리**: (1) Java의 JSON 경로(`JsonImporter` → `RecursiveGraphLayoutEngine`)는 옵션 범위를 검사하지 않으므로 Lean 엔진도 검사하지 않는다(elk-rs가 넣었던 검증 제거; 검증기 모듈은 유지), (2) 결정적·사용자 가시 Java 예외(`MAX_MODEL_ORDER_NODES` null NPE, P3 계수기 AIOOBE 등)는 클래스·문구까지 재현하고, JVM 실행 컨텍스트·identity hash·스레드 경쟁·힙 크기에 좌우되는 결과만 "재현 불가"로 문서화한다(ticket 213의 NaN 출력은 유한 결과 유지 예외로 남김). 결정적 Java 차이는 greedy switch `BetweenLayerEdgeTwoNodeCrossingsCounter.addAdjacencyOf` NPE(변형 4·v 1·c 14)만 남았다.
 
+### 11차 라운드 작업 할당표 (2026-10-31)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| GS. 마지막 결정적 Java 차이: greedy switch `BetweenLayerEdgeTwoNodeCrossingsCounter.addAdjacencyOf`의 `Map.get` unboxing NPE(변형 4·v 1·DisCo 세트 14 — Java는 예외, Lean은 배치)와 계층 import의 노드 model order 전체 BFS 인덱스(Java `importHierarchicalGraph`) | Java `p3order/counting/BetweenLayerEdgeTwoNodeCrossingsCounter`, `intermediate/greedyswitch/**`, `graph/transform/ElkGraphImporter` | opus | high | 서브에이전트 GS(worktree) | 진행 중 |
+
 ### 10차 라운드 작업 할당표 (2026-10-29)
 | 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
