@@ -751,8 +751,14 @@ def transformExternalPort (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph :
   let portLabelPlacement := graphNode.props.getD CoreOptions.PORT_LABELS_PLACEMENT PortLabelPlacement.outsideSet
   transformExternalPortLabels imp port.labels dummyPort portSize portSide
     (portLabelPlacement.contains .inside) (PortLabelPlacement.isFixed portLabelPlacement)
-  -- the spacings that apply to the labels are those of the parent graph
-  if let some parent := graphNode.parent then
+  -- the spacings that apply to the labels are those of the parent graph; Java reads them through
+  -- `elkgraph.getParent()`, so a layout root (no parent) with external ports fails with a
+  -- `NullPointerException` (elk-rs skips the copy)
+  let some parent := graphNode.parent
+    | throwNullPointer ("Cannot invoke \"org.eclipse.elk.graph.ElkNode.getProperty(" ++
+        "org.eclipse.elk.graph.properties.IProperty)\" because the return value of " ++
+        "\"org.eclipse.elk.graph.ElkNode.getParent()\" is null")
+  do
     let parentProps := (← elkNode parent).props
     let horizontal := parentProps.getD LayeredOptions.SPACING_LABEL_PORT_HORIZONTAL fl1p0
     let vertical := parentProps.getD LayeredOptions.SPACING_LABEL_PORT_VERTICAL fl1p0

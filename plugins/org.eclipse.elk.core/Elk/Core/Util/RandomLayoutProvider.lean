@@ -23,7 +23,9 @@ open Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Options
 namespace RandomLayoutProvider
 
 def MAX_BENDS : Int := 5
-def RAND_FACT : Float := 0.2
+/-- Java `private static final double RAND_FACT = 0.2f`: the `float` literal widened to `double`
+(`0.20000000298023224`; elk-rs used `0.2`, which shifts the random bend points by ~1e-9). -/
+def RAND_FACT : Float := Float.ofBits 0x3FC99999A0000000
 
 /-- `connectable_center`: (cx, cy, halfWidth, halfHeight) of a node or port. -/
 private def connectableCenter (g : ElkGraph) : ConnectableId → Float × Float × Float × Float

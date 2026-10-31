@@ -8,7 +8,7 @@ import Elk.Core.Options
 # `org.eclipse.elk.core.RecursiveGraphLayoutEngine`
 
 Lays out a compound graph bottom-up: resolves the algorithm of every node
-(`LayoutAlgorithmResolver`), optionally validates options/graph, then calls the
+(`LayoutAlgorithmResolver`; no option or graph validation, like ELK Java), then calls the
 registered `LayoutProvider` for every hierarchy level, honouring
 `elk.hierarchyHandling` (INCLUDE_CHILDREN), inside self loops and top-down layout.
 -/
@@ -278,27 +278,24 @@ partial def layoutRecursively (layoutNode : NodeId) (monitor : ProgressMonitor) 
   postProcessInsideSelfLoops childrenInsideSelfLoops
   return if hasInsideSelfLoops && supportsInsideSelfLoops then insideSelfLoops else #[]
 
-/-- `RecursiveGraphLayoutEngine.layout(layoutGraph, progressMonitor)`. -/
+/-- `RecursiveGraphLayoutEngine.layout(layoutGraph, progressMonitor)`: replaces deprecated options,
+resolves the algorithms (`LayoutAlgorithmResolver`) and lays the graph out. Like ELK Java, the
+engine runs no `LayoutOptionValidator` / `GraphValidator`: option bounds (`lowerBound` /
+`upperBound` of the option metadata) and the graph structure are not checked, and
+`elk.validateOptions` / `elk.validateGraph` are only read by Java's Eclipse `DiagramLayoutEngine`
+(agent DIS). An out-of-range value reaches the algorithm, which lays the graph out or fails with
+its own exception (e.g. force `iterations = 0` lays out, a rectpacking `desiredPosition` below
+`-1` fails with `ArrayIndexOutOfBoundsException`). elk-rs (and elk-lean before DIS) applied both
+validators here, `validateOptions` being on by default, and rejected such inputs with a
+`GraphValidationException`. The validators stay available (`Elk.Core.Validation`) for explicit
+use. -/
 def layout (root : NodeId) (monitor : ProgressMonitor) : ElkM Unit := do
   LayoutMetaDataService.ensureInitialized
   let nodeCount := countNodesRecursively (← get) root true
   let _ ← monitor.begin "Recursive Graph Layout" nodeCount.toFloat
   ElkUtil.applyVisitors root #[DeprecatedLayoutOptionReplacer.new]
-  let rootNode ← ElkM.getNode root
-  let validateGraph := rootNode.props.getD CoreOptions.VALIDATE_GRAPH false
-  let validateOptions := rootNode.props.getD CoreOptions.VALIDATE_OPTIONS false
   let resolver ← LayoutAlgorithmResolver.new
-  let optionValidator ← LayoutOptionValidator.new
-  let graphValidator ← GraphValidator.new
-  let mut visitors : Array GraphElementVisitor := #[resolver.toVisitor]
-  if validateOptions then visitors := visitors.push optionValidator.toVisitor
-  if validateGraph then visitors := visitors.push graphValidator.toVisitor
-  if validateGraph || validateOptions then
-    match ← ElkUtil.applyVisitorsWithValidation root visitors with
-    | .error e => throw e.toIOError
-    | .ok () => pure ()
-  else
-    ElkUtil.applyVisitors root visitors
+  ElkUtil.applyVisitors root #[resolver.toVisitor]
   if let some err := (← resolver.errors)[0]? then throw (IO.userError err)
   let _ ← layoutRecursively root monitor
   monitor.done
