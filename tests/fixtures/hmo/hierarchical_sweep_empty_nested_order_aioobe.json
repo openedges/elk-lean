@@ -1,0 +1,140 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+  "elk.layered.crossingMinimization.greedySwitchHierarchical.type": "TWO_SIDED",
+  "elk.layered.considerModelOrder.strategy": "PREFER_EDGES"
+ },
+ "children": [
+  {
+   "id": "n1",
+   "width": 27.5,
+   "height": 53.8,
+   "ports": [
+    {
+     "id": "n1p0",
+     "width": 4,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     }
+    },
+    {
+     "id": "n1p1",
+     "width": 0,
+     "height": 12,
+     "layoutOptions": {
+      "elk.port.side": "EAST",
+      "elk.portLabels.placement": "INSIDE SPACE_EFFICIENT"
+     }
+    },
+    {
+     "id": "n1p2",
+     "width": 12,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "WEST"
+     },
+     "labels": [
+      {
+       "id": "n1p2l0",
+       "text": "",
+       "width": 10.0,
+       "height": 18.7
+      }
+     ]
+    }
+   ],
+   "children": [
+    {
+     "id": "n1_n0",
+     "width": 65.8,
+     "height": 43.2,
+     "labels": [
+      {
+       "id": "n1_n0l0",
+       "text": "a longer label text",
+       "width": 12.7,
+       "height": 18.8
+      },
+      {
+       "id": "n1_n0l1",
+       "text": "a",
+       "width": 26.9,
+       "height": 4.8
+      }
+     ],
+     "ports": [
+      {
+       "id": "n1_n0p0",
+       "width": 12,
+       "height": 8,
+       "labels": [
+        {
+         "id": "n1_n0p0l0",
+         "text": "a",
+         "width": 25.0,
+         "height": 0.7
+        }
+       ],
+       "layoutOptions": {
+        "elk.port.side": "EAST"
+       }
+      },
+      {
+       "id": "n1_n0p1",
+       "width": 0,
+       "height": 8,
+       "layoutOptions": {
+        "elk.port.side": "NORTH",
+        "elk.portLabels.placement": "OUTSIDE SPACE_EFFICIENT"
+       }
+      },
+      {
+       "id": "n1_n0p2",
+       "width": 8,
+       "height": 8,
+       "layoutOptions": {
+        "elk.port.side": "WEST"
+       }
+      },
+      {
+       "id": "n1_n0p3",
+       "width": 12,
+       "height": 0,
+       "layoutOptions": {
+        "elk.port.side": "NORTH"
+       }
+      },
+      {
+       "id": "n1_n0p4",
+       "width": 4,
+       "height": 12,
+       "labels": [
+        {
+         "id": "n1_n0p4l0",
+         "text": "a longer label text",
+         "width": 40.2,
+         "height": 7.2
+        },
+        {
+         "id": "n1_n0p4l1",
+         "text": "",
+         "width": 3.5,
+         "height": 8.7
+        }
+       ],
+       "layoutOptions": {
+        "elk.port.side": "WEST"
+       }
+      }
+     ]
+    }
+   ],
+   "edges": [],
+   "x": 0.0,
+   "y": 578.7
+  }
+ ]
+}

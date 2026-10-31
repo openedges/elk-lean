@@ -19,6 +19,12 @@ layout at tolerance `0` (`<name>.java.json`). The fixtures are reductions of gen
 * `coffman_graham_cycle_stack_overflow` (from `h1/h1143`): `MODEL_ORDER` cycle breaking leaves a
   cycle through a `noModelOrder` node, and the transitive reduction DFS of `CoffmanGrahamLayerer`
   recurses until the stack overflows (Lean ran its explicit stack without bound).
+* `longest_path_cycle_stack_overflow` (from `h6/h0433`): the same cycle in `LongestPathLayerer.visit`.
+* `hierarchical_sweep_empty_nested_order_aioobe` (from the P3 variant `p2/v2_g0045`): the hierarchical
+  layer sweep reads `nestedGraphNodeOrder[startIndex][0]` of a nested graph without nodes to order.
+* `hierarchical_edge_offset_summation` (from `h3/h0190`): the hierarchical offset of an edge whose
+  coordinates belong to a graph two levels up is summed like Java's `KVector.add` chain (elk-rs
+  grouped the terms, one ulp off).
 -/
 namespace Tests.Api.RandomJavaHmo
 
@@ -28,10 +34,11 @@ private def fixtureDir : System.FilePath := "tests/fixtures/hmo"
 
 /-- The fixtures laid out and compared with `<name>.java.json`. -/
 def fixtures : Array String := #["scc_node_type_no_preferred_ids", "scc_node_type_preferred_source_uncached",
-  "scc_node_type_preferred_source_cached"]
+  "scc_node_type_preferred_source_cached", "hierarchical_edge_offset_summation"]
 
 /-- The fixtures whose layout fails with Java's exception (`<name>.java.error`). -/
-def errorFixtures : Array String := #["bk_class_graph_cycle_npe", "coffman_graham_cycle_stack_overflow"]
+def errorFixtures : Array String := #["bk_class_graph_cycle_npe", "coffman_graham_cycle_stack_overflow",
+  "longest_path_cycle_stack_overflow", "hierarchical_sweep_empty_nested_order_aioobe"]
 
 def layouts : Suite := suite "hmo.java" do
   for name in fixtures do
