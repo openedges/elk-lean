@@ -70,6 +70,18 @@ def removeAll (t : BinaryIndexedTree) (index : Nat) : BinaryIndexedTree :=
       { t with numsPerIndex := nums, binarySums := updateLoop sums (index + 1) (-numEntries), size := t.size - numEntries }
   else { t with outOfRange := true }
 
+/-- `a` with every entry `0`, in place when unshared. -/
+private partial def zeroFrom (a : Array Int) (i : Nat) : Array Int :=
+  if h : i < a.size then zeroFrom (a.set i 0) (i + 1) else a
+
+/-- `new maxNum` reusing the arrays of `t` when they have the sizes of a tree of `maxNum` buckets
+(zeroed in place; Lean only): the same value as `new maxNum`, without allocating. -/
+def renew (t : BinaryIndexedTree) (maxNum : Nat) : BinaryIndexedTree :=
+  match t with
+  | ⟨sums, nums, _, _, _⟩ =>
+    if sums.size == maxNum + 1 && nums.size == maxNum then ⟨zeroFrom sums 0, zeroFrom nums 0, 0, maxNum, false⟩
+    else new maxNum
+
 /-- elk-rs `reset(maxNum)`: a fresh tree of the new size (Java creates a new tree). -/
 def reset (_t : BinaryIndexedTree) (maxNum : Nat) : BinaryIndexedTree := new maxNum
 
