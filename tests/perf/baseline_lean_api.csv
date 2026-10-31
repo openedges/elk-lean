@@ -1,5 +1,5 @@
 timestamp,engine,scenario,iterations,warmup,elapsed_nanos,avg_ms,ops_per_sec
-1793476382,lean_api,layered_small,20,3,9767250,0.488363,2047.66
+1793482420,lean_api,layered_small,20,3,9596333,0.479817,2084.13
 1793474302,lean_api,layered_medium,20,3,73242458,3.662123,273.07
 1793464913,lean_api,layered_large,20,3,369304250,18.465213,54.16
 1793464920,lean_api,layered_xlarge,20,3,5631767875,281.588394,3.55
