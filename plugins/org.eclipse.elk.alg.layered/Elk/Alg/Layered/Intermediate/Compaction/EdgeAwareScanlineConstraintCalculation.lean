@@ -1,5 +1,6 @@
 import Elk.Alg.Common.Compaction.Scanline
 import Elk.Alg.Common.Compaction.OneD.IConstraintCalculationAlgorithm
+import Elk.Alg.Common.Compaction.OneD.ScanlineConstraintCalculator
 import Elk.Alg.Layered.Intermediate.Compaction.CompactionMetadata
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.compaction.EdgeAwareScanlineConstraintCalculation`
@@ -20,6 +21,11 @@ Ported from Rust, which differs from the Java subclass of `ScanlineConstraintCal
   back to `0` when no node contributes;
 * the enlargement and its undo are not exact inverses (the `SMALL_EPSILON` is subtracted from
   `y` in both directions); this is kept, as in Java and Rust.
+
+`sweep` is the fast path of the original monadic `sweepReference`: the sort keys are precomputed
+and the handler runs as the pure kernel `ScanlineConstraintCalculator.Kernel.run` (without the
+invalid hitbox check), as described in `ScanlineConstraintCalculator`; differential test
+`layered.intermediate.compaction.edgeAwareSweepFast`.
 
 The scheduled undo operations (Java `Runnable`s) are replayed in the same order. Unknown routing
 styles do nothing (Rust `_ => {}`; Java throws `UnsupportedConfigurationException`).
@@ -144,9 +150,10 @@ private def delete (n : CNodeId) : HandlerM Unit := do
 private def handle (t : Timestamp) : HandlerM Unit :=
   if t.low then insert t.node else delete t.node
 
-/-- Rust `sweep(compactor, filter)`: assigns `CNode.id := index` to all nodes and runs the
-scanline over the low/high timestamps of the nodes accepted by `filter`. -/
-def sweep (filter : CNodeId → Bool) : CompactM Unit := do
+/-- The original monadic Rust `sweep(compactor, filter)` (reference of the fast path `sweep`):
+assigns `CNode.id := index` to all nodes and runs the scanline over the low/high timestamps of
+the nodes accepted by `filter`. -/
+def sweepReference (filter : CNodeId → Bool) : CompactM Unit := do
   let allNodes ← cNodeIds
   for h : i in [0:allNodes.size] do
     modifyCNode allNodes[i] fun c => { c with id := i }
@@ -159,6 +166,33 @@ def sweep (filter : CNodeId → Bool) : CompactM Unit := do
   let g := (← get).cGraph
   let handler : Handler := { cand := Array.replicate allNodes.size none }
   let _ ← (Scanline.execute points (timestampCmp g) ⟨handle⟩ : HandlerM Unit).run handler
+
+/-- `timestampCmp` on precomputed keys (`ys[e]`: y of event code `e`, odd codes are low ends). -/
+@[inline] def keyCmp (ys : FloatArray) (a b : Nat) : Ordering :=
+  let cmp := Float.comparePartial (ys.get! a) (ys.get! b)
+  if cmp == .eq then
+    let aLow := a % 2 == 1
+    let bLow := b % 2 == 1
+    if !aLow && bLow then .lt
+    else if !bLow && aLow then .gt
+    else cmp
+  else cmp
+
+/-- Rust `sweep(compactor, filter)` (fast path of `sweepReference`, see the module doc): assigns
+`CNode.id := index` to all nodes and adds the constraints of the scanline over the low/high
+timestamps of the nodes accepted by `filter`. -/
+def sweep (filter : CNodeId → Bool) : CompactM Unit := do
+  let allNodes ← cNodeIds
+  for h : i in [0:allNodes.size] do
+    modifyCNode allNodes[i] fun c => { c with id := i }
+  let mut points : Array Nat := #[]
+  for h : i in [0:allNodes.size] do
+    if filter allNodes[i] then
+      points := (points.push (2 * i + 1)).push (2 * i)
+  if points.isEmpty then return
+  let (ys, _) := ScanlineConstraintCalculator.eventKeys (← get).cGraph allNodes
+  let events := stableSort points (keyCmp ys)
+  ScanlineConstraintCalculator.runKernel allNodes events false
 
 /-- Rust `alter_hitbox(node, spacing, fac)` (Java `alterHitbox`): segments are enlarged upwards
 unless `ignoreSpacingUp` (else downwards unless `ignoreSpacingDown`), nodes in both directions. -/

@@ -21,6 +21,9 @@ Strategies run on the `CompactorState` part of the compactor (see `ICompactionAl
 `reverse_constraints` hash map (keyed by node pointer, only used for lookups) is an array
 indexed by `CNodeId`.
 -/
+/-! Float literal as a global constant (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Common.Compaction.OneD
 
 open Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options
@@ -36,9 +39,9 @@ structure OneDimensionalCompactor extends CompactorState where
 
 namespace CGraph
 
-/-- `calculateGroupOffsets` on the graph: the reference of each group becomes its left-most node
-(first one on ties) and every node stores its offset to the reference. -/
-def calculateGroupOffsets (g : CGraph) : CGraph := Id.run do
+/-- The original `calculateGroupOffsets` on the graph (reference of the fast path
+`calculateGroupOffsets`). -/
+def calculateGroupOffsetsReference (g : CGraph) : CGraph := Id.run do
   let mut g := g
   for gi in g.cGroupIds do
     let groupNodes := (g.cGroup gi).cNodes
@@ -60,6 +63,42 @@ def calculateGroupOffsets (g : CGraph) : CGraph := Id.run do
         { c with cGroupOffset := ⟨c.hitbox.x - refX, c.hitbox.y - refY⟩ }
   return g
 
+/-- Position + 1 of the left-most node of `groupNodes` (first one on ties), `0` for an empty
+list: scans from position `i` (1-based) with the best position so far and its x (unboxed loop
+state). -/
+partial def leftmost (nodes : Array CNode) (groupNodes : Array CNodeId) (i best : Nat) (bestX : Float) : Nat :=
+  if h : i - 1 < groupNodes.size then
+    let x := (nodes[groupNodes[i - 1].idx]?.getD default).hitbox.x
+    if best == 0 || x < bestX then leftmost nodes groupNodes (i + 1) i x
+    else leftmost nodes groupNodes (i + 1) best bestX
+  else best
+
+/-- `calculateGroupOffsets` on the graph: the reference of each group becomes its left-most node
+(first one on ties) and every node stores its offset to the reference.
+
+Fast path of `calculateGroupOffsetsReference` (differential test
+`alg.common.compaction.cgraphFast`): the reference updates and the zero offsets the original writes
+first are overwritten before anything reads them (a group without reference has no nodes), so
+only the final reference and offsets are written, on the unpacked arenas. -/
+def calculateGroupOffsets (g : CGraph) : CGraph :=
+  match g with
+  | ⟨nodes, groups, sd, ph, pv⟩ => Id.run do
+    let mut nodes := nodes
+    let mut groups := groups
+    for gi in [0:groups.size] do
+      let groupNodes := groups[gi]!.cNodes
+      let best := leftmost nodes groupNodes 1 0 fl0p0
+      let reference : Option CNodeId := if best == 0 then none else groupNodes[best - 1]?
+      groups := groups.modifyIn gi fun grp => { grp with reference := reference }
+      if let some r := reference then
+        let rh := (nodes[r.idx]?.getD default).hitbox
+        let refX := rh.x
+        let refY := rh.y
+        for n in groupNodes do
+          nodes := nodes.modifyIn n.idx fun c =>
+            { c with cGroupOffset := ⟨c.hitbox.x - refX, c.hitbox.y - refY⟩ }
+    return ⟨nodes, groups, sd, ph, pv⟩
+
 /-- `mirrorHitboxes`: `x := -x - width` for all nodes, then `calculateGroupOffsets`. -/
 def mirrorHitboxes (g : CGraph) : CGraph := Id.run do
   let mut g := g
@@ -78,9 +117,8 @@ def transposeHitboxes (g : CGraph) : CGraph := Id.run do
         cGroupOffset := ⟨c.cGroupOffset.y, c.cGroupOffset.x⟩ }
   return g.calculateGroupOffsets
 
-/-- `calculateConstraintsForCGroups`: recomputes `outDegree`, `outDegreeReal` and
-`incomingConstraints` of all groups from the node constraints. -/
-def calculateConstraintsForCGroups (g : CGraph) : CGraph := Id.run do
+/-- The original `calculateConstraintsForCGroups` (reference of the fast path). -/
+def calculateConstraintsForCGroupsReference (g : CGraph) : CGraph := Id.run do
   let mut g := g
   let groups := g.cGroupIds
   for gi in groups do
@@ -98,6 +136,31 @@ def calculateConstraintsForCGroups (g : CGraph) : CGraph := Id.run do
           { grp with outDegree := grp.outDegree + 1, outDegreeReal := grp.outDegreeReal + 1 }
   return g
 
+/-- `calculateConstraintsForCGroups`: recomputes `outDegree`, `outDegreeReal` and
+`incomingConstraints` of all groups from the node constraints.
+
+Fast path of `calculateConstraintsForCGroupsReference` (same reads and updates in the same order,
+on the unpacked arenas; differential test `alg.common.compaction.cgraphFast`). -/
+def calculateConstraintsForCGroups (g : CGraph) : CGraph :=
+  match g with
+  | ⟨nodes, groups, sd, ph, pv⟩ => Id.run do
+    let mut groups := groups
+    for gi in [0:groups.size] do
+      groups := groups.modifyIn gi fun grp =>
+        { grp with outDegree := 0, outDegreeReal := 0, incomingConstraints := #[] }
+    for gi in [0:groups.size] do
+      let groupNodes := groups[gi]!.cNodes
+      for n in groupNodes do
+        for incoming in (nodes[n.idx]?.getD default).constraints do
+          let some incomingGroup := (nodes[incoming.idx]?.getD default).cGroup | continue
+          if incomingGroup.idx == gi then continue
+          groups := groups.modifyIn gi fun grp =>
+            if grp.incomingConstraints.contains incoming then grp
+            else { grp with incomingConstraints := grp.incomingConstraints.push incoming }
+          groups := groups.modifyIn incomingGroup.idx fun grp =>
+            { grp with outDegree := grp.outDegree + 1, outDegreeReal := grp.outDegreeReal + 1 }
+    return ⟨nodes, groups, sd, ph, pv⟩
+
 /-- `reverseConstraints`: every constraint `a → b` becomes `b → a` (the new lists are ordered by
 the source node index), start positions are reset, then `calculateConstraintsForCGroups`. -/
 def reverseConstraints (g : CGraph) : CGraph := Id.run do
@@ -107,7 +170,7 @@ def reverseConstraints (g : CGraph) : CGraph := Id.run do
   for n in nodes do
     g := g.modifyCNode n fun c => { c with startPos := Float.negInf }
     for inc in (g.cNode n).constraints do
-      incoming := incoming.modify inc.idx (·.push n)
+      incoming := incoming.modifyIn inc.idx (·.push n)
   for n in nodes do
     let cs := incoming[n.idx]?.getD #[]
     g := g.modifyCNode n fun c => { c with constraints := cs }

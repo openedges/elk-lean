@@ -8,9 +8,9 @@ Java-style comparator returning `Ordering`.
 -/
 namespace Elk.Core.Util
 
-/-- Stable merge sort (insertion sort on runs of 16, then bottom-up merges).
-Elements comparing equal keep their input order. -/
-@[specialize] def stableSort {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α := Id.run do
+/-- The original `while`-loop formulation of `stableSort` (reference of the tail-recursive
+`stableSort`; differential test `core.util.sort.stableSortTR`). -/
+def stableSortReference {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α := Id.run do
   let n := as.size
   if n < 2 then return as
   let run := 16
@@ -63,6 +63,82 @@ Elements comparing equal keep their input order. -/
     dst := tmp
     width := width * 2
   return src
+
+namespace StableSortTR
+
+/-- Insertion of `x` (taken from index `j`) into the sorted prefix `a[start, j)`: shifts the
+elements comparing `.gt` to `x` one to the right (`while j > start && cmp a[j - 1] x == .gt`). -/
+@[specialize] partial def shift {α : Type} [Inhabited α] (cmp : α → α → Ordering) (a : Array α)
+    (start j : Nat) (x : α) : Array α :=
+  if j > start then
+    let y := a[j - 1]!
+    if cmp y x == .gt then shift cmp (a.set! j y) start (j - 1) x else a.set! j x
+  else a.set! j x
+
+/-- Insertion sort of the run `a[start, stop)` from index `i` on. -/
+@[specialize] partial def insertRun {α : Type} [Inhabited α] (cmp : α → α → Ordering) (a : Array α)
+    (start stop i : Nat) : Array α :=
+  if i < stop then
+    let x := a[i]!
+    insertRun cmp (shift cmp a start i x) start stop (i + 1)
+  else a
+
+/-- Insertion sort of every run of 16 from `start` on. -/
+@[specialize] partial def insertRuns {α : Type} [Inhabited α] (cmp : α → α → Ordering) (a : Array α)
+    (n start : Nat) : Array α :=
+  if start < n then
+    let stop := min (start + 16) n
+    insertRuns cmp (insertRun cmp a start stop (start + 1)) n stop
+  else a
+
+/-- Copies `src[i, stop)` to `dst[k, ..)`. -/
+@[specialize] partial def copyTail {α : Type} [Inhabited α] (src dst : Array α) (i stop k : Nat) : Array α :=
+  if i < stop then copyTail src (dst.set! k src[i]!) (i + 1) stop (k + 1) else dst
+
+/-- Merges `src[i, mid)` and `src[j, hi)` into `dst[k, ..)` (the right element is taken when the
+left one compares `.gt` to it). -/
+@[specialize] partial def merge {α : Type} [Inhabited α] (cmp : α → α → Ordering) (src dst : Array α)
+    (i mid j hi k : Nat) : Array α :=
+  if i < mid && j < hi then
+    let x := src[i]!
+    let y := src[j]!
+    if cmp x y == .gt then merge cmp src (dst.set! k y) i mid (j + 1) hi (k + 1)
+    else merge cmp src (dst.set! k x) (i + 1) mid j hi (k + 1)
+  else
+    copyTail src (copyTail src dst i mid k) j hi (k + (mid - i))
+
+/-- One merge pass of width `width` from `lo` on. -/
+@[specialize] partial def mergePass {α : Type} [Inhabited α] (cmp : α → α → Ordering) (src dst : Array α)
+    (n width lo : Nat) : Array α :=
+  if lo < n then
+    let mid := min (lo + width) n
+    let hi := min (lo + 2 * width) n
+    mergePass cmp src (merge cmp src dst lo mid mid hi lo) n width hi
+  else dst
+
+/-- The merge passes for `width, 2 * width, …` while `width < n`. -/
+@[specialize] partial def mergeAll {α : Type} [Inhabited α] (cmp : α → α → Ordering) (src dst : Array α)
+    (n width : Nat) : Array α :=
+  if width < n then
+    let dst := mergePass cmp src dst n width 0
+    mergeAll cmp dst src n (width * 2)
+  else src
+
+end StableSortTR
+
+/-- Stable merge sort (insertion sort on runs of 16, then bottom-up merges).
+Elements comparing equal keep their input order.
+
+The loops are tail-recursive functions (`StableSortTR`): no loop state tuples per iteration.
+The algorithm is that of `stableSortReference` (the former `while` formulation), so the comparator
+is called on the same pairs in the same order and the result is the same for every comparator,
+including inconsistent ones (differential test `core.util.sort.stableSortTR`). -/
+@[specialize] def stableSort {α : Type} [Inhabited α] (as : Array α) (cmp : α → α → Ordering) : Array α :=
+  let n := as.size
+  if n < 2 then as
+  else
+    let a := StableSortTR.insertRuns cmp as n 0
+    StableSortTR.mergeAll cmp a a n 16
 
 /-- Stable sort by a key with a `compare` function on keys. -/
 @[inline] def stableSortByKey {α κ : Type} [Inhabited α] [Ord κ] (as : Array α) (key : α → κ) : Array α :=
