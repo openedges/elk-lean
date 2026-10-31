@@ -24,6 +24,7 @@ def intermediateProcessingConfiguration : LayeredProcessorConfiguration :=
 /-- `process(layeredGraph, monitor)` body. -/
 def run (graph : LGraphId) : LayeredM Unit := do
   let gr ← getGraph graph
+  if gr.internal.maxModelOrderNodesNull then throw (IO.userError maxModelOrderNodesNullError)
   let layerlessNodes := gr.layerlessNodes
   let offset : Int := max (layerlessNodes.size : Int) gr.internal.maxModelOrderNodes
   let modelOrderGroupCount : Int := max gr.internal.cbNumModelOrderGroups 1

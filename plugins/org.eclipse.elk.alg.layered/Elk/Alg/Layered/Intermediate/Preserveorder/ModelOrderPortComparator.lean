@@ -352,6 +352,8 @@ def compareOutgoing (p1 p2 : LPortId) (s1 s2 : PortSnapshot) (reverseOrder : Int
       let n2 ← getNode t2
       if n1.internal.modelOrder.isSome && n2.internal.modelOrder.isSome then
         let graph := (← get).graph
+        -- Java unboxes `graph.getProperty(MAX_MODEL_ORDER_NODES)` for the `int offset` argument
+        if graph.maxModelOrderNodesNull then throw (IO.userError maxModelOrderNodesNullError)
         let p1Order := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf graph n1 n2 graph.maxModelOrderNodes
         let p2Order := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf graph n2 n1 graph.maxModelOrderNodes
         return ← recordDecision p1 p2 (p1Order > p2Order) reverseOrder

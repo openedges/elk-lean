@@ -33,8 +33,6 @@ the comparison sequence of the sorting algorithm matters (Rust and Java sort wit
 * `layer_id` is `Layer.id as usize` (`0` without a layer); the "previous layer" of a node in layer id
   `0` does not exist (Rust `checked_sub`).
 * Missing ports, edge ends or owners make `handle_helper_dummy_nodes` return `0` instead of throwing.
-* `model_order_from_connected_edges` falls back to `LongEdgeOrderingStrategy.returnValue` when the
-  first incoming edge has no `MODEL_ORDER` (Java would throw on unboxing `null`).
 -/
 namespace Elk.Alg.Layered.Intermediate.Preserveorder
 
@@ -197,13 +195,15 @@ def relationVerdict (n1 n2 : LNodeId) : NodeComparatorM (Option Int) := do
 def compareInPreviousLayer (p1Node p2Node : LNodeId) : NodeComparatorM Int := do
   return ModelOrderPortComparator.checkReferenceLayer (← get).previousLayer p1Node p2Node
 
-/-- Rust `model_order_from_connected_edges(node)`: `MODEL_ORDER` of the first incoming edge of the
-first port with incoming edges, else `long_edge_node_order.return_value()`. -/
+/-- `getModelOrderFromConnectedEdges(node)`: `MODEL_ORDER` of the first incoming edge of the first port
+with incoming edges (Java's unboxing `NullPointerException`, `edgeModelOrderNullError`, when it has
+none), else `longEdgeNodeOrder.returnValue()`. -/
 def modelOrderFromConnectedEdges (n : LNodeId) : NodeComparatorM Int := do
   if let some port := (← firstIncomingPort n) then
     if let some e := (← getPort port).incomingEdges[0]? then
-      if let some order := (← getEdge e).internal.modelOrder then
-        return order
+      -- Java returns `edge.getProperty(MODEL_ORDER)` as `int`: unboxing `null` throws
+      let some order := (← getEdge e).internal.modelOrder | throw (IO.userError edgeModelOrderNullError)
+      return order
   return (← get).longEdgeNodeOrder.returnValue
 
 /-- `compare` when both nodes have a source port in the previous layer: the same source node orders
@@ -233,6 +233,8 @@ orders with offset `MAX_MODEL_ORDER_NODES`; otherwise `n1 < n2`). -/
 def compareByModelOrder (n1 n2 : LNodeId) (n1HasModelOrder n2HasModelOrder : Bool) : NodeComparatorM Int := do
   if n1HasModelOrder && n2HasModelOrder then
     let graph := (← get).graph
+    -- Java unboxes `graph.getProperty(MAX_MODEL_ORDER_NODES)` for the `int offset` argument
+    if graph.maxModelOrderNodesNull then throw (IO.userError maxModelOrderNodesNullError)
     let nd1 ← getNode n1
     let nd2 ← getNode n2
     let n1Order := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf graph nd1 nd2 graph.maxModelOrderNodes
