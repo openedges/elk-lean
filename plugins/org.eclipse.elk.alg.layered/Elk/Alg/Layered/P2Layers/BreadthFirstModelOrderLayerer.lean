@@ -61,12 +61,16 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
     return
   let graphRef := (← nodeGraph nodes[0]!).getD graph
   let mut realNodes : Array (Int × LNodeId) := #[]
+  let mut missingModelOrder := false
   for node in nodes do
     let nd ← getNode node
     if nd.type == .normal then
-      let some order := nd.internal.modelOrder
-        | throwUnsupportedGraph "The BF model order layer assigner requires all real nodes to have a model order."
-      realNodes := realNodes.push (order, node)
+      missingModelOrder := missingModelOrder || nd.internal.modelOrder.isNone
+      realNodes := realNodes.push (nd.internal.modelOrder.getD 0, node)
+  -- Java throws from the sort's comparator, which runs only for two or more real nodes (and then
+  -- compares every node at least once)
+  if missingModelOrder && realNodes.size >= 2 then
+    throwUnsupportedGraph "The BF model order layer assigner requires all real nodes to have a model order."
   realNodes := stableSort realNodes fun (x, _) (y, _) => compare x y
   let mut currentLayer ← newLayer graph graphRef
   let mut currentDummyLayer : Option LayerId := none

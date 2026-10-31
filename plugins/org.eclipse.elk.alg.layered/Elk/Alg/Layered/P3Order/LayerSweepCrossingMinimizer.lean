@@ -159,10 +159,30 @@ def collectHierarchicalTargets (layer : Array LNodeId) : LayeredM (Array (LNodeI
     out := out.push (node, ← graphIndexOf nested)
   return out
 
+/-- Java's `ClassCastException` of `(LPort) node.getProperty(ORIGIN)` (`originPort`) for an origin of
+another class (JDK message for classes of the application class loader). -/
+def originPortCastError (origin : Origin) : Option String :=
+  let cls := match origin with
+    | .elkNode _ => some "org.eclipse.elk.graph.impl.ElkNodeImpl"
+    | .elkPort _ => some "org.eclipse.elk.graph.impl.ElkPortImpl"
+    | .elkEdge _ => some "org.eclipse.elk.graph.impl.ElkEdgeImpl"
+    | .elkLabel _ => some "org.eclipse.elk.graph.impl.ElkLabelImpl"
+    | .lGraph _ => some "org.eclipse.elk.alg.layered.graph.LGraph"
+    | .lNode _ => some "org.eclipse.elk.alg.layered.graph.LNode"
+    | .lEdge _ => some "org.eclipse.elk.alg.layered.graph.LEdge"
+    | .lLabel _ => some "org.eclipse.elk.alg.layered.graph.LLabel"
+    | .lPort _ => none
+  cls.map fun c =>
+    s!"java.lang.ClassCastException: class {c} cannot be cast to class org.eclipse.elk.alg.layered.graph.LPort " ++
+    s!"({c} and org.eclipse.elk.alg.layered.graph.LPort are in unnamed module of loader 'app')"
+
 /-- The core of `sort_ports_by_dummy_positions_in_last_layer[_snap]`: walks the parent's ports and
 replaces every hierarchical port (`INSIDE_CONNECTIONS`) on the end-of-sweep side by the `ORIGIN` port
-of the next dummy of `lastLayer` (from the first index of the sweep direction onwards; a dummy whose
-origin is no port is not consumed). -/
+of the next node of `lastLayer` (from the first index of the sweep direction onwards). Java assumes
+that the layer holds one external port dummy per such port: running past the layer is its
+`ArrayIndexOutOfBoundsException`, a node whose origin is no port (e.g. a normal node, `ElkNode`) its
+`ClassCastException` of `originPort`. A node without origin is not consumed (elk-rs; Java would put
+`null` into the port list). -/
 def replaceHierarchicalPorts (lastLayer : Array LNodeId) (parent : LNodeId) (onRightMostLayer : Bool) :
     LayeredM Unit := do
   let mut j : Int := firstIndex onRightMostLayer lastLayer.size
@@ -172,10 +192,14 @@ def replaceHierarchicalPorts (lastLayer : Array LNodeId) (parent : LNodeId) (onR
     let pt ← getPort port
     if isOnEndOfSweepSide pt.side onRightMostLayer && pt.internal.insideConnections then
       let some dummy := (if j < 0 then none else lastLayer[j.toNat]?)
-        | throw (IO.userError s!"java.lang.IndexOutOfBoundsException: Index {j} out of bounds for length {lastLayer.size}")
-      if let some (.lPort origin) := (← getNode dummy).internal.origin then
+        | throw (IO.userError s!"java.lang.ArrayIndexOutOfBoundsException: Index {j} out of bounds for length {lastLayer.size}")
+      match (← getNode dummy).internal.origin with
+      | some (.lPort origin) =>
         ports := ports.set! i origin
         j := j + next onRightMostLayer
+      | some other =>
+        if let some msg := originPortCastError other then throw (IO.userError msg)
+      | none => pure ()
   modifyNode parent fun n => { n with ports := ports }
 
 /-- `sort_ports_by_dummy_positions_in_last_layer(node_order, parent, on_right_most_layer)`: only when
