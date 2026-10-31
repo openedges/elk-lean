@@ -8,7 +8,8 @@ import Elk.Alg.Layered.P1Cycles.GroupModelOrderCalculator
 Port of elk-rs `p1cycles/model_order_cycle_breaker.rs`. Reverses every edge (from an output port
 of a layerless node) whose target has a smaller constraint (group) model order than its source.
 One `GroupModelOrderCalculator` is created per source node and shared with its targets (so the
-separate-node counters advance as in Rust). `bigOffset = offset * max(CB_NUM_MODEL_ORDER_GROUPS, 1)`.
+separate-node counters advance as in Rust). `bigOffset = offset * CB_NUM_MODEL_ORDER_GROUPS` (Java; elk-rs
+takes at least one group).
 -/
 namespace Elk.Alg.Layered.P1Cycles
 
@@ -24,10 +25,11 @@ def intermediateProcessingConfiguration : LayeredProcessorConfiguration :=
 /-- `process(layeredGraph, monitor)` body. -/
 def run (graph : LGraphId) : LayeredM Unit := do
   let gr ← getGraph graph
+  if gr.internal.maxModelOrderNodesNull then throw (IO.userError maxModelOrderNodesNullError)
   let layerlessNodes := gr.layerlessNodes
   let offset : Int := max (layerlessNodes.size : Int) gr.internal.maxModelOrderNodes
-  let modelOrderGroupCount : Int := max gr.internal.cbNumModelOrderGroups 1
-  let bigOffset := offset * modelOrderGroupCount
+  -- Java `offset * CB_NUM_MODEL_ORDER_GROUPS` (`0` without group ids; elk-rs: at least `offset`)
+  let bigOffset := offset * gr.internal.cbNumModelOrderGroups
   let enforceGroupModelOrder :=
     gr.props.getD LayeredOptions.GROUP_MODEL_ORDER_CB_GROUP_ORDER_STRATEGY .onlyWithinGroup == .enforced
   let compute (c : GroupModelOrderCalculator) (nd : LNode) : Int × GroupModelOrderCalculator :=

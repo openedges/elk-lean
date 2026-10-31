@@ -686,7 +686,7 @@ def sortProcessorTests : Suite := suite "layered.intermediate.sortByInputModelPr
       let _ ← connect q tw (some 3)
       let re ← connect r tw (some 1)
       LayeredM.modifyEdge re fun x => { x with internal.reversed := true }
-      let _ ← connect u (← addPort w .west) none
+      let _ ← connect u (← addPort w .west) (some 4)
       let _ ← connect deadEnd (← addPort d3 .west) (some 0)
       return (s, t, w, #[p, q, r, u, deadEnd]))
   let ((tp, td), _) ← LayeredM.run (do
@@ -703,10 +703,22 @@ def sortProcessorTests : Suite := suite "layered.intermediate.sortByInputModelPr
       for q in sp do
         targets := targets.push (← LayeredM.getPort q).internal.longEdgeTargetNode
       return (m1, m2, targets)) a
-  checkEq "long edge target map: minimum non-reversed order per target (hand: t ↦ 3, w ↦ MAX)" m1
-    #[(t, 3), (w, 2147483647)]
+  checkEq "long edge target map: minimum non-reversed order per target (hand: t ↦ 3, w ↦ 4)" m1
+    #[(t, 3), (w, 4)]
   checkEq "long edge target map is cached on the node" m2 m1
   checkEq "LONG_EDGE_TARGET_NODE on every port with a target (hand)" targets #[some t, some t, some t, some w, none]
+  -- Java `Math.min(edge.getProperty(MODEL_ORDER), previousOrder)`: a non-reversed first edge without a
+  -- model order is the unboxing `NullPointerException` (elk-rs used `Integer.MAX_VALUE`)
+  let npe ← try
+      let _ ← LayeredM.run (do
+        let (g, layers) ← graphWithLayers 2
+        let s ← addNode g layers[0]! (some 0)
+        let w ← addNode g layers[1]! (some 1)
+        let _ ← connect (← addPort s .east) (← addPort w .west) none
+        SortByInputModelProcessor.longEdgeTargetNodePreprocessing s)
+      pure "no exception"
+    catch e => pure (toString e)
+  checkEq "edge without MODEL_ORDER: Java's unboxing NullPointerException" npe edgeModelOrderNullError
 
 def suites : Array Suite :=
   #[cmGroupTests, nodeComparatorTests, portComparatorTests, relationTests, sortProcessorRustTests, sortProcessorTests]

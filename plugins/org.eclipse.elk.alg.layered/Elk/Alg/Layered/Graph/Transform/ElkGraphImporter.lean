@@ -834,14 +834,10 @@ index when needed; Java's `checkEdgeValidity` first) whose edge and end nodes ar
 placed by `edgeParentLGraph`; then the inside self loops of `elkgraph` contained in its parent. -/
 def importFlatGraphEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
   let graphNode ← elkNode elkgraph
-  let needsEdgeModelOrder := needsModelOrderBasedOnParent graphNode.props
-  let mut edgeModelOrderIndex : Int := 0
   for e in graphNode.containedEdges do
-    -- Java: hyperedges and edges without an end are rejected before anything else
+    -- Java: hyperedges and edges without an end are rejected before anything else (the edge model
+    -- orders are assigned beforehand by `assignHierarchicalEdgeModelOrders`)
     checkEdgeValidity e
-    if needsEdgeModelOrder then
-      setElementModelOrderForEdge e edgeModelOrderIndex
-      edgeModelOrderIndex := edgeModelOrderIndex + 1
     let edge ← elkEdge e
     let some sourceNode ← withElk (firstNode · edge.sources) | continue
     let some targetNode ← withElk (firstNode · edge.targets) | continue
@@ -927,6 +923,32 @@ private def createNestedGraph (child : NodeId) (parentGraphDirection : Direction
     calculateMinimumGraphSize child nested
   return some nested
 
+/-- The edge model orders of Java's `importHierarchicalGraph`: one index over the whole hierarchy, the
+graphs in Java's breadth-first order (the top-level graph, then the children of every visited graph
+that are laid out by layered in the same run), and only when the *top-level* graph needs model orders
+(`needsModelOrderBasedOnParent(elkgraph)` with Java's top-level `elkgraph`; elk-rs: per level from
+`0`, decided by each level). Edges of a nested graph whose top-level graph does not need model orders
+get none, so `SortByInputModelProcessor` hits Java's unboxing `NullPointerException` there. -/
+private def assignHierarchicalEdgeModelOrders (elkgraph : NodeId) : LImportM Unit := do
+  if !needsModelOrderBasedOnParent (← elkNode elkgraph).props then return
+  let mut index : Int := 0
+  let mut queue : Array NodeId := #[elkgraph]
+  let mut head := 0
+  while h : head < queue.size do
+    let graph := queue[head]
+    head := head + 1
+    let graphNode ← elkNode graph
+    for e in graphNode.containedEdges do
+      setElementModelOrderForEdge e index
+      index := index + 1
+    let handling := graphNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
+    if graph == elkgraph || handling == .includeChildren || handling == .inherit then
+      for child in graphNode.children do
+        let childNode ← elkNode child
+        let childHandling := childNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
+        if usesElkLayered childNode.props && (childHandling == .includeChildren || childHandling == .inherit) then
+          queue := queue.push child
+
 /-- Rust `import_hierarchical_graph(elkgraph, lgraph)` (Java `importHierarchicalGraph`, but
 recursive): the children that are laid out (model orders per level), each child's nested graph
 imported right after its node (`COMPOUND_NODE`, parent/nested links), then the level's edges. -/
@@ -944,6 +966,8 @@ partial def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId)
       modifyNode lnode fun n => { n with
         nestedGraph := some nestedGraph, internal := { n.internal with compoundNode := true } }
       importHierarchicalGraph imp child nestedGraph
+      -- Java sets `MAX_MODEL_ORDER_NODES` only on the top-level graph of a hierarchical import
+      modifyGraph nestedGraph fun g => { g with internal := { g.internal with maxModelOrderNodesNull := true } }
   setModelOrderCounts lgraph index groups
   importFlatGraphEdges imp elkgraph lgraph
 
@@ -969,7 +993,9 @@ def importGraph (imp : ElkGraphImporter) (elkgraph : NodeId) : LImportM LGraphId
   if ← shouldCalculateMinimumGraphSize elkgraph then
     calculateMinimumGraphSize elkgraph lgraph
   let hierarchyHandling := (← elkNode elkgraph).props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
-  if hierarchyHandling == .includeChildren then importHierarchicalGraph imp elkgraph lgraph
+  if hierarchyHandling == .includeChildren then
+    assignHierarchicalEdgeModelOrders elkgraph
+    importHierarchicalGraph imp elkgraph lgraph
   else importFlatGraph imp elkgraph lgraph
   return lgraph
 

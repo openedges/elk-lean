@@ -42,6 +42,7 @@ import Tests.Api.LayeredP3Java
 import Tests.Api.LayeredNodePromotion
 import Tests.Api.RandomJava3
 import Tests.Api.RandomJavaSpv
+import Tests.Api.RandomJavaLm
 
 /-- Test driver (`lake test`). Add each plugin's `suites` here. `lake test -- --suite <prefix>` runs
 only the suites whose name starts with `<prefix>`. -/
@@ -74,6 +75,7 @@ def main (args : List String) : IO UInt32 := do
     Tests.Api.LayeredNodePromotion.suites ++
     Tests.Api.RandomJava3.suites ++
     Tests.Api.RandomJavaSpv.suites ++
+    Tests.Api.RandomJavaLm.suites ++
     Tests.Core.Alg.suites ++
     -- keep `Tests.Core.Engine` last: it registers an extra test algorithm (`core.meta.counts` expects 4)
     Tests.Core.Engine.suites

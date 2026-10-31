@@ -1914,10 +1914,17 @@ def inLayerDifferential (seeds : Nat) : IO (Nat × Nat) := do
       for _ in [0:3] do
         for layer in order do
           for side in #[PortSide.west, .east, .north, .south] do
-            let x ← live.countInLayerCrossingsOnSide layer side
-            let y ← snap.countInLayerCrossingsOnSide layer side
-            if x != y || (← live.currentPositions) != (← snap.currentPositions) then m := m + 1
-            if x != 0 then nz := nz + 1
+            -- both paths throw Java's tree index exception for the same stale far end, or count the same
+            let x ← try (Except.ok <$> live.countInLayerCrossingsOnSide layer side)
+              catch e => pure (Except.error (toString e))
+            let y ← try (Except.ok <$> snap.countInLayerCrossingsOnSide layer side)
+              catch e => pure (Except.error (toString e))
+            let same := match x, y with
+              | .ok a, .ok b => a == b
+              | .error a, .error b => a == b
+              | _, _ => false
+            if !same || (← live.currentPositions) != (← snap.currentPositions) then m := m + 1
+            if let .ok v := x then if v != 0 then nz := nz + 1
         order ← order.mapM fun layer => shuffle r layer
       return (m, nz)
     mismatches := mismatches + m

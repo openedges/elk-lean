@@ -41,6 +41,9 @@ def modelOrderEdgeGroups (graph : LGraphId) (node : LNodeId) : LayeredM (Array (
     let some targetPort := (← getEdge edge).target | continue
     let some targetNode := (← getPort targetPort).owner | continue
     let target ← getNode targetNode
+    -- Java reads `MAX_MODEL_ORDER_NODES` (as `int`) for every target with a model order when enforced
+    if enforceGroupModelOrder && target.internal.modelOrder.isSome && gr.internal.maxModelOrderNodesNull then
+      throw (IO.userError maxModelOrderNodesNullError)
     let key : Int := match target.internal.modelOrder with
       | none => 2147483647 - (groups.size : Int)
       | some modelOrder =>

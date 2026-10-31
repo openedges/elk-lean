@@ -878,3 +878,112 @@ SPOrE 7·VertiFlex 8·rectpacking 1개 `java_exact`, 예외 4개·문구 2개 `j
 
 성능(`elk bench` 합성 26개, 기준 바이너리와 번갈아 5회, 중앙값, 최종 바이너리): 기하평균 0.992배, rectpacking 0.96~0.97배
 (`Weak`/차용 흉내 제거), 나머지 0.97~1.01배(최대 `mrtree_xlarge` 1.008, 잡음 범위 — mrtree 코드는 바뀌지 않음).
+
+## 17. LM: 교차 최소화의 elk-rs 잔여, 교차 계수 예외 인덱스, 큰 인자 `sin`/`cos`, `MAX_MODEL_ORDER_NODES`의 `null` (2026-10-31)
+
+방법: 라운드 9 병합본(`3d6242f`, `elk_base`)과 Java 소스·새 JVM 단일 실행, 그림자 클래스(서명 제거한 layered jar 사본 +
+`AllCrossingsCounter`/`CrossingsCounter`에 위치 배열·호출 지점 덤프, 결과 기준값에는 쓰지 않음)로 확인했다. 결과 기준값은
+항상 수정하지 않은 Java(`ElkJavaBaseline`)다. 전부 ELK Java가 기준이고 elk-rs와는 달라진다.
+
+### 17.1 `countModelOrderNodeChanges`/`countModelOrderPortChanges`
+
+Java는 층 0의 "이전 층"으로 `layers[0]` 자신을 넘기고(`previousLayer == -1 ? layers[0] : …`; elk-rs: 빈 층), 층마다(포트는
+노드마다) 새 비교자를 만들며, `longEdgeTargetNodePreprocessing`을 포트가 둘 미만인 노드에도 부른다(elk-rs는 그런 노드를
+먼저 건너뛰어 `TARGET_NODE_MODEL_ORDER`/`LONG_EDGE_TARGET_NODE`를 남기지 않았다). Lean은 이 셋을 Java대로 바꿨다(비교자는
+SPV가 Java와 같게 만든 `ModelOrderNodeComparator`/`ModelOrderPortComparator`를 층·노드마다 초기화해 재사용).
+`countCurrentNumberOfCrossingsNodePortOrder`도 Java 순서로: model order 계수 → 시작 그래프 교차 → 자식 그래프의 교차를
+`double`로 Java의 덧셈 순서(`total += crossings + influence`, 자식마다 `total += …`). 층 0의 노드가 이전 층과 이어지려면
+층 id가 −1인 노드가 있어야 하고, 전처리의 부작용은 이미 정렬된 노드에서 다시 읽히지 않아서, 코퍼스·무작위·변형 세트 어디에서도
+출력이 달라지지 않았다(재현 가능한 차이를 찾지 못함 — 결정적 이식으로 둠).
+
+### 17.2 `npb/v1_g0132`의 예외 인덱스(`CrossingsCounter`의 낡은 먼 끝 위치)
+
+Java: 중첩 그래프(포트 17개)의 첫 계수(`minimizeCrossingsWithCounter`의 초기 교차, 위치 배열 전부 0)는 성공하고, 첫 sweep 뒤의
+계수에서 마지막 층 `EAST` 쪽 in-layer 계수가 포트 13의 in-layer 간선의 먼 끝(포트 11, `WEST` 쪽 — 이 계수는 번호를 매기지
+않음)을 읽는다. 그 위치는 앞 계수의 층 사이 계수가 남긴 `7`이고, 트리 크기는 1이라 `BinaryIndexedTree.rank(7)`이
+`ArrayIndexOutOfBoundsException: Index 7 out of bounds for length 2`를 낸다. Lean은 `countAllCrossings`의 in-layer·층 사이
+계수(스냅숏 경로의 묶음 트리, 살아 있는 경로의 `BinaryIndexedTree`)가 범위 밖 인덱스를 조용히 무시해 성공했고, 같은 상태가
+뒤의 greedy switch 양방향 계수(`withTreeChecked`, 유일하게 검사하던 곳)에서 `Index 1 … length 1`로 터졌다.
+
+- `countInLayerCrossingsOnSide`·`countCrossingsBetweenLayers`가 두 경로 모두 Java의 트리 경계를 검사한다: 스냅숏 경로는
+  묶음 트리에 표시 칸 하나(`t[2n+1]`)를 더해 범위 밖 `add`를 표시하고, 표시되면 같은 번호 매기기를 살아 있는 경로로 다시 해
+  `javaTreeIndexError`(Java 순서로 처음 실패하는 접근: 먼 끝 > n이면 `rank`의 `Index e … length n+1`, = n이면 `add`의
+  `Index n … length n`)를 던진다. 살아 있는 경로는 `withTreeChecked`. 정상 입력에서는 표시 검사 하나만 더해진다.
+- `countCurrentNumberOfCrossings`: elk-rs의 그래프별 교차 수 캐시(`cached_crossings_by_graph`·dirty 집합)를 없애고 Java처럼
+  매번 다시 센다 — 공유 위치 배열 때문에 바뀌지 않은 순서를 다시 세는 것도 관찰된다(앞 계수가 남긴 먼 끝 위치가 다르다).
+  자식 그래프는 Java의 재귀 순서(`childGraphs` 순서)로 센다.
+
+결과: `npb/v1_g0132` Java와 같은 예외 문구. 같은 원인으로 Java만 실패하던 무작위·변형 입력이 대거 Java와 같아졌다:
+`robustness/java_crossing_counter_aioobe`(“Java 결함, 재현하지 않음”으로 두었던 fixture — 이제 `robustness.exceptions`),
+무작위 s 6·v 10·d 10·p 26(17.5).
+
+### 17.3 HotSpot `sin`/`cos`의 큰 인자 축소
+
+RJ3은 `|x| ≤ 2^19·π/2`만 스텁대로 옮기고 그 위는 C 라이브러리를 썼다. `generate__ieee754_rem_pio2`의 큰 인자 분기와
+`generate__kernel_rem_pio2`(HotSpot `macroAssembler_aarch64_trig.cpp`, RJ3이 받아 둔 소스)를 `hsRemPio2Large`로 옮겼다:
+`e0 = (ix >> 20) − 1046`, `z`의 24비트 조각 `x[0..2]`(펼친 루프, `nx` 판정), `jv = (e0 − 3) / 24`(`sdiv`, 음수면 0),
+`2/π` 표를 `double`로, `q[i]`를 스텁의 벡터 순서대로 융합 곱셈-덧셈(`f[i]·x[jx]`부터 `fmla`), 재계산의 `q`도
+`fmadd`(`x[0]·f`부터), `2^q0`/`2^-q0`/`fw`는 지수 비트로, 재계산 항 수 `k`는 `iq[3..0]`를 펼쳐 최대 4, `PIo2[k]·q[i+k]`를
+`fmadd`로 누적, `fq` 압축은 fdlibm `prec = 2`. JVM 덤프(`scripts/java/SinCosDump.java`: 경계 `0x413921fb…`, `2^19`~`2^1023`의
+거듭제곱과 이웃·`2^e·π/2`, 1e6~1e300 십진 크기, 무작위 1,000,000개 — 합계 1,006,063개, Temurin 21.0.13 aarch64)와 `sin`·`cos`
+모두 비트 동일(차이 0). 이제 `javaSin`/`javaCos`는 모든 유한 인자에서 기준 JVM과 같다. 테스트 `core.javaSinCos.large`(표본
+94개, `ELK_SINCOS_CASES=<덤프>`로 전체). 코퍼스·무작위 출력은 바뀌지 않았다(그런 인자를 쓰는 입력이 없음).
+
+### 17.4 `MAX_MODEL_ORDER_NODES`의 `null`과 간선 `MODEL_ORDER`의 `null` — 결정적이므로 재현
+
+`ElkGraphImporter.importHierarchicalGraph`는 `MAX_MODEL_ORDER_NODES`를 **최상위 그래프에만** 설정하고(`createLGraph`로 만든
+중첩 그래프에는 없음, 기본값도 없는 `Property`), `int`로 읽는 곳이 언박싱 NPE를 낸다: `ModelOrderNodeComparator`(두 노드 모두
+`MODEL_ORDER`일 때의 마지막 비교), `ModelOrderPortComparator`(`PREFER_NODES`의 long edge 목표 비교),
+`ModelOrderBarycenterHeuristic`, `ModelOrderCycleBreaker`·`GreedyModelOrderCycleBreaker`·`SCCModelOrderCycleBreaker`(처리 시작),
+`DFS`/`BFSNodeOrderCycleBreaker`(`ENFORCED`이고 목표에 model order가 있을 때). 같은 임포터는 간선 model order를 계층 전체에
+걸친 BFS 하나의 인덱스로, **최상위 그래프**가 필요로 할 때만 준다(`needsModelOrderBasedOnParent(elkgraph)`) — 중첩 그래프가
+model order 전략을 켜도 최상위가 아니면 그 간선에는 값이 없어, `longEdgeTargetNodePreprocessing`의 `Math.min(edge.getProperty(
+MODEL_ORDER), …)`와 `getModelOrderFromConnectedEdges`가 NPE를 낸다. 어느 쪽도 실행 맥락과 무관한 결정적 결과이고 사용자에게
+보이는 예외이므로(ticket 213의 NaN 출력과 달리 레이아웃 자체가 실패) Java 문구를 재현한다:
+
+- `LGraphInternals.maxModelOrderNodesNull`(계층 임포트의 중첩 그래프에 설정, 컴포넌트 분할은 그대로 물려받음)과
+  `ModelOrderGraphContext.maxModelOrderNodesNull`; 위 읽기 지점마다 `maxModelOrderNodesNullError`(`Cannot invoke
+  "java.lang.Integer.intValue()" because the return value of "org.eclipse.elk.alg.layered.graph.LGraph.getProperty(…)" is null`).
+  `ModelOrderBarycenterHeuristic`의 순수 정렬은 관계 상태의 표시로 멈추고 호출자가 던진다.
+- 간선 model order: `assignHierarchicalEdgeModelOrders`(Java BFS 순서, 최상위 기준; elk-rs: 층마다 0부터, 층마다 판정),
+  값이 없는 간선의 두 읽기 지점은 `edgeModelOrderNullError`(`… LEdge.getProperty(…)" is null`).
+- 덤으로 `ModelOrderCycleBreaker`의 `bigOffset = offset * CB_NUM_MODEL_ORDER_GROUPS`(Java; elk-rs `max(…, 1)`).
+
+결과(변형 세트의 Java NPE 407개): `LGraph` 문구 349/349, `LEdge` 문구 54/54 Java와 같음(전에는 Lean 성공 또는 다른 예외).
+남은 4개는 greedy switch `BetweenLayerEdgeTwoNodeCrossingsCounter`의 `Map.get` NPE(이 라운드 범위 밖). fixture
+`tests/fixtures/lm/`(4개, `lm.java.errors`), 기존 단위 테스트 하나(`sortByInputModelProcessor`의 model order 없는 간선 — Java면
+NPE)는 값을 주고 NPE 검사를 따로 뒀다.
+
+### 17.5 결과(시드 1~10; 기준 = `3d6242f`, Java 기준값은 RJ3·NIK·P3J 실행 재사용, 변형 세트는 추적되는 생성기로 만든 기존 입력)
+
+| 세트 | 둘 다 성공 | 정확 일치 전 → 후 | Java 예외 | 예외 문구 일치 전 → 후 |
+|---|---:|---:|---:|---:|
+| s | 1,205 | 1,197 → 1,197 | 4,793 | 4,787 → **4,793** |
+| v | 5,761 | 5,711 → 5,711 | 227 | 216 → **226** |
+| d | 5,761 | 5,711 → 5,711 | 227 | 216 → 226 |
+| o | 5,236 | 5,224 → 5,224 | 745 | 745 → 745 |
+| p | 1,373 | 1,359 → 1,359 | 428 | 379 → **426** |
+| NIK `npa`(1,802개) | 1,323 | 1,317 → 1,317 | 479 | 91 → **139** |
+| NIK `npb` | 1,151 | 1,143 → 1,143 | 651 | 138 → **605** |
+| NIK `mob` | 1,715 | 1,698 → 1,698 | 87 | 81 → 84 |
+| P3J `p3a` | 1,376 | 1,354 → 1,354 | 426 | 376 → 412 |
+
+모든 세트에서 정확 → 비정확 0, 예외 문구 일치 → 불일치 0, Java가 성공하는 입력이 Lean에서 실패로 바뀐 것 0. 바뀐 입력은 전부
+"Java만 예외/다른 예외 → 같은 예외"이다(무작위 s·v·d·p 71개: 교차 계수 트리의 AIOOBE 52·model order NPE 19, 루트 알고리즘이 box/force/mrtree/
+radial/stress인 입력은 그 안의 layered 자식 그래프). s 세트의 Java 예외는 이제 전부 문구까지 같고, v 세트에 남은 것은 위
+greedy switch `Map.get` NPE 1개다. 기본 세트(s, v)가 바뀌어 `tests/random_parity/report.md`를 기본 실행으로 다시 게시했다.
+
+코퍼스(ELK Java 기준): Lean 출력 1,998개와 elk-rs trace·Java trace용 Lean trace 모두 기준 바이너리와 바이트 동일, 정확 일치
+1878/119(집합 동일), Java 단계별 trace 1,743/1,997(기준과 같음). elk-rs 보조: model parity(1e-6) 1447/1447, strict trace
+1447/1447. 합성 26개 Lean 출력 바이트 동일. `lake build` 경고 0, `lake test` 17,023 통과/0 실패(기준 16,830: 큰 인자 삼각함수
+189, `lm.*` 4 등).
+
+성능(`elk bench --scenarios layered_medium,crossmin_layer_sweep,radial_large --iterations 20 --warmup 3`, 기준 바이너리와 번갈아
+5회, 중앙값): `crossmin_layer_sweep` 1.010배, `layered_medium` 1.014배(무작위 반복마다 Java처럼 다시 세는 계수 1회),
+`radial_large` 1.003배 — 5% 게이트 안.
+
+### 17.6 남은 것
+
+- greedy switch `BetweenLayerEdgeTwoNodeCrossingsCounter.AdjacencyList.addAdjacencyOf`의 `Map.get` 언박싱 NPE(변형 세트 4·v 1).
+- 계층 임포트의 노드 model order는 elk-rs처럼 층마다 0부터다(Java: 계층 전체 BFS 인덱스, `MAX_MODEL_ORDER_NODES`는 최상위의
+  전체 개수). 한 그래프 안의 상대 순서와 최상위의 offset 비교 결과는 같아 관찰되지 않았다.

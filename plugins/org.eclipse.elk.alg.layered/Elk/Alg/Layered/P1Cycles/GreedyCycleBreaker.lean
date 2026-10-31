@@ -99,6 +99,7 @@ def chooseNodeWithMaxOutflow (graph : LGraphId) (nodes : Array LNodeId) : Greedy
   if nodes.isEmpty then return none
   if (← get).preferModelOrder then
     let gr ← getGraph graph
+    if gr.internal.maxModelOrderNodesNull then throw (IO.userError maxModelOrderNodesNullError)
     let offset : Int := max (gr.layerlessNodes.size : Int) gr.internal.maxModelOrderNodes
     let bigOffset := offset * gr.internal.cbNumModelOrderGroups
     let enforceGroupModelOrder :=

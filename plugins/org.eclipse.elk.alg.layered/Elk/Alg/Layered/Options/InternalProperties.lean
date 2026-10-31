@@ -49,6 +49,20 @@ inductive Origin where
   | lLabel (id : LLabelId)
   deriving BEq, Repr, Inhabited
 
+/-- Java's unboxing `NullPointerException` (JDK helpful message) of an `int` read of
+`LGraph.getProperty(InternalProperties.MAX_MODEL_ORDER_NODES)` on a nested graph of a hierarchical
+import (`LGraphInternals.maxModelOrderNodesNull`): the model order comparators, `ModelOrderBarycenterHeuristic`
+and the model order cycle breakers. -/
+def maxModelOrderNodesNullError : String :=
+  "java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because the return value of " ++
+  "\"org.eclipse.elk.alg.layered.graph.LGraph.getProperty(org.eclipse.elk.graph.properties.IProperty)\" is null"
+
+/-- Java's unboxing `NullPointerException` of `edge.getProperty(InternalProperties.MODEL_ORDER)` as an
+`int` (`SortByInputModelProcessor.longEdgeTargetNodePreprocessing` for an edge without model order). -/
+def edgeModelOrderNullError : String :=
+  "java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because the return value of " ++
+  "\"org.eclipse.elk.alg.layered.graph.LEdge.getProperty(org.eclipse.elk.graph.properties.IProperty)\" is null"
+
 /-- Internal properties set on `LGraph`s. -/
 structure LGraphInternals where
   /-- Segment table behind `SPLINE_ROUTE_START` (the `SplineSegment`s of the spline router, shared by
@@ -72,6 +86,10 @@ structure LGraphInternals where
   extPortConnections : EnumSet PortSide := EnumSet.empty
   /-- `MAX_MODEL_ORDER_NODES` (`modelOrder.maximum`, `0`). -/
   maxModelOrderNodes : Int := 0
+  /-- `MAX_MODEL_ORDER_NODES` is `null` (no default): Java's `ElkGraphImporter` sets it on the graph it
+  imports, but for a hierarchical import only on the top-level graph, so a nested graph's value is
+  `null` and every `int` read of it throws `maxModelOrderNodesNullError`. -/
+  maxModelOrderNodesNull : Bool := false
   /-- `CB_NUM_MODEL_ORDER_GROUPS` (`modelOrderGroups.cb.number`, `0`). -/
   cbNumModelOrderGroups : Int := 0
   /-- `FIRST_TRY_WITH_INITIAL_ORDER` (`firstTryWithInitialOrder`, `false`). -/

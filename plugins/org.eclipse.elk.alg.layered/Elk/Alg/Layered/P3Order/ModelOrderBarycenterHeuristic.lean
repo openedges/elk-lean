@@ -58,6 +58,9 @@ structure ModelOrderBarycenterRelations where
   biggerThan : Std.HashMap LNodeId (Std.HashSet LNodeId) := {}
   /-- `smaller_than`. -/
   smallerThan : Std.HashMap LNodeId (Std.HashSet LNodeId) := {}
+  /-- A comparison reached the model order of a graph whose `MAX_MODEL_ORDER_NODES` is `null` (Java throws
+  `maxModelOrderNodesNullError` there; the callers throw once the pure sort returns). -/
+  nullOffset : Bool := false
   deriving Inhabited
 
 namespace ModelOrderBarycenterRelations
@@ -173,6 +176,7 @@ def compareByModelOrder (env : ModelOrderCompareEnv) (rel : ModelOrderBarycenter
   -- enforced group orders are all read from it
   let graph ← a.nodeGraph n1
   let ctx ← env.graphContexts[graph]?
+  if ctx.maxModelOrderNodesNull then return ((0 : Int), { rel with nullOffset := true })
   let v1 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf ctx nd1 nd2 ctx.maxModelOrderNodes
   let v2 := CMGroupModelOrderCalculator.calculateModelOrderOrGroupModelOrderOf ctx nd2 nd1 ctx.maxModelOrderNodes
   let mut value := orderingToInt (Ord.compare v1 v2)
@@ -215,6 +219,7 @@ def insertionSort (env : ModelOrderCompareEnv) (rel : ModelOrderBarycenterRelati
     while j > 0 do
       let (value, rel') := compareNodes env rel layer[j - 1]! temp
       rel := rel'
+      if rel.nullOffset then return (layer, rel)
       if value > 0 then
         layer := layer.set! j layer[j - 1]!
         j := j - 1
@@ -233,12 +238,14 @@ def sortByCompareNodes (env : ModelOrderCompareEnv) (rel : ModelOrderBarycenterR
     let tmp := v[i]!
     let (first, rel') := compareNodes env rel tmp v[i - 1]!
     rel := rel'
+    if rel.nullOffset then return (v, rel)
     if first < 0 then
       v := v.set! i v[i - 1]!
       let mut j := i - 1
       while j > 0 do
         let (value, rel') := compareNodes env rel tmp v[j - 1]!
         rel := rel'
+        if rel.nullOffset then return (v, rel)
         if value < 0 then
           v := v.set! j v[j - 1]!
           j := j - 1
@@ -296,6 +303,7 @@ def compareNodesM (h : ModelOrderBarycenterHeuristic) (n1 n2 : LNodeId) : Layere
   let c ← h.base.context true
   let env ← h.compareEnv c #[n1, n2]
   let (value, rel) := compareNodes env (← h.relations.get) n1 n2
+  if rel.nullOffset then throw (IO.userError maxModelOrderNodesNullError)
   h.relations.set rel
   return value
 
@@ -315,6 +323,7 @@ def setFirstLayerOrder (h : ModelOrderBarycenterHeuristic) (order : Array (Array
     let env ← h.compareEnv c nodes
     let rel ← h.relations.swap {}
     let (sorted, rel) := insertionSort env rel nodes
+    if rel.nullOffset then throw (IO.userError maxModelOrderNodesNullError)
     h.relations.set rel
     nodes := sorted
   return (order.setIfInBounds startIndex nodes, false)
@@ -337,10 +346,12 @@ def minimizeCrossings (h : ModelOrderBarycenterHeuristic) (order : Array (Array 
     let rel ← h.relations.swap {}
     if h.forceModelOrder then
       let (sorted, rel) := insertionSort env rel nodes
+      if rel.nullOffset then throw (IO.userError maxModelOrderNodesNullError)
       h.relations.set rel
       nodes := sorted
     else
       let (sorted, rel) := sortByCompareNodes env rel nodes
+      if rel.nullOffset then throw (IO.userError maxModelOrderNodesNullError)
       h.relations.set rel
       nodes ← h.base.constraintResolver.processConstraints sorted
   return (order.setIfInBounds freeLayerIndex nodes, false)

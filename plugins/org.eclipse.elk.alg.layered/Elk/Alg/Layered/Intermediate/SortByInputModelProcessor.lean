@@ -130,7 +130,8 @@ def getTargetNode (port : LPortId) : LayeredM (Option LNodeId) := do
 /-- `longEdgeTargetNodePreprocessing(node)` (Rust `long_edge_target_node_preprocessing`): unless the
 node already has a `TARGET_NODE_MODEL_ORDER` map (then that is returned), sets `LONG_EDGE_TARGET_NODE`
 on every port whose first outgoing edge leads to a target node and maps each target node to the
-minimal `MODEL_ORDER` (`Integer.MAX_VALUE` if unset) of those first edges that are not `REVERSED`; the
+minimal `MODEL_ORDER` of those first edges that are not `REVERSED` (Java's unboxing
+`NullPointerException`, `edgeModelOrderNullError`, for such an edge without one); the
 map is stored on the node. Pairs are in order of first insertion (only lookups are observable). -/
 def longEdgeTargetNodePreprocessing (node : LNodeId) : LayeredM (Array (LNodeId × Int)) := do
   if let some existing ← getTargetNodeModelOrder node then return existing
@@ -142,8 +143,9 @@ def longEdgeTargetNodePreprocessing (node : LNodeId) : LayeredM (Array (LNodeId 
     modifyPort port fun p => { p with internal := { p.internal with longEdgeTargetNode := some targetNode } }
     let prevOrder := orders.getD targetNode 2147483647
     let ed ← getEdge firstEdge
-    let modelOrder := ed.internal.modelOrder.getD 2147483647
     if !ed.internal.reversed then
+      -- `Math.min(edge.getProperty(MODEL_ORDER), previousOrder)` unboxes the edge's model order
+      let some modelOrder := ed.internal.modelOrder | throw (IO.userError edgeModelOrderNullError)
       if !orders.contains targetNode then
         keys := keys.push targetNode
       orders := orders.insert targetNode (min prevOrder modelOrder)

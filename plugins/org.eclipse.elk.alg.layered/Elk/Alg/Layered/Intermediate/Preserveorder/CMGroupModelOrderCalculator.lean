@@ -31,6 +31,9 @@ open Elk.Graph Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options Layer
 structure ModelOrderGraphContext where
   /-- `InternalProperties.MAX_MODEL_ORDER_NODES` (Rust `unwrap_or(0)`). -/
   maxModelOrderNodes : Int := 0
+  /-- `MAX_MODEL_ORDER_NODES` is `null` (`LGraphInternals.maxModelOrderNodesNull`): passing it as the
+  `int offset` throws `maxModelOrderNodesNullError`. -/
+  maxModelOrderNodesNull : Bool := false
   /-- `LayeredOptions.GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY` (Rust `unwrap_or(OnlyWithinGroup)`). -/
   groupOrderStrategy : GroupOrderStrategy := .onlyWithinGroup
   /-- `LayeredOptions.GROUP_MODEL_ORDER_CM_ENFORCED_GROUP_ORDERS` (Rust `unwrap_or_default()`). -/
@@ -47,6 +50,7 @@ def unavailable : ModelOrderGraphContext := {}
 def ofGraph (g : LGraphId) : LayeredM ModelOrderGraphContext := do
   let gr ← getGraph g
   return { maxModelOrderNodes := gr.internal.maxModelOrderNodes
+           maxModelOrderNodesNull := gr.internal.maxModelOrderNodesNull
            groupOrderStrategy := gr.props.getD LayeredOptions.GROUP_MODEL_ORDER_CM_GROUP_ORDER_STRATEGY .onlyWithinGroup
            enforcedGroupOrders := gr.props.getD LayeredOptions.GROUP_MODEL_ORDER_CM_ENFORCED_GROUP_ORDERS #[] }
 

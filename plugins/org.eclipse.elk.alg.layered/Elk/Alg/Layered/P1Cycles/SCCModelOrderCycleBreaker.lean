@@ -102,6 +102,7 @@ def incrementSourceLayerId (edge : LEdgeId) : LayeredM Unit := do
 /-- Rust `process_scc_model_order_cycle_breaking` (Java `SCCModelOrderCycleBreaker.process`). -/
 def processSccModelOrderCycleBreaking (graph : LGraphId) (findNodes : FindNodes) : LayeredM Unit := do
   let gr ← getGraph graph
+  if gr.internal.maxModelOrderNodesNull then throw (IO.userError maxModelOrderNodesNullError)
   let offset : Int := max (gr.layerlessNodes.size : Int) gr.internal.maxModelOrderNodes
   let bigOffset := offset * gr.internal.cbNumModelOrderGroups
   let mut revEdges : Array LEdgeId := #[]
