@@ -878,3 +878,101 @@ SPOrE 7·VertiFlex 8·rectpacking 1개 `java_exact`, 예외 4개·문구 2개 `j
 
 성능(`elk bench` 합성 26개, 기준 바이너리와 번갈아 5회, 중앙값, 최종 바이너리): 기하평균 0.992배, rectpacking 0.96~0.97배
 (`Weak`/차용 흉내 제거), 나머지 0.97~1.01배(최대 `mrtree_xlarge` 1.008, 잡음 범위 — mrtree 코드는 바뀌지 않음).
+
+## 17. DIS: DisCo 패킹의 Java parity와 옵션 검증 순서 (2026-10-31)
+
+방법: 라운드 9 병합본(`3d6242f`, `elk_base`)과 DisCo fixture 58개(`tests/fixtures/disco/`)를 Java 소스와 비교하고, 새 무작위
+세트 `c`(`scripts/gen_disco_graphs.py`, `--sets c`; 시드 1~10 × 600)를 수정하지 않은 ELK Java 0.12.0과 대조했다. 다른 생성기는
+DisCo를 고르지 않아 이전 무작위 세트에는 DisCo 입력이 없었다. `c` 세트는 DisCo를 루트(약 6/7) 또는 `fixed` 루트의 복합 자식에
+두고, 무작위 컴포넌트(위치가 주어진 노드, 라벨, 포트·포트 라벨, 섹션·bend point가 있거나 없는 간선, 간선 라벨, 가끔 self loop와
+하이퍼엣지), DisCo 노드의 포트와 자식을 잇는 간선(확장), 컴포넌트 레이아웃 알고리즘(없음·`fixed`·`box`·`layered`·`random`·
+`rectpacking`), `aspectRatio`·간격·padding·간선 두께·`polyomino.*`를 바꾼다. 결과 기준은 항상 ELK Java이고 elk-rs와는 달라진다.
+
+### 17.1 DisCo(`alg.disco`, `alg.common.polyomino`)
+
+- **정렬 방향**(주원인): `PolyominoCompactor.packPolyominoes`는 low-level 비교자를 `.reversed()`로 정렬한다(큰 polyomino
+  먼저, 안정 `List.sort`), 이어 high-level 비교자들은 오름차순. elk-rs는 low-level을 오름차순으로 정렬했다. 비교자 값은 Java
+  `int` 산술(`w * w`).
+- **polyomino 옵션 등록**: ELK Java는 `org.eclipse.elk.alg.common` jar의 `ServiceLoader` 항목으로 `PolyominoOptions`를 등록하므로
+  JSON의 `org.eclipse.elk.polyomino.fill`이 파싱되어 `fill = false`가 적용된다. elk-rs(와 이전 Lean)는 이 provider를 적용하지
+  않아 옵션을 무시했다. `Elk.Alg.Disco.Init`이 DisCo 앞(rank 19)에서 등록한다 — `elk options`에 4개 추가(251개).
+  `lowLevelSort`·`highLevelSort`·`traversalStrategy`는 Java에서도 빈 `Polyominoes` 홀더에서 읽혀 항상 기본값이다(변화 없음).
+  DisCo의 option support 기본값은 Java처럼 각 옵션의 기본값(`aspectRatio` 없음, `padding` 12; elk-rs 1.0·0).
+- **루트에서 오는 간선**: `ElkGraphComponentsProcessor.computeIncidences`의 `getSourceNode(edge).getParent().equals(...)`는
+  레이아웃 루트에서 시작하는 간선(루트 포트 → 자식)에서 `NullPointerException`을 던진다. 루트로 들어가는 간선(자식 → 루트 포트)은
+  확장으로 레이아웃된다. 이전 Lean은 둘 다 레이아웃했다(`c` 세트 Java 예외 269건 중 대부분).
+- **grid 경계**: `TwoBitGrid`는 `long[height][ceil(width / 32)]`이다. 읽기는 배열 밖(`y` 범위 밖, `x < 0`, `x >> 5 >= words`)에서만
+  실패하고 너비 오른쪽의 같은 워드 칸은 비어 있다고 읽으며, 쓰기는 `x >= width`에서도 실패한다. 중심 기준 접근의 메시지는
+  변환된 점 + ` Given center based coordinates were (x, y).`이다. 이전 Lean은 모든 접근을 너비로 검사하고 중심 기준 좌표를
+  보고했다(`weaklyIntersectsArea`가 Java보다 먼저 실패할 수 있었다).
+- **`getFilledBounds`**: 막힌 칸이 없으면 Java `int` 산술로 `(MAX_VALUE, MAX_VALUE, 2, 2)`(이전 Lean `(0, 0, 0, 0)`), 위치 차도
+  `int` 감산.
+- **aspect ratio**: `null`만 1.0이다(이전 Lean은 0도 1.0으로 바꿨다). 0·NaN은 무한/NaN 셀 높이로 Java와 같은 NaN·거대 좌표를,
+  음수는 `DCPolyomino.reinitialize`의 `NegativeArraySizeException: <높이>`를 낸다. `1e-9`·`1e9` 같은 극단 값의 grid는 Java가
+  `OutOfMemoryError: Requested array size exceeds VM limit`(차원 `MAX_VALUE`)·`Java heap space`로 실패한다 — elk-lean은 2^26
+  워드를 넘는 grid를 할당하지 않고 같은 문구를 던진다(이전에는 수십 GB를 할당하려다 멈췄다; Java의 heap 한계 자체는 JVM 설정
+  의존).
+
+### 17.2 DisCo 경로에서 드러난 다른 단위의 Java 동작
+
+DisCo의 컴포넌트 레이아웃 알고리즘은 엔진을 거치지 않고 provider를 직접 부른다. `c` 세트가 처음으로 건드린 Java 동작:
+
+- `RandomLayoutProvider.RAND_FACT = 0.2f`(double로 넓힌 `0.20000000298023224`; elk-rs 0.2) — bend point 흔들림이 ~1e-9 달랐다
+  (`random` 컴포넌트 레이아웃 484건이 1e-6 일치만).
+- `FixedLayoutProvider`는 들어오는 간선마다 `getSourceNode(edge)`를 불러 하이퍼엣지에서 `IllegalArgumentException`을 던지고,
+  루트에서 오는 간선(`getParent() == null != layoutNode`)도 처리한다(이전 Lean은 둘 다 건너뛰었다).
+- layered `ElkGraphImporter.transformExternalPort`는 라벨 간격을 `elkgraph.getParent()`에서 읽어, 외부 포트가 있는 **레이아웃
+  루트**에서 `NullPointerException`을 던진다(DisCo의 `layered` 컴포넌트 레이아웃 + 루트 포트 59건; 엔진 경로의 layered 루트도 같다,
+  코퍼스·다른 무작위 세트에는 없다). 단위 테스트 `layered.import.externalPorts`는 같은 그래프를 복합 자식으로 가져온다.
+- force: `iterations = 0`(17.3)에서 FR의 `threshold = temperature / 0 = ∞`(한 번 반복, 온도 `-∞`)이고 bounding box는 Java처럼
+  `Integer.MAX/MIN_VALUE` 시작값과 NaN 전파 `Math.min/max`, `ElkUtil.resizeNode`도 `Math.max` — Java처럼 전부 NaN이 된다.
+
+### 17.3 옵션 검증 순서(결정)
+
+ELK Java의 JSON 경로(`JsonImporter` → `RecursiveGraphLayoutEngine.layout`)는 옵션의 `lowerBound`/`upperBound`를 검사하지 않는다:
+`LayoutOptionValidator`·`GraphValidator`를 쓰는 곳은 Eclipse의 `DiagramLayoutEngine`(`elk.validateOptions`/`elk.validateGraph`를
+읽음)뿐이고, `RecursiveGraphLayoutEngine.layout`은 `DeprecatedLayoutOptionReplacer`와 `LayoutAlgorithmResolver`만 적용한다.
+elkjs도 같은 엔진이다. elk-rs는 엔진에 두 validator를 넣었고(`validateOptions` 기본 `true`), elk-lean은 그것을 이어받아
+`force.iterations = 0`·rectpacking `desiredPosition < -1`·`aspectRatio <= 0` 같은 입력을 `GraphValidationException`으로 거부했다.
+**결정**: Lean 엔진도 검증하지 않는다(`RecursiveGraphLayoutEngine.layout`). 범위 밖 값은 알고리즘까지 가서 Java와 같은 결과나
+예외를 낸다: `force_iter0`(Java가 레이아웃, NaN 좌표 포함 — `tests/fixtures/force/force_iter0_seed3.expected.json`), rectpacking
+음수 `desiredPosition`(작은 그래프는 레이아웃, SPV의 EMF 용량 AIOOBE 경로), DisCo `aspectRatio` 0/음수(17.1). validator 자체는
+`Elk.Core.Validation`에 그대로 있다. 무작위 s·v·o·p 세트(19,802개)에는 범위 밖 옵션이 없어 출력이 바이트 동일하다.
+
+### 17.4 재현하지 않는 것·남은 것
+
+- **포트에 확장 간선이 둘 이상**: `applyLayout`은 `incomingExtensionsMapping`/`outgoingExtensionsMapping`(identity hash 키
+  `HashMap<ElkEdge, …>`)의 첫 간선으로 포트 위치를 정한다. 같은 입력이 새 JVM에서 앞선 레이아웃 수에 따라 두 결과를 낸다(`c1/g0211`:
+  0·3·20·1·2·7·13개 앞섬 → 두 결과). Lean은 삽입 순서. `c` 세트 31건(전부 이 경우).
+- **병렬 스트림 예외 문구**: `computeIncidences`의 `StreamSupport.stream(..., true)`에서 술어가 던지면, 작업이 `ForkJoinPool` 작업자
+  스레드에서 돌았을 때 `ForkJoinTask`가 다시 만든 예외가 전파된다: NPE는 메시지 없는 `java.lang.NullPointerException`(54건),
+  IAE는 `IllegalArgumentException: java.lang.IllegalArgumentException: Passed edge is not 'simple'.`(12건). 호출 스레드에서 돌면
+  원래 문구 — 스레드 경쟁이라 재현하지 않는다(Lean은 원래 문구).
+- **확장 grid 경계 오류의 순서**: `DCComponent`의 요소는 `HashSet<DCElement>`(identity hash)라 어느 확장의 경계 오류가 먼저인지
+  실행 맥락 의존(1건, 클래스는 같음).
+- **Java layered의 P3 계수기 예외**(14건): DisCo의 `layered` 컴포넌트 레이아웃에서 Java가 `CrossingsCounter.countCrossingsOnPorts`의
+  `BinaryIndexedTree.add` AIOOBE·`BetweenLayerEdgeTwoNodeCrossingsCounter.AdjacencyList`의 NPE를 낸다(같은 그래프를 엔진의 layered
+  루트로 돌려도 같다) — layered P3 계수기의 일이라 이 라운드 밖(LM 담당 영역).
+- 극단 aspect ratio의 OOM은 Java heap 설정 의존(17.1).
+
+### 17.5 결과(시드 1~10; Java 기준값은 같은 입력)
+
+| 세트 | 입력 | 둘 다 성공 | 정확 일치 전(`3d6242f`) → 후 | 1e-6 전 → 후 | 둘 다 예외 / 문구 같음 전 → 후 | Lean ok·Java 예외 전 → 후 |
+|---|---:|---:|---:|---:|---:|---:|
+| c | 6,000 | 5,104 | 1,154 → **5,073**(99.4%) | 1,263 → 5,073 | 627/607 → 882/815 | 269 → 14 |
+| s | 6,000 | 1,205 | 1,197 → 1,197 | 1,197 → 1,197 | 4,792/4,787 → 같음 | 1 → 1 |
+| v | 6,000 | 5,761 | 5,711 → 5,711 | 5,711 → 5,711 | 216/216 → 같음 | 11 → 11 |
+| o | 6,000 | 5,236 | 5,224 → 5,224 | 5,227 → 5,227 | 745/745 → 같음 | 0 → 0 |
+| p | 1,802 | 1,373 | 1,359 → 1,359 | 1,359 → 1,359 | 386/379 → 같음 | 42 → 42 |
+
+s·v·o·p는 Lean 출력이 기준 바이너리와 바이트 동일(19,802개). `c` 세트의 남은 차이는 전부 17.4(31 + 67 + 14). DisCo fixture 58개는
+Java로 다시 고정했다(Java와 같은 것 7 → 58: 레이아웃 42개 tol 0, 예외 16개 문구까지; `tests/fixtures/disco/README.md`,
+`opt_java_status.tsv`의 `DIS` 행). 새 테스트 `disco.java`(`tests/fixtures/disco/java/` 32개: 이전 Lean이 Java와 달랐던 무작위 입력 25개와
+aspect ratio 5개(이전 Lean은 검증으로 거부하거나 거대 grid 할당에서 멈춤), 회귀 검사 2개 — `hyperedge_fixed_c7_g0560`은 이전에도
+DisCo 자신의 IAE로 같았고 루트 NPE 이식 뒤 `FixedLayoutProvider`의 IAE가 먼저여야 같다, `empty_grid_int_bounds`는 셀 크기 0이라
+`int` 경계가 결과에 드러나지 않는다), Java 값으로 바꾼 기대값: polyomino 패킹 18개·기본 grid(`alg.common.polyomino.PolyominoCompactor`,
+Java 프로그램 출력), `PlanarGrid` 경계·메시지·빈 `getFilledBounds`, DisCo 메타데이터(support 기본값, polyomino 옵션 등록), 옵션 수
+247 → 251, 엔진이 `validateGraph`를 무시하는 것, DisCo 루트 포트 간선의 NPE, `force_iter0_seed3`(오류 → Java 레이아웃).
+
+코퍼스(ELK Java 기준): Lean 출력 1,998개 기준 바이너리와 바이트 동일, 정확 일치 1878/119(집합 동일). elk-rs 보조: model
+parity(1e-6) 1447/1447.
