@@ -63,6 +63,16 @@ def calculateGroupOffsetsReference (g : CGraph) : CGraph := Id.run do
         { c with cGroupOffset := ⟨c.hitbox.x - refX, c.hitbox.y - refY⟩ }
   return g
 
+/-- Position + 1 of the left-most node of `groupNodes` (first one on ties), `0` for an empty
+list: scans from position `i` (1-based) with the best position so far and its x (unboxed loop
+state). -/
+partial def leftmost (nodes : Array CNode) (groupNodes : Array CNodeId) (i best : Nat) (bestX : Float) : Nat :=
+  if h : i - 1 < groupNodes.size then
+    let x := (nodes[groupNodes[i - 1].idx]?.getD default).hitbox.x
+    if best == 0 || x < bestX then leftmost nodes groupNodes (i + 1) i x
+    else leftmost nodes groupNodes (i + 1) best bestX
+  else best
+
 /-- `calculateGroupOffsets` on the graph: the reference of each group becomes its left-most node
 (first one on ties) and every node stores its offset to the reference.
 
@@ -77,18 +87,8 @@ def calculateGroupOffsets (g : CGraph) : CGraph :=
     let mut groups := groups
     for gi in [0:groups.size] do
       let groupNodes := groups[gi]!.cNodes
-      let mut reference : Option CNodeId := none
-      let mut referenceX := fl0p0
-      for n in groupNodes do
-        let x := (nodes[n.idx]?.getD default).hitbox.x
-        match reference with
-        | some _ =>
-          if x < referenceX then
-            reference := some n
-            referenceX := x
-        | none =>
-          reference := some n
-          referenceX := x
+      let best := leftmost nodes groupNodes 1 0 fl0p0
+      let reference : Option CNodeId := if best == 0 then none else groupNodes[best - 1]?
       groups := groups.modifyIn gi fun grp => { grp with reference := reference }
       if let some r := reference then
         let rh := (nodes[r.idx]?.getD default).hitbox
