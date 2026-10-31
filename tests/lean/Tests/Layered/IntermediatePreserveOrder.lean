@@ -494,6 +494,27 @@ def relationTests : Suite := suite "layered.intermediate.preserveorder.relations
     if !relationsMatch dense (·.idx) original then
       allMatch := false
   check "dense_relations_match_original_sets_through_word_growth_and_cycles" allMatch
+  -- Lean only: `find` + `ensure` (the pure comparators) is `index`, through the linear/map switch
+  let mut viaIndex : ModelOrderRelations LNodeId := {}
+  let mut viaFind : ModelOrderRelations LNodeId := ModelOrderRelations.emptyWithCapacity 4
+  let mut fstate : UInt64 := 41
+  let mut findSame := true
+  for _ in [0:500] do
+    let (s, b, sm) := lcgPair fstate 90
+    fstate := s
+    let (i1, r1) := viaIndex.index ⟨b⟩
+    let (i2, r2) := r1.index ⟨sm⟩
+    viaIndex := r2.record i1 i2
+    let j1 := viaFind.find ⟨b⟩
+    let f1 := viaFind.ensure ⟨b⟩ j1
+    let j2 := f1.find ⟨sm⟩
+    let f2 := f1.ensure ⟨sm⟩ j2
+    viaFind := f2.record j1 j2
+    if i1 != j1 || i2 != j2 || viaIndex.keys != viaFind.keys || viaIndex.stride != viaFind.stride ||
+        viaIndex.bigger != viaFind.bigger || viaIndex.smaller != viaFind.smaller ||
+        viaIndex.indices.toList.length != viaFind.indices.toList.length then
+      findSame := false
+  check "find and ensure equal index (90 keys)" findSame
   -- port_relations_match_original_sets_through_reversal_growth_and_resets
   let ports : Array LPortId := (Array.range 130).map fun i => ⟨i⟩
   let indexAll : PortComparatorM Unit := do

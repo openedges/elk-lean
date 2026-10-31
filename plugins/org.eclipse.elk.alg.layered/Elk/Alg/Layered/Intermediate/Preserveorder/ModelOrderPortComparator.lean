@@ -182,6 +182,26 @@ def index (r : ModelOrderRelations κ) (key : κ) : Nat × ModelOrderRelations �
         (i, ⟨keys.push key, indices.insert key i, newStride, growRows bigger i stride newStride,
           growRows smaller i stride newStride⟩)
 
+/-- `index` without the update (Lean only): the dense index of `key`, `keys.size` when it has none. -/
+@[inline] def find (r : ModelOrderRelations κ) (key : κ) : Nat :=
+  if r.keys.size ≤ linearKeys then findKey r.keys key 0 else r.indices.getD key r.keys.size
+
+/-- The update of `index` for a key without an index (Lean only): `(index r key).2` when
+`find r key = r.keys.size`. -/
+def addKey (r : ModelOrderRelations κ) (key : κ) : ModelOrderRelations κ :=
+  match r with
+  | ⟨keys, indices, stride, bigger, smaller⟩ =>
+    let rows := keys.size
+    let keys := keys.push key
+    let indices := if rows ≤ linearKeys then (if keys.size > linearKeys then indexKeys keys 0 indices else indices)
+      else indices.insert key rows
+    let newStride := strideFor stride keys.size
+    ⟨keys, indices, newStride, growRows bigger rows stride newStride, growRows smaller rows stride newStride⟩
+
+/-- `(index r key).2` given `i = find r key` (Lean only; no result pair). -/
+@[inline] def ensure (r : ModelOrderRelations κ) (key : κ) (i : Nat) : ModelOrderRelations κ :=
+  if i < r.keys.size then r else r.addKey key
+
 /-- Bit `j` of row `i` of flat rows of `stride` words. -/
 @[inline] def testAt (words : Array Nat) (stride i j : Nat) : Bool :=
   let w := j >>> 5
@@ -879,10 +899,12 @@ def decide (a : LGraphArena) (env : PortCmpEnv) (p1 p2 : LPortId) : UInt8 :=
 
 /-- `compare(p1, p2)` on the arena with the relations `rel`: the result (`-1`, `0`, `1`, or `failed`
 for Java's `maxModelOrderNodesNullError`) and the updated relations (see the section doc). -/
-def compareCore (a : LGraphArena) (env : PortCmpEnv) (rel : ModelOrderRelations LPortId) (p1 p2 : LPortId) :
+@[inline] def compareCore (a : LGraphArena) (env : PortCmpEnv) (rel : ModelOrderRelations LPortId) (p1 p2 : LPortId) :
     Int × ModelOrderRelations LPortId :=
-  let (k1, rel) := rel.index p1
-  let (k2, rel) := rel.index p2
+  let k1 := rel.find p1
+  let rel := rel.ensure p1 k1
+  let k2 := rel.find p2
+  let rel := rel.ensure p2 k2
   if rel.isBigger k1 k2 then (1, rel)
   else if rel.isBigger k2 k1 then (-1, rel)
   else if rel.isSmaller k1 k2 then (-1, rel)

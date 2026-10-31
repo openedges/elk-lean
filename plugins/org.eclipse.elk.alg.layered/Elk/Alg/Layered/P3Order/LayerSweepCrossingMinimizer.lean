@@ -378,8 +378,13 @@ arena) for every node, then the pairs of its ports on the arena after it (fresh 
 partial def portChangeNodesIn (nodes : Array LNodeId) (k : Nat) (env : PortCmpEnv) (acc : Nat) : LayeredM Nat := do
   if h : k < nodes.size then
     let node := nodes[k]
-    let longEdgeTargets ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
+    -- `longEdgeTargetNodePreprocessing` returns a stored map without writing anything: read it directly
     let a ← get
+    let (longEdgeTargets, a) ← match (a.node node).internal.targetNodeModelOrder with
+      | some existing => pure (existing, a)
+      | none => do
+        let m ← SortByInputModelProcessor.longEdgeTargetNodePreprocessing node
+        pure (m, ← get)
     let ports := (a.node node).ports
     if ports.size < 2 then portChangeNodesIn nodes (k + 1) env acc
     else

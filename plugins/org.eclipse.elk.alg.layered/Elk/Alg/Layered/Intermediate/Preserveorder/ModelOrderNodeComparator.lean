@@ -428,8 +428,10 @@ def resetForPreviousLayer (env : NodeCmpEnv) (previousLayer : Array LNodeId) : N
 
 /-- `updateBiggerAndSmaller(bigger, smaller)`. -/
 @[inline] def upd (rel : ModelOrderRelations LNodeId) (bigger smaller : LNodeId) : ModelOrderRelations LNodeId :=
-  let (bi, rel) := rel.index bigger
-  let (si, rel) := rel.index smaller
+  let bi := rel.find bigger
+  let rel := rel.ensure bigger bi
+  let si := rel.find smaller
+  let rel := rel.ensure smaller si
   rel.record bi si
 
 /-- `recordDecision(n1, n2, n1Bigger)`. -/
@@ -598,8 +600,10 @@ partial def cmp (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array (LNodeId 
 /-- `compareBody` on the arena. -/
 partial def body (a : LGraphArena) (env : NodeCmpEnv) (visiting : Array (LNodeId × LNodeId))
     (rel : ModelOrderRelations LNodeId) (n1 n2 : LNodeId) : Int × ModelOrderRelations LNodeId :=
-  let (k1, rel) := rel.index n1
-  let (k2, rel) := rel.index n2
+  let k1 := rel.find n1
+  let rel := rel.ensure n1 k1
+  let k2 := rel.find n2
+  let rel := rel.ensure n2 k2
   if rel.isBigger k1 k2 then (1, rel)
   else if rel.isBigger k2 k1 then (-1, rel)
   else if rel.isSmaller k1 k2 then (-1, rel)
