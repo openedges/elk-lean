@@ -29,6 +29,17 @@ constraints or group references of removed nodes) are never read before the next
 
 The pointer-keyed Rust maps (`node_locks`, `Spacing.individual`) are master-indexed arrays;
 the per-call lock snapshot (`frozen`) is indexed by projection ids.
+
+## Moving the members (fast path)
+
+The master graph is only read right after a `sync`. `rebuild` therefore *moves* the member
+elements out of the master (`projectMove`: the master keeps `default` placeholders in their slots,
+so the moved elements are unshared and their renumbering updates them in place) and `sync` moves
+them back (`writeBackMove`, which takes the projection out of the compactor). Every element read
+after a `sync` is the same as with the copying `project` / `writeBack`, which are kept as the
+reference (`pack … (moveMembers := false)`; differential test
+`layered.components.packMoveMembers`). A membership listing an element twice (never produced by
+`pack`) falls back to copying.
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -150,6 +161,76 @@ def writeBack (master : CGraph) (m : Membership) (phase : CGraph) : CGraph := Id
     master := master.modifyCGroup m.groups[i]! fun _ => g
   return master
 
+/-- Takes the element at index `i` out of `a`, leaving `default` in its slot. -/
+@[inline] private def takeAt {α : Type} [Inhabited α] (a : Array α) (i : Nat) : α × Array α :=
+  if h : i < a.size then (a[i], a.set i default) else (default, a)
+
+/-- Whether `ids` (indices into an arena of `size` elements) contains an index twice or an index
+out of range. -/
+private def hasDuplicates (ids : Array Nat) (size : Nat) : Bool := Id.run do
+  let mut seen : Array Bool := Array.replicate size false
+  for i in ids do
+    if h : i < seen.size then
+      if seen[i] then return true
+      seen := seen.set i true
+    else return true
+  return false
+
+/-- `project` that moves the member elements out of the master (see the module doc): returns the
+master with `default` in the members' slots and the projection. -/
+def projectMove (master : CGraph) (m : Membership) : CGraph × CGraph := Id.run do
+  let mut nodeIdx : Array (Option Nat) := Array.replicate master.cNodes.size none
+  for i in [0:m.nodes.size] do
+    nodeIdx := nodeIdx.set! m.nodes[i]!.idx (some i)
+  let mut groupIdx : Array (Option Nat) := Array.replicate master.cGroups.size none
+  for i in [0:m.groups.size] do
+    groupIdx := groupIdx.set! m.groups[i]!.idx (some i)
+  let nodeMap := nodeIdx
+  let groupMap := groupIdx
+  let rn : CNodeId → Option CNodeId := fun n => ((nodeMap[n.idx]?).bind id).map (⟨·⟩)
+  let rg : CGroupId → Option CGroupId := fun g => ((groupMap[g.idx]?).bind id).map (⟨·⟩)
+  match master with
+  | ⟨masterNodes, masterGroups, sd, ph, pv⟩ =>
+    let mut masterNodes := masterNodes
+    let mut cNodes : Array CNode := Array.mkEmpty m.nodes.size
+    for id in m.nodes do
+      let (n, rest) := takeAt masterNodes id.idx
+      masterNodes := rest
+      cNodes := cNodes.push { n with cGroup := n.cGroup.bind rg, constraints := n.constraints.filterMap rn }
+    let mut masterGroups := masterGroups
+    let mut cGroups : Array CGroup := Array.mkEmpty m.groups.size
+    for id in m.groups do
+      let (g, rest) := takeAt masterGroups id.idx
+      masterGroups := rest
+      let g := { g with master := g.master.bind rn, cNodes := g.cNodes.filterMap rn,
+                        incomingConstraints := g.incomingConstraints.filterMap rn, reference := g.reference.bind rn }
+      cGroups := cGroups.push g
+    return (⟨masterNodes, masterGroups, sd, ph, pv⟩, ⟨cNodes, cGroups, sd, ph, pv⟩)
+
+/-- `writeBack` that moves the projection's elements back into the master slots of the members
+(see the module doc). -/
+def writeBackMove (master : CGraph) (m : Membership) (phase : CGraph) : CGraph := Id.run do
+  let bn : CNodeId → CNodeId := fun n => m.nodes[n.idx]?.getD n
+  let bg : CGroupId → CGroupId := fun g => m.groups[g.idx]?.getD g
+  match master, phase with
+  | ⟨masterNodes, masterGroups, sd, ph, pv⟩, ⟨phaseNodes, phaseGroups, _, _, _⟩ =>
+    let mut masterNodes := masterNodes
+    let mut phaseNodes := phaseNodes
+    for i in [0:m.nodes.size] do
+      let (n, rest) := takeAt phaseNodes i
+      phaseNodes := rest
+      let n := { n with cGroup := n.cGroup.map bg, constraints := n.constraints.map bn }
+      masterNodes := masterNodes.set! m.nodes[i]!.idx n
+    let mut masterGroups := masterGroups
+    let mut phaseGroups := phaseGroups
+    for i in [0:m.groups.size] do
+      let (g, rest) := takeAt phaseGroups i
+      phaseGroups := rest
+      let g := { g with master := g.master.map bn, cNodes := g.cNodes.map bn,
+                        incomingConstraints := g.incomingConstraints.map bn, reference := g.reference.map bn }
+      masterGroups := masterGroups.set! m.groups[i]!.idx g
+    return ⟨masterNodes, masterGroups, sd, ph, pv⟩
+
 /-- Rust `Spacing` (`ISpacingsHandler`): placeholders have the individual spacing `1.0`, all
 other nodes the default; the spacing of a pair is the `f64::min` of both. Built per projection
 (`isPlaceholder` is master-indexed). -/
@@ -168,6 +249,9 @@ structure Packer where
   /-- Rust `node_locks` (master-indexed). -/
   nodeLocks : Array (Array Bool)
   spacing : Float
+  /-- `rebuild` / `sync` move the members out of / back into the master (fast path) instead of
+  copying them (reference). -/
+  moveMembers : Bool := true
 
 namespace Packer
 
@@ -176,13 +260,30 @@ def sync (p : Packer) : IO Packer := do
   if p.compactor.cGraph.cNodes.size != p.members.nodes.size ||
       p.compactor.cGraph.cGroups.size != p.members.groups.size then
     throw (IO.userError "java.lang.IllegalStateException: compaction graph membership changed unexpectedly")
-  return { p with master := writeBack p.master p.members p.compactor.cGraph }
+  if p.moveMembers && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
+      !hasDuplicates (p.members.groups.map (·.idx)) p.master.cGroups.size then
+    match p with
+    | ⟨master, members, compactor, isPlaceholder, nodeLocks, spacing, moveMembers⟩ =>
+      let phase := compactor.cGraph
+      let compactor := { compactor with cGraph := {} }
+      return ⟨writeBackMove master members phase, members, compactor, isPlaceholder, nodeLocks, spacing,
+        moveMembers⟩
+  else
+    return { p with master := writeBack p.master p.members p.compactor.cGraph }
 
 /-- Hands the compactor the projection of the current membership. -/
 def rebuild (p : Packer) : Packer :=
-  let g := project p.master p.members
   let handler := spacingsFor p.isPlaceholder p.members p.spacing
-  { p with compactor := { p.compactor with cGraph := g, spacingsHandler := handler } }
+  if p.moveMembers && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
+      !hasDuplicates (p.members.groups.map (·.idx)) p.master.cGroups.size then
+    match p with
+    | ⟨master, members, compactor, isPlaceholder, nodeLocks, spacing, moveMembers⟩ =>
+      let (master, g) := projectMove master members
+      ⟨master, members, { compactor with cGraph := g, spacingsHandler := handler }, isPlaceholder,
+        nodeLocks, spacing, moveMembers⟩
+  else
+    let g := project p.master p.members
+    { p with compactor := { p.compactor with cGraph := g, spacingsHandler := handler } }
 
 /-- Rust `remove_node(graph, node)` on the membership. -/
 def removeMember (p : Packer) (n : CNodeId) : Packer :=
@@ -295,8 +396,10 @@ def compactRound (p : Packer) (extensions : Array PackExtension) (topLeft : KVec
   return (p, delta)
 
 /-- Rust `pack(components, spacing)`: compacts the components and returns the offset of every
-component (input order) and the size of the compacted drawing. -/
-def pack (components : Array Component) (spacing : Float) : IO (Array KVector × KVector) := do
+component (input order) and the size of the compacted drawing. `moveMembers := false` selects the
+copying projection (reference of the fast path, see the module doc). -/
+def pack (components : Array Component) (spacing : Float) (moveMembers : Bool := true) :
+    IO (Array KVector × KVector) := do
   let mut graph := CGraph.allDirections
   let mut references : Array (CNodeId × ElkRectangle) := #[]
   let mut extensions : Array PackExtension := #[]
@@ -341,7 +444,7 @@ def pack (components : Array Component) (spacing : Float) : IO (Array KVector ×
   let compactor := (OneDimensionalCompactor.new (project graph members)).setSpacingsHandler
     (spacingsFor isPlaceholder members spacing)
   let mut p : Packer :=
-    { master := graph, members, compactor, isPlaceholder, nodeLocks, spacing }
+    { master := graph, members, compactor, isPlaceholder, nodeLocks, spacing, moveMembers }
   p ← p.sync
   for extension in extensions do
     p := p.removeMember extension.node
