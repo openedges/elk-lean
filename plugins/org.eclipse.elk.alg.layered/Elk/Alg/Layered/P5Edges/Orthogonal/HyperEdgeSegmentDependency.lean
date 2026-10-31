@@ -15,19 +15,19 @@ Segments list their dependencies by index. Like Rust (`swap_remove`, not Java's 
 freed position.
 
 Representation (ORM): the dependencies live in a `DependencyTable`, three scalar words per
-dependency in three columns, so creating one allocates nothing and a dependency costs 24
-bytes plus its two list entries (the six one-field columns before cost 48): the *ends* word packs the
-`CRITICAL` flag and the encoded source and target (segment index `+ 1`, `0` = none), the *positions*
-word the dependency's positions in its source's outgoing and its target's incoming list (which turn
-the Rust `position` scan of `swap_remove` into a constant-time lookup; the list contents and order
-are those of the scan: a dependency occurs at most once in a list), and the *weight* word the weight
-(zigzag-coded `Int`). Every packed word stays below `2^63`, i.e. an unboxed scalar `Nat`: segment
-codes and list positions have 31 bits, which no graph reaches (`2^31` segments or dependencies would
-need far more memory than the arrays allow). The table is chunked, so it holds no doubling slack and
-is never copied while it grows (the dependency count is quadratic in the segments of one routing run:
-a node with 5,000 ports gives about 12.5 million). `dependency d` assembles the `HyperEdgeSegmentDependency` value
-on demand. The previous six-column representation is kept as the oracle of a differential test
-(`Tests.Layered.SegmentGraphRef`).
+dependency in three columns, so creating one allocates nothing and a dependency costs 24 bytes plus
+its two list entries (the six one-field columns before cost 48): the *ends* word packs the encoded
+source and target (segment index `+ 1`, `0` = none), the *positions* word the dependency's
+positions in its source's outgoing and its target's incoming list (which turn the Rust `position`
+scan of `swap_remove` into a constant-time lookup; the list contents and order are those of the
+scan: a dependency occurs at most once in a list), and the *weight* word the weight (zigzag-coded
+`Int`) with the `CRITICAL` flag. Every packed word stays below `2^63`, i.e. an unboxed scalar `Nat`:
+segment codes and list positions have 31 bits, which no graph reaches (`2^31` segments or
+dependencies would need far more memory than the arrays allow). Beyond its first `2^20 - 2` entries
+the table is chunked, so it holds no doubling slack and is never copied while it grows (the
+dependency count is quadratic in the segments of one routing run: a node with 5,000 ports gives about
+12.5 million). `dependency d` assembles the `HyperEdgeSegmentDependency` value on demand. The previous
+six-column representation is kept as the oracle of a differential test (`Tests.Layered.SegmentGraphRef`).
 
 `SegmentGraph.splitAt` is Java/Rust `HyperEdgeSegment.splitAt`; it is defined here because it removes
 dependencies.
@@ -54,46 +54,35 @@ structure HyperEdgeSegmentDependency where
   weight : Int := 0
   deriving Inhabited
 
-/-- Dependencies per chunk of a `DependencyTable` (`2^TABLE_CHUNK_BITS`). -/
-private def TABLE_CHUNK : Nat := 65536
-/-- `log2 TABLE_CHUNK`. -/
-private def TABLE_CHUNK_BITS : Nat := 16
-/-- `TABLE_CHUNK - 1`. -/
-private def TABLE_CHUNK_MASK : Nat := 65535
+/-- Words in the head array of a column: `2^20 - 2`, a capacity that the doubling growth of
+`Array.push` (`(capacity + 1) * 2` from `0`) reaches exactly, so a full head has no unused slack.
+Reading a chunk costs more than reading the flat head (measured: a 2,000-port node about 1.15x in a
+warm process); below a million dependencies per routing run (ports of about 1,400 segments) nothing
+is chunked. -/
+private def COLUMN_HEAD : Nat := 1048574
+/-- Words per chunk after the head (`2^COLUMN_CHUNK_BITS`). -/
+private def COLUMN_CHUNK : Nat := 65536
+/-- `log2 COLUMN_CHUNK`. -/
+private def COLUMN_CHUNK_BITS : Nat := 16
+/-- `COLUMN_CHUNK - 1`. -/
+private def COLUMN_CHUNK_MASK : Nat := 65535
 
-/-- The dependency records of a `SegmentGraph` (ORM; no Java/Rust counterpart): three columns of
-scalar words (ends, positions, weight; see the module doc), each in chunks of `TABLE_CHUNK` words.
-Unlike one `Array`, whose doubling leaves up to half of the capacity unused and holds the old and the
-new buffer while it grows, a full chunk is never copied; only the first chunk grows by doubling
-(small routing runs allocate little). The columns stay separate because most loops read one word of
-consecutive dependencies. Reads past the end give `0` and writes past the end do nothing, like
-`Array.get!`/`set!`. -/
-structure DependencyTable where
-  /-- Ends words, in chunks (all but the last hold exactly `TABLE_CHUNK` words). -/
-  ends : Array (Array Nat) := #[]
-  /-- Positions words, chunked like `ends`. -/
-  positions : Array (Array Nat) := #[]
-  /-- Weight words, chunked like `ends`. -/
-  weights : Array (Array Nat) := #[]
-  /-- Number of dependencies. -/
-  count : Nat := 0
-  deriving Inhabited
+/-! A column of the `DependencyTable` (one of its three words per dependency) is a pair `head`/`rest`:
+the first `COLUMN_HEAD` words in one flat array (read with one bounds check like a plain `Array`),
+the rest in chunks of `COLUMN_CHUNK` words. Unlike one `Array`, whose doubling leaves up to half of
+the capacity unused and holds the old and the new buffer while it grows, a full chunk is never
+copied; the head grows by doubling, so small routing runs allocate little. Reads past the end give
+`0` and writes past the end do nothing, like `Array.get!`/`set!`. The pairs are fields of the table
+itself (not a nested structure): every read then has one indirection less and every update rebuilds
+one object. -/
 
-namespace DependencyTable
-
-/-- Word `d` of a chunked column (`0` past the end). -/
-@[inline] def columnWord (column : Array (Array Nat)) (d : Nat) : Nat :=
-  let ci := d >>> TABLE_CHUNK_BITS
-  if h : ci < column.size then column[ci][d &&& TABLE_CHUNK_MASK]! else 0
-
-/-- Ends word of dependency `d`. -/
-@[inline] def endsWord (t : DependencyTable) (d : Nat) : Nat := columnWord t.ends d
-
-/-- Positions word of dependency `d`. -/
-@[inline] def positionsWord (t : DependencyTable) (d : Nat) : Nat := columnWord t.positions d
-
-/-- Weight word of dependency `d`. -/
-@[inline] def weightWord (t : DependencyTable) (d : Nat) : Nat := columnWord t.weights d
+/-- Word `d` of the column `head`/`rest` (`0` past the end). -/
+@[inline] private def columnGet (head : Array Nat) (rest : Array (Array Nat)) (d : Nat) : Nat :=
+  if d < COLUMN_HEAD then head[d]!
+  else
+    let e := d - COLUMN_HEAD
+    let ci := e >>> COLUMN_CHUNK_BITS
+    if h : ci < rest.size then rest[ci][e &&& COLUMN_CHUNK_MASK]! else 0
 
 /-! The chunk updates are `@[noinline]` and applied with `Array.modify`, which clears the slot with a
 scalar dummy: `Array.modifyIn` clears it with `default`, which for an `Array` allocates a fresh empty
@@ -105,57 +94,120 @@ array on every update. -/
 /-- `chunk.push v` (see above). -/
 @[noinline] private def chunkPush (v : Nat) (chunk : Array Nat) : Array Nat := chunk.push v
 
-/-- Replaces word `d` of a chunked column (no-op past the end). -/
-@[inline] def setColumnWord (column : Array (Array Nat)) (d v : Nat) : Array (Array Nat) :=
-  column.modify (d >>> TABLE_CHUNK_BITS) (chunkSet (d &&& TABLE_CHUNK_MASK) v)
+/-- `rest` with word `d` (`≥ COLUMN_HEAD`) replaced (no-op past the end). -/
+@[inline] private def restSet (rest : Array (Array Nat)) (d v : Nat) : Array (Array Nat) :=
+  let e := d - COLUMN_HEAD
+  rest.modify (e >>> COLUMN_CHUNK_BITS) (chunkSet (e &&& COLUMN_CHUNK_MASK) v)
 
-/-- Appends a word to a chunked column holding `count` words. -/
-@[inline] private def pushColumnWord (column : Array (Array Nat)) (count v : Nat) : Array (Array Nat) :=
-  if count &&& TABLE_CHUNK_MASK == 0 then
-    column.push (chunkPush v (Array.emptyWithCapacity (if count == 0 then 0 else TABLE_CHUNK)))
-  else column.modify (column.size - 1) (chunkPush v)
+/-- `rest` with word number `count` (`≥ COLUMN_HEAD`) appended. -/
+@[inline] private def restPush (rest : Array (Array Nat)) (count v : Nat) : Array (Array Nat) :=
+  if (count - COLUMN_HEAD) &&& COLUMN_CHUNK_MASK == 0 then rest.push ((Array.emptyWithCapacity COLUMN_CHUNK).push v)
+  else rest.modify (rest.size - 1) (chunkPush v)
+
+/-- The dependency records of a `SegmentGraph` (ORM; no Java/Rust counterpart): three columns of
+scalar words (ends, positions, weight; see the module doc), each a `head`/`rest` pair (see above).
+The columns stay separate because most loops read one word of consecutive dependencies. -/
+structure DependencyTable where
+  /-- Ends words `0 … COLUMN_HEAD - 1`. -/
+  endsHead : Array Nat := #[]
+  /-- Further ends words, in chunks (all but the last hold exactly `COLUMN_CHUNK` words). -/
+  endsRest : Array (Array Nat) := #[]
+  /-- Positions words, like `endsHead`. -/
+  positionsHead : Array Nat := #[]
+  /-- Further positions words, like `endsRest`. -/
+  positionsRest : Array (Array Nat) := #[]
+  /-- Weight words, like `endsHead`. -/
+  weightsHead : Array Nat := #[]
+  /-- Further weight words, like `endsRest`. -/
+  weightsRest : Array (Array Nat) := #[]
+  /-- Number of dependencies. -/
+  count : Nat := 0
+  deriving Inhabited
+
+namespace DependencyTable
+
+/-- Ends word of dependency `d`. -/
+@[inline] def endsWord (t : DependencyTable) (d : Nat) : Nat := columnGet t.endsHead t.endsRest d
+
+/-- Positions word of dependency `d`. -/
+@[inline] def positionsWord (t : DependencyTable) (d : Nat) : Nat := columnGet t.positionsHead t.positionsRest d
+
+/-- Weight word of dependency `d`. -/
+@[inline] def weightWord (t : DependencyTable) (d : Nat) : Nat := columnGet t.weightsHead t.weightsRest d
+
+/-! The updates branch on head versus rest *outside* the constructor matches: a branch between the
+match and the new constructor makes the compiler free the table and allocate a new one on every
+update instead of reusing it (PLAN §7.1 item 13). -/
+
+/-- `setEnds` for `d < COLUMN_HEAD`. -/
+@[noinline] private def setEndsHead (t : DependencyTable) (d v : Nat) : DependencyTable :=
+  match t with
+  | ⟨eh, er, ph, pr, wh, wr, count⟩ => ⟨eh.set! d v, er, ph, pr, wh, wr, count⟩
+
+/-- `setEnds` for `d ≥ COLUMN_HEAD`. -/
+@[noinline] private def setEndsRest (t : DependencyTable) (d v : Nat) : DependencyTable :=
+  match t with
+  | ⟨eh, er, ph, pr, wh, wr, count⟩ => ⟨eh, restSet er d v, ph, pr, wh, wr, count⟩
 
 /-- Replaces the ends word of dependency `d`. -/
 @[inline] def setEnds (t : DependencyTable) (d v : Nat) : DependencyTable :=
+  if d < COLUMN_HEAD then setEndsHead t d v else setEndsRest t d v
+
+/-- `setPositions` for `d < COLUMN_HEAD`. -/
+@[noinline] private def setPositionsHead (t : DependencyTable) (d v : Nat) : DependencyTable :=
   match t with
-  | ⟨ends, positions, weights, count⟩ => ⟨setColumnWord ends d v, positions, weights, count⟩
+  | ⟨eh, er, ph, pr, wh, wr, count⟩ => ⟨eh, er, ph.set! d v, pr, wh, wr, count⟩
+
+/-- `setPositions` for `d ≥ COLUMN_HEAD`. -/
+@[noinline] private def setPositionsRest (t : DependencyTable) (d v : Nat) : DependencyTable :=
+  match t with
+  | ⟨eh, er, ph, pr, wh, wr, count⟩ => ⟨eh, er, ph, restSet pr d v, wh, wr, count⟩
 
 /-- Replaces the positions word of dependency `d`. -/
 @[inline] def setPositions (t : DependencyTable) (d v : Nat) : DependencyTable :=
-  match t with
-  | ⟨ends, positions, weights, count⟩ => ⟨ends, setColumnWord positions d v, weights, count⟩
+  if d < COLUMN_HEAD then setPositionsHead t d v else setPositionsRest t d v
 
-/-- Appends a dependency (a new chunk per column when the last one is full: of capacity `TABLE_CHUNK`,
-or growing from empty for the first one). -/
-def push (t : DependencyTable) (endsWord positionsWord weightWord : Nat) : DependencyTable :=
+/-- `push` while the heads are not full. -/
+@[noinline] private def pushHead (t : DependencyTable) (endsWord positionsWord weightWord : Nat) : DependencyTable :=
   match t with
-  | ⟨ends, positions, weights, count⟩ =>
-    ⟨pushColumnWord ends count endsWord, pushColumnWord positions count positionsWord,
-      pushColumnWord weights count weightWord, count + 1⟩
+  | ⟨eh, er, ph, pr, wh, wr, count⟩ =>
+    ⟨eh.push endsWord, er, ph.push positionsWord, pr, wh.push weightWord, wr, count + 1⟩
+
+/-- `push` once the heads are full. -/
+@[noinline] private def pushRest (t : DependencyTable) (endsWord positionsWord weightWord : Nat) : DependencyTable :=
+  match t with
+  | ⟨eh, er, ph, pr, wh, wr, count⟩ =>
+    ⟨eh, restPush er count endsWord, ph, restPush pr count positionsWord, wh, restPush wr count weightWord, count + 1⟩
+
+/-- Appends a dependency. -/
+@[inline] def push (t : DependencyTable) (endsWord positionsWord weightWord : Nat) : DependencyTable :=
+  if t.count < COLUMN_HEAD then pushHead t endsWord positionsWord weightWord
+  else pushRest t endsWord positionsWord weightWord
 
 end DependencyTable
 
-/-- Zigzag code of a weight (`2w` for `w ≥ 0`, `-2w - 1` below). -/
-@[inline] private def encodeWeight (w : Int) : Nat :=
-  match w with
-  | .ofNat n => 2 * n
-  | .negSucc n => 2 * n + 1
+/-- Weight word of a dependency: the `CRITICAL` flag in bit 0 and above it the zigzag code of the
+weight (`2w` for `w ≥ 0`, `-2w - 1` below). The flag lives here, not in the ends word, because the
+cycle detector's weight sums read flag and weight together. -/
+@[inline] private def packWeight (critical : Bool) (w : Int) : Nat :=
+  let zigzag := match w with
+    | .ofNat n => 2 * n
+    | .negSucc n => 2 * n + 1
+  2 * zigzag + (if critical then 1 else 0)
 
-/-- Inverse of `encodeWeight`. -/
-@[inline] private def decodeWeight (code : Nat) : Int :=
-  if code &&& 1 == 0 then .ofNat (code >>> 1) else .negSucc (code >>> 1)
+/-- The weight of a weight word. -/
+@[inline] private def weightOfWord (word : Nat) : Int :=
+  let zigzag := word >>> 1
+  if zigzag &&& 1 == 0 then .ofNat (zigzag >>> 1) else .negSucc (zigzag >>> 1)
 
 /-- Width of a packed segment code or list position (see the module doc). -/
 private def FIELD_BITS : UInt64 := 31
 /-- Mask of a packed segment code or list position. -/
 private def FIELD_MASK : UInt64 := 0x7FFFFFFF
-/-- The `CRITICAL` flag of an ends word (bit 62). -/
-private def CRITICAL_FLAG : UInt64 := 0x4000000000000000
-
-/-- Ends word of a dependency: the critical flag, the encoded source in bits `31…61` and the
-encoded target in bits `0…30`. -/
-@[inline] private def packEnds (critical : Bool) (sourceCode targetCode : Nat) : Nat :=
-  ((if critical then CRITICAL_FLAG else 0) ||| (sourceCode.toUInt64 <<< FIELD_BITS) ||| targetCode.toUInt64).toNat
+/-- Ends word of a dependency: the encoded source in bits `31…61` and the encoded target in bits
+`0…30`. -/
+@[inline] private def packEnds (sourceCode targetCode : Nat) : Nat :=
+  ((sourceCode.toUInt64 <<< FIELD_BITS) ||| targetCode.toUInt64).toNat
 
 /-- Positions word: the position in the source's outgoing list in bits `31…61`, the position in
 the target's incoming list in bits `0…30`. -/
@@ -182,7 +234,7 @@ structure SegmentGraph where
   segments : Array HyperEdgeSegment := #[]
   /-- The dependencies (index = creation order): ends (`packEnds`), positions in the source's
   outgoing and the target's incoming list (`packPositions`; each meaningful while the dependency has
-  that end) and weight (`encodeWeight`). -/
+  that end) and weight with the critical flag (`packWeight`). -/
   deps : DependencyTable := {}
   deriving Inhabited
 
@@ -201,10 +253,10 @@ namespace SegmentGraph
 @[inline] def depTargetCode (g : SegmentGraph) (d : Nat) : Nat := lowerField (g.deps.endsWord d)
 
 /-- Weight of dependency `d`. -/
-@[inline] def depWeight (g : SegmentGraph) (d : Nat) : Int := decodeWeight (g.deps.weightWord d)
+@[inline] def depWeight (g : SegmentGraph) (d : Nat) : Int := weightOfWord (g.deps.weightWord d)
 
 /-- Whether dependency `d` is critical. -/
-@[inline] def depIsCritical (g : SegmentGraph) (d : Nat) : Bool := (g.deps.endsWord d).toUInt64 &&& CRITICAL_FLAG != 0
+@[inline] def depIsCritical (g : SegmentGraph) (d : Nat) : Bool := g.deps.weightWord d &&& 1 != 0
 
 /-- Recorded position of dependency `d` in its source's outgoing list. -/
 @[inline] private def depSourcePos (g : SegmentGraph) (d : Nat) : Nat := upperField (g.deps.positionsWord d)
@@ -277,20 +329,25 @@ position), else the first occurrence; `list.size` when absent. -/
 @[inline] private def incomingAt (g : SegmentGraph) (i pos : Nat) : Nat :=
   if h : i < g.segments.size then g.segments[i].incomingSegmentDependencies.getD pos 0 else 0
 
+/-! The table updates below are `@[noinline]`: the graph mutators destructure the `SegmentGraph` and
+pass the table on; inlined, the compiler takes its own reference to the table before it checks the
+graph for reuse, so the table, the column and the chunk all look shared and are copied (PLAN §7.1
+items 13, 26). -/
+
 /-- Replaces the upper field (source code) of the ends word of dependency `d`. -/
-@[inline] private def setSourceField (t : DependencyTable) (d value : Nat) : DependencyTable :=
+@[noinline] private def setSourceField (t : DependencyTable) (d value : Nat) : DependencyTable :=
   t.setEnds d (withUpperField (t.endsWord d) value)
 
 /-- Replaces the lower field (target code) of the ends word of dependency `d`. -/
-@[inline] private def setTargetField (t : DependencyTable) (d value : Nat) : DependencyTable :=
+@[noinline] private def setTargetField (t : DependencyTable) (d value : Nat) : DependencyTable :=
   t.setEnds d (withLowerField (t.endsWord d) value)
 
 /-- Replaces the upper field (source position) of the positions word of dependency `d`. -/
-@[inline] private def setSourcePosField (t : DependencyTable) (d value : Nat) : DependencyTable :=
+@[noinline] private def setSourcePosField (t : DependencyTable) (d value : Nat) : DependencyTable :=
   t.setPositions d (withUpperField (t.positionsWord d) value)
 
 /-- Replaces the lower field (target position) of the positions word of dependency `d`. -/
-@[inline] private def setTargetPosField (t : DependencyTable) (d value : Nat) : DependencyTable :=
+@[noinline] private def setTargetPosField (t : DependencyTable) (d value : Nat) : DependencyTable :=
   t.setPositions d (withLowerField (t.positionsWord d) value)
 
 /-! The mutators below destructure the graph (`match g with ⟨…⟩ => ⟨…⟩`), rebuild it once and update
@@ -375,8 +432,8 @@ def addDependency (g : SegmentGraph) (critical : Bool) (source target : Nat) (we
   | ⟨segments, deps⟩ =>
     let segments := pushOutgoingIn segments source d
     let segments := pushIncomingIn segments target d
-    ⟨segments, deps.push (packEnds critical (source + 1) (target + 1)) (packPositions sourcePos targetPos)
-      (encodeWeight weight)⟩
+    ⟨segments, deps.push (packEnds (source + 1) (target + 1)) (packPositions sourcePos targetPos)
+      (packWeight critical weight)⟩
 
 /-- `createAndAddRegular(source, target, weight)`: a regular dependency (index returned). -/
 def createAndAddRegular (g : SegmentGraph) (source target : Nat) (weight : Int) : SegmentGraph × Nat :=
