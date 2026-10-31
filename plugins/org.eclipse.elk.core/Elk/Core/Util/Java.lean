@@ -301,8 +301,9 @@ argument always takes the `qx = 0.28125` branch). They differ from `StrictMath` 
 from the C library (`Float.sin`/`Float.cos`) for about 7% of the arguments; `atan2`/`acos` of the C
 library differ from fdlibm for about 16%. The ports below were checked bit for bit against the JVM
 (1,000,000 random arguments each for typical, near-`k·π/2` and up to `2^19·π/2` magnitudes: 0
-differences); the large-argument reduction of the stubs (`|x| > 2^19·π/2`, vectorised
-`__kernel_rem_pio2` with fused operations) is not ported — such arguments use the C library. -/
+differences); the large-argument reduction of the stubs (`|x| > 2^19·π/2`, `hsRemPio2Large`) likewise
+(1,000,000 arguments from `2^19` to the largest double plus boundaries, `scripts/java/SinCosDump.java`:
+0 differences), so `javaSin`/`javaCos` are bit-exact for every finite argument. -/
 
 private def trigS1 : Float := Float.ofBits 0xBFC5555555555549
 private def trigS2 : Float := Float.ofBits 0x3F8111111110F8A6
@@ -375,6 +376,175 @@ private def hsKernelCos (x y : Float) (ix : UInt32) : Float :=
 /-- The biased exponent of a double. -/
 @[inline] private def trigExp (x : Float) : UInt32 := ((x.toBits >>> 52) &&& 0x7ff).toUInt32
 
+/-- HotSpot aarch64 `_two_over_pi`: fdlibm's `ipio2` (24-bit chunks of `2/π`), converted to `double`. -/
+private def trigTwoOverPi : Array Float := (#[
+  0xA2F983, 0x6E4E44, 0x1529FC, 0x2757D1, 0xF534DD, 0xC0DB62, 0x95993C, 0x439041, 0xFE5163, 0xABDEBB,
+  0xC561B7, 0x246E3A, 0x424DD2, 0xE00649, 0x2EEA09, 0xD1921C, 0xFE1DEB, 0x1CB129, 0xA73EE8, 0x8235F5,
+  0x2EBB44, 0x84E99C, 0x7026B4, 0x5F7E41, 0x3991D6, 0x398353, 0x39F49C, 0x845F8B, 0xBDF928, 0x3B1FF8,
+  0x97FFDE, 0x05980F, 0xEF2F11, 0x8B5A0A, 0x6D1F6D, 0x367ECF, 0x27CB09, 0xB74F46, 0x3F669E, 0x5FEA2D,
+  0x7527BA, 0xC7EBE5, 0xF17B3D, 0x0739F7, 0x8A5292, 0xEA6BFB, 0x5FB11F, 0x8D5D08, 0x560330, 0x46FC7B,
+  0x6BABF0, 0xCFBC20, 0x9AF436, 0x1DA9E3, 0x91615E, 0xE61B08, 0x659985, 0x5F14A0, 0x68408D, 0xFFD880,
+  0x4D7327, 0x310606, 0x1556CA, 0x73A8C9, 0x60E27B, 0xC08C6B] : Array Nat).map Nat.toFloat
+
+/-- HotSpot aarch64 `_pio2` (fdlibm `PIo2`, `π/2` in 24-bit pieces; `jp = 4` uses the first five). -/
+private def trigPio2Table : Array Float := #[Float.ofBits 0x3FF921FB40000000, Float.ofBits 0x3E74442D00000000,
+  Float.ofBits 0x3CF8469880000000, Float.ofBits 0x3B78CC5160000000, Float.ofBits 0x39F01B8380000000]
+
+private def trigTwo24 : Float := Float.ofBits 0x4170000000000000
+private def trigTwon24 : Float := Float.ofBits 0x3E70000000000000
+
+/-- `2^e` from the exponent bits (`(e + 1023) << 52`, as the stub builds it; `e` stays normal). -/
+@[inline] private def trigPow2 (e : Int) : Float := Float.ofBits ((e + 1023).toNat.toUInt64 <<< 52)
+
+/-- `fcvtzdw`: truncation of a `double` to an `int` (the operands here are small and finite). -/
+@[inline] private def trigToInt (x : Float) : Int := x.toInt64.toInt
+
+/-- HotSpot aarch64 `generate__ieee754_rem_pio2` for `|x| > 2^19·π/2` (`ix > 0x413921fb`) with its
+`generate__kernel_rem_pio2`: fdlibm's Payne–Hanek reduction for `prec = 2` with the stub's changes —
+the `2/π` table as `double`s, the products `q[i]` and the recomputed `q`s summed with fused
+multiply-adds (`fmla`/`fmadd`, in the stub's order: the highest `x[j]` term first), `PIo2[k]·q[i+k]`
+accumulated with `fmadd`, `2^q0`/`2^-q0` and `fw` made from exponent bits, and the number of extra
+terms of a recomputation capped at 4 (`for(k=1;iq[jk-k]==0;k++)` unrolled over `iq[3..0]`).
+Returns `(n, y0, y1)` (`n` negated with `y` for a negative `x`). -/
+private def hsRemPio2Large (x : Float) (ix : UInt32) : Int × Float × Float := Id.run do
+  let e0 : Int := ((ix >>> 20).toNat : Int) - 1046
+  -- `z = scalbn(|x|, -e0)`: the high word `ix - (e0 << 20)` with the low word of `x`
+  let hi : Nat := ((ix.toNat : Int) - e0 * 1048576).toNat
+  let z0 := Float.ofBits ((hi.toUInt64 <<< 32) ||| (x.toBits &&& 0xffffffff))
+  let x0 := z0.floor
+  let z1 := (z0 - x0) * trigTwo24
+  let x1 := z1.floor
+  let z2 := z1 - x1
+  let x2 := z2 * trigTwo24
+  let jx : Nat := if z2 != 0.0 then 2 else if x1 != 0.0 then 1 else 0
+  let jv : Int := max 0 ((e0 - 3).tdiv 24)
+  let mut q0 : Int := e0 - 24 * (jv + 1)
+  -- `f[k] = ipio2[jv - jx + k]` (zero below the table)
+  let f (k : Nat) : Float :=
+    let j : Int := jv - jx + k
+    if j < 0 then 0.0 else trigTwoOverPi[j.toNat]!
+  -- `q[i] = Σ x[j]·f[jx+i-j]` as the stub computes it
+  let qOf (i : Nat) : Float :=
+    match jx with
+    | 0 => f i * x0
+    | 1 => Float.fma (f (i + 1)) x0 (f i * x1)
+    | _ => Float.fma (f (i + 2)) x0 (Float.fma (f (i + 1)) x1 (f i * x2))
+  let mut q : Array Float := Array.replicate 20 0.0
+  for i in [0:5] do q := q.set! i (qOf i)
+  let mut iq : Array Int := Array.replicate 20 0
+  let mut jz : Nat := 4
+  let twoQ0 := trigPow2 q0
+  let twoNegQ0 := trigPow2 (-q0)
+  let mut z : Float := 0.0
+  let mut n : Int := 0
+  let mut ih : Int := 0
+  let mut carry : Bool := false
+  let mut recompute := true
+  let mut rounds := 0
+  while recompute && rounds < 20 do
+    recompute := false
+    rounds := rounds + 1
+    -- distill `q[]` into `iq[]` reversingly
+    z := q[jz]!
+    let mut di := 0
+    let mut dj := jz
+    while dj > 0 do
+      let fw := (trigTwon24 * z).floor
+      iq := iq.set! di (trigToInt (Float.fma (-trigTwo24) fw z))
+      z := q[dj - 1]! + fw
+      di := di + 1
+      dj := dj - 1
+    -- compute `n`
+    z := z * twoQ0
+    let fl := (z * 0.125).floor
+    z := Float.fma (-fl) 8.0 z
+    n := trigToInt z
+    z := z - (if z < 0.0 then z.ceil else z.floor)
+    ih := 2
+    if q0 > 0 then
+      let s := (24 - q0).toNat
+      let v := iq[jz - 1]!
+      let k := v.toNat >>> s
+      let v := v - ((k <<< s : Nat) : Int)
+      iq := iq.set! (jz - 1) v
+      n := n + k
+      ih := ((v.toNat >>> (s - 1) : Nat) : Int)
+    else if q0 == 0 then
+      ih := ((iq[jz - 1]!.toNat >>> 23 : Nat) : Int)
+    else if z < 0.5 then
+      ih := 0
+    carry := false
+    if ih > 0 then
+      n := n + 1
+      for i in [0:jz] do
+        let v := iq[i]!
+        if carry then iq := iq.set! i (0xffffff - v)
+        else if v != 0 then
+          carry := true
+          iq := iq.set! i (0x1000000 - v)
+      if q0 > 0 then
+        let mask : Int := if q0 == 1 then 0x7fffff else 0x3fffff
+        iq := iq.set! (jz - 1) (Int.ofNat (iq[jz - 1]!.toNat &&& mask.toNat))
+      if ih == 2 then
+        z := 1.0 - z
+        if carry then z := z - twoQ0
+    -- check if recomputation is needed
+    if z == 0.0 then
+      let mut orv : Int := 0
+      for i in [4:jz] do
+        if iq[i]! != 0 then orv := 1
+      if orv == 0 then
+        let k : Nat := if iq[3]! != 0 then 1 else if iq[2]! != 0 then 2 else if iq[1]! != 0 then 3 else 4
+        for i in [jz + 1:jz + k + 1] do
+          let fi := f (jx + i)
+          let fw := match jx with
+            | 0 => x0 * fi
+            | 1 => Float.fma x1 (f (jx + i - 1)) (x0 * fi)
+            | _ => Float.fma x2 (f (jx + i - 2)) (Float.fma x1 (f (jx + i - 1)) (x0 * fi))
+          q := q.set! i fw
+        jz := jz + k
+        recompute := true
+  -- chop off zero terms
+  if z == 0.0 then
+    jz := jz - 1
+    q0 := q0 - 24
+    while iq[jz]! == 0 && jz > 0 do
+      jz := jz - 1
+      q0 := q0 - 24
+  else
+    z := z * twoNegQ0
+    if z ≥ trigTwo24 then
+      let fw := (trigTwon24 * z).floor
+      iq := iq.set! jz (trigToInt (Float.fma (-trigTwo24) fw z))
+      jz := jz + 1
+      q0 := q0 + 24
+      iq := iq.set! jz (trigToInt fw)
+    else
+      iq := iq.set! jz (trigToInt z)
+  -- convert the integer chunks to floating-point values
+  let mut fw := trigPow2 q0
+  for k in [0:jz + 1] do
+    let i := jz - k
+    q := q.set! i (Float.ofInt iq[i]! * fw)
+    fw := fw * trigTwon24
+  -- `fq[jz - i] = Σ PIo2[k]·q[i + k]`
+  let mut fq : Array Float := Array.replicate (jz + 1) 0.0
+  for k in [0:jz + 1] do
+    let i := jz - k
+    let mut acc : Float := 0.0
+    for m in [0:(Nat.min 4 (jz - i)) + 1] do
+      acc := Float.fma q[i + m]! trigPio2Table[m]! acc
+    fq := fq.set! (jz - i) acc
+  -- compress `fq[]` into `y[]`
+  let mut s : Float := 0.0
+  for k in [0:jz + 1] do s := s + fq[jz - k]!
+  let mut t := fq[0]! - s
+  for i in [1:jz + 1] do t := t + fq[i]!
+  let y0 := if ih == 0 then s else -s
+  let y1 := if ih == 0 then t else -t
+  if x.toBits < 0x8000000000000000 then return (n, y0, y1)
+  return (-n, -y0, -y1)
+
 /-- HotSpot aarch64 `generate__ieee754_rem_pio2` for `|x| ≤ 2^19·π/2` (`ix ≤ 0x413921fb`):
 `(n, y0, y1)`; `none` for larger arguments. -/
 private def hsRemPio2 (x : Float) (ix : UInt32) : Option (Int × Float × Float) := Id.run do
@@ -434,19 +604,20 @@ private def hsSinCos (x : Float) (isCos : Bool) : Float :=
   if ix < 0x3e400000 then (if isCos then trigOne else x)
   else if ix ≤ 0x3fe921fb then (if isCos then hsKernelCos x 0.0 ix else hsKernelSin x 0.0 false)
   else if absX ≥ 0x7ff0000000000000 then Float.nan
-  else match hsRemPio2 x ix with
-    | none => if isCos then x.cos else x.sin
-    | some (n, y0, y1) =>
-      -- `n & 3` of the two's complement `int` (`Int.emod`)
-      let low := n % 4
-      let odd := low % 2 == 1
-      if isCos then
-        -- negated iff bit 0 of `n ^ (n >>> 1)` is set
-        let v := if odd then hsKernelSin y0 y1 true else hsKernelCos y0 y1 ix
-        if low == 1 || low == 2 then -v else v
-      else
-        let v := if odd then hsKernelCos y0 y1 ix else hsKernelSin y0 y1 true
-        if low ≥ 2 then -v else v
+  else
+    let (n, y0, y1) := match hsRemPio2 x ix with
+      | some r => r
+      | none => hsRemPio2Large x ix
+    -- `n & 3` of the two's complement `int` (`Int.emod`)
+    let low := n % 4
+    let odd := low % 2 == 1
+    if isCos then
+      -- negated iff bit 0 of `n ^ (n >>> 1)` is set
+      let v := if odd then hsKernelSin y0 y1 true else hsKernelCos y0 y1 ix
+      if low == 1 || low == 2 then -v else v
+    else
+      let v := if odd then hsKernelCos y0 y1 ix else hsKernelSin y0 y1 true
+      if low ≥ 2 then -v else v
 
 /-- Java `Math.sin` on the reference JVM (HotSpot aarch64 intrinsic, see above). -/
 def javaSin (x : Float) : Float := hsSinCos x false
