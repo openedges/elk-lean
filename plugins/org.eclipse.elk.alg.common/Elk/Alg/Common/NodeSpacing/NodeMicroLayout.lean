@@ -25,13 +25,16 @@ structure NodeMicroLayout where
   adapter : ElkAdapters
   /-- The graph whose children are processed. -/
   graph : NodeId
+  /-- Whether `adapter` is the plain `ElkGraphAdapters` family (`forGraph`): the margins are then
+  computed by `NodeMarginCalculator.processElkGraph`, which reads the arena directly (same result). -/
+  plainElkAdapters : Bool := false
 
 namespace NodeMicroLayout
 
 /-- `NodeMicroLayout.forGraph(elkGraph)` (elk-rs `for_graph(graph)`): a micro layout for the
 children of `graph` with fresh adapters; run it with `execute`. -/
 def forGraph (graph : NodeId) : IO NodeMicroLayout := do
-  return { adapter := ← ElkGraphAdapters.adapt graph, graph }
+  return { adapter := ← ElkGraphAdapters.adapt graph, graph, plainElkAdapters := true }
 
 /-- `NodeMicroLayout.forGraph(adapter)` (elk-rs `for_adapter(adapter)`): a micro layout with the
 given adapters for the children of `graph`. -/
@@ -47,7 +50,8 @@ sides assigned.`). -/
 def execute (l : NodeMicroLayout) : ElkM Unit := do
   NodeDimensionCalculation.sortPortLists l.adapter l.graph
   NodeDimensionCalculation.calculateLabelAndNodeSizesJava l.adapter l.graph
-  NodeDimensionCalculation.calculateNodeMargins l.adapter l.graph
+  if l.plainElkAdapters then NodeMarginCalculator.new.processElkGraph l.graph
+  else NodeDimensionCalculation.calculateNodeMargins l.adapter l.graph
 
 end NodeMicroLayout
 
