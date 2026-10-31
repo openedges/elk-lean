@@ -40,6 +40,14 @@ structure AdjacencyList where
   currentIndex : Nat := 0
   deriving Inhabited
 
+/-- Java's unboxing `NullPointerException` (JDK helpful message) of
+`int adjacentPortPosition = portPositions.get(adjacentPort)` in `AdjacencyList.addAdjacencyOf`: the
+far end of a between-layer edge is not among the numbered ports (eastern ports of the western layer,
+western ports of the eastern layer). -/
+def greedySwitchPortPositionNullError : String :=
+  "java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because the return value of " ++
+  "\"java.util.Map.get(Object)\" is null"
+
 namespace AdjacencyList
 
 /-- `reset()`: rewinds the cursor. -/
@@ -75,13 +83,16 @@ def removeFirst (l : AdjacencyList) : AdjacencyList :=
       | none => l
     { l with currentSize := l.currentSize - 1 }
 
-/-- `addAdjacencyOf(edge)`: the far end's position joins the list (merged with an equal last entry). -/
+/-- `addAdjacencyOf(edge)`: the far end's position joins the list (merged with an equal last entry).
+`none` when the far end has no position: Java unboxes `portPositions.get(adjacentPort)` and throws
+`greedySwitchPortPositionNullError` (the far end is not a numbered port of the neighbouring layer,
+e.g. a `WEST` port with an outgoing edge on a node whose inverted ports were not processed). -/
 private def addAdjacencyOf (l : AdjacencyList) (a : LGraphArena) (portPositions : Std.HashMap LPortId Int) (e : LEdgeId) :
-    AdjacencyList :=
+    Option AdjacencyList :=
   let ed := a.edge e
   let adjacentPort := if l.side == .west then ed.source else ed.target
   match adjacentPort.bind (portPositions[·]?) with
-  | none => l
+  | none => none
   | some adjacentPosition =>
     let list := match l.adjacencyList.back? with
       | some last =>
@@ -90,21 +101,25 @@ private def addAdjacencyOf (l : AdjacencyList) (a : LGraphArena) (portPositions 
             { x with cardinality := x.cardinality + 1, currentCardinality := x.currentCardinality + 1 }
         else l.adjacencyList.push { position := adjacentPosition }
       | none => l.adjacencyList.push { position := adjacentPosition }
-    { l with adjacencyList := list, size := l.size + 1, currentSize := l.currentSize + 1 }
+    some { l with adjacencyList := list, size := l.size + 1, currentSize := l.currentSize + 1 }
 
 /-- `new AdjacencyList(node, side)`: collects the between-layer edges (incoming on `WEST`,
 outgoing otherwise) of the node's side ports in `inNorthSouthEastWestOrder`, skipping self loops
-and in-layer edges; then sorts stably by position and resets. -/
-def new (a : LGraphArena) (node : LNodeId) (side : PortSide) (portPositions : Std.HashMap LPortId Int) : AdjacencyList := Id.run do
+and in-layer edges; then sorts stably by position and resets. `none` where Java's `addAdjacencyOf`
+throws (a far end without position). -/
+def new (a : LGraphArena) (node : LNodeId) (side : PortSide) (portPositions : Std.HashMap LPortId Int) :
+    Option AdjacencyList := Id.run do
   let mut l : AdjacencyList := { side }
   for port in CrossMinUtil.inNorthSouthEastWestOrder a node side do
     let pt := a.port port
     let edges := if side == .west then pt.incomingEdges else pt.outgoingEdges
     for e in edges do
       if a.edgeIsSelfLoop e || a.edgeIsInLayerEdge e then continue
-      l := l.addAdjacencyOf a portPositions e
+      match l.addAdjacencyOf a portPositions e with
+      | some l' => l := l'
+      | none => return none
   l := { l with adjacencyList := stableSortByKey l.adjacencyList (·.position) }
-  return l.reset
+  return some l.reset
 
 end AdjacencyList
 
@@ -198,8 +213,11 @@ private def ensureAdjacencies (c : BetweenLayerEdgeTwoNodeCrossingsCounter) (sid
   | some lists => return lists
   | none =>
     let a ← get
-    let lists := ((c.currentNodeOrder[c.freeLayerIndex]?).getD #[]).map fun node =>
-      AdjacencyList.new a node side c.portPositions
+    let mut lists : Array AdjacencyList := #[]
+    for node in (c.currentNodeOrder[c.freeLayerIndex]?).getD #[] do
+      match AdjacencyList.new a node side c.portPositions with
+      | some l => lists := lists.push l
+      | none => throw (IO.userError greedySwitchPortPositionNullError)
     target.set (some lists)
     return lists
 

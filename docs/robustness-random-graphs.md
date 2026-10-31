@@ -1088,3 +1088,78 @@ parity(1e-6) 1447/1447.
 성능(`elk bench` 합성 26개, 기준 바이너리와 번갈아 5회, 중앙값): 기하평균 1.001배, 0.987~1.016배(잡음 범위 — 합성 시나리오에는
 DisCo가 없고 바뀐 코드는 NaN·범위 밖 경로뿐). DisCo fixture 8개 × 20회 `elk batch`(번갈아 5회 중앙값): 1.94 s → 1.51 s(0.78배) —
 큰 polyomino를 먼저 놓으면 뒤의 작은 것들이 시험하는 후보 위치가 줄어든다.
+
+## 19. GS: greedy switch `addAdjacencyOf` NPE, 계층 임포트(model order·간선 순서·`NO_LAYOUT`), 외부 포트 위치 전달 (2026-11-01)
+
+방법: 라운드 10 병합본(`299f2c9`, `elk_base`)과 Java 디버그 섀도 클래스(`BetweenLayerEdgeTwoNodeCrossingsCounter`에 누락 키
+출력)로 원인을 확인하고, 계층 model order 탐색용 새 생성기 `scripts/gen_hierarchical_mo_graphs.py`(INCLUDE_CHILDREN 2~3단,
+model order 옵션·`NO_LAYOUT`(복합 포함, `ALGORITHM` 있음/없음)·`noModelOrder`·그룹 id·층 제약·self loop·계층 횡단 간선; 시드 1·2 ×
+2,000)를 수정하지 않은 ELK Java 0.12.0과 대조했다.
+
+### 19.1 greedy switch `BetweenLayerEdgeTwoNodeCrossingsCounter.AdjacencyList.addAdjacencyOf` NPE
+
+Java는 자유 층의 이웃 층에서 서쪽 층의 **동쪽** 포트와 동쪽 층의 **서쪽** 포트만 번호(`portPositions`)를 매기고,
+`addAdjacencyOf`는 `int adjacentPortPosition = portPositions.get(adjacentPort)`로 언박싱한다. 포트 제약이 없는 노드
+(`UNDEFINED` → `FREE`, `NON_FREE_PORTS` 없음)의 포트가 들어오는 간선 1개·나가는 간선 1개를 가지면(`HYPEREDGES`도 없음)
+`InvertedPortProcessor`가 예약되지 않고, `PortSideProcessor`가 순유량 0으로 그 포트를 `WEST`에 둔다. 그 포트의 나가는 간선이
+다음 층으로 가고 다음 층에 노드가 둘 이상이면 greedy switch가 그 층의 두 노드를 비교할 때 서쪽 인접 리스트가 번호 없는 서쪽
+포트를 만나 `NullPointerException: Cannot invoke "java.lang.Integer.intValue()" because the return value of
+"java.util.Map.get(Object)" is null`(다음 층에 노드가 하나면 greedy switch가 비교하지 않고 P3 계수기의 AIOOBE가 먼저 난다 — LM에서
+이미 일치). Lean(elk-rs 상속)은 그 간선을 건너뛰었다 → `AdjacencyList.new`가 `Option`을 돌려주고 `ensureAdjacencies`가 Java처럼
+첫 질의(그 쪽의 리스트를 처음 만들 때)에 같은 문구를 던진다. 대상: 무작위 v·d·p `9/g0273`, 변형 세트 4(`v9_g0273`), DisCo 세트 8
+(`c3/g0142, c4/g0120, c5/g0198, c6/g0075, c6/g0407, c7/g0589, c9/g0091, c10/g0306`). DIS가 함께 적은 나머지 6건
+(`c1/g0007, c4/g0451, c5/g0244, c6/g0078, c6/g0208, c9/g0494`)은 같은 원인의 P3 계수기 AIOOBE로 LM 병합 뒤 이미 같은 문구다.
+
+### 19.2 계층 임포트의 노드 model order(과제 2)
+
+Java `importHierarchicalGraph`는 노드를 하나의 BFS 큐로 읽으며(최상위 자식, 그다음 중첩 그래프를 얻은 노드의 자식) 하나의
+인덱스로 번호를 매기고(`NO_LAYOUT` 확인 전이라 제외 노드도 번호를 쓴다), `MAX_MODEL_ORDER_NODES`·`CB_NUM_MODEL_ORDER_GROUPS`는
+최상위 그래프에만 전체 수로 둔다 → `assignHierarchicalNodeModelOrders`로 이식(중첩 그래프는 LM의 `maxModelOrderNodesNull`).
+관찰 가능한 차이 탐색: 변형 세트(npa/npb/mob/p3a 6,000여 개), 무작위 p 세트, 새 생성기 시드 1(2,000개) 모두 이 변경만으로는 Lean
+출력 바이트 동일(한 그래프 안의 상대 순서는 같고, 중첩 그래프의 절대값을 읽는 Java 지점은 전부 `MAX_MODEL_ORDER_NODES` null NPE가
+먼저다). 코퍼스도 바이트 동일.
+
+### 19.3 생성기가 찾은 계층 임포트·주변의 결정적 Java 차이
+
+| 차이 | Java | 수정 |
+|---|---|---|
+| 계층 간선의 순서와 범위 | 모든 노드를 만든 뒤 간선을 그래프 BFS 순서(최상위 먼저)로 읽는다; 큐에는 같은 실행에 속한 자식 그래프(`usesElkLayered` && `INCLUDE_CHILDREN`)를 `NO_LAYOUT`이나 중첩 그래프 여부와 무관하게 넣는다 → `NO_LAYOUT` 복합 노드 안의 간선은 끝 노드를 찾지 못해 "could not be found" `UnsupportedGraphException` | `importHierarchicalEdges`(elk-rs: 층마다 노드 직후, 깊은 층 먼저; 자식 층이 부모의 inside self loop을 한 번 더 가져와 두 번 임포트) |
+| `NO_LAYOUT` + `ALGORITHM` 자식 | `LayoutAlgorithmResolver`가 `NO_LAYOUT` 노드를 건너뛰어 `RESOLVED_ALGORITHM`이 없으므로 `!algorithmData.equals(null)` → 엔진이 분리(`SEPARATE_CHILDREN`), 안쪽은 아무도 배치하지 않음 | `RecursiveGraphLayoutEngine`의 algorithm switch `getD true`, 임포터의 `partOfSameLayoutRun` |
+| 외부 포트 위치 전달 | `graphLayoutToNode`가 `getExternalPortPosition` 값을 그대로 부모 포트에 둔다 | elk-rs의 "pure self loop" 동쪽 더미 y 보정 제거(복합 노드의 바깥 간선 포트가 계층 포트 옆으로 옮겨졌다; 최소 예: 복합 `b`(자식 `c`)와 `b→a`, `c→a`) |
+| BF/DF model order 층 배정 | "requires all real nodes to have a model order"는 정렬 비교자에서만 → 실노드가 둘 이상일 때만 | 미리 검사하던 것을 비교자 의미로 |
+| `sortPortsByDummyPositionsInLastLayer` | 마지막 층을 외부 포트 더미로 가정하고 `(LPort) ORIGIN` → 일반 노드면 `ClassCastException`(`ElkNodeImpl` … `loader 'app'`), 층을 넘으면 `ArrayIndexOutOfBoundsException` | 같은 예외(elk-rs: 포트가 아닌 origin은 소비하지 않고 넘어감; 범위 밖 문구의 클래스도 `ArrayIndexOutOfBoundsException`으로) |
+
+새 생성기 결과(Java와 같은 것 = 정확 일치 레이아웃 또는 같은 예외 문구):
+
+| 시드 | 입력 | 기준(`299f2c9`) | GS | 나빠진 것 |
+|---|---:|---:|---:|---:|
+| 1 | 2,000 | 1,656 | **1,993** | 0 |
+| 2 | 2,000 | 1,644 | **1,985** | 0 |
+
+남은 22개: Java 실행 컨텍스트 의존(단일 JVM·역순 실행에서 Java 결과가 바뀜, 메시지 없는 `ArrayIndexOutOfBoundsException` = HotSpot
+fast throw, 계층 그래프 처리 순서에 따른 `LGraph`/`LEdge` NPE 순서), Java `StackOverflowError` vs Lean timeout, 그리고 결정적인 소수
+(시드 1 `h0008` 드리프트, `h1104`/`h1314`의 P3 계수기 AIOOBE 인덱스(BF model order 층 배정의 역방향·층 내 간선), 시드 2 드리프트
+몇 개와 `h0323`의 예외 순서) — 다음 라운드 후보.
+
+### 19.4 결과
+
+무작위 세트(시드 1~10; Java 기준값은 같은 입력, Lean 출력은 기준 바이너리와 비교): 바뀐 입력은 19.1의 NPE 11개뿐
+(`c` 8, `v`·`d`·`p` 각 1) — 정확 일치 수 불변(s 1,197·v 5,711·d 5,711·o 5,224·p 1,359·c 5,073), Java 예외 문구 일치 v 226 →
+**227/227**·d 226 → 227·p 426 → 427·c 821 → 829(남은 67은 17.4의 병렬 스트림 워커 문구), s 4,793/4,793 그대로. 변형 세트 npa
+139 → 140·npb 605 → 606·mob 84 → 85·p3a 412 → 413(각각 `v9_g0273`), 정확 일치 수 불변(1,317·1,143·1,698·1,354), 다른 입력 바이트 동일.
+`tests/random_parity/report.md` 갱신(기본 실행 s,v).
+
+코퍼스(ELK Java 기준): Lean 출력 1,998개, elk-rs trace·Java trace용 Lean trace 모두 기준 바이너리와 바이트 동일, 정확 일치
+1878/119(집합 동일), Java 단계별 trace 1,743/1,997(같음). elk-rs 보조: model parity(1e-6) 1447/1447, strict trace 1447/1447.
+합성 26개 Lean 출력 바이트 동일. `lake build` 경고 0, `lake test` 17,088 통과/0 실패(기준 17,077 + `gs.*` 11; elk-rs 구조를 고정하던
+단위 테스트 `layered.import.hierarchical`(간선 순서·inside self loop 2회 임포트)와 `hierarchicalNodeResizing.selfLoops`(y 보정)는 Java
+값으로 바꿈).
+
+성능(`elk bench --scenarios layered_medium,crossmin_layer_sweep,hierarchy_nested --iterations 20 --warmup 3`, 기준 바이너리와
+번갈아 5회, 중앙값): `crossmin_layer_sweep` 1.001배, `layered_medium` 1.001배, `hierarchy_nested` 1.005배 — 잡음 범위.
+
+### 19.5 남은 것
+
+- 새 생성기 시드 1·2의 결정적 소수(19.3 끝): 드리프트 몇 개(시드 1 `h0008`), BF model order 층 배정 뒤 P3 계수기 AIOOBE의 인덱스
+  (`h1104`·`h1314`), 예외 순서(`h0323`). 생성기는 `run_random_java_parity.sh`에 편입하지 않았다(수동: 생성 → `ElkJavaBaseline` → 비교).
+- 계층 임포트의 노드 변환 순서는 여전히 재귀(DFS)다(Java: BFS). arena id 순서만 다르고 관찰된 출력 차이는 없다.

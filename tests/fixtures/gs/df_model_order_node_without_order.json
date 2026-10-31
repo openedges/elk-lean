@@ -1,0 +1,34 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.layered.layering.strategy": "DF_MODEL_ORDER"
+ },
+ "children": [
+  {
+   "id": "a",
+   "width": 30,
+   "height": 30,
+   "layoutOptions": {
+    "elk.layered.considerModelOrder.noModelOrder": true
+   }
+  },
+  {
+   "id": "b",
+   "width": 20,
+   "height": 20,
+   "layoutOptions": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "sources": [
+    "a"
+   ],
+   "targets": [
+    "b"
+   ]
+  }
+ ]
+}

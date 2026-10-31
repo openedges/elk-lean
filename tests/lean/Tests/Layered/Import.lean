@@ -305,19 +305,20 @@ def hierarchicalImport : Suite := suite "layered.import.hierarchical" do
     ((a.node (n 4)).internal.compoundNode && (a.node (n 4)).nestedGraph.isNone)
   check "hand: hp INSIDE_CONNECTIONS" (a.port (p 0)).internal.insideConnections
   checkEq "hand: edges eij, ehp, ejk, ehk" a.edges.size 4
+  -- Java order: all nodes first, then the edges graph by graph breadth-first (root: ejk, ehk; h: eij, ehp)
   -- eij inside h: node ports created with the DOWN direction
-  checkEq "hand: eij source port side SOUTH" ((a.edge (e 0)).source.map fun q => (a.port q).side) (some .south)
-  checkEq "hand: eij target port side NORTH" ((a.edge (e 0)).target.map fun q => (a.port q).side) (some .north)
-  checkEq "hand: ehp source is h's port hp" (a.edge (e 1)).source (some (p 0))
-  checkEq "ehp target owner i" ((a.edge (e 1)).target.bind fun q => (a.port q).owner) (some (n 1))
+  checkEq "hand: eij source port side SOUTH" ((a.edge (e 2)).source.map fun q => (a.port q).side) (some .south)
+  checkEq "hand: eij target port side NORTH" ((a.edge (e 2)).target.map fun q => (a.port q).side) (some .north)
+  checkEq "hand: ehp source is h's port hp" (a.edge (e 3)).source (some (p 0))
+  checkEq "ehp target owner i" ((a.edge (e 3)).target.bind fun q => (a.port q).owner) (some (n 1))
   -- ejk crosses the hierarchy
-  checkEq "ejk source owner j" ((a.edge (e 2)).source.bind fun q => (a.port q).owner) (some (n 2))
-  checkEq "ejk target owner k" ((a.edge (e 2)).target.bind fun q => (a.port q).owner) (some (n 3))
-  checkEq "hand: ejk COORDINATE_SYSTEM_ORIGIN = root graph" (a.edge (e 2)).internal.coordinateSystemOrigin (some r.lgraph)
-  checkNone "ehk coordinate origin (siblings)" (a.edge (e 3)).internal.coordinateSystemOrigin
-  checkEq "h ports: hp, ehk source" (a.node (n 0)).ports #[p 0, p 6]
-  -- inside self loop under INCLUDE_CHILDREN: the child level imports it from the parent's edges,
-  -- then the parent level imports it again into the child's nested graph (elk-rs structure)
+  checkEq "ejk source owner j" ((a.edge (e 0)).source.bind fun q => (a.port q).owner) (some (n 2))
+  checkEq "ejk target owner k" ((a.edge (e 0)).target.bind fun q => (a.port q).owner) (some (n 3))
+  checkEq "hand: ejk COORDINATE_SYSTEM_ORIGIN = root graph" (a.edge (e 0)).internal.coordinateSystemOrigin (some r.lgraph)
+  checkNone "ehk coordinate origin (siblings)" (a.edge (e 1)).internal.coordinateSystemOrigin
+  checkEq "h ports: hp, ehk source" (a.node (n 0)).ports #[p 0, p 3]
+  -- inside self loop under INCLUDE_CHILDREN: the root's edge loop places it into the child's nested
+  -- graph, once (Java; elk-rs also imported it from the child level, giving a second copy)
   let loopJson := "{ \"id\": \"root\", \"layoutOptions\": { \"elk.hierarchyHandling\": \"INCLUDE_CHILDREN\" },
     \"children\": [ { \"id\": \"c\", \"width\": 20, \"height\": 20,
       \"layoutOptions\": { \"elk.insideSelfLoops.activate\": \"true\" },
@@ -328,13 +329,13 @@ def hierarchicalImport : Suite := suite "layered.import.hierarchical" do
   let g1 : LGraphId := ⟨1⟩
   checkEq "hand: inside self loop gives c a nested graph" (s.a.node (n 0)).nestedGraph (some g1)
   check "c COMPOUND_NODE" (s.a.node (n 0)).internal.compoundNode
-  checkEq "hand: the inside self loop is imported twice" s.a.edges.size 2
-  checkEq "both copies connect cp1 → cp2" ((s.a.edge (e 0)).source, (s.a.edge (e 1)).target) (some (p 0), some (p 1))
-  checkEq "ledges points to the second copy" (s.ledges.get? (edgeNamed s.g "sl")) (some (e 1))
+  checkEq "java: the inside self loop is imported once" s.a.edges.size 1
+  checkEq "it connects cp1 → cp2" ((s.a.edge (e 0)).source, (s.a.edge (e 0)).target) (some (p 0), some (p 1))
+  checkEq "ledges points to it" (s.ledges.get? (edgeNamed s.g "sl")) (some (e 0))
   check "hand: both end ports INSIDE_CONNECTIONS"
     ((s.a.port (p 0)).internal.insideConnections && (s.a.port (p 1)).internal.insideConnections)
   let gp1 := (s.a.graph g1).internal.graphProperties
-  check "hand: SELF_LOOPS + HYPEREDGES on the nested graph" (gp1.contains .selfLoops && gp1.contains .hyperedges)
+  check "hand: SELF_LOOPS (no HYPEREDGES) on the nested graph" (gp1.contains .selfLoops && !gp1.contains .hyperedges)
   check "root graph has no SELF_LOOPS" (!(s.a.graph s.lgraph).internal.graphProperties.contains .selfLoops)
 
 /-! ## Graph properties, hypernodes, self loops -/

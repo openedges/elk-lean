@@ -32,15 +32,16 @@ elk-rs behaviour reproduced where it differs from Java (Rust is the oracle):
   (Java applies `LayeredSpacings.withBaseValue`). `RANDOM` is left to `GraphConfigurator`.
 * `checkExternalPorts` also treats a root graph with ports and side-fixed `PORT_CONSTRAINTS` as
   having external ports.
-* Hierarchical import is recursive: per level the children are transformed (a child's nested
-  graph is imported right after its node, also for `INHERIT` hierarchy handling), then the level's
-  edges with `importFlatGraphEdges`; model order indices, `MAX_MODEL_ORDER_NODES` and
-  `CB_NUM_MODEL_ORDER_GROUPS` are per level. `NO_LAYOUT` children are skipped before they get a
-  model order.
-* The edge loop of one hierarchical level (`importFlatGraphEdges`) imports every contained edge
-  whose end points are laid out; an edge into a node outside the layout scope throws (Java's
-  `transformEdge` text, `throwEdgeEndNotFound`). Inside self loops of the graph itself are
-  collected from the parent's edges. The flat import follows Java instead
+* Hierarchical import is recursive for the nodes: per level the children are transformed, a
+  child's nested graph imported right after its node (also for `INHERIT` hierarchy handling). The
+  rest follows Java: one breadth-first index over the hierarchy for node model orders
+  (`assignHierarchicalNodeModelOrders`, `NO_LAYOUT` nodes included) and one for edges
+  (`assignHierarchicalEdgeModelOrders`); `MAX_MODEL_ORDER_NODES` and `CB_NUM_MODEL_ORDER_GROUPS` only
+  on the top-level graph (nested graphs: `maxModelOrderNodesNull`); the edges once all nodes exist, in
+  Java's breadth-first graph order (`importHierarchicalEdges`, which also visits the edges inside a
+  `NO_LAYOUT` compound node without `ALGORITHM` and fails on them with Java's "could not be found"
+  `UnsupportedGraphException`). elk-rs imported a level's edges right after its nodes (nested levels
+  first) with per-level model orders. The flat import follows Java as well
   (`importFlatGraphEdgesJava`: only edges between children or between a child and the graph,
   hierarchy-crossing edges are left to no run without an error).
 * `COMPOUND_NODE` on a node requires children or an actual inside self loop edge.
@@ -834,31 +835,6 @@ private def importParentInsideSelfLoops (imp : ElkGraphImporter) (elkgraph : Nod
     if insideSelfLoopsEnabled && edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false then
       transformEdge imp e lgraph (some elkgraph)
 
-/-- Rust `import_flat_graph_edges(elkgraph, lgraph)`, the edge loop of one level of
-`importHierarchicalGraph` (Java's hierarchical edge loop): the contained edges (edge model order by
-index when needed; Java's `checkEdgeValidity` first) whose edge and end nodes are laid out, each
-placed by `edgeParentLGraph`; then the inside self loops of `elkgraph` contained in its parent. -/
-def importFlatGraphEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
-  let graphNode ← elkNode elkgraph
-  for e in graphNode.containedEdges do
-    -- Java: hyperedges and edges without an end are rejected before anything else (the edge model
-    -- orders are assigned beforehand by `assignHierarchicalEdgeModelOrders`)
-    checkEdgeValidity e
-    let edge ← elkEdge e
-    let some sourceNode ← withElk (firstNode · edge.sources) | continue
-    let some targetNode ← withElk (firstNode · edge.targets) | continue
-    let isSelfLoop ← withElk (ElkGraphUtil.isSelfloop · e)
-    let insideSelfLoopYo := edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
-    let edgeNoLayout := edge.props.getD CoreOptions.NO_LAYOUT false
-    let sourceProps := (← elkNode sourceNode).props
-    let targetNoLayout := (← elkNode targetNode).props.getD CoreOptions.NO_LAYOUT false
-    if edgeNoLayout || sourceProps.getD CoreOptions.NO_LAYOUT false || targetNoLayout then continue
-    let insideSelfLoopsEnabled := sourceProps.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
-    let isInsideSelfLoop := isSelfLoop && insideSelfLoopsEnabled && insideSelfLoopYo
-    let (parentElkGraph, parentLGraph) ← edgeParentLGraph imp elkgraph lgraph sourceNode targetNode isInsideSelfLoop
-    transformEdge imp e parentLGraph (some parentElkGraph)
-  importParentInsideSelfLoops imp elkgraph lgraph
-
 /-- The edge loop of Java `importFlatGraph(elkgraph, lgraph)`: for every contained edge (edge model
 order by index when needed) `ElkGraphUtil.getSourceNode/getTargetNode` (Java
 `IllegalArgumentException("Passed edge is not 'simple'.")` unless it has exactly one source and one
@@ -908,10 +884,22 @@ private def usesElkLayered (props : PropertyMap) : Bool :=
   | some algorithmId => LayeredOptions.ALGORITHM_ID.endsWith algorithmId.trimAscii.toString
   | none => true
 
-/-- The nested graph Rust `import_hierarchical_graph` creates for a child that is laid out by
-layered in the same run (`INCLUDE_CHILDREN` or `INHERIT`) and has children or inside self loops:
-`DIRECTION` of the parent level, port sides and minimum size when it has size constraints. -/
-private def createNestedGraph (child : NodeId) (parentGraphDirection : Direction) : LImportM (Option LGraphId) := do
+/-- Whether the edge loops of Java's `importHierarchicalGraph` visit a child of a visited graph:
+`usesElkLayered` and `HIERARCHY_HANDLING == INCLUDE_CHILDREN` as `RecursiveGraphLayoutEngine` leaves
+it (`INHERIT` resolved against the visited parent, i.e. included; a child with an `ALGORITHM` whose
+resolved algorithm differs is switched to `SEPARATE_CHILDREN`, and a `NO_LAYOUT` node has no resolved
+algorithm, so a `NO_LAYOUT` child with any `ALGORITHM` is separate). A `NO_LAYOUT` child without
+`ALGORITHM` stays included, so the edges inside it are visited although its children were not
+transformed. -/
+private def partOfSameLayoutRun (props : PropertyMap) : Bool :=
+  let handling := props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
+  usesElkLayered props && (handling == .includeChildren || handling == .inherit) &&
+    !(props.getD CoreOptions.NO_LAYOUT false && props.has CoreOptions.ALGORITHM)
+
+/-- Whether a child of a hierarchical import gets a nested graph in the same run (Rust
+`import_hierarchical_graph`): laid out by layered, `INCLUDE_CHILDREN` (or `INHERIT`) hierarchy
+handling, and children or inside self loops. -/
+private def nestsInSameRun (child : NodeId) : LImportM Bool := do
   let childNode ← elkNode child
   let hasChildren := !childNode.children.isEmpty
   let hasInsideSelfLoops ← withElk (hasInsideSelfLoopEdge · child)
@@ -919,8 +907,14 @@ private def createNestedGraph (child : NodeId) (parentGraphDirection : Direction
   -- Java resolves a child's INHERIT against the parent's INCLUDE_CHILDREN; this importer only
   -- recurses under INCLUDE_CHILDREN, so INHERIT counts as enabled
   let hasHierarchyHandlingEnabled := childHierarchyHandling == .includeChildren || childHierarchyHandling == .inherit
-  if !(usesElkLayered childNode.props && hasHierarchyHandlingEnabled && (hasChildren || hasInsideSelfLoops)) then
-    return none
+  return usesElkLayered childNode.props && hasHierarchyHandlingEnabled && (hasChildren || hasInsideSelfLoops)
+
+/-- The nested graph Rust `import_hierarchical_graph` creates for a child that is laid out by
+layered in the same run (`nestsInSameRun`): `DIRECTION` of the parent level, port sides and minimum
+size when it has size constraints. -/
+private def createNestedGraph (child : NodeId) (parentGraphDirection : Direction) : LImportM (Option LGraphId) := do
+  if !(← nestsInSameRun child) then return none
+  let childNode ← elkNode child
   let nested ← createLGraph child
   setGraphProp nested LayeredOptions.DIRECTION parentGraphDirection
   if ← shouldCalculateMinimumGraphSize child then
@@ -928,6 +922,26 @@ private def createNestedGraph (child : NodeId) (parentGraphDirection : Direction
       ensureDefinedPortSide nested port
     calculateMinimumGraphSize child nested
   return some nested
+
+/-- The node model orders of Java's `importHierarchicalGraph`: one index over the whole hierarchy in
+Java's breadth-first order (the top-level graph's children, then the children of every polled node
+that gets a nested graph in the same run), assigned when a node is polled and before its `NO_LAYOUT`
+check (so excluded nodes use up an index; their children are not visited). Returns the count and the
+cycle breaking group ids, which Java stores as `MAX_MODEL_ORDER_NODES`/`CB_NUM_MODEL_ORDER_GROUPS`
+on the top-level graph only (elk-rs: per level from `0`, every level storing its own counts). -/
+private def assignHierarchicalNodeModelOrders (elkgraph : NodeId) : LImportM (Int × Std.HashSet Int) := do
+  let mut index : Int := 0
+  let mut groups : Std.HashSet Int := {}
+  let mut queue : Array NodeId := (← elkNode elkgraph).children
+  let mut head := 0
+  while h : head < queue.size do
+    let node := queue[head]
+    head := head + 1
+    (index, groups) ← assignNodeModelOrder node index groups
+    if ← shouldSkipNode node then continue
+    if ← nestsInSameRun node then
+      queue := queue ++ (← elkNode node).children
+  return (index, groups)
 
 /-- The edge model orders of Java's `importHierarchicalGraph`: one index over the whole hierarchy, the
 graphs in Java's breadth-first order (the top-level graph, then the children of every visited graph
@@ -950,21 +964,53 @@ private def assignHierarchicalEdgeModelOrders (elkgraph : NodeId) : LImportM Uni
     let handling := graphNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
     if graph == elkgraph || handling == .includeChildren || handling == .inherit then
       for child in graphNode.children do
-        let childNode ← elkNode child
-        let childHandling := childNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
-        if usesElkLayered childNode.props && (childHandling == .includeChildren || childHandling == .inherit) then
+        if partOfSameLayoutRun (← elkNode child).props then
+          queue := queue.push child
+
+/-- The edge loop of Java's `importHierarchicalGraph`, run after every node of the hierarchy is
+transformed: the graphs in Java's breadth-first order (the top-level graph, then the children of every
+visited graph that are laid out by layered in the same run, whether or not they are laid out or got a
+nested graph), and per graph its contained edges in order: Java's `checkEdgeValidity`, edges that are
+`NO_LAYOUT` or have a `NO_LAYOUT` end node are skipped, the others are placed by `edgeParentLGraph`
+and transformed (an end outside the layout scope, e.g. inside a `NO_LAYOUT` compound node, is Java's
+"could not be found" `UnsupportedGraphException`). Inside self loops are placed into their node's
+nested graph by the loop of the graph containing them (no separate collection from the parent).
+elk-rs imports a level's edges right after its nodes, nested levels first. -/
+private def importHierarchicalEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) :
+    LImportM Unit := do
+  let mut queue : Array NodeId := #[elkgraph]
+  let mut head := 0
+  while h : head < queue.size do
+    let graph := queue[head]
+    head := head + 1
+    let graphNode ← elkNode graph
+    for e in graphNode.containedEdges do
+      checkEdgeValidity e
+      let edge ← elkEdge e
+      let some sourceNode ← withElk (firstNode · edge.sources) | continue
+      let some targetNode ← withElk (firstNode · edge.targets) | continue
+      let sourceProps := (← elkNode sourceNode).props
+      if edge.props.getD CoreOptions.NO_LAYOUT false || sourceProps.getD CoreOptions.NO_LAYOUT false ||
+          (← elkNode targetNode).props.getD CoreOptions.NO_LAYOUT false then continue
+      let isInsideSelfLoop := (← withElk (ElkGraphUtil.isSelfloop · e)) &&
+        sourceProps.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false && edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
+      let (parentElkGraph, parentLGraph) ← edgeParentLGraph imp graph lgraph sourceNode targetNode isInsideSelfLoop
+      transformEdge imp e parentLGraph (some parentElkGraph)
+    let handling := graphNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
+    if graph == elkgraph || handling == .includeChildren || handling == .inherit then
+      for child in graphNode.children do
+        if partOfSameLayoutRun (← elkNode child).props then
           queue := queue.push child
 
 /-- Rust `import_hierarchical_graph(elkgraph, lgraph)` (Java `importHierarchicalGraph`, but
-recursive): the children that are laid out (model orders per level), each child's nested graph
-imported right after its node (`COMPOUND_NODE`, parent/nested links), then the level's edges. -/
+recursive): the children that are laid out (their model orders were assigned beforehand by
+`assignHierarchicalNodeModelOrders`), each child's nested graph imported right after its node
+(`COMPOUND_NODE`, parent/nested links). The edges follow once all nodes exist
+(`importHierarchicalEdges`, like Java). -/
 partial def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
   let parentGraphDirection ← LGraphUtil.getDirection lgraph
-  let mut index : Int := 0
-  let mut groups : Std.HashSet Int := {}
   for child in (← elkNode elkgraph).children do
     if ← shouldSkipNode child then continue
-    (index, groups) ← assignNodeModelOrder child index groups
     let nested ← createNestedGraph child parentGraphDirection
     let lnode ← transformNode imp child lgraph
     if let some nestedGraph := nested then
@@ -974,8 +1020,6 @@ partial def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId)
       importHierarchicalGraph imp child nestedGraph
       -- Java sets `MAX_MODEL_ORDER_NODES` only on the top-level graph of a hierarchical import
       modifyGraph nestedGraph fun g => { g with internal := { g.internal with maxModelOrderNodesNull := true } }
-  setModelOrderCounts lgraph index groups
-  importFlatGraphEdges imp elkgraph lgraph
 
 /-- `importGraph(elkgraph)` (Rust `import_graph`): creates the top-level `LGraph` (`PARTITIONS`
 when partitioning is active), defines the sides of the graph's ports, transforms them into external
@@ -1000,8 +1044,11 @@ def importGraph (imp : ElkGraphImporter) (elkgraph : NodeId) : LImportM LGraphId
     calculateMinimumGraphSize elkgraph lgraph
   let hierarchyHandling := (← elkNode elkgraph).props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
   if hierarchyHandling == .includeChildren then
+    let (index, groups) ← assignHierarchicalNodeModelOrders elkgraph
     assignHierarchicalEdgeModelOrders elkgraph
     importHierarchicalGraph imp elkgraph lgraph
+    importHierarchicalEdges imp elkgraph lgraph
+    setModelOrderCounts lgraph index groups
   else importFlatGraph imp elkgraph lgraph
   return lgraph
 

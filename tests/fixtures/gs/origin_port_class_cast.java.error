@@ -1,0 +1,1 @@
+java.lang.ClassCastException: class org.eclipse.elk.graph.impl.ElkNodeImpl cannot be cast to class org.eclipse.elk.alg.layered.graph.LPort (org.eclipse.elk.graph.impl.ElkNodeImpl and org.eclipse.elk.alg.layered.graph.LPort are in unnamed module of loader 'app')
