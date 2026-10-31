@@ -43,36 +43,60 @@ def catchLayout {α : Type} (act : IO α) : IO (Except String α) := do
     if isJavaThrowableText msg || (msg.splitOn "org.eclipse.elk.core.").length > 1 then return .error msg
     else return .error s!"{unsupportedConfigurationExceptionClass}: {msg}"
 
+/-- The pipeline of `layoutValue`/`layoutJson` up to the transfer: parse the options, import, lay
+out, materialise the defaults and transfer the layout. Returns the importer state and the transfer
+overlay (`JsonImporter.transferLayoutOverlay`, the document unchanged), or `none` when the overlay
+does not apply and `JsonImporter.transferLayout` has rewritten `st.model`. -/
+def layoutTransfer (input : Value) (optionsJson : String) (forceRootAlgorithm : Option String) :
+    IO (ImporterState × Option Overlay) := do
+  let defaults ← match ← GlobalOptions.parse optionsJson with
+    | .ok g => pure g
+    | .error e => throw (IO.userError e)
+  let ((root, st), g) ← (ImportM.run (JsonImporter.transform input) { defaults := some defaults }).run {}
+  -- elk-rs `model_parity_layout_runner` in trace mode sets the root `ALGORITHM` to layered right
+  -- after the import (`force_layered_algorithm`); `forceRootAlgorithm` reproduces that
+  let g := match forceRootAlgorithm with
+    | some alg => g.modifyNode root fun n => { n with props := n.props.set Elk.Core.Options.CoreOptions.ALGORITHM alg }
+    | none => g
+  let ((), g) ← (RecursiveGraphLayoutEngine.layout root (ProgressMonitor.null)).run g
+  let materialized ← (st.defaults.getD defaults).materialize st.model
+  let st := { st with model := materialized }
+  -- the transfer reads the graph only
+  let ((ov, st'), _) ← (ImportM.run JsonImporter.transferLayoutOverlay st).run g
+  if ov.ok then return (st', some ov)
+  let (((), st), _) ← (ImportM.run JsonImporter.transferLayout st).run g
+  return (st, none)
+
 /-- `layout_value`: lays out a parsed document. Returns the laid-out document. -/
 def layoutValue (input : Value) (optionsJson : String := "") (forceRootAlgorithm : Option String := none) :
     IO (Except String Value) := do
   ensureInitialized
   catchLayout do
-    let defaults ← match ← GlobalOptions.parse optionsJson with
-      | .ok g => pure g
-      | .error e => throw (IO.userError e)
-    let ((root, st), g) ← (ImportM.run (JsonImporter.transform input) { defaults := some defaults }).run {}
-    -- elk-rs `model_parity_layout_runner` in trace mode sets the root `ALGORITHM` to layered right
-    -- after the import (`force_layered_algorithm`); `forceRootAlgorithm` reproduces that
-    let g := match forceRootAlgorithm with
-      | some alg => g.modifyNode root fun n => { n with props := n.props.set Elk.Core.Options.CoreOptions.ALGORITHM alg }
-      | none => g
-    let ((), g) ← (RecursiveGraphLayoutEngine.layout root (ProgressMonitor.null)).run g
-    let materialized ← (st.defaults.getD defaults).materialize st.model
-    let st := { st with model := materialized }
-    let (((), st), _) ← (ImportM.run JsonImporter.transferLayout st).run g
-    return st.model
+    match ← layoutTransfer input optionsJson forceRootAlgorithm with
+    | (st, some ov) => return Overlay.materialize (.ofState st ov) st.model
+    | (st, none) => return st.model
 
-/-- `layout_json`: string in, string out (elkjs `layout()` contract). -/
+/-- `layout_json`: string in, string out (elkjs `layout()` contract). The compact output with
+document key order is printed straight from the overlay (`OverlayPrinter.render`). -/
 def layoutJson (graphJson : String) (optionsJson : String := "") (lenient : Bool := false)
     (pretty : Bool := false) (sortKeys : Bool := false) (forceRootAlgorithm : Option String := none) :
     IO (Except String String) := do
   match Elk.Json.parse graphJson lenient with
   | .error e => return .error s!"Failed to parse graph JSON: {e}"
   | .ok input =>
-    match ← layoutValue input optionsJson forceRootAlgorithm with
-    | .error e => return .error e
-    | .ok v => return .ok (if pretty then v.renderPretty sortKeys else v.render sortKeys)
+    ensureInitialized
+    catchLayout do
+      -- the laid-out document is about 3 to 5 times the input (positions, sections), pretty
+      -- printing adds the indentation
+      let cap := (if pretty then 8 else 4) * graphJson.utf8ByteSize + 256
+      match ← layoutTransfer input optionsJson forceRootAlgorithm with
+      | (st, some ov) =>
+        let c := Overlay.Ctx.ofState st ov
+        if pretty || sortKeys then
+          let v := Overlay.materialize c st.model
+          return if pretty then v.renderPretty sortKeys cap else v.render sortKeys cap
+        else return OverlayPrinter.render c st.model cap
+      | (st, none) => return if pretty then st.model.renderPretty sortKeys cap else st.model.render sortKeys cap
 
 private def graphFeatureName : GraphFeature → String
   | .selfLoops => "SELF_LOOPS"

@@ -31,7 +31,7 @@ private def SIXTY_FOUR : Float := 64.0
 
 /-- Whether `s.toUpper` contains `sub` (upper-case ASCII). `String.toUpper` only maps ASCII
 letters, so a byte-wise search with ASCII case folding is equivalent (and allocates nothing). -/
-private def containsUpper (s sub : String) : Bool :=
+def containsUpper (s sub : String) : Bool :=
   let n := s.utf8ByteSize
   let m := sub.utf8ByteSize
   let up (b : UInt8) : UInt8 := if b >= 97 && b <= 122 then b - 32 else b
@@ -155,17 +155,17 @@ def recordCoordinateModes (el : ElementId) : ImportM Unit := do
 /-! Pure readers of the transfer tables (`globalX`, `shapeCoordsMode`, … on a table value read
 once), so the per-shape records below return plain floats and enum values. -/
 
-@[inline] private def tableGX (t : TransferTables) : ElementId → Float
+@[inline] def tableGX (t : TransferTables) : ElementId → Float
   | .edge _ => fl0p0
   | el => t.globalX.get! (t.index el)
 
-@[inline] private def tableGY (t : TransferTables) : ElementId → Float
+@[inline] def tableGY (t : TransferTables) : ElementId → Float
   | .edge _ => fl0p0
   | el => t.globalY.get! (t.index el)
 
 /-- `coordinateModes`' shape mode: the element's own mode unless it is `INHERIT` (or unset), then
 the JSON parent's (`PARENT` at the root). -/
-@[inline] private def resolveShapeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : ShapeCoords :=
+@[inline] def resolveShapeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : ShapeCoords :=
   match props.get? CoreOptions.JSON_SHAPE_COORDS with
   | some .parent => .parent
   | some .root => .root
@@ -175,7 +175,7 @@ the JSON parent's (`PARENT` at the root). -/
     | none => .parent
 
 /-- `coordinateModes`' edge mode (`CONTAINER` at the root). -/
-@[inline] private def resolveEdgeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : EdgeCoords :=
+@[inline] def resolveEdgeMode (t : TransferTables) (props : PropertyMap) (parent : Option ElementId) : EdgeCoords :=
   match props.get? CoreOptions.JSON_EDGE_COORDS with
   | some .container => .container
   | some .parent => .parent
@@ -345,12 +345,35 @@ def recomputeFixedOrderVerticalPortSurroundingHeight (n : NodeId) : ImportM (Opt
   if !allZeroSized || counted < 2 || !minY.isFinite || !maxY.isFinite || minY <= 0.0 then return none
   return some (maxY + minY)
 
-/-- `transfer_layout_node` including the elk-rs compaction corrections. -/
-def transferLayoutNode (n : NodeId) : ImportM Unit := do
-  let some path := tableGet? (← getI).nodePath n.idx | throwJsonImport "Node did not exist in input."
-  -- the members read below (`layoutOptions`/`properties`) are not touched by `transferXywh`, and
-  -- `width`/`height` read back the values it writes
-  let jsonObj ← objectAt path
+/-- The decisions of `transfer_layout_node` that depend on the node's JSON options and on the laid-out
+node, its ports and children (shared by `transferLayoutNode` and the overlay transfer
+`TransferOverlay`). -/
+structure NodeCompaction where
+  /-- `should_compact_inside_self_loop_node`. -/
+  insideSelfLoop : Bool
+  /-- `should_compact_passthrough_node`. -/
+  passthrough : Bool
+  /-- `should_compact_vertical_passthrough_node`. -/
+  vertical : Bool
+  /-- `PORTS` and `PORT_LABELS` size constraints with `FIXED_ORDER` port constraints (the height
+  compensation of `recompute_fixed_order_vertical_port_surrounding_height`). -/
+  fixedOrderPortLabels : Bool
+  /-- The node's width as written to JSON (`Number.ofFloatElk`, read back as a double). -/
+  nodeWidth : Float
+  /-- The node's height as written to JSON. -/
+  nodeHeight : Float
+
+/-- `NodeCompaction` of a node: its JSON object `jsonObj` (the options), the graph and `rootHint`
+(`rootIncludeChildrenHint`). -/
+def nodeCompaction (jsonObj : Value) (g : ElkGraph) (node : ElkNode) (rootHint : Bool) : NodeCompaction := Id.run do
+  -- `(Number.ofFloatElk x).toFloat` is `x` (bit for bit): the integer form is only taken for exactly
+  -- integral doubles below `2^63`, which `Float.ofInt` gives back exactly
+  let nodeWidth := node.width
+  let nodeHeight := node.height
+  -- without ports every compaction needs a zero-sized port and the height compensation two ports
+  if node.ports.isEmpty then
+    return { insideSelfLoop := false, passthrough := false, vertical := false, fixedOrderPortLabels := false,
+             nodeWidth, nodeHeight }
   let layoutOptions := match JsonAdapter.optObject jsonObj Key.layoutOptions with
     | some o => some o
     | none => JsonAdapter.optObject jsonObj Key.properties
@@ -369,13 +392,6 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
     ((layoutOptions.bind fun lo => lookup lo CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE.id "insideSelfLoops.activate").bind parseBoolLayoutOption).getD false
   let portConstraints :=
     ((layoutOptions.bind fun lo => lookup lo CoreOptions.PORT_CONSTRAINTS.id "portConstraints").bind parsePortConstraintsLayoutOption).getD .undefined
-  let g ← getG
-  let node := g.node n
-  let parent := node.parent.map ElementId.node
-  recordShape (.node n) parent node.x node.y node.props
-  transferXywh node.x node.y node.width node.height path parent
-  let nodeWidth := (Number.ofFloatElk node.width).toFloat
-  let nodeHeight := (Number.ofFloatElk node.height).toFloat
   -- port analysis
   let mut hasLeft := false
   let mut hasRight := false
@@ -409,7 +425,6 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
   let hasSinglePointChildCentered := singleChild.any fun c =>
     (c.x - nodeWidth / TWO).abs <= EPS9 && (c.y - TWELVE).abs <= EPS9 && c.width.abs <= EPS9 && c.height.abs <= EPS9
   let hasNoChildren := children.isEmpty
-  let rootHint := (← getI).rootIncludeChildrenHint
   let shouldCompactInsideSelfLoopNode := insideSelfLoopsActive && hasNoChildren && !hasExplicitSizeConstraints
     && (!hasExplicitPortConstraints || portConstraints.isSideFixed) && allPortsZeroSized
   let shouldCompactPassthroughNode := !insideSelfLoopsActive && !rootHint && !hasExplicitSizeConstraints
@@ -418,23 +433,42 @@ def transferLayoutNode (n : NodeId) : ImportM Unit := do
   let shouldCompactVerticalPassthroughNode := !insideSelfLoopsActive && !rootHint && !hasExplicitSizeConstraints
     && hasOnlyNorthOrSouthBoundaryZeroPorts && hasSinglePointChildCentered
     && (nodeWidth - SIXTY_FOUR).abs <= EPS9 && (nodeHeight - TWENTY_FOUR).abs <= EPS9
-  if (shouldCompactInsideSelfLoopNode || shouldCompactPassthroughNode) && nodeWidth > FOUR then
+  return { insideSelfLoop := shouldCompactInsideSelfLoopNode, passthrough := shouldCompactPassthroughNode,
+           vertical := shouldCompactVerticalPassthroughNode,
+           fixedOrderPortLabels := hasPortsAndPortLabelsSizeConstraints && portConstraints == .fixedOrder,
+           nodeWidth, nodeHeight }
+
+/-- `transfer_layout_node` including the elk-rs compaction corrections. -/
+def transferLayoutNode (n : NodeId) : ImportM Unit := do
+  let some path := tableGet? (← getI).nodePath n.idx | throwJsonImport "Node did not exist in input."
+  -- the members read below (`layoutOptions`/`properties`) are not touched by `transferXywh`, and
+  -- `width`/`height` read back the values it writes
+  let jsonObj ← objectAt path
+  let g ← getG
+  let node := g.node n
+  let c := nodeCompaction jsonObj g node (← getI).rootIncludeChildrenHint
+  let parent := node.parent.map ElementId.node
+  recordShape (.node n) parent node.x node.y node.props
+  transferXywh node.x node.y node.width node.height path parent
+  let nodeWidth := c.nodeWidth
+  let nodeHeight := c.nodeHeight
+  if (c.insideSelfLoop || c.passthrough) && nodeWidth > FOUR then
     let delta := nodeWidth - FOUR
     modI fun s => { s with insideSelfLoopNodeXDelta := s.insideSelfLoopNodeXDelta.insert n delta }
     if let some p := node.parent then
-      if shouldCompactPassthroughNode then
+      if c.passthrough then
         modI fun s => { s with passthroughCompactedParentKeys := s.passthroughCompactedParentKeys.push p }
-      else if shouldCompactInsideSelfLoopNode then
+      else if c.insideSelfLoop then
         if (g.node p).children.size == 1 then
           modI fun s => { s with passthroughCompactedParentKeys := s.passthroughCompactedParentKeys.push p }
     modAt path (·.set Key.width (.ofFloatElk FOUR))
-  if shouldCompactVerticalPassthroughNode && nodeHeight > FOUR then
+  if c.vertical && nodeHeight > FOUR then
     let delta := nodeHeight - FOUR
     modI fun s => { s with compactedVerticalNodeYDelta := s.compactedVerticalNodeYDelta.insert n delta }
     if let some p := node.parent then
       modI fun s => { s with verticalCompactedParentKeys := s.verticalCompactedParentKeys.push p }
     modAt path (·.set Key.height (.ofFloatElk FOUR))
-  if hasPortsAndPortLabelsSizeConstraints && portConstraints == .fixedOrder then
+  if c.fixedOrderPortLabels then
     if let some compensated ← recomputeFixedOrderVerticalPortSurroundingHeight n then
       let current := (((← objectAt path).get? Key.height).bind (·.getFloat?)).getD fl0p0
       if compensated > current + EPS9 then

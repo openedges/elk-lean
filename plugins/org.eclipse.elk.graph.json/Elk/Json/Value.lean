@@ -16,6 +16,11 @@ open Elk.Core.Util
 /-! Appending number renderings to the output string (C shim `elk_core_ffi.c`; declared here so that
 only the JSON modules depend on them). -/
 
+/-- `""` with room for `cap` bytes, so that a printer appending to it does not reallocate (and copy)
+the growing output. -/
+@[extern "elk_string_with_capacity"]
+opaque stringWithCapacity (cap : USize) : String
+
 /-- `out ++ (if x.isFinite then Float.toJsonNumber x else "null")`, appended in place when `out` is
 unshared and has the capacity (no temporary string; JSON printer). -/
 @[extern "elk_string_append_json_float"]

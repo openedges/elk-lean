@@ -42,7 +42,7 @@ private partial def hasEscapes (s : String) (n : USize) (hn : n = Utf8.usize s) 
 
 /-- Appends `pre`, `s` with serde_json escaping and `post` to `out`: `pre`/`post` carry the quotes
 and the punctuation around the literal, so a plain string costs three appends. -/
-@[inline] private def appendQuoted (out pre s post : String) : String :=
+@[inline] def appendQuoted (out pre s post : String) : String :=
   if hasEscapes s (Utf8.usize s) rfl 0 then s.foldl pushEscaped (out ++ pre) ++ post
   else out ++ pre ++ s ++ post
 
@@ -53,16 +53,16 @@ def escapeInto (out s : String) : String := appendQuoted out "\"" s "\""
 key is one append (no escape scan). -/
 
 /-- `"key":` (first member, compact). -/
-private def compactKeysFirst : Array String := Key.all.map fun k => "\"" ++ k ++ "\":"
+def compactKeysFirst : Array String := Key.all.map fun k => "\"" ++ k ++ "\":"
 /-- `,"key":` (later members, compact). -/
-private def compactKeysNext : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":"
+def compactKeysNext : Array String := Key.all.map fun k => ",\"" ++ k ++ "\":"
 /-- `"key": ` (pretty). -/
 private def prettyKeys : Array String := Key.all.map fun k => "\"" ++ k ++ "\": "
 
 /-- Appends the key `k` between `pre` and `post` (`appendQuoted`), from `lits` (`pre ++ k ++ post`
 for each `Key.all` entry) when `k` is one of the ELK member names (the parser shares their objects,
 so the equality test is usually a pointer comparison). -/
-@[inline] private def appendKey (out : String) (lits : Array String) (pre k post : String) : String :=
+@[inline] def appendKey (out : String) (lits : Array String) (pre k post : String) : String :=
   let j := Key.candidateIndex k 0 k.utf8ByteSize
   if h : j < lits.size then
     if k == Key.all.getD j "" then out ++ lits[j] else appendQuoted out pre k post
@@ -82,14 +82,14 @@ private def digitPairs : Array String := (Array.range 100).map fun n => if n < 1
 
 /-- Appends the decimal representation of `n` (`Nat.repr` without the intermediate string), two
 digits per append. -/
-private def pushNat (out : String) (n : Nat) : String :=
+def pushNat (out : String) (n : Nat) : String :=
   if n < 100 then out ++ smallNats.getD n ""
   else pushNat out (n / 100) ++ digitPairs.getD (n % 100) ""
 termination_by n
 decreasing_by omega
 
 /-- Appends `n.render`; integers and doubles are written in place (no temporary string). -/
-@[inline] private def pushNumber (out : String) (n : Number) : String :=
+@[inline] def pushNumber (out : String) (n : Number) : String :=
   match n with
   | .int (.ofNat k) => pushNat out k
   | .int (.negSucc k) => pushNat (out ++ "-") (k + 1)
@@ -190,11 +190,13 @@ end Printer
 
 namespace Value
 
-/-- `serde_json::to_string`. -/
-def render (v : Value) (sortKeys : Bool := false) : String := Printer.compact sortKeys v ""
+/-- `serde_json::to_string` (`cap`: room reserved for the output, see `stringWithCapacity`). -/
+def render (v : Value) (sortKeys : Bool := false) (cap : Nat := 0) : String :=
+  Printer.compact sortKeys v (stringWithCapacity cap.toUSize)
 
-/-- `serde_json::to_string_pretty`. -/
-def renderPretty (v : Value) (sortKeys : Bool := false) : String := Printer.pretty sortKeys v 0 ""
+/-- `serde_json::to_string_pretty` (`cap`: room reserved for the output). -/
+def renderPretty (v : Value) (sortKeys : Bool := false) (cap : Nat := 0) : String :=
+  Printer.pretty sortKeys v 0 (stringWithCapacity cap.toUSize)
 
 instance : ToString Value := ⟨fun v => v.render⟩
 

@@ -791,6 +791,13 @@ static lean_obj_res elk_string_append_ascii(lean_obj_arg s, const char *buf, siz
     return r;
 }
 
+/* An empty string with room for `cap` bytes (output buffers of the JSON printer). */
+LEAN_EXPORT lean_obj_res elk_string_with_capacity(size_t cap) {
+    lean_object *r = lean_alloc_string(1, cap + 1, 0);
+    lean_to_string(r)->m_data[0] = 0;
+    return r;
+}
+
 /* `out ++ Number.render (.float x)`: `elk_float_to_json` for a finite x, `null` otherwise, appended
  * without a temporary string. */
 LEAN_EXPORT lean_obj_res elk_string_append_json_float(lean_obj_arg s, double x) {
