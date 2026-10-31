@@ -909,6 +909,18 @@ private def usesElkLayered (props : PropertyMap) : Bool :=
   | some algorithmId => LayeredOptions.ALGORITHM_ID.endsWith algorithmId.trimAscii.toString
   | none => true
 
+/-- Whether the edge loops of Java's `importHierarchicalGraph` visit a child of a visited graph:
+`usesElkLayered` and `HIERARCHY_HANDLING == INCLUDE_CHILDREN` as `RecursiveGraphLayoutEngine` leaves
+it (`INHERIT` resolved against the visited parent, i.e. included; a child with an `ALGORITHM` whose
+resolved algorithm differs is switched to `SEPARATE_CHILDREN`, and a `NO_LAYOUT` node has no resolved
+algorithm, so a `NO_LAYOUT` child with any `ALGORITHM` is separate). A `NO_LAYOUT` child without
+`ALGORITHM` stays included, so the edges inside it are visited although its children were not
+transformed. -/
+private def partOfSameLayoutRun (props : PropertyMap) : Bool :=
+  let handling := props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
+  usesElkLayered props && (handling == .includeChildren || handling == .inherit) &&
+    !(props.getD CoreOptions.NO_LAYOUT false && props.has CoreOptions.ALGORITHM)
+
 /-- Whether a child of a hierarchical import gets a nested graph in the same run (Rust
 `import_hierarchical_graph`): laid out by layered, `INCLUDE_CHILDREN` (or `INHERIT`) hierarchy
 handling, and children or inside self loops. -/
@@ -977,15 +989,49 @@ private def assignHierarchicalEdgeModelOrders (elkgraph : NodeId) : LImportM Uni
     let handling := graphNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
     if graph == elkgraph || handling == .includeChildren || handling == .inherit then
       for child in graphNode.children do
-        let childNode ← elkNode child
-        let childHandling := childNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
-        if usesElkLayered childNode.props && (childHandling == .includeChildren || childHandling == .inherit) then
+        if partOfSameLayoutRun (← elkNode child).props then
+          queue := queue.push child
+
+/-- The edge loop of Java's `importHierarchicalGraph`, run after every node of the hierarchy is
+transformed: the graphs in Java's breadth-first order (the top-level graph, then the children of every
+visited graph that are laid out by layered in the same run, whether or not they are laid out or got a
+nested graph), and per graph its contained edges in order: Java's `checkEdgeValidity`, edges that are
+`NO_LAYOUT` or have a `NO_LAYOUT` end node are skipped, the others are placed by `edgeParentLGraph`
+and transformed (an end outside the layout scope, e.g. inside a `NO_LAYOUT` compound node, is Java's
+"could not be found" `UnsupportedGraphException`). Inside self loops are placed into their node's
+nested graph by the loop of the graph containing them (no separate collection from the parent).
+elk-rs imports a level's edges right after its nodes, nested levels first. -/
+private def importHierarchicalEdges (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) :
+    LImportM Unit := do
+  let mut queue : Array NodeId := #[elkgraph]
+  let mut head := 0
+  while h : head < queue.size do
+    let graph := queue[head]
+    head := head + 1
+    let graphNode ← elkNode graph
+    for e in graphNode.containedEdges do
+      checkEdgeValidity e
+      let edge ← elkEdge e
+      let some sourceNode ← withElk (firstNode · edge.sources) | continue
+      let some targetNode ← withElk (firstNode · edge.targets) | continue
+      let sourceProps := (← elkNode sourceNode).props
+      if edge.props.getD CoreOptions.NO_LAYOUT false || sourceProps.getD CoreOptions.NO_LAYOUT false ||
+          (← elkNode targetNode).props.getD CoreOptions.NO_LAYOUT false then continue
+      let isInsideSelfLoop := (← withElk (ElkGraphUtil.isSelfloop · e)) &&
+        sourceProps.getD CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false && edge.props.getD CoreOptions.INSIDE_SELF_LOOPS_YO false
+      let (parentElkGraph, parentLGraph) ← edgeParentLGraph imp graph lgraph sourceNode targetNode isInsideSelfLoop
+      transformEdge imp e parentLGraph (some parentElkGraph)
+    let handling := graphNode.props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
+    if graph == elkgraph || handling == .includeChildren || handling == .inherit then
+      for child in graphNode.children do
+        if partOfSameLayoutRun (← elkNode child).props then
           queue := queue.push child
 
 /-- Rust `import_hierarchical_graph(elkgraph, lgraph)` (Java `importHierarchicalGraph`, but
 recursive): the children that are laid out (their model orders were assigned beforehand by
 `assignHierarchicalNodeModelOrders`), each child's nested graph imported right after its node
-(`COMPOUND_NODE`, parent/nested links), then the level's edges. -/
+(`COMPOUND_NODE`, parent/nested links). The edges follow once all nodes exist
+(`importHierarchicalEdges`, like Java). -/
 partial def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
   let parentGraphDirection ← LGraphUtil.getDirection lgraph
   for child in (← elkNode elkgraph).children do
@@ -999,7 +1045,6 @@ partial def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId)
       importHierarchicalGraph imp child nestedGraph
       -- Java sets `MAX_MODEL_ORDER_NODES` only on the top-level graph of a hierarchical import
       modifyGraph nestedGraph fun g => { g with internal := { g.internal with maxModelOrderNodesNull := true } }
-  importFlatGraphEdges imp elkgraph lgraph
 
 /-- `importGraph(elkgraph)` (Rust `import_graph`): creates the top-level `LGraph` (`PARTITIONS`
 when partitioning is active), defines the sides of the graph's ports, transforms them into external
@@ -1027,6 +1072,7 @@ def importGraph (imp : ElkGraphImporter) (elkgraph : NodeId) : LImportM LGraphId
     let (index, groups) ← assignHierarchicalNodeModelOrders elkgraph
     assignHierarchicalEdgeModelOrders elkgraph
     importHierarchicalGraph imp elkgraph lgraph
+    importHierarchicalEdges imp elkgraph lgraph
     setModelOrderCounts lgraph index groups
   else importFlatGraph imp elkgraph lgraph
   return lgraph
