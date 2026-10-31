@@ -828,6 +828,154 @@ def connectedPortsSortedByPosition (a : LGraphArena) (positions : Array Int) (up
           ports := ports.push other
   return stableSortByKey ports (positionIn positions a ·)
 
+/-! ### Port sets of the both-orders counts without hash sets
+
+`connectedInLayerPortsSortedByPositionFast` and `connectedPortsSortedByPositionFast` collect the same
+ports in the same order as the reference loops above (Java's `TreeSet` keyed by position: a port
+whose position was collected before is dropped), with the collected positions searched linearly while
+there are at most `PosSeen.linearMax` of them (then a hash set), the edges walked as `incomingEdges`
+then `outgoingEdges` (`connectedEdges` without the concatenation) and the side view walked in place.
+All collected positions are distinct, so the stable sort by position has exactly one result, which
+`sortPortsByKeys` (insertion sort of the collected positions) produces. -/
+
+/-- The positions collected so far, with their ports. -/
+structure PosSeen where
+  ports : Array LPortId := #[]
+  poss : Array Int := #[]
+  set : Std.HashSet Int := {}
+  big : Bool := false
+  deriving Inhabited
+
+namespace PosSeen
+
+/-- Up to this many positions `contains` scans `poss`. -/
+def linearMax : Nat := 16
+
+/-- Whether `x` occurs in `poss[i:]`. -/
+partial def scan (poss : Array Int) (x : Int) (i : Nat) : Bool :=
+  if h : i < poss.size then poss[i] == x || scan poss x (i + 1) else false
+
+/-- Whether position `x` was collected. -/
+@[inline] def contains (st : PosSeen) (x : Int) : Bool :=
+  if st.big then st.set.contains x else scan st.poss x 0
+
+/-- `poss[i:]` added to `set`. -/
+partial def fill (poss : Array Int) (i : Nat) (set : Std.HashSet Int) : Std.HashSet Int :=
+  if h : i < poss.size then fill poss (i + 1) (set.insert poss[i]) else set
+
+/-- Collects port `p` at position `x` unless `x` was collected. -/
+@[noinline] def add (st : PosSeen) (p : LPortId) (x : Int) : PosSeen :=
+  if st.contains x then st
+  else
+    match st with
+    | ⟨ports, poss, set, big⟩ =>
+      let ports := ports.push p
+      let poss := poss.push x
+      if big then ⟨ports, poss, set.insert x, true⟩
+      else if poss.size > linearMax then ⟨ports, poss, fill poss 0 set, true⟩
+      else ⟨ports, poss, set, false⟩
+
+end PosSeen
+
+/-- Inserts `ports[i]` (key `keys[i]`) into the sorted prefix `[0, i)`: moves it down while the key
+before is strictly greater (stable). -/
+partial def insertByKey (keys : Array Int) (ports : Array LPortId) (j : Nat) (k : Int) (p : LPortId) :
+    Array Int × Array LPortId :=
+  if j > 0 then
+    let kj := keys[j - 1]!
+    if kj > k then insertByKey (keys.set! j kj) (ports.set! j ports[j - 1]!) (j - 1) k p
+    else (keys.set! j k, ports.set! j p)
+  else (keys.set! j k, ports.set! j p)
+
+/-- Insertion sort of `ports` by `keys` from `i` on (stable). -/
+partial def insertionSortByKey (keys : Array Int) (ports : Array LPortId) (i : Nat) : Array LPortId :=
+  if i < keys.size && i < ports.size then
+    let (keys, ports) := insertByKey keys ports i keys[i]! ports[i]!
+    insertionSortByKey keys ports (i + 1)
+  else ports
+
+/-- The ports sorted stably by `keys` (their positions): the stable sort has a unique result, so an
+insertion sort for short arrays and `stableSortByKey` otherwise. -/
+def sortPortsByKeys (a : LGraphArena) (positions : Array Int) (ports : Array LPortId) (keys : Array Int) : Array LPortId :=
+  if ports.size <= 32 then insertionSortByKey keys ports 1
+  else stableSortByKey ports (positionIn positions a ·)
+
+/-- `stableSortByKey ports (positionIn positions a ·)` (see `sortPortsByKeys`). -/
+def sortPortsByPosition (a : LGraphArena) (positions : Array Int) (ports : Array LPortId) : Array LPortId :=
+  if ports.size <= 32 then insertionSortByKey (ports.map (positionIn positions a ·)) ports 1
+  else stableSortByKey ports (positionIn positions a ·)
+
+/-- The edge loop of `connectedInLayerPortsSortedByPosition` for port `p` (position `pos`) over
+`edges[k:]`. -/
+partial def collectInLayerEdges (a : LGraphArena) (positions : Array Int) (p : LPortId) (pos : Int)
+    (edges : Array LEdgeId) (k : Nat) (st : PosSeen) : PosSeen :=
+  if h : k < edges.size then
+    let e := edges[k]
+    if a.edgeIsSelfLoop e then collectInLayerEdges a positions p pos edges (k + 1) st
+    else
+      let st := st.add p pos
+      let st := if isInLayer a e then
+          match otherEndOf a e p with
+          | some other => st.add other (positionIn positions a other)
+          | none => st
+        else st
+      collectInLayerEdges a positions p pos edges (k + 1) st
+  else st
+
+/-- The port loop of `connectedInLayerPortsSortedByPosition` over the view `ports[lo:hi]` of a node
+(downwards from `hi` when `rev`). -/
+partial def collectInLayerPorts (a : LGraphArena) (positions : Array Int) (ports : Array LPortId) (lo hi : Nat)
+    (rev : Bool) (st : PosSeen) : PosSeen :=
+  if lo < hi then
+    let j := if rev then hi - 1 else lo
+    match ports[j]? with
+    | some p =>
+      let pt := a.port p
+      let pos := positionIn positions a p
+      let st := collectInLayerEdges a positions p pos pt.incomingEdges 0 st
+      let st := collectInLayerEdges a positions p pos pt.outgoingEdges 0 st
+      if rev then collectInLayerPorts a positions ports lo (hi - 1) rev st
+      else collectInLayerPorts a positions ports (lo + 1) hi rev st
+    | none => st
+  else st
+
+/-- `connectedInLayerPortsSortedByPosition` without hash sets and intermediate arrays (see "Port sets
+of the both-orders counts without hash sets"). -/
+def connectedInLayerPortsSortedByPositionFast (a : LGraphArena) (positions : Array Int) (upperNode lowerNode : LNodeId)
+    (side : PortSide) : Array LPortId :=
+  let visit (node : LNodeId) (st : PosSeen) : PosSeen :=
+    match side with
+    | .undefined => st
+    | _ =>
+      let nd := a.node node
+      let v := sideView a node nd side
+      collectInLayerPorts a positions nd.ports v.lo v.hi (side matches .south | .west) st
+  let st := visit lowerNode (visit upperNode {})
+  sortPortsByKeys a positions st.ports st.poss
+
+/-- The far ends of `edges[k:]` of `port` for `connectedPortsSortedByPosition` (port self loops
+skipped). -/
+partial def collectFarEnds (a : LGraphArena) (positions : Array Int) (port : LPortId) (edges : Array LEdgeId) (k : Nat)
+    (st : PosSeen) : PosSeen :=
+  if h : k < edges.size then
+    let e := edges[k]
+    if isPortSelfLoop a e then collectFarEnds a positions port edges (k + 1) st
+    else
+      match otherEndOf a e port with
+      | some other => collectFarEnds a positions port edges (k + 1) (st.add other (positionIn positions a other))
+      | none => collectFarEnds a positions port edges (k + 1) st
+  else st
+
+/-- `connectedPortsSortedByPosition` without hash sets and intermediate arrays. -/
+def connectedPortsSortedByPositionFast (a : LGraphArena) (positions : Array Int) (upperPort lowerPort : LPortId) :
+    Array LPortId :=
+  let visit (port : LPortId) (st : PosSeen) : PosSeen :=
+    let pt := a.port port
+    let st := st.add port (positionIn positions a port)
+    collectFarEnds a positions port pt.outgoingEdges 0 (collectFarEnds a positions port pt.incomingEdges 0 st)
+  let st := visit lowerPort (visit upperPort {})
+  sortPortsByKeys a positions st.ports st.poss
+
 /-! ## Construction -/
 
 /-- `new CrossingsCounter(portPositions)` sharing the given position array. -/
@@ -1055,11 +1203,11 @@ two ports in the current and in the switched order. Initialise with `initForCoun
 def countCrossingsBetweenPortsInBothOrders (c : CrossingsCounter) (upperPort lowerPort : LPortId) :
     LayeredM (Int × Int) := do
   let a ← get
-  let ports := connectedPortsSortedByPosition a (← c.portPositions.get) upperPort lowerPort
+  let ports := connectedPortsSortedByPositionFast a (← c.portPositions.get) upperPort lowerPort
   let upperLowerCrossings ← c.withTreeChecked ports false
   c.indexTree.modify (·.clear)
   c.switchPorts upperPort lowerPort
-  let ports := stableSortByKey ports (positionIn (← c.portPositions.get) a ·)
+  let ports := sortPortsByPosition a (← c.portPositions.get) ports
   let lowerUpperCrossings ← c.withTreeChecked ports false
   c.indexTree.modify (·.clear)
   c.switchPorts lowerPort upperPort
@@ -1071,11 +1219,11 @@ crossings at the two nodes in the current and in the switched order. Initialise 
 def countInLayerCrossingsBetweenNodesInBothOrders (c : CrossingsCounter) (upperNode lowerNode : LNodeId)
     (side : PortSide) : LayeredM (Int × Int) := do
   let a ← get
-  let ports := connectedInLayerPortsSortedByPosition a (← c.portPositions.get) upperNode lowerNode side
+  let ports := connectedInLayerPortsSortedByPositionFast a (← c.portPositions.get) upperNode lowerNode side
   let upperLowerCrossings ← c.withTreeChecked ports true
   c.switchNodes upperNode lowerNode side
   c.indexTree.modify (·.clear)
-  let ports := stableSortByKey ports (positionIn (← c.portPositions.get) a ·)
+  let ports := sortPortsByPosition a (← c.portPositions.get) ports
   let lowerUpperCrossings ← c.withTreeChecked ports true
   c.switchNodes lowerNode upperNode side
   c.indexTree.modify (·.clear)

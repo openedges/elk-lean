@@ -441,12 +441,20 @@ partial def fillFlatToNode (nodes : Array LNodeId) (flats : Array Nat) (base i :
     fillFlatToNode nodes flats base (i + 1) (out.setIfInBounds (flats[i]! - base) (nodes[i].idx + 1))
   else out
 
-/-- Clears the `visited` flags of the flat nodes `flats[i:]`. -/
-partial def clearVisitedSnap (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat) (d : BarycenterData) : BarycenterData :=
+/-- Clears the `visited` flags of the flat nodes `flats[i:]` in the states table (the table alone is
+passed, so no `BarycenterData` is rebuilt per node). -/
+partial def clearVisitedStates (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat)
+    (states : Array (Array (Option BarycenterState))) : Array (Array (Option BarycenterState)) :=
   if h : i < flats.size then
     let flat := flats[i]
-    clearVisitedSnap s flats (i + 1) (d.modifyState (s.nodeLayerOf flat) (s.nodeGraphIdOf flat) fun st => { st with visited := false })
-  else d
+    clearVisitedStates s flats (i + 1)
+      (BarycenterState.updateIn states (s.nodeLayerOf flat) (s.nodeGraphIdOf flat) fun st => { st with visited := false })
+  else states
+
+/-- Clears the `visited` flags of the flat nodes `flats[i:]`. -/
+def clearVisitedSnap (s : CrossMinSnapshot) (flats : Array Nat) (i : Nat) (d : BarycenterData) : BarycenterData :=
+  match d with
+  | ⟨states, random, traces⟩ => ⟨clearVisitedStates s flats i states, random, traces⟩
 
 /-- `alreadyVisited` on a states table. -/
 @[inline] def visitedIn (states : Array (Array (Option BarycenterState))) (li ni : Nat) : Bool :=

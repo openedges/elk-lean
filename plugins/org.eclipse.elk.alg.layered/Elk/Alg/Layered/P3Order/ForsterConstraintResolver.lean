@@ -104,7 +104,7 @@ barycenter (without building an `Option`). -/
 
 /-- Updates state `(li, ni)` of a `barycenter_states[layer][node id]` table (no-op without a
 state). The row and the state are taken out before the update so that both change in place. -/
-@[inline] def BarycenterState.updateIn (states : Array (Array (Option BarycenterState))) (li ni : Nat)
+@[specialize] def BarycenterState.updateIn (states : Array (Array (Option BarycenterState))) (li ni : Nat)
     (f : BarycenterState → BarycenterState) : Array (Array (Option BarycenterState)) :=
   if h : li < states.size then
     let row := states[li]
