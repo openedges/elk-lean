@@ -13,6 +13,20 @@ namespace Elk.Json
 
 open Elk.Core.Util
 
+/-! Appending number renderings to the output string (C shim `elk_core_ffi.c`; declared here so that
+only the JSON modules depend on them). -/
+
+/-- `out ++ (if x.isFinite then Float.toJsonNumber x else "null")`, appended in place when `out` is
+unshared and has the capacity (no temporary string; JSON printer). -/
+@[extern "elk_string_append_json_float"]
+opaque appendJsonFloat (out : String) (x : Float) : String
+
+/-- `out ++` the JSON rendering of the layout number `x` (`Number.ofFloatElk x |>.render`): exactly
+integral finite values other than `-0.0` below `2^63` in magnitude as integers, other finite values
+as `Float.toJsonNumber`, non-finite ones as `null`; appended like `appendJsonFloat`. -/
+@[extern "elk_string_append_elk_number"]
+opaque appendElkNumber (out : String) (x : Float) : String
+
 /-- JSON number: integer lexemes stay `Int`, everything else is a double. -/
 inductive Number where
   | int (i : Int)

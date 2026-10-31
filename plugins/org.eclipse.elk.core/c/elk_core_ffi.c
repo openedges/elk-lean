@@ -772,6 +772,68 @@ LEAN_EXPORT lean_obj_res elk_float_to_json(double x) {
     return lean_mk_string_unchecked(buf, n, n);
 }
 
+/* Appends the `n` ASCII bytes at `buf` to the string `s` (consumed): in place when `s` is exclusive
+ * and has the capacity (no temporary string), otherwise through `lean_string_append`, which grows
+ * the capacity geometrically. */
+static lean_obj_res elk_string_append_ascii(lean_obj_arg s, const char *buf, size_t n) {
+    size_t sz = lean_string_size(s); /* bytes including the terminator */
+    if (lean_is_exclusive(s) && lean_string_capacity(s) >= sz + n) {
+        char *p = (char *)lean_string_cstr(s) + sz - 1;
+        memcpy(p, buf, n);
+        p[n] = 0;
+        lean_to_string(s)->m_size = sz + n;
+        lean_to_string(s)->m_length += n;
+        return s;
+    }
+    lean_object *t = lean_mk_string_unchecked(buf, n, n);
+    lean_object *r = lean_string_append(s, t);
+    lean_dec_ref(t);
+    return r;
+}
+
+/* `out ++ Number.render (.float x)`: `elk_float_to_json` for a finite x, `null` otherwise, appended
+ * without a temporary string. */
+LEAN_EXPORT lean_obj_res elk_string_append_json_float(lean_obj_arg s, double x) {
+    if (!isfinite(x)) {
+        return elk_string_append_ascii(s, "null", 4);
+    }
+    char buf[32];
+    size_t n = (size_t)(elk_zmij_write(x, buf, 1) - buf);
+    return elk_string_append_ascii(s, buf, n);
+}
+
+/* `out ++ (Number.ofFloatElk x).render`: a finite, exactly integral x other than `-0.0` with
+ * |x| < 2^63 as a decimal integer, any other finite x as `elk_float_to_json`, a non-finite one as
+ * `null`. */
+LEAN_EXPORT lean_obj_res elk_string_append_elk_number(lean_obj_arg s, double x) {
+    if (!isfinite(x)) {
+        return elk_string_append_ascii(s, "null", 4);
+    }
+    uint64_t bits;
+    memcpy(&bits, &x, sizeof bits);
+    char buf[32];
+    if (x == round(x) && bits != 0x8000000000000000ULL && fabs(x) < 9223372036854775808.0) {
+        int64_t v = (int64_t)x;
+        uint64_t u = v < 0 ? (uint64_t)0 - (uint64_t)v : (uint64_t)v;
+        char tmp[24];
+        size_t k = 0;
+        do {
+            tmp[k++] = (char)('0' + (int)(u % 10));
+            u /= 10;
+        } while (u != 0);
+        size_t n = 0;
+        if (v < 0) {
+            buf[n++] = '-';
+        }
+        while (k > 0) {
+            buf[n++] = tmp[--k];
+        }
+        return elk_string_append_ascii(s, buf, n);
+    }
+    size_t n = (size_t)(elk_zmij_write(x, buf, 1) - buf);
+    return elk_string_append_ascii(s, buf, n);
+}
+
 /* Java `Double.toString` style is not needed for JSON, but `%.17g` is handy for traces. */
 LEAN_EXPORT lean_obj_res elk_float_to_g17(double x) {
     char out[64];

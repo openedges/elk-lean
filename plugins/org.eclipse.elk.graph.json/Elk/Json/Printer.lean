@@ -88,12 +88,12 @@ private def pushNat (out : String) (n : Nat) : String :=
 termination_by n
 decreasing_by omega
 
-/-- Appends `n.render`; integers are written in place. -/
+/-- Appends `n.render`; integers and doubles are written in place (no temporary string). -/
 @[inline] private def pushNumber (out : String) (n : Number) : String :=
   match n with
   | .int (.ofNat k) => pushNat out k
   | .int (.negSucc k) => pushNat (out ++ "-") (k + 1)
-  | n => out ++ n.render
+  | .float f => appendJsonFloat out f
 
 mutual
 
