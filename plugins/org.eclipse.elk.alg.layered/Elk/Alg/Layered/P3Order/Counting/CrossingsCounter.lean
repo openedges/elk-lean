@@ -26,6 +26,10 @@ is used), and nodes of the snapshot without a port on the counted side are skipp
 count walks the side views in place (`…Fast`; the port loops are kept as
 `countNorthSouthPortCrossingsInLayerPort` for the differential test).
 
+Java's index tree bounds are checked on every counting path (live and snapshot): a far end whose
+position (possibly stale, left by an earlier count in the shared array) lies outside the tree is
+Java's `ArrayIndexOutOfBoundsException` (`javaTreeIndexError`; elk-rs ignored such indices).
+
 Rust semantics kept where they differ from Java:
 - the in-layer/two-port port sets are de-duplicated by port identity and *stably* sorted by
   position (Java uses a `TreeSet` keyed by position, which also drops ports with equal positions);
