@@ -193,6 +193,12 @@
 - **12차 라운드 HMO 병합(병합본 `b8bfcf3`, 2026-11-01)**: 계층 model-order 세트 `h`의 결정적 잔여 5종(SCC 선호 id 박싱 `==`, BK `null` 시프트 NPE, 층 배정 DFS 순환 `StackOverflowError`, 빈 중첩 그래프 AIOOBE, 계층 offset 덧셈 순서)을 Java와 같게 고쳐 **무작위·변형·계층 세트 전부에서 결정적 Java 차이가 소진**되었다; 남은 것은 Java 실행 컨텍스트 의존(§20)뿐이며 의심 사례는 새 JVM·`-XX:hashCode=N`으로 가른다. 세트 `h`가 파이프라인에 들어가 전체 실행은 `--sets s,v,d,o,p,c,h`. `lake test` 17108/0.
 - **12차 라운드 JSN 병합(병합본 `27137a3`, 2026-11-01)**: JSON 경로를 오버레이 전달·문서 순서 프린터로 바꿔 출력 바이트 동일을 유지한 채 JSON 시간을 약 1/3 줄였다(수치는 아래 표). 관용구는 `PLAN.md` 7.1의 29번. `lake test` 17100/0, 합성 기하평균 0.77배, 기준선은 `5a72a3d`와 `27137a3` 측정의 시나리오별 최솟값(HMO 동시 실행 부하 때문에 JSON 비중이 작은 시나리오는 +1~4.3%로 나왔고 격리 A/B에서는 0.89~0.99였다).
 
+### 선택 항목 작업 할당표 (2026-11-01, 사용자 승인)
+| 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
+|---|---|---|---|---|---|
+| TRN. trace 단계 이름을 Java 클래스 이름으로 통일: `BfsNodeOrderCycleBreaker`→`BFSNodeOrderCycleBreaker`, `DfsNodeOrderCycleBreaker`→`DFSNodeOrderCycleBreaker`, `SccNodeTypeCycleBreaker`→`SCCNodeTypeCycleBreaker`, `ScConnectivityCycleBreaker`→`SCConnectivity`, `HypernodeProcessor`→`HypernodesProcessor`; elk-rs 보조 trace 비교(`scripts/compare_phase_traces.py`)에는 별칭 5쌍을 두어 1447/1447 유지; 테스트 기대값·docstring·문서 갱신 — 레이아웃 출력 불변, 코퍼스 trace 196,407 파일 불변(이 전략을 쓰는 코퍼스 모델 없음) | Java `p1cycles/{BFSNodeOrderCycleBreaker,DFSNodeOrderCycleBreaker,SCCNodeTypeCycleBreaker,SCConnectivity}.java`, `intermediate/HypernodesProcessor.java`; Lean `P1Cycles/{BFSNodeOrderCycleBreaker,DFSNodeOrderCycleBreaker,SCCNodeTypeCycleBreaker,SCConnectivity}.lean`, `Intermediate/HypernodeProcessor.lean`, `tests/lean/Tests/Layered/P1Cycles.lean`, `scripts/compare_phase_traces.py` | sonnet | medium | 서브에이전트 TRN(worktree) | 진행 중(`87fc58b`에서 시작, FLC와 동시) |
+| FLC. 모듈별 Float 리터럴 상수(174모듈 362개 정의: `fl0p0` 146·`fl2p0` 74·`fl1p0` 68 등)를 공용 `Elk.Core.Util.FloatConst`로 통합(두 모듈 이상에서 쓰는 값만; 모듈 고유 값은 유지; 플러그인 의존 방향을 지키지 못하는 모듈은 유지) — 생성 C의 `ofSciImpl` 0건 유지, 바이트 동일, 명령 수 중립 | Lean 전 플러그인의 `private def fl…` 정의, 새 `plugins/org.eclipse.elk.core/Elk/Core/Util/FloatConst.lean` | sonnet | medium | 서브에이전트 FLC(worktree) | 진행 중(`87fc58b`에서 시작, TRN과 동시) |
+
 ### 14차 라운드 작업 할당표 (2026-11-01)
 | 작업 | 대응 원본 파일 | 모델 | effort | 담당 | 결과 |
 |---|---|---|---|---|---|
