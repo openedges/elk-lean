@@ -1340,11 +1340,11 @@ def verticalPortSizeForFreeSide (a : GraphAdapters m G N P L E) (node : N) (side
       treatAsGroup labelLabelSpacing portLabelSpacingV)
   -- For outside placement: topmost port margin.top = 0, bottommost port margin.bottom = 0
   if portLabelsOutside && !margins.isEmpty then
-    margins := margins.modify 0 fun mg => { mg with top := fl0p0 }
-    margins := margins.modify (margins.size - 1) fun mg => { mg with bottom := fl0p0 }
+    margins := margins.modifyIn 0 fun mg => { mg with top := fl0p0 }
+    margins := margins.modifyIn (margins.size - 1) fun mg => { mg with bottom := fl0p0 }
     -- Space-efficient: if topmost port's labels are NOT next to port, clear its bottom margin
     if spaceEfficientPortLabels && !labelsNextToPort then
-      margins := margins.modify 0 fun mg => { mg with bottom := fl0p0 }
+      margins := margins.modifyIn 0 fun mg => { mg with bottom := fl0p0 }
   -- Sum port heights + margins + inter-port spacing
   let mut height := fl0p0
   for i in [0:ports.size] do

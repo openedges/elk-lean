@@ -217,9 +217,11 @@ structure ShiftState where
 /-- Sets the slot of loop `i` on `side` (loop and routing state). -/
 def ShiftState.setSlot (s : ShiftState) (i : Nat) (side : PortSide) (slot : Int) : ShiftState :=
   let sideIdx := ElkEnum.ordinal side
-  { s with
-    states := s.states.modify i fun st => { st with routingSlots := st.routingSlots.set! sideIdx slot }
-    loops := s.loops.modify i (·.setRoutingSlot side slot) }
+  -- taken apart first and updated with `modifyIn`, so that neither the arrays nor their elements are
+  -- shared while they are updated (PLAN 7.1 items 13, 16)
+  let ⟨loops, states, nextFree⟩ := s
+  ⟨loops.modifyIn i (·.setRoutingSlot side slot),
+    states.modifyIn i fun st => { st with routingSlots := st.routingSlots.set! sideIdx slot }, nextFree⟩
 
 /-- The lowest slot of loop `i` above the next free slots of the ports (`minIdx ..= maxIdx`,
 within the port list) it is active at. -/

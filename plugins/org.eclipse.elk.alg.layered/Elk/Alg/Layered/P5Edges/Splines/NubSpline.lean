@@ -479,7 +479,7 @@ def generateNiceCurve : NubSpline :=
     mirrorOnX vector6 vector9.x, mirrorOnX vector5 vector9.x, mirrorOnX vector4 vector9.x,
     mirrorOnX vector3 vector9.x, mirrorOnX vector2 vector9.x, mirrorOnX vector1 vector9.x,
     mirrorOnX vector1 vector9.x, mirrorOnX vector1 vector9.x]
-  let chain := KVectorChain.offsetValues (chain.map (·.scale fl5p0)) (-fl50p0) (-fl80p0)
+  let chain := KVectorChain.offsetValues (KVectorChain.scale chain fl5p0) (-fl50p0) (-fl80p0)
   -- 21 control points, dimension 3: the constructor cannot fail
   match new true 3 chain with
   | .ok s => s

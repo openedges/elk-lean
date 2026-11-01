@@ -25,7 +25,7 @@ namespace CrossHierarchyMap
 /-- `put(edge, crossEdge)`: appends to the edge's entry (created at the end if missing). -/
 def put (m : CrossHierarchyMap) (edge : LEdgeId) (crossEdge : CrossHierarchyEdge) : CrossHierarchyMap :=
   match m.findIdx? (·.1 == edge) with
-  | some i => m.modify i fun (e, edges) => (e, edges.push crossEdge)
+  | some i => m.modifyIn i fun (e, edges) => (e, edges.push crossEdge)
   | none => m.push (edge, #[crossEdge])
 
 /-- `get(edge)`: the segments of the edge (empty if unknown). -/

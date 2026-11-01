@@ -279,7 +279,7 @@ private def outgoingEdgeSegments (cNode : CNodeId) (nodeHitbox : ElkRectangle) (
   if let some index := lastRegularSegmentIndex then
     if let some box ← targetHitbox ed.target then
       let y := bend1.y
-      segments := segments.modify index fun s => ignoreFlags s y box
+      segments := segments.modifyIn index fun s => ignoreFlags s y box
   return segments
 
 /-- The north/south target segment of one incoming edge (body of the second inner loop of Rust
@@ -338,7 +338,7 @@ def collectVerticalSegmentsSplines : TransformM (Array VerticalSegment) := do
         let segment := VerticalSegment.newSpline segmentId view.boundingBox representative splineSegment
         if let some lastId := lastNonStraightSegmentId then
           if let some index := segmentIdToIndex.get? lastId then
-            segments := segments.modify index fun s =>
+            segments := segments.modifyIn index fun s =>
               { s with constraintTargetIds := pushUnique s.constraintTargetIds segmentId }
         segmentIdToIndex := segmentIdToIndex.insert segmentId segments.size
         lastNonStraightSegmentId := some segmentId
@@ -479,7 +479,7 @@ def applySegmentPositions (ctx : CompactionContext) : LayeredM Unit := do
       adjusted := adjusted.insert (edge, bendIndex)
       modifyEdge edge fun ed =>
         if bendIndex < ed.bendPoints.size then
-          { ed with bendPoints := ed.bendPoints.modify bendIndex fun p => { p with x := p.x + delta } }
+          { ed with bendPoints := ed.bendPoints.modifyIn bendIndex fun p => { p with x := p.x + delta } }
         else ed
     let mut adjustedSplineSegments : Std.HashSet Nat := {}
     for splineSegment in segment.affectedSplineSegments do

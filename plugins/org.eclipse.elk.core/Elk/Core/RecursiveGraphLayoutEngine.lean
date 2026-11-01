@@ -66,7 +66,7 @@ def postProcessInsideSelfLoops (loops : Array EdgeId) : ElkM Unit := do
     for s in edge.sections do
       ElkM.modifySection s fun sec => { sec with
         startX := sec.startX + xo, startY := sec.startY + yo, endX := sec.endX + xo, endY := sec.endY + yo,
-        bendPoints := sec.bendPoints.map fun b => ⟨b.x + xo, b.y + yo⟩ }
+        bendPoints := KVectorChain.offsetValues sec.bendPoints xo yo }
     if let some jps := edge.props.get? CoreOptions.JUNCTION_POINTS then
       ElkM.modifyEdge e fun x => { x with props := x.props.set CoreOptions.JUNCTION_POINTS (KVectorChain.offsetValues jps xo yo) }
 
@@ -210,7 +210,7 @@ def applyTopdownLayout (layoutNode : NodeId) (children : Array NodeId) (data : L
         ElkM.modifySection s fun sec => { sec with
           startX := sec.startX + xShift, startY := sec.startY + yShift,
           endX := sec.endX + xShift, endY := sec.endY + yShift,
-          bendPoints := sec.bendPoints.map fun b => ⟨b.x + xShift, b.y + yShift⟩ }
+          bendPoints := KVectorChain.offsetValues sec.bendPoints xShift yShift }
       for l in edge.labels do
         ElkM.modifyLabel l fun lb => { lb with x := lb.x + xShift, y := lb.y + yShift }
       if let some jps := edge.props.get? CoreOptions.JUNCTION_POINTS then

@@ -30,6 +30,16 @@ structure Adjacency where
 /-- `Adjacency.reset()`. -/
 @[inline] def Adjacency.reset (adj : Adjacency) : Adjacency := { adj with currentCardinality := adj.cardinality }
 
+/-- One consumed edge (`currentCardinality--`); out of line so that the update runs on the unshared
+entry even where the entry was read just before (PLAN 7.1 items 16, 59). -/
+@[noinline] def Adjacency.consumeOne (adj : Adjacency) : Adjacency :=
+  { adj with currentCardinality := adj.currentCardinality - 1 }
+
+/-- One more edge to the same position (`cardinality++`, `currentCardinality++`); out of line like
+`consumeOne`. -/
+@[noinline] def Adjacency.addOne (adj : Adjacency) : Adjacency :=
+  { adj with cardinality := adj.cardinality + 1, currentCardinality := adj.currentCardinality + 1 }
+
 /-- `BetweenLayerEdgeTwoNodeCrossingsCounter.AdjacencyList`: the adjacencies of one node on one
 side, sorted by position, with a consuming cursor. -/
 structure AdjacencyList where
@@ -52,7 +62,7 @@ namespace AdjacencyList
 
 /-- `reset()`: rewinds the cursor. -/
 def reset (l : AdjacencyList) : AdjacencyList :=
-  { l with currentIndex := 0, currentSize := l.size, adjacencyList := l.adjacencyList.modify 0 Adjacency.reset }
+  { l with currentIndex := 0, currentSize := l.size, adjacencyList := l.adjacencyList.modifyIn 0 Adjacency.reset }
 
 /-- `isEmpty()`. -/
 @[inline] def isEmpty (l : AdjacencyList) : Bool := l.currentSize == 0
@@ -69,18 +79,19 @@ def countAdjacenciesBelowNodeOfFirstPort (l : AdjacencyList) : Nat :=
 def incrementCurrentIndex (l : AdjacencyList) : AdjacencyList :=
   let l := { l with currentIndex := l.currentIndex + 1 }
   if l.currentIndex < l.adjacencyList.size then
-    { l with adjacencyList := l.adjacencyList.modify l.currentIndex Adjacency.reset }
+    { l with adjacencyList := l.adjacencyList.modifyIn l.currentIndex Adjacency.reset }
   else l
 
 /-- `removeFirst()`. -/
 def removeFirst (l : AdjacencyList) : AdjacencyList :=
   if l.isEmpty then l
   else
-    let l := match l.adjacencyList[l.currentIndex]? with
-      | some adj =>
-        if adj.currentCardinality == 1 then l.incrementCurrentIndex
-        else { l with adjacencyList := l.adjacencyList.modify l.currentIndex fun x => { x with currentCardinality := x.currentCardinality - 1 } }
-      | none => l
+    -- the cardinality is read by index, not through a bound `some adj` that would keep the entry
+    -- shared during the update (PLAN 7.1 item 27)
+    let l := if h : l.currentIndex < l.adjacencyList.size then
+        if l.adjacencyList[l.currentIndex].currentCardinality == 1 then l.incrementCurrentIndex
+        else { l with adjacencyList := l.adjacencyList.modify l.currentIndex Adjacency.consumeOne }
+      else l
     { l with currentSize := l.currentSize - 1 }
 
 /-- `addAdjacencyOf(edge)`: the far end's position joins the list (merged with an equal last entry).
@@ -94,13 +105,12 @@ private def addAdjacencyOf (l : AdjacencyList) (a : LGraphArena) (portPositions 
   match adjacentPort.bind (portPositions[·]?) with
   | none => none
   | some adjacentPosition =>
-    let list := match l.adjacencyList.back? with
-      | some last =>
-        if last.position == adjacentPosition then
-          l.adjacencyList.modify (l.adjacencyList.size - 1) fun x =>
-            { x with cardinality := x.cardinality + 1, currentCardinality := x.currentCardinality + 1 }
-        else l.adjacencyList.push { position := adjacentPosition }
-      | none => l.adjacencyList.push { position := adjacentPosition }
+    -- `back?` read by index (see `removeFirst`)
+    let n := l.adjacencyList.size
+    let mergeLast := if h : n - 1 < n then l.adjacencyList[n - 1].position == adjacentPosition else false
+    let list := if mergeLast then
+        l.adjacencyList.modify (n - 1) Adjacency.addOne
+      else l.adjacencyList.push { position := adjacentPosition }
     some { l with adjacencyList := list, size := l.size + 1, currentSize := l.currentSize + 1 }
 
 /-- `new AdjacencyList(node, side)`: collects the between-layer edges (incoming on `WEST`,

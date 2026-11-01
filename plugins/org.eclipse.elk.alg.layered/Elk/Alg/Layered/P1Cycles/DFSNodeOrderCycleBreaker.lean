@@ -51,7 +51,7 @@ def modelOrderEdgeGroups (graph : LGraphId) (node : LNodeId) : LayeredM (Array (
           maxModelOrderNodes * target.props.getD LayeredOptions.GROUP_MODEL_ORDER_CYCLE_BREAKING_ID 0 + modelOrder
         else modelOrder
     match groups.findIdx? (·.1 == key) with
-    | some i => groups := groups.modify i fun (k, es) => (k, es.push edge)
+    | some i => groups := groups.modifyIn i fun (k, es) => (k, es.push edge)
     | none => groups := groups.push (key, #[edge])
   return (stableSort groups fun a b => compare a.1 b.1).map (·.2)
 

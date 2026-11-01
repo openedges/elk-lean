@@ -54,12 +54,12 @@ def addToSpans (spans : Array LayerSpan) (node : LNodeId) (minx maxx : Float) : 
       match foundIdx with
       | some found =>
         -- merge the previously found layer span with the current one
-        spans := spans.modify found fun f => { f with nodes := f.nodes ++ span.nodes, «end» := fmax f.end span.end }
+        spans := spans.modifyIn found fun f => { f with nodes := f.nodes ++ span.nodes, «end» := fmax f.end span.end }
         spans := spans.eraseIdx! idx
         continue
       | none =>
         -- add the node to the current layer span
-        spans := spans.modify idx fun s =>
+        spans := spans.modifyIn idx fun s =>
           { s with nodes := s.nodes.push node, start := fmin s.start minx, «end» := fmax s.end maxx }
         foundIdx := some idx
     idx := idx + 1

@@ -97,6 +97,10 @@ def new (baseSpacing : Float) : ElkCoreSpacingsBuilder :=
       acc.push { property := o, factor }
   { baseSpacing, factors }
 
+/-- Sets the factor of one entry; out of line so that `Array.modify` hands it the unshared entry
+(PLAN 7.1 items 16, 59). -/
+@[noinline] private def withFactorValue (factor : Float) (f : SpacingFactor) : SpacingFactor := { f with factor }
+
 private def findFactorIndex (b : ElkCoreSpacingsBuilder) (option : Property Float) : Option Nat :=
   b.factors.findIdx? (·.property.id == option.id)
 
@@ -114,7 +118,7 @@ def withFactor (b : ElkCoreSpacingsBuilder) (option : Property Float) (factor : 
     throw (illegalArgument s!"The factor for '{option.id}' must not be negative ({Float.toRustDisplay factor}).")
   if option.id == BASE_SPACING_OPTION.id then
     throw (illegalArgument s!"'{option.id}' is the base spacing option not allowed to use with 'with_factor'.")
-  return { b with factors := b.factors.modify idx fun f => { f with factor } }
+  return { b with factors := b.factors.modify idx (withFactorValue factor) }
 
 /-- `withValue(spacingOption, value)`. -/
 def withValue (b : ElkCoreSpacingsBuilder) (option : Property Float) (value : Float) :
@@ -126,7 +130,7 @@ def withValue (b : ElkCoreSpacingsBuilder) (option : Property Float) (value : Fl
   if option.id == BASE_SPACING_OPTION.id then
     throw (illegalArgument s!"'{option.id}' is the base spacing option not allowed to use with 'with_value'.")
   let factor ← computeFactor b value
-  return { b with factors := b.factors.modify idx fun f => { f with factor } }
+  return { b with factors := b.factors.modify idx (withFactorValue factor) }
 
 /-- `withOverwrite(overwrite)`. -/
 def withOverwrite (b : ElkCoreSpacingsBuilder) (overwrite : Bool) : ElkCoreSpacingsBuilder := { b with overwrite }

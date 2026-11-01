@@ -532,7 +532,7 @@ def translateSection (g : ElkGraph) (s : SectionId) (xoffset yoffset : Float) : 
   g.modifySection s fun sec =>
     { sec with startX := sec.startX + xoffset, startY := sec.startY + yoffset,
                endX := sec.endX + xoffset, endY := sec.endY + yoffset,
-               bendPoints := sec.bendPoints.map (·.addValues xoffset yoffset) }
+               bendPoints := KVectorChain.offsetValues sec.bendPoints xoffset yoffset }
 
 /-- Pure `ElkUtil.translate(edge, xoffset, yoffset)`: sections, labels and junction points. -/
 def translateEdge (g : ElkGraph) (e : EdgeId) (xoffset yoffset : Float) : ElkGraph := Id.run do

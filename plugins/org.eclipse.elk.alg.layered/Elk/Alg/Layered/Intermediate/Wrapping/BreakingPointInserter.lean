@@ -135,14 +135,14 @@ def offsetAssignedCut (cuts : Array CutState) (cut : Nat) : Array CutState := Id
   if !cuts[cut]!.assigned then return cuts
   let mut cuts := cuts
   let offset := cuts[cut]!.newIndex - cuts[cut]!.index
-  cuts := cuts.modify cut fun c => { c with index := c.index + offset }
+  cuts := cuts.modifyIn cut fun c => { c with index := c.index + offset }
   let mut prev := cuts[cut]!.prev
   for _ in [0:cuts.size] do
     match prev with
     | none => break
     | some p =>
       if cuts[p]!.assigned then break
-      cuts := cuts.modify p fun c => { c with index := c.index + offset }
+      cuts := cuts.modifyIn p fun c => { c with index := c.index + offset }
       prev := cuts[p]!.prev
   let mut suc := cuts[cut]!.suc
   for _ in [0:cuts.size] do
@@ -150,7 +150,7 @@ def offsetAssignedCut (cuts : Array CutState) (cut : Nat) : Array CutState := Id
     | none => break
     | some s =>
       if cuts[s]!.assigned then break
-      cuts := cuts.modify s fun c => { c with index := c.index + offset }
+      cuts := cuts.modifyIn s fun c => { c with index := c.index + offset }
       suc := cuts[s]!.suc
   return cuts
 
@@ -181,7 +181,7 @@ private def bestCutRound (cutStates : Array CutState) (spans : Array Int) (layer
       bestScore := score
       bestCut := hit
       if let some b := bestCut then
-        cutStates := cutStates.modify b fun c => { c with newIndex := i }
+        cutStates := cutStates.modifyIn b fun c => { c with newIndex := i }
     if let some r := rCut then
       if i == cutStates[r]!.index then
         lCut := rCut
@@ -200,7 +200,7 @@ def improveCuts (graph : LGraphId) (cuts : Array Int) : LayeredM (Array Int) := 
     let state : CutState := { index := cut, newIndex := cut, prev := prev, suc := none }
     cutStates := cutStates.push state
   for idx in [0:cutStates.size - 1] do
-    cutStates := cutStates.modify idx fun c => { c with suc := some (idx + 1) }
+    cutStates := cutStates.modifyIn idx fun c => { c with suc := some (idx + 1) }
   let spans ← computeEdgeSpans graph
   let layerCount := (← getGraph graph).layers.size
   let distancePenalty :=
@@ -210,7 +210,7 @@ def improveCuts (graph : LGraphId) (cuts : Array Int) : LayeredM (Array Int) := 
     cutStates := states
     if let some b := bestCut then
       improved := improved.push cutStates[b]!.newIndex
-      cutStates := cutStates.modify b fun c => { c with assigned := true }
+      cutStates := cutStates.modifyIn b fun c => { c with assigned := true }
       cutStates := offsetAssignedCut cutStates b
   return stableSort improved compare
 

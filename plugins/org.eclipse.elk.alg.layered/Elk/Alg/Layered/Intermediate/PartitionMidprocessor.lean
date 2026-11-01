@@ -55,7 +55,7 @@ def collectPartitions (graph : LGraphId) : LayeredM (Array (Int × Array LNodeId
   for node in (← getGraph graph).layerlessNodes do
     let some partition := (← getNode node).props.get CoreOptions.PARTITIONING_PARTITION | continue
     match partitions.findIdx? (·.1 == partition) with
-    | some i => partitions := partitions.modify i fun (k, ns) => (k, ns.push node)
+    | some i => partitions := partitions.modifyIn i fun (k, ns) => (k, ns.push node)
     | none => partitions := partitions.push (partition, #[node])
   return stableSort partitions fun a b => compare a.1 b.1
 
