@@ -15,7 +15,7 @@
 5. **배포**: 네이티브 CLI(`elk`), Node.js NAPI 애드온, WASM(브라우저/Node), elkjs 호환 npm 패키지(`layout()`, `knownLayoutAlgorithms()`, `knownLayoutOptions()`, `knownLayoutCategories()`, Web Worker 모드).
 
 ### 비목표
-- Eclipse/EMF/Xtext 통합 플러그인(`core.service`, `*.ui`, `*.debug`, `core.meta`, `conn.gmf`)은 포팅하지 않는다(elk-rs도 최소 스텁).
+- Eclipse/EMF/Xtext 통합 플러그인(`core.service`, `*.ui`, `*.debug`, `core.meta`, `conn.gmf`)은 포팅하지 않는다(elk-rs도 최소 스텁). elk-live의 Java Xtext 언어 서버도 포팅하지 않는다 — 브라우저 데모(Phase 10)는 클라이언트 전용으로 대체한다.
 - Graphviz(`alg.graphviz.*`)와 libavoid(`alg.libavoid`)는 외부 바이너리 연동이므로 메타데이터 등록과 스텁만 유지한다(elk-rs와 동일).
 - Java 원본의 동작을 "개선"하지 않는다. elk-rs가 Java 기준값 생성 시 적용한 패치 3건(`../elk-rs/scripts/java/patches`)의 취급: (1) self-loop 포트 변 순서 — Java는 `HashMultimap`의 identity hash 순서라 실행마다 달라진다 → Java가 내는 결과 중 하나인 열거형 순서로 고정(elk-rs와 동일); (2) zero-size resize — Java는 중간 포트 좌표가 비유한이 되지만 뒤에 덮어써 최종 출력은 같다 → 최종 출력 기준으로 Java와 일치; (3) zero-height scanline(ticket 213) — 수정 전 Java는 최종 출력에 NaN을 낸다 → **유일한 의도적 예외**로 유한한 결과를 유지하고 `HISTORY.md`에 기록.
 
@@ -192,6 +192,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | **7b. 무작위 입력 Java parity** (진행 중) | `scripts/run_random_java_parity.sh`(seed 1~10 × 600, s/v/d 세트)로 코퍼스 밖 입력의 ELK Java 일치율을 재고 불일치 클래스(NML·SEC·LNODE·DEF·LEDGE·POS)를 하나씩 Java 동작으로 수정, Java `TimSort`(`JavaSort`)·노드 크기 검증·오류 문구 이식 | `tests/random_parity/report.md`, `docs/robustness-random-graphs.md` | v 세트 정확 일치 616/5,761(10.7%) → RJ1·SEC·OPT·LNODE·LEDGE·FEL·P3J·NIK·RJ3·SPV·LM·DIS·GS 후 **5,711/5,761(99.1%)**, s 1,197/1,205, o 5,224/5,236, p 1,359/1,373, c(DisCo) 5,067~5,073/5,104, h(계층 model order) 2,175/2,271·예외 문구 3,718/3,721, Java 예외 문구 s 4,793/4,793·v 227/227·d 227/227·o 745/745·p 428/428(남은 차이는 Java 실행 컨텍스트·identity hash·`HashSet`/`HashMap` 순서·스레드 경쟁·NaN 표기·비종료; 결정적 잔여는 GS·HMO로 전 세트에서 소진); 목표: Java 자체 결함(AIOOBE·NPE·StackOverflow)과 실행 컨텍스트 의존 입력을 제외한 전 입력 정확 일치; 코퍼스 Java 정확 1,878/1,997 유지(유지됨). Java의 실제 작업을 따르면서 느려진 mrtree·radial은 PR로 회복(합성 기하평균 0.82배, 코퍼스 1.01배) |
 | **8. 배포** (대부분 완료) | `Elk.Ffi`+`elk_lean.h` C API, NAPI C 애드온, WASM(emscripten, MEMORY64=2), npm 패키지(elkjs 호환 로더/Worker/typings, WASM 폴백, 깊은 재귀용 `workerStackSizeMb` Worker 모드), `node:test` 56개, `.gitlab-ci.yml` 초안·`CHANGELOG.md`·릴리스 예행 문서 | `elk-lean` npm 패키지(미게시) | NAPI vs CLI 1,447/1,448 바이트 일치, WASM 550/550; 남은 일: Linux/Windows 빌드(CI 미실행), 게시(`private` 제거), GMP 라이선스 검토(G1) |
 | **9. 릴리스** | CHANGELOG, 문서, 태그 | `v0.12.0` | 품질 게이트 전항목 통과 |
+| **10. 브라우저 데모(elk-live 대체)** (2026-11-01 사용자 승인, 진행 중) | `plugins/org.eclipse.elk.live`: 서버 없는 정적 웹 앱 — Monaco 편집기(`.elkt` 문법 강조, Lean 파서 오류 마커, `knownLayoutOptions()` 메타데이터 기반 옵션 키 자동완성), sprotty 그래프 뷰(elk-live `client/src`의 시각 모델 참고), elk-models 예제 선택, 편집-레이아웃 동기화; 레이아웃은 elk-lean WASM(Web Worker 모드), `.elkt` → JSON은 새 API `convertElkt`(Lean `Elk.Text.parseElkt` + JSON exporter → C `elk_lean_convert_elkt` → NAPI·WASM·npm `elk.convertElkt(text)`) | `npm run dev`/`build`(정적 `dist/`), `.gitlab-ci.yml` pages 잡 초안(릴리스 결정과 함께 보류) | `convertElkt`가 CLI `elk convert`와 898개 `.elkt` 전부 바이트 동일, 데모 빌드 성공·브라우저 스모크(가능하면 Playwright, 아니면 Node에서 번들 로딩) 통과, 데모의 레이아웃 = CLI 결과(같은 WASM) |
 
 병렬화: Phase 1~2는 규약을 정하는 단계이므로 직렬로 진행한다. Phase 3 이후는 플러그인/서브패키지 단위로 서브에이전트에 분배한다(각 작업은 "대응 Rust 파일 목록 + 규약 문서 + parity 명령"을 받고, 빌드 경고 0·테스트 통과·parity 수치를 보고한다).
 
@@ -300,6 +301,16 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 - **WASM**(`plugins/org.eclipse.elk.wasm`, `scripts/build_wasm.sh`): Lean 런타임 `src/runtime`(v4.35.0 소스, 단일 스레드, GMP 없음, libuv 호환 셈 `c/uv_compat`)과 Init/Std C(툴체인 `lean -c`로 재생성, 릴리스 오브젝트와 793/793 바이트 일치 검증) + 모든 Elk 모듈 C + `elk_lean.c`를 emscripten 6.0.13으로 컴파일. **`-sMEMORY64=2`**(64비트 C를 wasm32로 낮춤): Lean 생성 C는 32비트 타깃에서 `2^31` 이상 리터럴을 매번 힙 bignum으로 만들고 해제하지 않아(누수·느림) 순수 wasm32는 쓰지 않는다. 산출물: Node CJS(동기 초기화) + 브라우저 ESM, `.wasm` 18.9 MB(brotli 2.0 MB), mimalloc. 깊은 재귀(JSON 중첩·compound 계층·mrtree/radial 트리 순회)는 호출 스레드의 JS 엔진 스택(V8 기본 약 1 MB)에 걸리므로 npm 패키지의 `workerUrl` 모드는 `worker_threads` Worker를 `resourceLimits.stackSizeMb`(옵션 `workerStackSizeMb`, 기본 64 MB)로 만들고 그래프를 JSON 문자열로 전달한다(구조화 복제는 약 1,000단계, `JSON.stringify`는 약 3,000단계가 한계; W2 측정표는 `plugins/org.eclipse.elk.js/README.md` "Limits"). 브라우저 Web Worker의 스택은 JS에서 바꿀 수 없어 응답성 확보용이다. 메모리는 `-sMAXIMUM_MEMORY=4GB -sINITIAL_HEAP=16MB`(W3; 초기 41.9 MiB, 포트 8,000개 노드까지 네이티브와 동일 출력)이고, Lean의 `lean_internal_panic`(`exit(1)`)로 죽은 인스턴스는 명확한 Error를 던지며 npm 로더·Worker가 다음 호출에서 새 인스턴스로 바꾼다. `MEMORY64=2`는 emsdk 6.0.13에서 deprecated 경고(#27952)만 있고 제거 일정이 없으며 `MEMORY64=1`(진짜 wasm64)은 1.95배로 느려서 **유지**(emsdk 올릴 때 재확인, `plugins/org.eclipse.elk.wasm/README.md`).
 - **npm**: elk-rs `plugins/org.eclipse.elk.js`의 로더(플랫폼 NAPI → 로컬 .node → WASM 폴백, Worker 모드)와 typings 구조를 그대로 이식.
 
+### 8.1 브라우저 데모(elk-live 대체) 설계 (Phase 10)
+- **대상**: `external/elk-live`(ElkGraph Web: Java Xtext 언어 서버 + Monaco/sprotty/elkjs 클라이언트)의 사용자 기능 — `.elkt` 텍스트 편집과 동기화된 그래프 보기, 예제 선택 — 를 **서버 없이** 제공한다. Java 언어 서버(Xtext LSP: 파싱·검증·자동완성·포매팅)는 포팅하지 않고 클라이언트 안에서 대체한다(비목표 참조).
+- **위치·스택**: `plugins/org.eclipse.elk.live`(elk-live `client/`에 대응; Java 플러그인 대응은 없음). TypeScript + Vite, Monaco Editor(최신 안정판, Monarch 토크나이저로 `.elkt` 강조), sprotty(최신; elk-live의 노드·포트·라벨·간선 섹션·junction point 시각 모델을 참고), 로컬 npm 패키지 `elk-lean`(`plugins/org.eclipse.elk.js`, `file:` 의존)의 WASM 백엔드를 Web Worker 모드(`workerUrl`)로 사용. elk-live의 오래된 의존(sprotty 0.8, monaco 0.14)은 쓰지 않는다.
+- **`.elkt` 변환 API(새 공개 API)**: Lean `Elk.Text.parseElkt`(+ `applyDefaults`)와 JSON exporter를 묶은 `convertElkt`를 C API `elk_lean_convert_elkt(const char* elkt, int* is_error)`(`elk_lean.h`), `Elk.Ffi` export, NAPI 애드온, WASM `EXPORTS`/`elk_lean_api.js`, npm 로더·typings(`elk.convertElkt(text) → ElkNode JSON`)에 모두 노출한다. 결과는 CLI `elk convert --to json`과 바이트 동일해야 하며, 파서 오류는 Lean 파서의 행·열 메시지를 그대로 전달한다(Xtext 메시지와 같을 필요 없음).
+- **편집기 기능 수준**: 문법 강조, 파서 오류 마커(행·열), 옵션 키 자동완성(`knownLayoutOptions()`의 id·그룹·열거형 값), 예제 드롭다운(`external/elk-models`의 examples `.elkt`를 빌드 시 복사). 포매팅·리네임 등 LSP 고급 기능은 비목표.
+- **동작**: 편집 뒤 디바운스 → `convertElkt` → `layout`(Worker) → sprotty 모델 갱신; 오류는 편집기 마커와 상태줄에. WASM(약 19 MB)은 Worker에서 비동기 로딩하고 로딩 상태를 표시한다. `MEMORY64=2` 빌드이므로 지원 브라우저(Chrome·Firefox 최신, Safari는 확인)를 문서화한다.
+- **호스팅**: 정적 산출물(`dist/`)만. `.gitlab-ci.yml`에 pages 잡 초안을 두되 실행은 릴리스 결정(러너·이미지)과 함께 보류. 로컬은 `npm run dev`.
+- **라이선스**: elk-lean과 같은 EPL-2.0 OR GPL-3.0-or-later. elk-live 코드를 가져오면 EPL-2.0 헤더와 `NOTICE`에 출처를 적는다(sprotty EPL-2.0, Monaco MIT).
+- **검증**: (1) `convertElkt` vs `elk convert` 898개 `.elkt` 바이트 동일(npm 테스트에 추가, NAPI·WASM 양쪽), (2) 데모 빌드 성공과 브라우저 스모크(Playwright가 설치 가능하면 편집→렌더 1회; 아니면 Node에서 번들·Worker 로딩 테스트), (3) 레이아웃 수치는 같은 WASM이므로 CLI와 자동 동일. 품질 게이트(`lake build` 경고 0, `lake test`, npm 테스트)는 그대로.
+
 ## 9. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
@@ -349,6 +360,7 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 | 4f. P5 edge routing, self loops, components, compound | `p5edges/*`, `loops/*`, `components/*`, `compound/*` (12K줄) | opus ×3 | xhigh | |
 | 5. force/stress, mrtree, radial, rectpacking, spore, disco, topdownpacking, vertiflex | 각 플러그인 | sonnet(소형)/opus(mrtree·rectpacking) | medium~high | 플러그인 단위 병렬 |
 | 6. elkt 파서 | `elkt_test_loader.rs` (3.3K줄), elk-live TS 파서 | sonnet | high | 명세 명확 |
+| 10. 브라우저 데모(elk-live 대체) | elk-live `client/src`(TS), 새 C/WASM/npm API `convertElkt` | opus | high | 웹 앱 통합(Monaco·sprotty·Worker)과 API 설계 판단 |
 | 7. 전수 parity·drift 분석·성능 | 전체 | fable(주)+opus | max | |
 | 8. FFI/NAPI/WASM/npm | elk-rs `js/`, `napi/`, `wasm/` | opus | xhigh | 런타임 빌드 리스크 |
 
