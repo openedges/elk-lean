@@ -95,6 +95,11 @@ export interface ElkLayoutArguments {
     measureExecutionTime?: boolean
 }
 
+export interface ElkConvertArguments {
+    /** Apply the elk-live default sizes (nodes 30, ports 5, labels 9 x length by 16). */
+    defaults?: boolean
+}
+
 export interface ElkCommonDescription {
     id?: string
     name?: string
@@ -122,6 +127,13 @@ export interface ELK {
         graph: T,
         args?: ElkLayoutArguments
     ): Promise<Omit<T, 'children'> & { children?: (T['children'][number] & ElkNode)[] }>;
+    /**
+     * elk-lean addition: parses ELK Text (`.elkt`) into the ElkGraph JSON object, the same graph
+     * as the CLI `elk convert` (`defaults: true` = `elk convert --defaults`, the elk-live default
+     * sizes for shapes without a size). Rejects with
+     * `Error('ELK Text parse error: <line>:<col>: <message>')` on a syntax or linking error.
+     */
+    convertElkt(elkt: string, args?: ElkConvertArguments): Promise<ElkNode>
     knownLayoutAlgorithms(): Promise<ElkLayoutAlgorithmDescription[]>
     knownLayoutOptions(): Promise<ElkLayoutOptionDescription[]>
     knownLayoutCategories(): Promise<ElkLayoutCategoryDescription[]>

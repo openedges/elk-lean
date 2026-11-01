@@ -39,6 +39,7 @@ class ELKBrowser extends ELK {
         known_layout_algorithms: function() { return call('known_layout_algorithms', []); },
         known_layout_options: function() { return call('known_layout_options', []); },
         known_layout_categories: function() { return call('known_layout_categories', []); },
+        convert_elkt: function(elkt, flags) { return call('convert_elkt', [elkt, flags]); },
       };
     }
 

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# build-time copies (scripts/copy-assets.mjs)
+public/examples/
+public/elk-lean/
+test-results/

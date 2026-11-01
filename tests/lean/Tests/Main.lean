@@ -37,6 +37,7 @@ import Tests.RectPacking
 import Tests.Api.PerfBenchmark
 import Tests.Api.Robustness
 import Tests.Api.Sections
+import Tests.Api.ConvertElkt
 import Tests.Api.NodeMicroLayout
 import Tests.Api.OptionDefaults
 import Tests.Api.LayeredNodeJava
@@ -73,6 +74,7 @@ def main (args : List String) : IO UInt32 := do
     Tests.Api.PerfBenchmark.suites ++
     Tests.Api.Robustness.suites ++
     Tests.Api.Sections.suites ++
+    Tests.Api.ConvertElkt.suites ++
     Tests.Api.NodeMicroLayout.suites ++
     Tests.Api.OptionDefaults.suites ++
     Tests.Api.LayeredNodeJava.suites ++

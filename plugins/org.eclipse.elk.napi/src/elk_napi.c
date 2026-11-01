@@ -8,6 +8,8 @@
  *   known_layout_algorithms() -> string
  *   known_layout_options() -> string
  *   known_layout_categories() -> string
+ *   convert_elkt(elkt: string, flags?: number) -> string   (elk-lean addition: ELK Text -> ELK
+ *       JSON like `elk convert`; flags = ELK_LEAN_CONVERT_* bits of elk_lean.h, default 0)
  * An engine error is thrown as a JavaScript `Error(message)` (napi::Error::from_reason).
  *
  * Threading: the module is context aware, so worker_threads may load it. elk_lean_init runs
@@ -207,6 +209,50 @@ static napi_value js_layout_json(napi_env env, napi_callback_info info) {
     return finish(env, out, is_error);
 }
 
+/* convert_elkt(elkt, flags = 0): elk_lean_convert_elkt_flags (ELK Text -> ELK JSON). */
+static napi_value js_convert_elkt(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value argv[2];
+    if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok) {
+        napi_throw_error(env, NULL, "elk-lean: cannot read arguments");
+        return NULL;
+    }
+    napi_value undef;
+    napi_get_undefined(env, &undef);
+    int32_t flags = 0;
+    if (argc > 1) {
+        napi_valuetype type;
+        if (napi_typeof(env, argv[1], &type) != napi_ok) {
+            napi_throw_error(env, NULL, "elk-lean: cannot inspect argument");
+            return NULL;
+        }
+        if (type == napi_number) {
+            napi_get_value_int32(env, argv[1], &flags);
+        } else if (type != napi_undefined && type != napi_null) {
+            napi_throw_type_error(env, NULL, "elk-lean: argument 'flags' must be a number");
+            return NULL;
+        }
+    }
+    char *text = get_string_arg(env, argc > 0 ? argv[0] : undef, "elkt", 0);
+    if (text == NULL) {
+        return NULL;
+    }
+    int is_error = 1;
+    char *out;
+    pthread_mutex_lock(&g_lock);
+    if (ensure_engine_locked() != 0) {
+        pthread_mutex_unlock(&g_lock);
+        free(text);
+        napi_throw_error(env, NULL, "elk-lean: engine initialisation failed");
+        return NULL;
+    }
+    ensure_thread_locked();
+    out = elk_lean_convert_elkt_flags(text, (int)flags, &is_error);
+    pthread_mutex_unlock(&g_lock);
+    free(text);
+    return finish(env, out, is_error);
+}
+
 static napi_value js_known_layout_algorithms(napi_env env, napi_callback_info info) {
     (void)info;
     return call_metadata(env, elk_lean_known_layout_algorithms);
@@ -243,6 +289,7 @@ NAPI_MODULE_INIT(/* napi_env env, napi_value exports */) {
          napi_enumerable, NULL},
         {"known_layout_categories", NULL, js_known_layout_categories, NULL, NULL, NULL,
          napi_enumerable, NULL},
+        {"convert_elkt", NULL, js_convert_elkt, NULL, NULL, NULL, napi_enumerable, NULL},
     };
     napi_value version;
     if (napi_define_properties(env, exports, sizeof props / sizeof props[0], props) != napi_ok ||

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><!-- SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later -->
+<path d="M9 9 H16 V23 H23 M16 16 H23" fill="none" stroke="#224" stroke-width="2"/>
+<rect x="2" y="5" width="9" height="8" fill="#ddf" stroke="#448" stroke-width="1.5"/>
+<rect x="21" y="12" width="9" height="8" fill="#ddf" stroke="#448" stroke-width="1.5"/>
+<rect x="21" y="19" width="9" height="8" fill="#ddf" stroke="#448" stroke-width="1.5"/>
+</svg>

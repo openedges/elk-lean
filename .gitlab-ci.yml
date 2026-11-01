@@ -380,3 +380,27 @@ package:npm:
     expire_in: 1 month
     paths:
       - packages/*.tgz
+
+# ---------------------------------------------------------------------------------------------
+# GitLab Pages: the server-less ELK Live demo (plugins/org.eclipse.elk.live, Phase 10).
+# DRAFT, DISABLED: a job whose name starts with "." is never run. To enable it, rename `.pages`
+# to `pages` (GitLab's reserved Pages job name) once the runner/image decisions are made; it
+# needs the WASM artefacts of build:wasm and the external/elk-models submodule (examples).
+# UNTESTED in CI (the build was run by hand on macOS: npm ci && npm run build && npm test).
+# ---------------------------------------------------------------------------------------------
+.pages:
+  stage: package
+  image: node:24
+  tags: [$RUNNER_TAG_LINUX_X64]
+  needs: ["build:wasm"]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - cd plugins/org.eclipse.elk.live
+    - npm ci
+    - npm run build                      # copies examples + worker/WASM, tsc --noEmit, vite build
+    - npm test                           # Node pipeline smoke (CLI comparisons skip without .lake/build/bin/elk)
+    - rm -rf "$CI_PROJECT_DIR/public" && cp -R dist "$CI_PROJECT_DIR/public"
+  artifacts:
+    paths:
+      - public

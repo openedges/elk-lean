@@ -6,7 +6,8 @@
  * Lean entry points of `Elk.Ffi`. Results are NUL-terminated UTF-8 strings allocated with
  * malloc (release them with elk_lean_free). `*is_error` is set to 1 when the result is an
  * error message (the JavaScript layers throw it) and to 0 when it is JSON: compact, object
- * keys sorted, exactly like elk-rs `serde_json::to_string`.
+ * keys sorted, exactly like elk-rs `serde_json::to_string`. elk_lean_convert_elkt (an elk-lean
+ * addition) converts ELK Text (.elkt) to ELK JSON like the CLI `elk convert`.
  *
  * Threads: elk_lean_init must run once before anything else. Every other thread that calls
  * the API must call elk_lean_thread_init first (and elk_lean_thread_finalize before it
@@ -37,6 +38,19 @@ char *elk_lean_layout_json(const char *graph_json, const char *options_json, int
 char *elk_lean_known_layout_algorithms(int *is_error);
 char *elk_lean_known_layout_options(int *is_error);
 char *elk_lean_known_layout_categories(int *is_error);
+
+/* Flag bits of elk_lean_convert_elkt_flags (the `elk convert` options). */
+#define ELK_LEAN_CONVERT_DEFAULTS 1  /* --defaults: elk-live sizes (nodes 30, ports 5, labels) */
+#define ELK_LEAN_CONVERT_PRETTY 2    /* --pretty: indented output */
+#define ELK_LEAN_CONVERT_SORT_KEYS 4 /* --sort-keys: object keys sorted */
+
+/* elk-lean addition: ELK Text (.elkt) -> ELK JSON, byte-identical to `elk convert INPUT.elkt`
+ * (compact, keys in exporter order, no default sizes). A parse error is returned with
+ * *is_error = 1 as the CLI's message "ELK Text parse error: <line>:<col>: <message>". */
+char *elk_lean_convert_elkt(const char *elkt, int *is_error);
+
+/* Same with ELK_LEAN_CONVERT_* flags, e.g. ELK_LEAN_CONVERT_DEFAULTS for `elk convert --defaults`. */
+char *elk_lean_convert_elkt_flags(const char *elkt, int flags, int *is_error);
 
 /* elk-lean version ("0.12.0"); static storage, do not free. */
 const char *elk_lean_version(void);

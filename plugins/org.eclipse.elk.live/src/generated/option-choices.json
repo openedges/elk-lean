@@ -1,0 +1,469 @@
+{
+ "org.eclipse.elk.alg.layered.compaction.postCompaction.constraints": [
+  "QUADRATIC",
+  "SCANLINE"
+ ],
+ "org.eclipse.elk.alg.layered.compaction.postCompaction.strategy": [
+  "NONE",
+  "LEFT",
+  "RIGHT",
+  "LEFT_RIGHT_CONSTRAINT_LOCKING",
+  "LEFT_RIGHT_CONNECTION_LOCKING",
+  "EDGE_LENGTH"
+ ],
+ "org.eclipse.elk.alg.layered.considerModelOrder.components": [
+  "NONE",
+  "INSIDE_PORT_SIDE_GROUPS",
+  "GROUP_MODEL_ORDER",
+  "MODEL_ORDER"
+ ],
+ "org.eclipse.elk.alg.layered.considerModelOrder.groupModelOrder.cbGroupOrderStrategy": [
+  "ONLY_WITHIN_GROUP",
+  "MODEL_ORDER",
+  "ENFORCED"
+ ],
+ "org.eclipse.elk.alg.layered.considerModelOrder.groupModelOrder.cmGroupOrderStrategy": [
+  "ONLY_WITHIN_GROUP",
+  "MODEL_ORDER",
+  "ENFORCED"
+ ],
+ "org.eclipse.elk.alg.layered.considerModelOrder.longEdgeStrategy": [
+  "DUMMY_NODE_OVER",
+  "DUMMY_NODE_UNDER",
+  "EQUAL"
+ ],
+ "org.eclipse.elk.alg.layered.considerModelOrder.strategy": [
+  "NONE",
+  "NODES_AND_EDGES",
+  "PREFER_EDGES",
+  "PREFER_NODES"
+ ],
+ "org.eclipse.elk.alg.layered.crossingMinimization.greedySwitch.type": [
+  "ONE_SIDED",
+  "TWO_SIDED",
+  "OFF"
+ ],
+ "org.eclipse.elk.alg.layered.crossingMinimization.greedySwitchHierarchical.type": [
+  "ONE_SIDED",
+  "TWO_SIDED",
+  "OFF"
+ ],
+ "org.eclipse.elk.alg.layered.crossingMinimization.strategy": [
+  "LAYER_SWEEP",
+  "MEDIAN_LAYER_SWEEP",
+  "INTERACTIVE",
+  "NONE"
+ ],
+ "org.eclipse.elk.alg.layered.cycleBreaking.strategy": [
+  "GREEDY",
+  "DEPTH_FIRST",
+  "INTERACTIVE",
+  "MODEL_ORDER",
+  "GREEDY_MODEL_ORDER",
+  "SCC_CONNECTIVITY",
+  "SCC_NODE_TYPE",
+  "DFS_NODE_ORDER",
+  "BFS_NODE_ORDER"
+ ],
+ "org.eclipse.elk.alg.layered.directionCongruency": [
+  "READING_DIRECTION",
+  "ROTATION"
+ ],
+ "org.eclipse.elk.alg.layered.edgeLabels.centerLabelPlacementStrategy": [
+  "MEDIAN_LAYER",
+  "TAIL_LAYER",
+  "HEAD_LAYER",
+  "SPACE_EFFICIENT_LAYER",
+  "WIDEST_LAYER",
+  "CENTER_LAYER"
+ ],
+ "org.eclipse.elk.alg.layered.edgeLabels.sideSelection": [
+  "ALWAYS_UP",
+  "ALWAYS_DOWN",
+  "DIRECTION_UP",
+  "DIRECTION_DOWN",
+  "SMART_UP",
+  "SMART_DOWN"
+ ],
+ "org.eclipse.elk.alg.layered.edgeRouting.selfLoopDistribution": [
+  "EQUALLY",
+  "NORTH",
+  "NORTH_SOUTH"
+ ],
+ "org.eclipse.elk.alg.layered.edgeRouting.selfLoopOrdering": [
+  "STACKED",
+  "REVERSE_STACKED",
+  "SEQUENCED"
+ ],
+ "org.eclipse.elk.alg.layered.edgeRouting.splines.mode": [
+  "CONSERVATIVE",
+  "CONSERVATIVE_SOFT",
+  "SLOPPY"
+ ],
+ "org.eclipse.elk.alg.layered.interactiveReferencePoint": [
+  "CENTER",
+  "TOP_LEFT"
+ ],
+ "org.eclipse.elk.alg.layered.layering.layerConstraint": [
+  "NONE",
+  "FIRST",
+  "FIRST_SEPARATE",
+  "LAST",
+  "LAST_SEPARATE"
+ ],
+ "org.eclipse.elk.alg.layered.layering.nodePromotion.strategy": [
+  "NONE",
+  "NIKOLOV",
+  "NIKOLOV_PIXEL",
+  "NIKOLOV_IMPROVED",
+  "NIKOLOV_IMPROVED_PIXEL",
+  "DUMMYNODE_PERCENTAGE",
+  "NODECOUNT_PERCENTAGE",
+  "NO_BOUNDARY",
+  "MODEL_ORDER_LEFT_TO_RIGHT",
+  "MODEL_ORDER_RIGHT_TO_LEFT"
+ ],
+ "org.eclipse.elk.alg.layered.layering.strategy": [
+  "NETWORK_SIMPLEX",
+  "LONGEST_PATH",
+  "LONGEST_PATH_SOURCE",
+  "COFFMAN_GRAHAM",
+  "INTERACTIVE",
+  "STRETCH_WIDTH",
+  "MIN_WIDTH",
+  "BF_MODEL_ORDER",
+  "DF_MODEL_ORDER"
+ ],
+ "org.eclipse.elk.alg.layered.layerUnzipping.strategy": [
+  "NONE",
+  "ALTERNATING"
+ ],
+ "org.eclipse.elk.alg.layered.nodePlacement.bk.edgeStraightening": [
+  "NONE",
+  "IMPROVE_STRAIGHTNESS"
+ ],
+ "org.eclipse.elk.alg.layered.nodePlacement.bk.fixedAlignment": [
+  "NONE",
+  "LEFT_UP",
+  "RIGHT_UP",
+  "LEFT_DOWN",
+  "RIGHT_DOWN",
+  "BALANCED"
+ ],
+ "org.eclipse.elk.alg.layered.nodePlacement.networkSimplex.nodeFlexibility": [
+  "NONE",
+  "PORT_POSITION",
+  "NODE_SIZE_WHERE_SPACE_PERMITS",
+  "NODE_SIZE"
+ ],
+ "org.eclipse.elk.alg.layered.nodePlacement.networkSimplex.nodeFlexibility.default": [
+  "NONE",
+  "PORT_POSITION",
+  "NODE_SIZE_WHERE_SPACE_PERMITS",
+  "NODE_SIZE"
+ ],
+ "org.eclipse.elk.alg.layered.nodePlacement.networkSimplex.nodeFlexibility.recomputeNodePlacement": [
+  "SIMPLE",
+  "INTERACTIVE",
+  "LINEAR_SEGMENTS",
+  "BRANDES_KOEPF",
+  "NETWORK_SIMPLEX"
+ ],
+ "org.eclipse.elk.alg.layered.nodePlacement.strategy": [
+  "SIMPLE",
+  "INTERACTIVE",
+  "LINEAR_SEGMENTS",
+  "BRANDES_KOEPF",
+  "NETWORK_SIMPLEX"
+ ],
+ "org.eclipse.elk.alg.layered.portSortingStrategy": [
+  "INPUT_ORDER",
+  "PORT_DEGREE"
+ ],
+ "org.eclipse.elk.alg.layered.wrapping.cutting.strategy": [
+  "ARD",
+  "MSD",
+  "MANUAL"
+ ],
+ "org.eclipse.elk.alg.layered.wrapping.strategy": [
+  "OFF",
+  "SINGLE_EDGE",
+  "MULTI_EDGE"
+ ],
+ "org.eclipse.elk.alg.layered.wrapping.validify.strategy": [
+  "NO",
+  "GREEDY",
+  "LOOK_BACK"
+ ],
+ "org.eclipse.elk.alignment": [
+  "AUTOMATIC",
+  "LEFT",
+  "RIGHT",
+  "TOP",
+  "BOTTOM",
+  "CENTER"
+ ],
+ "org.eclipse.elk.box.packingMode": [
+  "SIMPLE",
+  "GROUP_DEC",
+  "GROUP_MIXED",
+  "GROUP_INC"
+ ],
+ "org.eclipse.elk.compaction.compactionStrategy": [
+  "DEPTH_FIRST"
+ ],
+ "org.eclipse.elk.contentAlignment": [
+  "V_TOP",
+  "V_CENTER",
+  "V_BOTTOM",
+  "H_LEFT",
+  "H_CENTER",
+  "H_RIGHT"
+ ],
+ "org.eclipse.elk.direction": [
+  "UNDEFINED",
+  "RIGHT",
+  "LEFT",
+  "DOWN",
+  "UP"
+ ],
+ "org.eclipse.elk.disco.componentCompaction.strategy": [
+  "POLYOMINO"
+ ],
+ "org.eclipse.elk.edge.type": [
+  "NONE",
+  "DIRECTED",
+  "UNDIRECTED",
+  "ASSOCIATION",
+  "GENERALIZATION",
+  "DEPENDENCY"
+ ],
+ "org.eclipse.elk.edgeLabels.placement": [
+  "CENTER",
+  "HEAD",
+  "TAIL"
+ ],
+ "org.eclipse.elk.edgeRouting": [
+  "UNDEFINED",
+  "POLYLINE",
+  "ORTHOGONAL",
+  "SPLINES"
+ ],
+ "org.eclipse.elk.force.model": [
+  "EADES",
+  "FRUCHTERMAN_REINGOLD"
+ ],
+ "org.eclipse.elk.hierarchyHandling": [
+  "INHERIT",
+  "INCLUDE_CHILDREN",
+  "SEPARATE_CHILDREN"
+ ],
+ "org.eclipse.elk.json.edgeCoords": [
+  "INHERIT",
+  "CONTAINER",
+  "PARENT",
+  "ROOT"
+ ],
+ "org.eclipse.elk.json.shapeCoords": [
+  "INHERIT",
+  "PARENT",
+  "ROOT"
+ ],
+ "org.eclipse.elk.mrtree.edgeRoutingMode": [
+  "NONE",
+  "MIDDLE_TO_MIDDLE",
+  "AVOID_OVERLAP"
+ ],
+ "org.eclipse.elk.mrtree.searchOrder": [
+  "DFS",
+  "BFS"
+ ],
+ "org.eclipse.elk.mrtree.weighting": [
+  "MODEL_ORDER",
+  "DESCENDANTS",
+  "FAN",
+  "CONSTRAINT"
+ ],
+ "org.eclipse.elk.nodeLabels.placement": [
+  "H_LEFT",
+  "H_CENTER",
+  "H_RIGHT",
+  "V_TOP",
+  "V_CENTER",
+  "V_BOTTOM",
+  "INSIDE",
+  "OUTSIDE",
+  "H_PRIORITY"
+ ],
+ "org.eclipse.elk.nodeSize.constraints": [
+  "PORTS",
+  "PORT_LABELS",
+  "NODE_LABELS",
+  "MINIMUM_SIZE"
+ ],
+ "org.eclipse.elk.nodeSize.options": [
+  "DEFAULT_MINIMUM_SIZE",
+  "MINIMUM_SIZE_ACCOUNTS_FOR_PADDING",
+  "COMPUTE_PADDING",
+  "OUTSIDE_NODE_LABELS_OVERHANG",
+  "PORTS_OVERHANG",
+  "UNIFORM_PORT_SPACING",
+  "SPACE_EFFICIENT_PORT_LABELS",
+  "FORCE_TABULAR_NODE_LABELS",
+  "ASYMMETRICAL"
+ ],
+ "org.eclipse.elk.polyomino.highLevelSort": [
+  "NUM_OF_EXTERNAL_SIDES_THAN_NUM_OF_EXTENSIONS_LAST",
+  "CORNER_CASES_THAN_SINGLE_SIDE_LAST"
+ ],
+ "org.eclipse.elk.polyomino.lowLevelSort": [
+  "BY_SIZE",
+  "BY_SIZE_AND_SHAPE"
+ ],
+ "org.eclipse.elk.polyomino.traversalStrategy": [
+  "SPIRAL",
+  "LINE_BY_LINE",
+  "MANHATTAN",
+  "JITTER",
+  "QUADRANTS_LINE_BY_LINE",
+  "QUADRANTS_MANHATTAN",
+  "QUADRANTS_JITTER",
+  "COMBINE_LINE_BY_LINE_MANHATTAN",
+  "COMBINE_JITTER_MANHATTAN"
+ ],
+ "org.eclipse.elk.port.side": [
+  "UNDEFINED",
+  "NORTH",
+  "EAST",
+  "SOUTH",
+  "WEST"
+ ],
+ "org.eclipse.elk.portAlignment.default": [
+  "DISTRIBUTED",
+  "JUSTIFIED",
+  "BEGIN",
+  "CENTER",
+  "END"
+ ],
+ "org.eclipse.elk.portAlignment.east": [
+  "DISTRIBUTED",
+  "JUSTIFIED",
+  "BEGIN",
+  "CENTER",
+  "END"
+ ],
+ "org.eclipse.elk.portAlignment.north": [
+  "DISTRIBUTED",
+  "JUSTIFIED",
+  "BEGIN",
+  "CENTER",
+  "END"
+ ],
+ "org.eclipse.elk.portAlignment.south": [
+  "DISTRIBUTED",
+  "JUSTIFIED",
+  "BEGIN",
+  "CENTER",
+  "END"
+ ],
+ "org.eclipse.elk.portAlignment.west": [
+  "DISTRIBUTED",
+  "JUSTIFIED",
+  "BEGIN",
+  "CENTER",
+  "END"
+ ],
+ "org.eclipse.elk.portConstraints": [
+  "UNDEFINED",
+  "FREE",
+  "FIXED_SIDE",
+  "FIXED_ORDER",
+  "FIXED_RATIO",
+  "FIXED_POS"
+ ],
+ "org.eclipse.elk.portLabels.placement": [
+  "OUTSIDE",
+  "INSIDE",
+  "NEXT_TO_PORT_IF_POSSIBLE",
+  "ALWAYS_SAME_SIDE",
+  "ALWAYS_OTHER_SAME_SIDE",
+  "SPACE_EFFICIENT"
+ ],
+ "org.eclipse.elk.processingOrder.rootSelection": [
+  "FIXED",
+  "CENTER_NODE"
+ ],
+ "org.eclipse.elk.processingOrder.spanningTreeCostFunction": [
+  "CENTER_DISTANCE",
+  "CIRCLE_UNDERLAP",
+  "RECTANGLE_UNDERLAP",
+  "INVERTED_OVERLAP",
+  "MINIMUM_ROOT_DISTANCE"
+ ],
+ "org.eclipse.elk.processingOrder.treeConstruction": [
+  "MINIMUM_SPANNING_TREE",
+  "MAXIMUM_SPANNING_TREE"
+ ],
+ "org.eclipse.elk.radial.compactor": [
+  "NONE",
+  "RADIAL_COMPACTION",
+  "WEDGE_COMPACTION"
+ ],
+ "org.eclipse.elk.radial.optimizationCriteria": [
+  "NONE",
+  "EDGE_LENGTH",
+  "EDGE_LENGTH_BY_POSITION",
+  "CROSSING_MINIMIZATION_BY_POSITION"
+ ],
+ "org.eclipse.elk.radial.sorter": [
+  "NONE",
+  "POLAR_COORDINATE",
+  "ID"
+ ],
+ "org.eclipse.elk.radial.wedgeCriteria": [
+  "LEAF_NUMBER",
+  "NODE_SIZE"
+ ],
+ "org.eclipse.elk.rectpacking.packing.strategy": [
+  "COMPACTION",
+  "SIMPLE",
+  "NONE"
+ ],
+ "org.eclipse.elk.rectpacking.whiteSpaceElimination.strategy": [
+  "EQUAL_BETWEEN_STRUCTURES",
+  "TO_ASPECT_RATIO",
+  "NONE"
+ ],
+ "org.eclipse.elk.rectpacking.widthApproximation.optimizationGoal": [
+  "ASPECT_RATIO_DRIVEN",
+  "MAX_SCALE_DRIVEN",
+  "AREA_DRIVEN"
+ ],
+ "org.eclipse.elk.rectpacking.widthApproximation.strategy": [
+  "GREEDY",
+  "TARGET_WIDTH"
+ ],
+ "org.eclipse.elk.stress.dimension": [
+  "XY",
+  "X",
+  "Y"
+ ],
+ "org.eclipse.elk.structure.structureExtractionStrategy": [
+  "DELAUNAY_TRIANGULATION"
+ ],
+ "org.eclipse.elk.topdown.nodeType": [
+  "PARALLEL_NODE",
+  "HIERARCHICAL_NODE",
+  "ROOT_NODE"
+ ],
+ "org.eclipse.elk.topdownpacking.nodeArrangement.strategy": [
+  "LEFT_RIGHT_TOP_DOWN_NODE_PLACER"
+ ],
+ "org.eclipse.elk.topdownpacking.whitespaceElimination.strategy": [
+  "BOTTOM_ROW_EQUAL_WHITESPACE_ELIMINATOR"
+ ],
+ "org.eclipse.elk.vertiflex.layoutStrategy": [
+  "STRAIGHT",
+  "BEND"
+ ]
+}

@@ -7,6 +7,7 @@
  * an object with the four functions
  *   layout_json(graphJson, optionsJson) -> string
  *   known_layout_algorithms() / known_layout_options() / known_layout_categories() -> string
+ *   convert_elkt(elktText, flags) -> string   (elk-lean addition)
  * that throw an Error(message) on failure, and caches it.
  *
  * The backend is the emscripten CommonJS build of plugins/org.eclipse.elk.wasm

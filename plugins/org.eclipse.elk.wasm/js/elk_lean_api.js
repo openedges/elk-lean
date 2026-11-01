@@ -10,6 +10,8 @@
  *   backend.known_layout_algorithms()            -> string   (JSON array)
  *   backend.known_layout_options()               -> string
  *   backend.known_layout_categories()            -> string
+ *   backend.convert_elkt(elktText, flags)        -> string   (elk-lean addition: ELK Text -> ELK
+ *       JSON like `elk convert`; flags = ELK_LEAN_CONVERT_* bits of elk_lean.h, default 0)
  *   backend.version                              -> "0.12.0"
  *
  * Calls are synchronous and must not overlap (single-threaded build; the layout engine keeps
@@ -107,6 +109,15 @@ Module['createBackend'] = function () {
     },
     known_layout_categories: function () {
       return take(guarded(function () { return _elk_lean_known_layout_categories(flag); }));
+    },
+    convert_elkt: function (elktText, flags) {
+      if (backend.failed) throw new Error(backend.failed);
+      var t = cString(elktText);
+      try {
+        return take(guarded(function () { return _elk_lean_convert_elkt_flags(t, (flags | 0), flag); }));
+      } finally {
+        _free(t);
+      }
     },
     version: jsString(_elk_lean_version()),
     // null, or the message of the ExitStatus that ended this instance (see `guarded`)

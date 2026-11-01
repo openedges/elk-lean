@@ -3,7 +3,8 @@
  *
  * Contract: the default export `loadWasm(moduleArg)` returns a Promise of a backend, an object
  * with the four functions layout_json(graphJson, optionsJson), known_layout_algorithms(),
- * known_layout_options(), known_layout_categories() (JSON strings; Error on failure).
+ * known_layout_options(), known_layout_categories(), plus convert_elkt(elktText, flags) (JSON
+ * strings; Error on failure).
  * Concurrent first calls share one initialisation; once the backend has failed (`backend.failed`)
  * the next call creates a new instance. `moduleArg` is forwarded to the emscripten factory (e.g.
  * `locateFile` when dist/wasm/ is served elsewhere).

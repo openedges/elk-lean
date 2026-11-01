@@ -10,6 +10,7 @@ import Elk.Alg.Radial
 import Elk.Alg.MrTree
 import Elk.Alg.RectPacking
 import Elk.Api.LayoutApi
+import Elk.Api.ConvertApi
 import Elk.Api.PerfBenchmark
 /-! Facade of elk-lean: algorithm registration and the elkjs-compatible string API. -/
 namespace Elk.Api

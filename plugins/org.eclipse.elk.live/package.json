@@ -1,0 +1,36 @@
+{
+  "name": "elk-lean-live",
+  "version": "0.12.0",
+  "private": true,
+  "description": "Server-less ELK Text editor with a synchronized diagram (elk-live replacement) on the elk-lean WASM backend",
+  "license": "EPL-2.0 OR GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "assets": "node scripts/copy-assets.mjs",
+    "dev": "node scripts/copy-assets.mjs && vite",
+    "build": "node scripts/copy-assets.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs",
+    "gen:choices": "node scripts/gen-choices.mjs"
+  },
+  "dependencies": {
+    "elk-lean": "file:../org.eclipse.elk.js",
+    "inversify": "6.2.2",
+    "lz-string": "1.5.0",
+    "monaco-editor": "0.57.0",
+    "reflect-metadata": "0.2.2",
+    "snabbdom": "3.5.1",
+    "sprotty": "1.4.0",
+    "sprotty-protocol": "1.4.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "8.3.4"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

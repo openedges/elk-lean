@@ -8,7 +8,7 @@ elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt
 elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty]
 elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV]
           [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]
-elk algorithms | options | categories
+elk algorithms | options [--choices] | categories
 elk --version
 ```
 `bench` is elk-rs `perf_benchmark --engine rust_api` (same graphs, same CSV; engine `lean_api`).
@@ -21,7 +21,7 @@ and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills th
 open Elk Elk.Json Elk.Api
 
 def usage : String :=
-  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV] [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]\n  elk algorithms | options | categories\n  elk --version"
+  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV] [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]\n  elk algorithms | options [--choices] | categories\n  elk --version"
 
 structure LayoutArgs where
   input : Option String := none
@@ -47,14 +47,10 @@ def writeOutput (path : Option String) (out : String) : IO Unit := do
 /-- `true` for ELK Text inputs (`.elkt`). -/
 def isElkt (path : String) : Bool := path.endsWith ".elkt"
 
-/-- Parses ELK Text and renders it as ELK JSON (`Elk.Json.JsonExporter`). -/
-def elktToJson (text : String) (defaults : Bool) (pretty : Bool := false) (sortKeys : Bool := false) : IO (Except String String) := do
-  match ← Elk.Text.parseElkt text with
-  | .error e => return .error s!"ELK Text parse error: {e}"
-  | .ok (root, g) =>
-    let g := if defaults then Elk.Text.applyDefaults g root else g
-    let v ← Elk.Json.JsonExporter.exportValue g root {}
-    return .ok (if pretty then v.renderPretty sortKeys else v.render sortKeys)
+/-- Parses ELK Text and renders it as ELK JSON: `Elk.Api.convertElkt`, shared with the C API,
+the NAPI addon, the WASM build and the npm package (`convertElkt`). -/
+def elktToJson (text : String) (defaults : Bool) (pretty : Bool := false) (sortKeys : Bool := false) : IO (Except String String) :=
+  convertElkt text defaults pretty sortKeys
 
 partial def parseLayoutArgs (args : List String) (acc : LayoutArgs) : Except String LayoutArgs :=
   match args with
@@ -279,6 +275,7 @@ def main (args : List String) : IO UInt32 := do
   | "bench" :: rest => runBench rest
   | ["algorithms"] => IO.println (← knownLayoutAlgorithms); return 0
   | ["options"] => IO.println (← knownLayoutOptions); return 0
+  | ["options", "--choices"] => IO.println ((← knownLayoutOptionsValue (choices := true)).render); return 0
   | ["categories"] => IO.println (← knownLayoutCategories); return 0
   | _ =>
     IO.eprintln usage

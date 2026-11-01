@@ -2,7 +2,7 @@
  * elk-lean WASM, browser / Web Worker ES module (dist/wasm/elk_lean.mjs).
  *
  * Same shape as the wasm-bindgen `--target web` glue of elk-rs: the default export initialises
- * the module (async, once), the named exports are the four synchronous backend functions and
+ * the module (async, once), the named exports are the synchronous backend functions and
  * throw `Error(message)` on failure.
  *
  *   import init, { layout_json } from './elk_lean.mjs';
@@ -50,4 +50,8 @@ export function known_layout_options() {
 
 export function known_layout_categories() {
   return current().known_layout_categories();
+}
+
+export function convert_elkt(elktText, flags) {
+  return current().convert_elkt(elktText, flags);
 }

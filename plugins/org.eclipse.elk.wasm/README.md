@@ -1,8 +1,9 @@
 # org.eclipse.elk.wasm
 
 elk-lean의 WebAssembly 빌드(emscripten). elk-rs `plugins/org.eclipse.elk.wasm`(wasm-bindgen)과 같은 네 함수
-`layout_json`, `known_layout_algorithms`, `known_layout_options`, `known_layout_categories`를 JavaScript에
-노출한다. 결과는 JSON 문자열(elk-rs `serde_json::to_string`과 같은 compact·키 정렬)이고, 실패하면
+`layout_json`, `known_layout_algorithms`, `known_layout_options`, `known_layout_categories`와 elk-lean 추가
+함수 `convert_elkt(elktText, flags)`(ELK Text → ELK JSON, `elk convert`와 바이트 동일; `flags`는 `elk_lean.h`의
+`ELK_LEAN_CONVERT_*` 비트, 기본 0)를 JavaScript에 노출한다. 결과는 JSON 문자열(elk-rs `serde_json::to_string`과 같은 compact·키 정렬)이고, 실패하면
 `Error(message)`를 던진다. 하나의 `.wasm`이 Node.js와 브라우저(메인 스레드·Worker) 모두에서 동작한다.
 
 ## 빌드
@@ -30,7 +31,7 @@ sh scripts/build_wasm.sh --verify-stdlib  # (macOS) 재생성한 Init/Std C를 �
 | 파일 | 용도 |
 |---|---|
 | `wasm-node/elk_lean.cjs` + `elk_lean.wasm` | Node.js CommonJS. `require` 시 동기 컴파일·초기화(`-sWASM_ASYNC_COMPILATION=0`) |
-| `wasm/elk_lean.mjs` | 브라우저/Worker ES 모듈 래퍼: `default` = 비동기 `init(moduleArg)`, 네 함수는 named export |
+| `wasm/elk_lean.mjs` | 브라우저/Worker ES 모듈 래퍼: `default` = 비동기 `init(moduleArg)`, 백엔드 함수(`convert_elkt` 포함)는 named export |
 | `wasm/elk_lean_core.mjs` + `elk_lean_core.wasm` | 위 래퍼가 쓰는 emscripten 모듈(`-sMODULARIZE -sEXPORT_ES6`, `.wasm`은 `new URL(..., import.meta.url)`로 찾음) |
 
 ```js
