@@ -221,8 +221,8 @@ task로 넘어간 값은 Lean이 MT로 표시해 참조 카운트가 원자적�
 
 - `lake build` 경고 0·오류 0, `LEAN_NUM_THREADS=3 lake test` **17,296 통과·0 실패**(기존 17,197 + 새 `parallel.*` 99:
   소유 표·적격성·컷, 재번호 병합·쓰기 검사, 무작위 계층 60개와 다중 요소 그래프의 상한 1 대 4 차분, 던지는 자식을 모든
-  위치·쌍에 둔 22가지의 예외 문구와 예외 뒤 arena). 기준점의 17,202와의 차이는 worktree에 `external/elk-models`가 없어
-  그 모델을 읽는 테스트가 빠진 것이다.
+  위치·쌍에 둔 22가지의 예외 문구와 예외 뒤 arena). 기준점 기록의 17,202와 기존 몫 17,197의 차이 5는 조사하지
+  않았다(이 worktree에는 `external/elk-models` 서브모듈이 없어 그것을 읽는 테스트가 빠졌을 가능성이 크다).
 - elk-rs(기본 모드): model parity(1e-6) **1447/1447**, 바이트 일치 1060/1447(기존과 같음), strict trace parity
   **1447/1447**(trace 모드라 순차).
 - FFI: `ELK_NO_GMP=1 sh scripts/build_ffi.sh --check` 통과(smoke에 `elk_lean_init_threads` 두 번 호출 + 상한 1·4가
