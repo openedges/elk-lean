@@ -43,12 +43,22 @@ def catchLayout {α : Type} (act : IO α) : IO (Except String α) := do
     if isJavaThrowableText msg || (msg.splitOn "org.eclipse.elk.core.").length > 1 then return .error msg
     else return .error s!"{unsupportedConfigurationExceptionClass}: {msg}"
 
+/-- The bytes that the layout transfer adds to a document, estimated from the laid-out graph `g`:
+coordinates of every shape (nodes, ports, labels), the edge members and the sections with their
+bend points (fitted on the synthetic benchmark inputs and a corpus sample: the compact output stays
+below the input size plus this estimate, and at most about 2.3 times above it). Only the capacity of
+the output buffer depends on it. -/
+def transferBytesEstimate (g : ElkGraph) : Nat :=
+  let bends := g.sections.foldl (fun acc s => acc + s.bendPoints.size) 0
+  64 * (g.nodes.size + g.ports.size + g.labels.size) + 32 * g.edges.size + 128 * g.sections.size + 40 * bends
+
 /-- The pipeline of `layoutValue`/`layoutJson` up to the transfer: parse the options, import, lay
 out, materialise the defaults and transfer the layout. Returns the importer state and the transfer
 overlay (`JsonImporter.transferLayoutOverlay`, the document unchanged), or `none` when the overlay
-does not apply and `JsonImporter.transferLayout` has rewritten `st.model`. -/
+does not apply and `JsonImporter.transferLayout` has rewritten `st.model`; and the
+`transferBytesEstimate` of the laid-out graph. -/
 def layoutTransfer (input : Value) (optionsJson : String) (forceRootAlgorithm : Option String) :
-    IO (ImporterState × Option Overlay) := do
+    IO (ImporterState × Option Overlay × Nat) := do
   let defaults ← match ← GlobalOptions.parse optionsJson with
     | .ok g => pure g
     | .error e => throw (IO.userError e)
@@ -61,11 +71,12 @@ def layoutTransfer (input : Value) (optionsJson : String) (forceRootAlgorithm : 
   let ((), g) ← (RecursiveGraphLayoutEngine.layout root (ProgressMonitor.null)).run g
   let materialized ← (st.defaults.getD defaults).materialize st.model
   let st := { st with model := materialized }
+  let extra := transferBytesEstimate g
   -- the transfer reads the graph only
   let ((ov, st'), _) ← (ImportM.run JsonImporter.transferLayoutOverlay st).run g
-  if ov.ok then return (st', some ov)
+  if ov.ok then return (st', some ov, extra)
   let (((), st), _) ← (ImportM.run JsonImporter.transferLayout st).run g
-  return (st, none)
+  return (st, none, extra)
 
 /-- `layout_value`: lays out a parsed document. Returns the laid-out document. -/
 def layoutValue (input : Value) (optionsJson : String := "") (forceRootAlgorithm : Option String := none) :
@@ -73,8 +84,17 @@ def layoutValue (input : Value) (optionsJson : String := "") (forceRootAlgorithm
   ensureInitialized
   catchLayout do
     match ← layoutTransfer input optionsJson forceRootAlgorithm with
-    | (st, some ov) => return Overlay.materialize (.ofState st ov) st.model
-    | (st, none) => return st.model
+    | (st, some ov, _) => return Overlay.materialize (.ofState st ov) st.model
+    | (st, none, _) => return st.model
+
+/-- Initial capacity of the output string of `layoutJson`: the input size plus the
+`transferBytesEstimate` `extra` (the compact document re-renders the input and adds the layout), three
+times that for pretty printing (indentation; at most about 2.6 times on the fitted inputs). An
+underestimate costs one doubling of the buffer, an overestimate only untouched (virtual) memory;
+the former `4 × input` (`8 ×` pretty) allocated a buffer of up to 4 GB for a 500 MB input. -/
+@[inline] def outputCapacity (inputBytes extra : Nat) (pretty : Bool) : Nat :=
+  let est := inputBytes + extra + 256
+  if pretty then 3 * est else est
 
 /-- `layout_json`: string in, string out (elkjs `layout()` contract). The compact output with
 document key order is printed straight from the overlay (`OverlayPrinter.render`). -/
@@ -86,17 +106,17 @@ def layoutJson (graphJson : String) (optionsJson : String := "") (lenient : Bool
   | .ok input =>
     ensureInitialized
     catchLayout do
-      -- the laid-out document is about 3 to 5 times the input (positions, sections), pretty
-      -- printing adds the indentation
-      let cap := (if pretty then 8 else 4) * graphJson.utf8ByteSize + 256
       match ← layoutTransfer input optionsJson forceRootAlgorithm with
-      | (st, some ov) =>
+      | (st, some ov, extra) =>
+        let cap := outputCapacity graphJson.utf8ByteSize extra pretty
         let c := Overlay.Ctx.ofState st ov
         if pretty || sortKeys then
           let v := Overlay.materialize c st.model
           return if pretty then v.renderPretty sortKeys cap else v.render sortKeys cap
         else return OverlayPrinter.render c st.model cap
-      | (st, none) => return if pretty then st.model.renderPretty sortKeys cap else st.model.render sortKeys cap
+      | (st, none, extra) =>
+        let cap := outputCapacity graphJson.utf8ByteSize extra pretty
+        return if pretty then st.model.renderPretty sortKeys cap else st.model.render sortKeys cap
 
 private def graphFeatureName : GraphFeature → String
   | .selfLoops => "SELF_LOOPS"

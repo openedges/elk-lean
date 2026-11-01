@@ -270,7 +270,7 @@ def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
       if let some shape := s.outgoingShape then
         endX := shiftedEastX st shape endX
         endY := shiftedSouthY st shape endY
-    let mut bends : FloatArray := .empty
+    let mut bends : FloatArray := .emptyWithCapacity (2 * s.bendPoints.size)
     for b in s.bendPoints do
       let bx ← adj.adjX b.x
       let by_ ← adj.adjY b.y
@@ -294,7 +294,7 @@ def overlayLayoutEdge (e : EdgeId) : OverlayM Unit := do
   let mut junction : Option FloatArray := none
   if let some jps := junctionPoints then
     if !jps.isEmpty then
-      let mut arr : FloatArray := .empty
+      let mut arr : FloatArray := .emptyWithCapacity (2 * jps.size)
       for jp in jps do
         let jx ← adj.adjX jp.x
         let jy ← adj.adjY jp.y

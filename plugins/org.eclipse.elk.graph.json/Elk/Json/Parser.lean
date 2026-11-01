@@ -272,6 +272,12 @@ private def fastDecimal (bs : String) (intStart mantEnd dot fracDigits expStart 
 /-- `-0.0` (a top-level constant: the literal would be rebuilt by `Float.ofScientific`). -/
 private def NEG_ZERO : Float := -0.0
 
+/-- The values `.num (.int i)` for `i < 1024`, shared by every document (coordinates and sizes are
+mostly small non-negative integers): the parser hands out these persistent objects instead of
+allocating two cells per number (and the layout frees nothing for them). Values are immutable, so
+sharing is unobservable. -/
+def smallIntValues : Array Value := (Array.range 1024).map fun (i : Nat) => .num (.int (Int.ofNat i))
+
 /-- The value of a validated number lexeme `bs[start:pos]` (`neg`: leading `-`; digits
 `[intStart, intStart + intDigits)`, then the fraction up to `mantEnd` with its point at `dot`, the
 exponent digits `[expStart, expEnd)`), as a JSON value. -/
@@ -280,7 +286,8 @@ private def numberValue (bs : String) (start pos : Nat) (neg isFloat : Bool) (in
   -- plain integers of at most 18 digits (always within `i64`) without building the lexeme
   if !isFloat && intDigits <= 18 then
     let v := digitsValue bs intStart pos 0
-    if neg && v == 0 then .ok (.num (.float NEG_ZERO)) pos
+    if h : v < smallIntValues.size ∧ !neg then .ok smallIntValues[v] pos
+    else if neg && v == 0 then .ok (.num (.float NEG_ZERO)) pos
     else .ok (.num (.int (if neg then -(v : Int) else (v : Int)))) pos
   else
     let f := if isFloat then fastDecimal bs intStart mantEnd dot fracDigits expStart expEnd expNeg else Float.nan
