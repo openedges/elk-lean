@@ -12,7 +12,7 @@ of a group decides (self loop → skip the group, active target → reverse the 
 recurse). Edges to targets without `MODEL_ORDER` get the key `i32::MAX - <number of groups so far>`.
 
 Node indices are written to `LNode.id` and read back from there (Rust `graph_element().id`). The
-phase name is the Rust `type_name` `DfsNodeOrderCycleBreaker`.
+phase name is the Java class name `DFSNodeOrderCycleBreaker` (the elk-rs `type_name` is `DfsNodeOrderCycleBreaker`).
 -/
 namespace Elk.Alg.Layered.P1Cycles
 
@@ -113,7 +113,7 @@ def run (graph : LGraphId) : DfsM Unit := do
 
 /-- The `DFSNodeOrderCycleBreaker` phase (`CycleBreakingStrategy.DFS_NODE_ORDER`). -/
 def phase : LayeredPhase :=
-  { name := "DfsNodeOrderCycleBreaker"
+  { name := "DFSNodeOrderCycleBreaker"
     process := fun graph monitor => do
       let _ ← monitor.begin "Depth-first cycle removal" 1.0
       let _ ← (run graph).run {}

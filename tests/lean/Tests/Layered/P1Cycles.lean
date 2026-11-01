@@ -307,8 +307,8 @@ def configurationTests : Suite := suite "layered.p1cycles.registration" do
     return phase.name
   checkEq "registered phases (Rust type names)" names
     #["GreedyCycleBreaker", "DepthFirstCycleBreaker", "InteractiveCycleBreaker", "ModelOrderCycleBreaker",
-      "GreedyModelOrderCycleBreaker", "ScConnectivityCycleBreaker", "SccNodeTypeCycleBreaker",
-      "DfsNodeOrderCycleBreaker", "BfsNodeOrderCycleBreaker"]
+      "GreedyModelOrderCycleBreaker", "SCConnectivity", "SCCNodeTypeCycleBreaker",
+      "DFSNodeOrderCycleBreaker", "BFSNodeOrderCycleBreaker"]
   checkEq "createPhase matches the registry" (allStrategies.map (·.createPhase.name)) names
   let ((cfgs, icfg), _) ← LayeredM.run (do
       let cfgs ← allStrategies.mapM fun s => s.createPhase.getLayoutProcessorConfiguration ⟨0⟩

@@ -1209,8 +1209,8 @@ Java `findNodes`는 `min.getProperty(CYCLE_BREAKING_ID) == graph.getProperty(CB_
 두어, 기본 옵션의 모든 강연결 성분이 "선호 source" 가지(최소 노드의 들어오는 간선 뒤집기)로 갔다. 설정된 값끼리는 JSON 임포트가
 노드와 그래프에서 따로 `Integer.valueOf`를 부르므로 `Integer` 캐시 `[-128, 127]` 안에서만 같은 객체다 → `javaBoxedIdEq`. 고정:
 `scc_node_type_no_preferred_ids`(3-순환, 시드 1 `h1104`의 분리 레이아웃 `n13`에서 축소), `..._preferred_source_uncached`(둘 다 `200` →
-연결도), `..._cached`(둘 다 `1` → 선호 source; 이전과 같은 결과). trace 단계 이름은 elk-rs의 `SccNodeTypeCycleBreaker` 그대로다
-(Java trace는 `SCCNodeTypeCycleBreaker`; 코퍼스에는 이 전략이 없다).
+연결도), `..._cached`(둘 다 `1` → 선호 source; 이전과 같은 결과). trace 단계 이름은 Java 클래스 이름 `SCCNodeTypeCycleBreaker`다
+(TRN에서 elk-rs 이름 `SccNodeTypeCycleBreaker`에서 변경; `scripts/compare_phase_traces.py`가 별칭 표로 elk-rs 이름과 맞춘다. 코퍼스에는 이 전략이 없다).
 
 ### 20.3 `BKCompactor`: 놓이지 않은 클래스의 `null` 시프트
 
@@ -1289,6 +1289,7 @@ Lean과 같고, 원인 단위 `n4_n2`만 떼면 `SelfLoopRouter`의 self-loop �
 - 재현하지 않는 것(Java 실행 컨텍스트 의존): `h` 세트의 self-loop 처리 순서(`SelfLoopRouter`·`SelfLoopPortRestorer`)와 node
   promotion에서 갈리는 레이아웃, 메시지 없는 fast throw AIOOBE, 컨텍스트에 따라 순서가 바뀌는 `LGraph`/`LEdge` NPE, 앞선 분리
   레이아웃 결과가 들어가는 예외 문구 좌표(`h1/h1012`).
-- trace 단계 이름 `SccNodeTypeCycleBreaker`·`DfsNodeOrderCycleBreaker`(Java `SCCNodeTypeCycleBreaker`·`DFSNodeOrderCycleBreaker`):
-  elk-rs trace parity가 이 이름을 쓰므로 그대로 두었다(Java trace 비교에서 이름 차이 1개로 보고되지만 코퍼스에는 두 전략이 없다).
+- trace 단계 이름: TRN에서 elk-rs 이름(`BfsNodeOrderCycleBreaker`·`DfsNodeOrderCycleBreaker`·`SccNodeTypeCycleBreaker`·`ScConnectivityCycleBreaker`·`HypernodeProcessor`)을
+  Java 클래스 이름(`BFSNodeOrderCycleBreaker`·`DFSNodeOrderCycleBreaker`·`SCCNodeTypeCycleBreaker`·`SCConnectivity`·`HypernodesProcessor`)으로 바꿨다.
+  elk-rs trace 비교는 `scripts/compare_phase_traces.py`의 `_PROCESSOR_ALIASES` 별칭 표가 양쪽을 Java 이름으로 정규화한다.
 - `LongestPathLayerer`류에서 `LNode.id`가 범위를 벗어나는 경우(Java는 `nodeHeights[node.id]`에서 AIOOBE) — 관찰된 입력 없음.

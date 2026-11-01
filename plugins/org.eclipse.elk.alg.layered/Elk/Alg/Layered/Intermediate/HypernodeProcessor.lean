@@ -9,8 +9,8 @@ the first join point of their connected edges: the edges starting (or ending) at
 (rightmost) first (last) bend point are reconnected to a new north or south port and lose that
 bend point (and the equal junction points).
 
-The processor name is the elk-rs `type_name` `HypernodeProcessor` (the trace file name of the
-oracle), not the Java simple class name `HypernodesProcessor`.
+The processor name is the Java simple class name `HypernodesProcessor` (the elk-rs `type_name` is
+`HypernodeProcessor`).
 
 Rust deviation from Java, followed here: the removed bend point is removed from **all** equal
 entries of `JUNCTION_POINTS` (Java `KVectorChain.remove(Object)` removes the first one only).
@@ -171,7 +171,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   monitor.done
 
 /-- The hypernode processor (`HypernodesProcessor` in Java). -/
-def processor : LayeredProcessor := { name := "HypernodeProcessor", process := process }
+def processor : LayeredProcessor := { name := "HypernodesProcessor", process := process }
 
 end HypernodeProcessor
 

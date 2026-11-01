@@ -61,7 +61,7 @@ def targetNode (a : LGraphArena) (e : LEdgeId) : Option LNodeId := (a.edge e).ta
 def registrationTests : Suite := suite "layered.intermediate.edgePorts.registration" do
   for (s, name) in #[(IntermediateProcessorStrategy.longEdgeSplitter, "LongEdgeSplitter"),
       (.longEdgeJoiner, "LongEdgeJoiner"), (.hyperedgeDummyMerger, "HyperedgeDummyMerger"),
-      (.hypernodeProcessor, "HypernodeProcessor"), (.northSouthPortPreprocessor, "NorthSouthPortPreprocessor"),
+      (.hypernodeProcessor, "HypernodesProcessor"), (.northSouthPortPreprocessor, "NorthSouthPortPreprocessor"),
       (.northSouthPortPostprocessor, "NorthSouthPortPostprocessor"), (.invertedPortProcessor, "InvertedPortProcessor"),
       (.portSideProcessor, "PortSideProcessor"), (.portListSorter, "PortListSorter"),
       (.reversedEdgeRestorer, "ReversedEdgeRestorer")] do

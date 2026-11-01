@@ -101,6 +101,18 @@ def _processor_from_stem(stem: str) -> str:
     return parts[2] if len(parts) == 3 else (parts[1] if len(parts) == 2 else stem)
 
 
+# elk-rs `type_name` -> Java class simple name. elk-lean names its trace steps after the Java
+# classes; the elk-rs oracle traces still use the Rust names for these five processors, so both
+# sides are normalised to the Java name before comparison.
+_PROCESSOR_ALIASES = {
+    "BfsNodeOrderCycleBreaker": "BFSNodeOrderCycleBreaker",
+    "DfsNodeOrderCycleBreaker": "DFSNodeOrderCycleBreaker",
+    "SccNodeTypeCycleBreaker": "SCCNodeTypeCycleBreaker",
+    "ScConnectivityCycleBreaker": "SCConnectivity",
+    "HypernodeProcessor": "HypernodesProcessor",
+}
+
+
 def _normalize_processor_name(name: str) -> str:
     """Normalize processor names across Java/Rust trace formats.
 
@@ -118,7 +130,7 @@ def _normalize_processor_name(name: str) -> str:
         normalized = normalized.rsplit(".", 1)[1]
     if "$" in normalized:
         normalized = normalized.rsplit("$", 1)[1]
-    return normalized
+    return _PROCESSOR_ALIASES.get(normalized, normalized)
 
 
 def collect_step_files(directory: Path) -> list[tuple[int, str, Path]]:
