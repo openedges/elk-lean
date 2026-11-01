@@ -137,18 +137,22 @@ private partial def internalWorked (m : ProgressMonitor) (work : Float) : IO Uni
         internalWorked p (Float.toF32 (work / s.totalWork * ps.currentChildWork))
     | none => pure ()
 
+/-- `begin` of a basic monitor (see `begin`). -/
+def beginBasic (r : IO.Ref MonitorState) (name : String) (totalWork : Float) : IO Bool := do
+  let s ← r.get
+  if s.closed then Elk.Core.throwIllegalState "The task is already done."
+  if s.taskName.isSome then return false
+  let now ← if s.recordExecutionTime then some <$> IO.monoNanosNow else pure none
+  r.modify fun s => { s with taskName := some name, totalWork := totalWork, startNanos := now }
+  return true
+
 /-- `begin(name, totalWork)`: returns `false` if the task was already started.
-Throws `IllegalStateException` if the task is already done. -/
-def begin (m : ProgressMonitor) (name : String) (totalWork : Float) : IO Bool := do
+Throws `IllegalStateException` if the task is already done. `@[inline]`: the null monitor's
+answer melts into the caller (no call, no `IO` result object, PLAN 7.1 item 58). -/
+@[inline] def begin (m : ProgressMonitor) (name : String) (totalWork : Float) : IO Bool :=
   match m.state with
   | none => pure false
-  | some r =>
-    let s ← r.get
-    if s.closed then Elk.Core.throwIllegalState "The task is already done."
-    if s.taskName.isSome then return false
-    let now ← if s.recordExecutionTime then some <$> IO.monoNanosNow else pure none
-    r.modify fun s => { s with taskName := some name, totalWork := totalWork, startNanos := now }
-    return true
+  | some r => beginBasic r name totalWork
 
 /-- `worked(work)`: only positive amounts of work are recorded, and only while open. -/
 def worked (m : ProgressMonitor) (work : Float) : IO Unit := do
@@ -158,22 +162,25 @@ def worked (m : ProgressMonitor) (work : Float) : IO Unit := do
     let s ← r.get
     if work > 0.0 && !s.closed then internalWorked m work
 
+/-- `done` of a basic monitor (see `done`). -/
+def doneBasic (m : ProgressMonitor) (r : IO.Ref MonitorState) : IO Unit := do
+  let s ← r.get
+  if s.taskName.isNone then Elk.Core.throwIllegalState "The task has not begun yet."
+  if s.closed then return
+  if s.recordExecutionTime then
+    if let some start := s.startNanos then
+      let now ← IO.monoNanosNow
+      r.modify fun s => { s with totalTime := (now - start).toFloat / fl1p0e9 }
+  if s.completedWork < s.totalWork then
+    internalWorked m (s.totalWork - s.completedWork)
+  r.modify fun s => { s with closed := true }
+
 /-- `done()`: completes the remaining work and records the execution time.
-Throws `IllegalStateException` if the task has not begun. -/
-def done (m : ProgressMonitor) : IO Unit := do
+Throws `IllegalStateException` if the task has not begun. `@[inline]` like `begin`. -/
+@[inline] def done (m : ProgressMonitor) : IO Unit :=
   match m.state with
   | none => pure ()
-  | some r =>
-    let s ← r.get
-    if s.taskName.isNone then Elk.Core.throwIllegalState "The task has not begun yet."
-    if s.closed then return
-    if s.recordExecutionTime then
-      if let some start := s.startNanos then
-        let now ← IO.monoNanosNow
-        r.modify fun s => { s with totalTime := (now - start).toFloat / fl1p0e9 }
-    if s.completedWork < s.totalWork then
-      internalWorked m (s.totalWork - s.completedWork)
-    r.modify fun s => { s with closed := true }
+  | some r => doneBasic m r
 
 /-- `isRunning()`. -/
 def isRunning (m : ProgressMonitor) : IO Bool := do
@@ -195,21 +202,24 @@ def totalWork (m : ProgressMonitor) : IO Float := do
 def completedWork (m : ProgressMonitor) : IO Float := do
   return ((← getState m).map (·.completedWork)).getD 0.0
 
+/-- `subTask` of a basic monitor (see `subTask`). -/
+def subTaskBasic (m : ProgressMonitor) (r : IO.Ref MonitorState) (work : Float) : IO ProgressMonitor := do
+  let s ← r.get
+  if s.closed then return null
+  let newLevels := if s.maxLevels > 0 then s.maxLevels - 1 else s.maxLevels
+  let sub ← IO.mkRef
+    ({ childIndex := s.nextChildIndex, maxLevels := newLevels,
+       recordLogs := s.recordLogs, persistLogs := s.persistLogs,
+       recordExecutionTime := s.recordExecutionTime } : MonitorState)
+  r.modify fun s => { s with nextChildIndex := s.nextChildIndex + 1, currentChildWork := work }
+  return ⟨some sub, some m⟩
+
 /-- `subTask(work)`: a child monitor consuming `work` units of this monitor.
 A closed monitor yields the null monitor. -/
-def subTask (m : ProgressMonitor) (work : Float) : IO ProgressMonitor := do
+@[inline] def subTask (m : ProgressMonitor) (work : Float) : IO ProgressMonitor :=
   match m.state with
   | none => pure null
-  | some r =>
-    let s ← r.get
-    if s.closed then return null
-    let newLevels := if s.maxLevels > 0 then s.maxLevels - 1 else s.maxLevels
-    let sub ← IO.mkRef
-      ({ childIndex := s.nextChildIndex, maxLevels := newLevels,
-         recordLogs := s.recordLogs, persistLogs := s.persistLogs,
-         recordExecutionTime := s.recordExecutionTime } : MonitorState)
-    r.modify fun s => { s with nextChildIndex := s.nextChildIndex + 1, currentChildWork := work }
-    return ⟨some sub, some m⟩
+  | some r => subTaskBasic m r work
 
 /-- `getSubMonitors()`: always empty (see module doc). -/
 def subMonitors (_ : ProgressMonitor) : IO (Array ProgressMonitor) := pure #[]
@@ -218,9 +228,12 @@ def subMonitors (_ : ProgressMonitor) : IO (Array ProgressMonitor) := pure #[]
 def parentMonitor (m : ProgressMonitor) : IO (Option ProgressMonitor) := do
   return m.parent
 
-/-- `isCanceled()`: false unless `cancel` was called. -/
-def isCanceled (m : ProgressMonitor) : IO Bool := do
-  return (← getState m).any (·.canceled)
+/-- `isCanceled()`: false unless `cancel` was called. `@[inline]` like `begin` (the null monitor is
+never canceled). -/
+@[inline] def isCanceled (m : ProgressMonitor) : IO Bool :=
+  match m.state with
+  | none => pure false
+  | some r => return (← r.get).canceled
 
 /-- Requests cancellation (extension; Java subclasses override `isCanceled`). -/
 def cancel (m : ProgressMonitor) : IO Unit := modifyState m fun s => { s with canceled := true }
