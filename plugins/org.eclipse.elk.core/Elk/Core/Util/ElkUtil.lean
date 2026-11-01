@@ -422,8 +422,12 @@ def resizeNodeWith (g : ElkGraph) (node : NodeId) (newWidth newHeight : Float)
         | .west => if !fixedPorts then { p with y := p.y * heightRatio } else p
         | .undefined => p
   g := g.modifyNode node fun x => { x with width := newSize.x, height := newSize.y }
-  -- relative label placement is undefined on a collapsed rectangle
-  if moveLabels && oldSize.x != fl0p0 && oldSize.y != fl0p0 then
+  -- like Java the label percentages divide by the old size even when it is `0` (`±Infinity`/`NaN`
+  -- percentages: a label of a node of height `0` moves to the bottom by the width percentage, both
+  -- axes `0` leave it alone; the moved coordinates are always finite). elk-rs and elk-lean before
+  -- EXT skipped the labels of a collapsed node. The port coordinates keep the guarded ratios above:
+  -- Java's `x * Infinity` would be non-finite.
+  if moveLabels then
     for l in (g.node node).labels do
       g := g.modifyLabel l fun lab => Id.run do
         let midx := lab.x + lab.width / fl2p0
