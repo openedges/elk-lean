@@ -36,6 +36,25 @@ SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
   are copied from elk-rs (EPL-2.0 OR GPL-3.0-or-later).
 - `external/elk-models` test models carry their own license notices.
 
+## Browser Demo (plugins/org.eclipse.elk.live)
+
+- Files ported from elk-live (https://github.com/kieler/elk-live, `external/elk-live`,
+  reference commit cbf63a24), Copyright (c) 2017 TypeFox GmbH, (c) 2020 Kiel
+  University and others, licensed under EPL-2.0 only. They keep their original
+  headers (`SPDX-License-Identifier: EPL-2.0`) with a note on the changes:
+  `src/editor/elkt-language.ts`, `src/diagram/sprotty-config.ts`,
+  `src/diagram/sprotty-model.ts`, `src/diagram/views.ts`,
+  `src/diagram/diagram.css`, `src/core/elkex.ts`. The other files of the demo are
+  EPL-2.0 OR GPL-3.0-or-later.
+- The static build (`dist/`) bundles third-party npm packages under their own
+  licenses: Eclipse Sprotty and sprotty-protocol 1.4.0 (EPL-2.0 OR GPL-2.0 WITH
+  Classpath-exception-2.0), Monaco Editor 0.57.0 (MIT; includes DOMPurify 3.4.17,
+  MPL-2.0 OR Apache-2.0), InversifyJS 6.2.2 (MIT), snabbdom 3.5.1 (MIT),
+  reflect-metadata 0.2.2 (Apache-2.0), lz-string 1.5.0 (MIT), file-saver 2.0.5
+  (MIT), autocompleter 9.3.2 (MIT), tinyqueue 2.0.3 (ISC); copies of the
+  `external/elk-models/examples` files (EPL-2.0); and the elk-lean npm package's
+  Web Worker and WebAssembly build (this repository, see "Binary Distributions").
+
 ## Binary Distributions
 
 Executables and libraries built from this repository statically link the Lean 4
