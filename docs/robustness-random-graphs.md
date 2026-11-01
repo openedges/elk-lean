@@ -1402,3 +1402,110 @@ timeout·overflow는 양쪽 0. 결과(ok/예외) 불일치는 368개(Lean ok/Jav
   o 5,224·p 1,359·c 5,070·h 2,175, 예외 문구 4,793·227·227·745·424·813·3,716 그대로.
 - 코퍼스(ELK Java 기준): Lean 출력 1,997개 바이트 동일, 정확 일치 1,878/119(드리프트 집합 `corpus_drift_set.txt`와 동일; comment box 모델
   5개도 바뀌지 않음). 합성 26개 바이트 동일(23/26).
+
+## 22. EXT: 외부 포트 세트 `x` — 복합 노드 포트·포트 제약·계층 처리 혼합·계층 횡단 간선 (2026-11-01)
+
+방법: 외부 포트(복합·계층 노드의 포트, 계층 포트 dummy, 계층 횡단 간선)는 지금까지 코퍼스(계층 모델 284개, `INCLUDE_CHILDREN`
+23개, 고정 포트 제약 686개, 외부 포트 모델 4개)와 무작위 세트 h·s/v·w를 통해 간접적으로만 Java와 비교되었다. 새 생성기
+`scripts/gen_external_port_graphs.py`(파이프라인 세트 `x`, `--sets x`)로 시드 1~10 × 600 = 6,000개의 layered 그래프를 만들었다:
+2~3단 복합 노드의 네 변 포트, 부모·자식의 `portConstraints`(FREE/FIXED_SIDE/FIXED_ORDER/FIXED_RATIO/FIXED_POS/UNDEFINED), `port.side`·
+`port.index`(−1·100 포함)·`port.borderOffset`(음수 포함)·`port.anchor`, 포트 라벨과 `portLabels.placement`·`treatAsGroup`,
+`portAlignment.*`·`spacing.portPort`(음수 포함)·`spacing.portsSurrounding`·`padding`(음수 포함), 노드 크기 제약·옵션(`PORT_LABELS_OUTSIDE`,
+`SPACE_EFFICIENT_PORT_LABELS`, `UNIFORM_PORT_SPACING`, `FORCE_TABULAR_NODE_LABELS` …), 단계마다 섞인 `INCLUDE_CHILDREN`/`SEPARATE_CHILDREN`/
+`INHERIT`와 계층 횡단 간선(안쪽 노드 → 부모 포트 → 바깥 노드, 2~3단을 건너는 간선, 외부 포트 자체에서/로, 외부 포트 사이, 소수의
+hyperedge; 간선은 최저 공통 조상·루트·출발점의 부모 중 하나에 둔다), inside self loop(`insideSelfLoops.activate`·`.yo`), 노드와 외부 포트
+위치를 미리 준 interactive 레이아웃, 네 방향, ORTHOGONAL/POLYLINE/SPLINES, `allowNonFlowPortsToSwitchSides`·`feedbackEdges`·
+`mergeHierarchyEdges`·`hierarchicalSweepiness`(−3·2 포함)·`considerModelOrder.*`·post compaction, layered 부모 아래의 force/mrtree/rectpacking
+복합 자식. 크기 0인 포트·노드, 노드 밖 포트를 일부러 뽑는다. 그래프의 4%만 Java가 거부하는 조합(잘못된 포트 라벨 배치, 비 layered
+알고리즘 아래 변 없는 포트, hyperedge)을 유지한다(첫 시험에서는 75%가 예외였다). 그래프 k는 COUNT와 무관하다.
+
+차이마다 Java/Lean 단계별 trace로 첫 차이 프로세서를 찾고, Java 쪽 원인은 스택 트레이스 하네스(`ElkGraphJson` + `RecursiveGraphLayoutEngine`,
+실패 시 프레임 30개)로 확인했다. Java 실행 컨텍스트 의존 여부는 차이 입력마다 여섯 컨텍스트(목록 순서·역순·섞은 순서의 배치 JVM,
+`-XX:+UnlockExperimentalVMOptions -XX:hashCode=0/2/3`)로 갈랐다: Lean이 어느 한 컨텍스트와 같으면 "컨텍스트 의존(Lean = 한 컨텍스트)",
+Java끼리 다르면 "Java 컨텍스트 의존", 모든 컨텍스트가 같고 Lean만 다르면 결정적 후보다. 결정적 후보는 Java 결과가 비유한 값을 담는지도
+확인했다. 고정 입력은 "Java 결과 유지, EXT 이전 바이너리 ≠ Java, EXT 바이너리 = Java"를 유지하는 탐욕 축소(노드·복합 내용·간선·포트·
+라벨·옵션 제거, 후보 60개마다 한 JVM 배치)로 줄여 `tests/fixtures/ext/`에 두었다(`Tests/Api/RandomJavaExt.lean`, `ext.java`).
+
+### 22.1 결정적 차이와 수정(전부 ELK Java가 기준)
+
+| 차이 | Java | 수정(모듈) | 입력 수(첫 실행) | 고정 |
+|---|---|---|---:|---|
+| `null` 노드 크기로 만든 외부 포트 dummy | `CompoundGraphPreprocessor`는 `createExternalPortDummy`에 노드 크기 `null`을 넘기고(포트 dummy 생성 세 곳), `FIXED_RATIO`(인덱스 없는 `FIXED_ORDER`가 아니면)가 `portPosition / portNodeSize.y`(`.x`)로 `NullPointerException: Cannot read field "y" because "portNodeSize" is null` | `LGraphUtil.createExternalPortDummy`의 노드 크기를 `Option`으로, `none`이면 같은 NPE(elk-rs: `(0,0)`과 0 나눗셈 가드) | 499 | `external_port_dummy_null_node_size` |
+| 부모 간선의 hyperedge | `importFlatGraph`의 inside self loop 수집이 부모의 모든 간선에 `getSourceNode`(`IllegalArgumentException: Passed edge is not 'simple'.`) | `importParentInsideSelfLoops`가 같은 예외 | 69 | `parent_hyperedge_inside_self_loop_scan` |
+| `LayerSweepTypeDecider.nodeInfoFor` | `nodeInfo[n.getLayer().id][n.id]`: 북/남 포트의 `PORT_DUMMY`가 복합 노드 중첩 그래프의 외부 포트 dummy(층에서 빠졌거나 그 그래프의 번호)면 `NullPointerException`/`ArrayIndexOutOfBoundsException`, 범위 안이면 그 칸을 갱신; `currentNode`는 표의 칸 자체 | 초기화한 크기의 표에서 Java의 예외, 칸을 매번 다시 읽음(elk-rs: 표를 늘리고 층 없는 노드는 층 0) | 105 | `sweep_type_decider_node_without_layer`, `sweep_type_decider_stale_index` |
+| spline `anchorY` | 북/남 포트의 `SPLINE_NS_PORT_Y_COORD`를 언박싱(북쪽 외부 포트 dummy의 포트는 `SOUTH`이고 값이 없다: NPE); `FinalSplineBendpointsCalculator`도 같음 | `SplineSegment.anchorYFails`로 같은 NPE(elk-rs: 앵커 y로 대체) | 76 | `spline_anchor_north_south_without_coordinate` |
+| 최상위 외부 포트 dummy의 `ORIGIN` | `CrossHierarchyEdge.getActualSource/Target`의 `(LPort)` 캐스트: 혼자 배치되는 `INCLUDE_CHILDREN` 복합 노드의 외부 포트 dummy는 `ElkPort`가 origin이라 `ClassCastException` | 같은 예외(`CrossHierarchyMap.checkActualEnd`) | 10 | `compound_postprocessor_top_level_external_port` |
+| 북/남 교차 계수의 배열 경계 | `countNorthSouthCrossingsOnPorts`가 `PORT_DUMMY`(중첩 그래프의 외부 포트 dummy) 포트의 낡은 위치를 읽어 `portPositions`·`BinaryIndexedTree` 밖(AIOOBE) | `javaNorthSouthIndexError`(다른 그래프의 `PORT_DUMMY`가 있을 때만 검사) | 6 | `north_south_crossings_stale_port_dummy` |
+| 라벨 dummy 제거 뒤 라벨 위치 | `LabelDummyRemover`는 dummy 위치에 라벨을 둔다(post compaction이 이미 dummy를 옮김) | elk-rs의 `LEFT`/`RIGHT` post compaction 경계 재조정 제거 | 29 | `label_dummy_remover_post_compaction` |
+| 크기 0 노드의 라벨 이동 | `ElkUtil.resizeNode`·`LGraphUtil.resizeNode`가 옛 크기 0으로 나눈 백분율(`±Infinity`/`NaN`)로 라벨을 옮긴다(높이 0이면 아래로; 결과는 늘 유한) | 같은 계산(elk-rs: 크기 0이면 라벨을 두지 않음); 포트는 Java의 `x·Infinity`(비유한)를 따르지 않고 기존 가드 유지 | 약 80 | `resize_node_label_zero_height`, `lgraph_resize_node_label_zero_height` |
+| post compaction의 junction point·bend point | `VerticalSegment`가 첫 bend point의 x와 같은 junction point를 모아 함께 옮기고, 합친 구간 목록의 중복(북/남 구간과 이어지는 일반 구간이 공유하는 bend point)을 모두 옮기며, 허용 오차 이하 이동도 적용; 마지막 구간의 간격 판정은 끝에서 두 번째 bend point | `LGraphToCGraphTransformer`·`VerticalSegment` | 약 130 | `compaction_junction_points` |
+| post compaction의 scanline | `ScanlineConstraintCalculator`의 `TreeSet`(x 중심, `Double.compare`): 같은 중심의 활성 구간이면 `IllegalStateException: Invalid hitboxes for scanline constraint calculation.`; 같은 y에서는 끝이 시작보다 먼저(높이 0 구간은 지운 뒤 넣어 끝까지 남음); `lower`/`higher`/`remove`는 키 기준; 제약은 이웃의 그룹이 있고 다를 때만 | `EdgeAwareScanlineConstraintCalculation`(참조 처리기와 순수 커널 모두; elk-rs: 검사 없음, 식별자 기준 목록) | 1 | `scanline_invalid_hitboxes` |
+| self loop 경로 슬롯 수 | `SelfHyperLoop.setRoutingSlot`이 그때마다 `max(count, slot+1)`(원시 슬롯과 이동한 슬롯, 차지한 변만); 그 밖의 슬롯 읽기는 AIOOBE | `RoutingSlotAssigner.routingSlotCount`, `OrthogonalSelfLoopRouter.javaSlotIndexError`(elk-rs: 모든 변 최소 1개, 최종 슬롯만) | 5 | `self_loop_routing_slot_count` |
+| 계층 포트 dummy 정렬 | `restoreProperOrder`·`ensureUniquePositions`는 `Double.compare`(`-0.0` < `0.0`: 인덱스 0인 남·서쪽 포트), `Math.max` | `HierarchicalPortOrthogonalEdgeRouter`(elk-rs: `partial_cmp`, `f64::max`) | 1 | `hierarchical_port_restore_order_negative_zero` |
+| rectpacking | `findBestCandidate`는 후보가 0개나 3개 이상 남으면 `null`(NPE); 필터는 `Math.min/max`; `drawing + padding.getHorizontal()`(왼쪽+오른쪽을 먼저 더함) | `AreaApproximation`·필터 3개·`RectPackingLayoutProvider`·`Compactor`·`NoPlacement`/`SimplePlacement` | 1 | `rectpacking_padding_sum` |
+
+### 22.2 외부 포트 모듈 점검
+
+| 모듈 | 결과 |
+|---|---|
+| `Intermediate/HierarchicalPortConstraintProcessor`, `HierarchicalPortDummySizeProcessor`, `PortSideProcessor`, `PortListSorter` | 세트 `x`의 Java 정상 입력 3,885개에서 첫 차이 0개(그대로) |
+| `Intermediate/HierarchicalPortOrthogonalEdgeRouter` | Java로 변경(`Double.compare` 정렬, `Math.max`). 남은 첫 차이 38개는 전부 Java의 비유한 값(22.3) |
+| `Intermediate/HierarchicalPortPositionProcessor` | 남은 첫 차이 42개 전부 Java의 비유한 값(`FIXED_RATIO` 비율 × 높이, 22.3) |
+| `Intermediate/HierarchicalNodeResizingProcessor` | `LGraphUtil.resizeNode`의 라벨 이동을 Java로 변경; 그 밖의 첫 차이 0개 |
+| `Intermediate/InteractiveExternalPortPositioner` | 첫 차이 1개, Java의 비유한 값 |
+| `Intermediate/Loops/**` | `RoutingSlotAssigner`의 슬롯 수와 `OrthogonalSelfLoopRouter`의 배열 경계를 Java로 변경. 남은 첫 차이(`SelfLoopRouter` 133·`SelfLoopPortRestorer` 15·`SelfLoopPostProcessor` 4)는 모두 Java 실행 컨텍스트 의존(§21.3의 `PortSide` identity hash) 또는 비유한 값 |
+| `Graph/Transform/ElkGraphImporter` | `importParentInsideSelfLoops`의 hyperedge 예외, 외부 포트 dummy의 노드 크기(`some graphSize`). 모듈 주석의 elk-rs 항목(`DIRECTION` 기본값, `LABEL_MANAGER`, 루트 `checkExternalPorts`)은 관찰되지 않음 |
+| `Graph/Transform/ElkGraphLayoutTransferrer` | 단계별 trace가 전부 같은데 최종 출력이 다른 입력 54개는 모두 Lean이 어떤 Java 컨텍스트와 같다(외부 포트 위치 전달의 결정적 차이 0개) |
+| `Compound/**` | `CompoundGraphPreprocessor`(`null` 노드 크기), `CrossHierarchyMap`(`ClassCastException`). 남은 첫 차이: 전처리기 1개(Java 비유한 중간 포트 좌표), 후처리기 1개(컨텍스트 의존) |
+| `Components/ComponentsProcessor`(읽기만) | 외부 포트가 있는 성분 결합에서 차이 0개 — 수정 없음 |
+| `Elk/Core/RecursiveGraphLayoutEngine` | 비 layered 복합 자식(force/mrtree/rectpacking)의 외부 포트·계층 횡단 간선에서 결정적 차이 0개(남은 `DEF`/`NML` 플래그 18개는 모두 컨텍스트 의존 또는 비유한 값과 함께 나타남) |
+| 그 밖에 찾은 것 | `LayerSweepTypeDecider`, spline `anchorY`·`FinalSplineBendpointsCalculator`, 북/남 교차 계수, post compaction(junction point·bend point·scanline), `LabelDummyRemover`, `ElkUtil.resizeNode`, rectpacking(22.1) |
+
+### 22.3 Java 실행 컨텍스트 의존·Java 결함(재현하지 않음)
+
+남은 레이아웃 차이 308개(양쪽 정상 3,885개 중)와 예외 차이 16개의 분류:
+
+| 분류 | 수 | 근거·예 |
+|---|---:|---|
+| Java 실행 컨텍스트 의존: Lean이 한 컨텍스트와 같다 | 194 | 대부분 첫 차이가 `SelfLoopRouter`(118)·`SelfLoopPortRestorer`(14): §21.3의 `SelfHyperLoop.slPortsBySide` 키(`PortSide`, identity hash) 순서; 예 `x2/x0486`(새 JVM·hashCode 2/3/4·`-Xint`와 hashCode 0·앞선 입력 1/3개가 두 결과로 갈리고 Lean은 뒤쪽과 같다). trace가 전부 같은 54개는 같은 원인의 다른 배치 순서 |
+| Java 실행 컨텍스트 의존: Java끼리 다르다 | 12 | Lean은 여섯 컨텍스트 중 어느 것과도 같지 않지만 Java가 컨텍스트마다 다름(11개가 `SelfLoopRouter`) |
+| Java의 비유한 값(재현하지 않음) | 98 | 너비·높이 0인 복합 노드의 `FIXED_RATIO` 외부 포트: Java는 `portPosition / graphSize`(0 나눗셈)로 비율이 `±Infinity`/`NaN`이 되고, `HierarchicalPortPositionProcessor`(42)·`HierarchicalPortOrthogonalEdgeRouter`(38)·교차 최소화(4) 등에서 좌표가 비유한 값이 된다(Java 출력 `NaN`). Lean은 위치를 그대로 둔다(유한). 같은 원인으로 Java만 예외인 입력 6개(`Invalid hitboxes` 3, rectpacking `bestOpt` NPE 2, `NetworkSimplex` `NegativeArraySizeException` 1) |
+| Java의 비유한 중간 포트 좌표 | 3 | `ElkUtil.resizeNode`가 크기 0인 노드의 포트를 `y · Infinity`로 옮긴다(`EdgeAndLayerConstraintEdgeReverser` 2, `CompoundGraphPreprocessor` 1; 코퍼스 trace의 `EdgeAndLayerConstraintEdgeReverser` 169개와 같은 종류) |
+| 컨텍스트 의존(축소로 확인) | 1 | `x1/x0347`: 여섯 컨텍스트 모두 같은 Java 결과였지만, 차이를 유지하는 축소 입력(복합 노드 하나, 노드에서 자기 서쪽 포트로 가는 라벨 달린 self loop)은 `-XX:hashCode=2/3`에서 Lean과 같아진다 — 위와 같은 `PortSide` identity hash 원인 |
+| 예외 문구: HotSpot fast throw | 4 | Java `ArrayIndexOutOfBoundsException`(메시지 없음), Lean은 같은 클래스에 `Index … out of bounds …` |
+| 예외 문구: 컨텍스트 의존 | 6 | "could not be found" 4개(문구의 좌표), `x6/x0392`, `x7/x0258`: Lean이 한 컨텍스트와 같다 |
+| Java watchdog timeout | 1 | `x1/x0041`: Java가 60초 동안 진행하지 않음, Lean은 레이아웃 |
+
+
+### 22.4 결과
+
+시드 1~10 × 600, Java는 세트마다 배치 JVM(같은 Java 결과로 기준 `aff7de7`과 EXT 바이너리 비교):
+
+| 세트 | Java ok/예외/timeout | 기준 Lean ok/예외 | EXT Lean ok/예외 | 정확 일치(양쪽 ok) | 예외 문구 일치(양쪽 예외) |
+|---|---|---|---|---|---|
+| x1 | 380/219/1 | 433/167 | 381/219 | 298/380 → **321/380** | 146/167 → **218/219** |
+| x2 | 397/203/0 | 454/146 | 397/203 | 313/397 → **350/397** | 127/146 → **203/203** |
+| x3 | 391/209/0 | 456/144 | 393/207 | 305/391 → **336/391** | 115/144 → **203/207** |
+| x4 | 395/205/0 | 449/151 | 395/205 | 322/395 → **355/395** | 137/151 → **205/205** |
+| x5 | 374/226/0 | 429/171 | 375/225 | 320/374 → **356/374** | 143/171 → **225/225** |
+| x6 | 388/212/0 | 435/165 | 389/211 | 348/388 → **378/388** | 134/165 → **209/211** |
+| x7 | 392/208/0 | 448/152 | 393/207 | 349/392 → **379/392** | 133/152 → **205/207** |
+| x8 | 391/209/0 | 443/157 | 392/208 | 340/391 → **372/391** | 133/157 → **208/208** |
+| x9 | 397/203/0 | 453/147 | 397/203 | 349/397 → **377/397** | 128/147 → **202/203** |
+| x10 | 380/220/0 | 443/157 | 380/220 | 324/380 → **353/380** | 133/157 → **220/220** |
+| 합 | 3,885/2,114/1 | 4,443/1,557 | 3,892/2,108 | 3,268/3,885 → **3,577/3,885** | 1,329/1,557 → **2,098/2,108** |
+
+overflow는 양쪽 0. 결과(ok/예외) 불일치는 558개(Lean ok/Java 예외)에서 7개(전부 22.3의 Java 비유한 값의 결과)와 Java timeout 1개가
+되었다. 남은 레이아웃 차이 308개와 예외 문구 차이 10개는 22.3의 분류 그대로다(결정적 차이 0개).
+
+다른 검증(EXT 바이너리 vs 기준 바이너리, 같은 Java 결과):
+- 무작위 s/v/d/o/p/c/h/w(시드 1~10, 47,802개): Lean 출력(결과·예외 문구·레이아웃 바이트) **전부 동일** → 정확 일치 s 1,197·v 5,711·
+  d 5,711·o 5,224·p 1,359·c 5,074·h 2,175·w 5,479, 예외 문구 4,793·227·227·745·422·819·3,718·347 그대로(c·w의 수는 이번 실행의 Java
+  배치 JVM 기준; 기준 바이너리도 같은 수).
+- 코퍼스(ELK Java 기준): Lean 출력 1,997개 바이트 동일, 정확 일치 1,878/119(드리프트 집합 `corpus_drift_set.txt`와 동일). 합성 26개
+  바이트 동일(23/26). Java 단계별 trace 1,817/1,997(첫 차이 `EdgeAndLayerConstraintEdgeReverser` 169·
+  `SelfLoopRouter` 7·`PartitionMidprocessor` 3·`InLayerConstraintProcessor` 1, 이전과 같음).
+- elk-rs(보조): model parity(1e-6) 1,447/1,447, strict trace 1,447/1,447 — 그대로(이번 수정이 바꾸는 경로는 코퍼스에서 관찰되지 않음; oracle 특이점 추가 없음).
+- 성능: `elk bench` 26개 시나리오의 instructions retired(macOS `time -l`, 시나리오마다 따로 10회 반복, 세 번 재어 최솟값) 기하평균 비
+  1.0000(최소 0.9974 `mrtree_medium`, 최대 1.0020 `rectpacking_xlarge`).
+
