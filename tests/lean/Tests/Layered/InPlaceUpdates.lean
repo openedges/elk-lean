@@ -141,9 +141,9 @@ def overlapTests : Suite := suite "m16.overlaps.computeOverlaps" do
       let (w, s3) := rnd s2 60
       s := s3
       xs := xs.push (x.toFloat / 2.0, w.toFloat / 3.0)
-    let xs := stableSort xs fun a b => Float.compareTotal a.1 b.1
-    let nodes : Array RectangleNode := (List.range xs.size).toArray.map fun i =>
-      { originalIndex := i, rectangle := { x := xs[i]!.1, y := 0, width := xs[i]!.2, height := 1 },
+    let sorted := stableSort xs fun a b => Float.compareTotal a.1 b.1
+    let nodes : Array RectangleNode := (List.range sorted.size).toArray.map fun i =>
+      { originalIndex := i, rectangle := { x := sorted[i]!.1, y := 0, width := sorted[i]!.2, height := 1 },
         overlappingNodes := #[i] }
     let fast := RectangleStripOverlapRemover.computeOverlaps nodes
     let ref := computeOverlapsRef nodes
@@ -173,7 +173,7 @@ def setSlotTests : Suite := suite "m16.routingSlotAssigner.setSlot" do
     let side := sides[k]!
     let slot : Int := (v : Int) - 2
     a := a.setSlot i side slot
-    let sideIdx := ElkEnum.ordinal side
+    let sideIdx := Elk.ElkEnum.ordinal side
     b := { b with
       states := b.states.modify i fun st => { st with routingSlots := st.routingSlots.set! sideIdx slot }
       loops := b.loops.modify i (·.setRoutingSlot side slot) }
