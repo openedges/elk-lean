@@ -8,6 +8,8 @@ import Elk.Alg.Disco.Graph.DCGraph
 import Elk.Alg.Disco.Options.DisCoOptions
 import Elk.Alg.Disco.Transform.IGraphTransformer
 import Elk.Alg.Disco.Transform.ElkGraphComponentsProcessor
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.disco.transform.ElkGraphTransformer`
 
@@ -32,11 +34,6 @@ Deviations from Rust:
 * Rust panics with `Use import_elk_edge for ElkEdge instances.` for edges in `import_elk_shape`;
   Lean throws `IllegalArgumentException` with the Java message of `ElkGraphTransformer`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Disco.Transform
 

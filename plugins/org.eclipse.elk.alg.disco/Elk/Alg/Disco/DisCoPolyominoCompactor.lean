@@ -5,6 +5,8 @@ import Elk.Alg.Common.Polyomino
 import Elk.Alg.Disco.ICompactor
 import Elk.Alg.Disco.Options.DisCoOptions
 import Elk.Alg.Disco.Structures.DCPolyomino
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.disco.DisCoPolyominoCompactor`
 
@@ -21,10 +23,6 @@ the `Polyominoes` holder, which does not copy the graph's options (Rust/Java: de
 The debug polyominoes (`DEBUG_DISCO_POLYS`) are returned by `compactWithPolys` instead of being
 stored as a graph property (see `DisCoOptions`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl100p0 : Float := 100.0
 
 namespace Elk.Alg.Disco
 
