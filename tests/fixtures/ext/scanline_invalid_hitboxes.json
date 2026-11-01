@@ -1,0 +1,28 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+  "elk.spacing.nodeNode": 5,
+  "elk.layered.compaction.postCompaction.strategy": "EDGE_LENGTH"
+ },
+ "children": [
+  {
+   "id": "g275_n1",
+   "width": 20,
+   "height": 30,
+   "ports": [],
+   "layoutOptions": {}
+  },
+  {
+   "id": "g275_n3",
+   "width": 30,
+   "height": 30,
+   "ports": [],
+   "children": [],
+   "layoutOptions": {},
+   "edges": []
+  }
+ ],
+ "edges": []
+}

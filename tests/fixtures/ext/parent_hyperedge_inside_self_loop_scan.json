@@ -1,0 +1,78 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g171_n1",
+   "width": 20,
+   "height": 30,
+   "ports": [],
+   "children": [
+    {
+     "id": "g171_n2",
+     "width": 40,
+     "height": 45,
+     "ports": [],
+     "layoutOptions": {
+      "elk.portLabels.placement": "[INSIDE, ALWAYS_OTHER_SAME_SIDE, SPACE_EFFICIENT]"
+     }
+    }
+   ],
+   "layoutOptions": {},
+   "edges": []
+  },
+  {
+   "id": "g171_n5",
+   "width": 80,
+   "height": 120,
+   "ports": [
+    {
+     "id": "g171_n5_p1",
+     "width": 6,
+     "height": 4,
+     "layoutOptions": {}
+    },
+    {
+     "id": "g171_n5_p3",
+     "width": 4,
+     "height": 8,
+     "layoutOptions": {}
+    }
+   ],
+   "children": [],
+   "layoutOptions": {},
+   "edges": [
+    {
+     "id": "g171_e72",
+     "sources": [
+      "g171_n5_p1"
+     ],
+     "targets": [
+      "g171_n5_p3",
+      "g171_n12"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "g171_n9",
+   "width": 10,
+   "height": 30,
+   "ports": [],
+   "children": [
+    {
+     "id": "g171_n12",
+     "width": 40,
+     "height": 20,
+     "ports": [],
+     "layoutOptions": {}
+    }
+   ],
+   "layoutOptions": {},
+   "edges": []
+  }
+ ],
+ "edges": []
+}

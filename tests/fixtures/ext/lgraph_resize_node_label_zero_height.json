@@ -1,0 +1,35 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g467_n2",
+   "width": 30,
+   "height": 0,
+   "ports": [],
+   "labels": [
+    {
+     "text": "g467_n2_l",
+     "width": 0,
+     "height": 5
+    }
+   ],
+   "children": [
+    {
+     "id": "g467_n3",
+     "width": 40,
+     "height": 20,
+     "ports": [],
+     "children": [],
+     "layoutOptions": {},
+     "edges": []
+    }
+   ],
+   "layoutOptions": {},
+   "edges": []
+  }
+ ],
+ "edges": []
+}

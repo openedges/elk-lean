@@ -1,0 +1,65 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g80_n1",
+   "width": 40,
+   "height": 20,
+   "ports": [],
+   "children": [
+    {
+     "id": "g80_n5",
+     "width": 5,
+     "height": 60,
+     "ports": [
+      {
+       "id": "g80_n5_p2",
+       "width": 0,
+       "height": 6,
+       "layoutOptions": {
+        "elk.port.side": "SOUTH"
+       }
+      }
+     ],
+     "children": [
+      {
+       "id": "g80_n6",
+       "width": 10,
+       "height": 45,
+       "ports": [
+        {
+         "id": "g80_n6_p1",
+         "width": 4,
+         "height": 4,
+         "layoutOptions": {}
+        }
+       ],
+       "layoutOptions": {}
+      }
+     ],
+     "layoutOptions": {
+      "elk.portConstraints": "FIXED_ORDER",
+      "elk.edgeRouting": "SPLINES"
+     },
+     "edges": [
+      {
+       "id": "g80_e7",
+       "sources": [
+        "g80_n6_p1"
+       ],
+       "targets": [
+        "g80_n5_p2"
+       ]
+      }
+     ]
+    }
+   ],
+   "layoutOptions": {},
+   "edges": []
+  }
+ ],
+ "edges": []
+}
