@@ -1,6 +1,8 @@
 import Elk.Core.Util.Sort
 import Elk.Alg.MrTree.TreeLayoutPhases
 import Elk.Alg.MrTree.Options.MrTreeOptions
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.mrtree.p2order.NodeOrderer`
 
@@ -30,10 +32,6 @@ inner nodes are reordered accordingly (`replace_outgoing_edges`, which also rebu
 All sorts use consistent integer comparators, so `stableSort` equals Rust's `sort_by`. Rust sorts
 the slice of the caller in place; the Lean recursion returns the reordered level instead.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.MrTree.P2Order
 

@@ -6,6 +6,8 @@ import Elk.Core.Util.ProgressMonitor
 import Elk.Alg.MrTree.Graph.TArena
 import Elk.Alg.MrTree.Options.MrTreeOptions
 import Elk.Alg.MrTree.Intermediate.GraphBoundsProcessor
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.mrtree.ComponentsProcessor`
 
@@ -30,11 +32,6 @@ to the destination. `apply_padding_and_normalize_positions` sets `BB_UPLEFT := (
 graph by `(padding.left - GRAPH_XMIN, padding.top - GRAPH_YMIN)` into a throw-away graph, which the
 Lean port omits (`moveGraph` with no destination); the moved graph keeps its node and edge lists.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.MrTree
 

@@ -1,5 +1,7 @@
 import Elk.Alg.MrTree.Graph.TShape
 import Elk.Alg.MrTree.Options.InternalProperties
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.mrtree.graph.TNode`
 
@@ -13,10 +15,6 @@ the edge, `remove_outgoing` removes the *first occurrence* of the edge's target 
 `outgoing_edges` (Java `getChildren()`), so the cache is kept as the field `directChildren` and
 `children()` returns it, exactly like Rust.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.MrTree.Graph
 

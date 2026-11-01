@@ -1,6 +1,8 @@
 import Elk.Core.Math.KVector
 import Elk.Alg.MrTree.Graph.TGraphElement
 import Elk.Alg.MrTree.Options.InternalProperties
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.mrtree.graph.TGraph`
 
@@ -9,10 +11,6 @@ nodes and edges (ids into the `TArena`). Several graphs share nodes: the compone
 `ComponentsProcessor.split` and the packed graph of `ComponentsProcessor.pack` list the nodes of the
 imported graph, like the shared `TNodeRef`s of Rust.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.MrTree.Graph
 

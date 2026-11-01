@@ -4,6 +4,8 @@ import Elk.Core.Util.Sort
 import Elk.Alg.MrTree.Graph.TArena
 import Elk.Alg.MrTree.Options.MrTreeOptions
 import Elk.Alg.MrTree.TreeUtil
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 
 /-!
 # `org.eclipse.elk.alg.mrtree.intermediate.CompactionProcessor`
@@ -40,12 +42,6 @@ ELK Java details (elk-rs differs in all of them):
 Like Java, the sort keys of the main loop are read before the loop, while the positions of dependent
 nodes and parents are read when they are needed (they may have been moved earlier in the loop).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.MrTree.Intermediate
 
