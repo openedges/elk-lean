@@ -210,18 +210,28 @@ def prepareTraceDirectoryForRun : IO Unit := do
   if (← traceDir).isNone then return
   if (← stepCounter.get) == 0 then clearTraceDirectory
 
+/-- The trace directory of the current outermost run: `traceDir` read once when the run starts
+(`withLayoutScope` at depth 0) instead of once per processor (`getenv` on every
+`recordSnapshotForRoot`). Only read at depth 1, i.e. inside the run that set it; neither the
+override (set between runs by `elk batch`) nor the environment changes during a run. -/
+builtin_initialize runTraceDir : IO.Ref (Option String) ← IO.mkRef none
+
 /-- `TraceLayoutScope::enter`/`Drop`: runs `x` one nesting level deeper, restoring the depth
 afterwards (also on exceptions). -/
 def withLayoutScope {α : Type} (x : IO α) : IO α := do
   let previous ← layoutDepth.get
   layoutDepth.set (previous + 1)
-  if previous == 0 then prepareTraceDirectoryForRun
+  if previous == 0 then
+    let dir ← traceDir
+    runTraceDir.set dir
+    -- `prepareTraceDirectoryForRun` on the directory just read
+    if dir.isSome && (← stepCounter.get) == 0 then clearTraceDirectory
   try x finally layoutDepth.set previous
 
 /-- `record_trace_snapshot_for_root`: records the root graph of the outermost run. -/
 def recordSnapshotForRoot (a : LGraphArena) (g : LGraphId) (processorName : String) : IO Unit := do
   if (← layoutDepth.get) != 1 || (a.graph g).parentNode.isSome then return
-  let some dir ← traceDir | return
+  let some dir ← runTraceDir.get | return
   let step ← stepCounter.get
   stepCounter.set (step + 1)
   try writeSnapshot a g step processorName dir

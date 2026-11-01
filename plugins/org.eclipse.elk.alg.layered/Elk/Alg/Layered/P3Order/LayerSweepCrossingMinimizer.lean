@@ -92,8 +92,8 @@ structure LayerSweepCrossingMinimizer where
   graphsWhoseNodeOrderChanged : Array Bool := #[]
   /-- `random`: the shared generator (see the module doc). -/
   random : IO.Ref Random
-  /-- `random_seed` (`u64` in Rust; `setSeed` wraps). -/
-  randomSeed : Int := 0
+  /-- `random_seed` (`u64` in Rust; `setSeed` wraps): the bit pattern of the `nextLong` draw. -/
+  randomSeed : UInt64 := 0
   /-- The shared generators to write back: the graph holding the `RANDOM` state and its ref. -/
   randomRefs : Array (LGraphId × IO.Ref Random) := #[]
 
@@ -468,7 +468,7 @@ def chooseMinimizingMethod (rootIndex : Nat) : SweepM MinimizingMethod := do
 /-- `reset_random_for_all_graphs()`: reseeds the shared generator only (Java likewise). -/
 def resetRandomForAllGraphs : SweepM Unit := do
   let s ← get
-  s.random.modify (·.setSeed s.randomSeed)
+  s.random.modify (·.setSeedBits s.randomSeed)
 
 /-- `next_boolean_for_graph(index)`: the sweep direction from the shared generator
 (`ELK_DEBUG_CROSSMIN_FORCE_SWEEP=forward|backward` forces it). -/
@@ -799,8 +799,9 @@ def initializeRandom (root : LGraphId) : SweepM Unit := do
     let holderGraph ← LayeredM.randomHolder root
     modify fun s => { s with randomRefs := s.randomRefs.push (holderGraph, s.random) }
   RandomTrace.resetCounter
-  let rawSeed ← s.random.modifyGet (·.nextLong)
-  let seed ← RandomTrace.traceNextLong rawSeed "graph_info_holder::initialize"
+  let seed ← s.random.modifyGet (·.nextLongBits)
+  if RandomTrace.isEnabled then
+    let _ ← RandomTrace.traceNextLong seed.toInt64.toInt "graph_info_holder::initialize"
   modify fun s => { s with randomSeed := seed }
 
 /-- `initialize(root_graph, root_graph_guard)`: one holder per graph in BFS order (`LGraph.id :=

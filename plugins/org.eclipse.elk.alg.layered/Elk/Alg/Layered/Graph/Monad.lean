@@ -137,20 +137,24 @@ def cachePortSides (n : LNodeId) : LayeredM Unit := do
 
 /-! ### Shared `RANDOM` -/
 
-/-- The graph holding the generator shared with `g` (follows `LGraphInternals.randomOwner`). -/
+/-- `randomHolder` on an arena: at most `fuel` owner hops from `cur` (a pure loop; the monadic
+`for _ in [0:64]` allocated its range and loop state on every call). -/
+def randomHolderIn (a : LGraphArena) (cur : LGraphId) : Nat → LGraphId
+  | 0 => cur
+  | fuel + 1 =>
+    match (a.graph cur).internal.randomOwner with
+    | some o => if o == cur then cur else randomHolderIn a o fuel
+    | none => cur
+
+/-- The graph holding the generator shared with `g` (follows `LGraphInternals.randomOwner`, at most
+64 hops). -/
 def randomHolder (g : LGraphId) : LayeredM LGraphId := do
-  let mut cur := g
-  for _ in [0:64] do
-    match (← getGraph cur).internal.randomOwner with
-    | some o =>
-      if o == cur then return cur
-      cur := o
-    | none => return cur
-  return cur
+  return randomHolderIn (← get) g 64
 
 /-- `graph.getProperty(InternalProperties.RANDOM)`: the generator shared by `g`, if any. -/
 def graphRandom? (g : LGraphId) : LayeredM (Option Elk.Core.Util.Random) := do
-  return (← getGraph (← randomHolder g)).internal.random
+  let a ← get
+  return (a.graph (randomHolderIn a g 64)).internal.random
 
 /-- Writes the advanced generator back to the graph holding it (elk-rs shares the state). -/
 def setGraphRandom (g : LGraphId) (r : Elk.Core.Util.Random) : LayeredM Unit := do

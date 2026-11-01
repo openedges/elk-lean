@@ -83,6 +83,19 @@ def nextLong (r : Random) : Int × Random :=
   let v : Int64 := (Int64.ofInt (UInt32.toIntSigned hi) <<< 32) + Int64.ofInt (UInt32.toIntSigned lo)
   (v.toInt, r)
 
+/-- `nextLong()` as its two's complement bit pattern (`(nextLong r).1` is `Int64.toInt` of it): no
+`Int` result, which for most draws lies outside the small-`Int` range and costs a GMP number. -/
+def nextLongBits (r : Random) : UInt64 × Random :=
+  let (hi, r) := r.next 32
+  let (lo, r) := r.next 32
+  -- `((long) hi << 32) + (long) lo` with both halves sign-extended, wrapping
+  let hi64 : UInt64 := (Int32.toInt64 hi.toInt32).toUInt64
+  let lo64 : UInt64 := (Int32.toInt64 lo.toInt32).toUInt64
+  ((hi64 <<< 32) + lo64, r)
+
+/-- `setSeed(seed)` for a `long` seed given as its bit pattern (`setSeed r (Int64.toInt b)`). -/
+def setSeedBits (r : Random) (seed : UInt64) : Random := { r with seed := (seed ^^^ multiplier) &&& mask }
+
 /-- `nextBoolean()` (honours the test mock). -/
 def nextBoolean (r : Random) : Bool × Random :=
   match r.mockNextBoolean with

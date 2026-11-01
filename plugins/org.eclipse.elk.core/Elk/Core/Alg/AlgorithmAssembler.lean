@@ -107,13 +107,16 @@ private def retrieveProcessor (a : AlgorithmAssembler m P G F) (factory : F) : I
     return p
 
 /-- `SharedProcessorAdapter`/`PhaseProcessorAdapter`: wraps `process` with the
-`ELK_TRACE_PROCESSORS`/`ELK_TRACE_PHASES` (+ timing) stderr traces of the Rust port. -/
+`ELK_TRACE_PROCESSORS`/`ELK_TRACE_PHASES` (+ timing) stderr traces of the Rust port. The switches
+are read once at startup (`ElkTrace.global`), so without them the processor is returned unwrapped
+(the wrapper would only call `p.process`). -/
 private def traced [Monad m] [MonadLiftT IO m] (isPhase : Bool) (p : LayoutProcessor m G) : LayoutProcessor m G :=
+  let t := ElkTrace.global
+  let traceOn := if isPhase then t.phases else t.processors
+  let timingOn := if isPhase then t.phaseTiming else t.processorTiming
+  if !traceOn && !timingOn then p else
   { p with process := fun graph monitor => do
-      let t := ElkTrace.global
       let kind := if isPhase then "phase" else "processor"
-      let traceOn := if isPhase then t.phases else t.processors
-      let timingOn := if isPhase then t.phaseTiming else t.processorTiming
       if traceOn then liftM (m := IO) (IO.eprintln s!"{kind}: {p.name}")
       let start ← if timingOn then liftM (m := IO) IO.monoMsNow else pure 0
       p.process graph monitor
