@@ -18,9 +18,9 @@ parent, the heuristic and the port distributor chosen for the `CrossMinType`, th
 the sweep type decision (`dontSweepInto`) and the model order settings.
 
 ## Construction (Rust `build`)
-1. `ISweepPortDistributor` (+ barycenter view): `SweepPortDistributor.createWithBarycenter`, which
-   draws one `nextBoolean()` from the holder's generator unless the type is `TWO_SIDED_GREEDY_SWITCH`
-   (node-relative for `true`, layer-total for `false`).
+1. `ISweepPortDistributor` (+ barycenter view): `PortDistributorImpl.create` (the draw of
+   `SweepPortDistributor.createWithBarycenter`), one `nextBoolean()` from the holder's generator unless
+   the type is `TWO_SIDED_GREEDY_SWITCH` (node-relative for `true`, layer-total for `false`).
 2. `AllCrossingsCounter.new graph order`.
 3. The heuristic: `BARYCENTER` → a `ForsterConstraintResolver` and, with
    `CROSSING_MINIMIZATION_FORCE_NODE_MODEL_ORDER`, a `ModelOrderBarycenterHeuristic`, otherwise a
@@ -29,7 +29,8 @@ the sweep type decision (`dontSweepInto`) and the model order settings.
 4. `LayerSweepTypeDecider.new graph parent hasParent (heuristic.isDeterministic)`.
 5. The holder's own initialisation pass (`cachePortSides` and child graph collection per node in
    order, port count, zero port positions), then
-   `Initializable.init #[counter, decider, distributor, heuristic] order`.
+   `Initializable.init #[counter, decider, distributor, heuristic] order` — fused into one pass
+   (`FusedInit.run`, see "Fused initialisation"; the generic path is kept with `fused := false`).
 6. `CrossMinSnapshot.build order nPorts`, `heuristic.setSnapshot` and the counter's `setSnapshot`
    (`set_arena_sync` has no Lean counterpart: the counter reads the arena).
 7. `useBottomUp := decider.useBottomUpWithBoundary order hierarchicalSweepiness`, then
@@ -40,8 +41,15 @@ Rust's `Random` shares its state between clones (`Arc<Mutex<u64>>`): the holder'
 the generator its constructor was given (`new_with_graph`: the minimiser's shared generator, which is
 the root graph's `RANDOM`; `new`: the graph's own `RANDOM`). Here the caller passes that generator as
 an `IO.Ref Random` (the `LayerSweepCrossingMinimizer` keeps one ref per shared state and writes it back
-to the graphs); `new` and `new_with_graph` therefore coincide. The heuristics capture the same ref
-(`toHeuristic random`).
+to the graphs); `new` and `new_with_graph` therefore coincide. The heuristic's methods get the same ref
+(`HeuristicImpl.setFirstLayerOrder h.random …`; the `CrossingMinimizationHeuristic` record of
+`toHeuristic random` captures it).
+
+## Direct calls (Lean only)
+The holder keeps the concrete heuristic and port distributor (`HeuristicImpl`, `PortDistributorImpl`)
+and calls them by a `match` instead of through the closure records `CrossingMinimizationHeuristic` and
+`SweepPortDistributor` (which are built only for the generic initialisation): the same functions with
+the same arguments, without the closures per holder and the `lean_apply` per call.
 
 ## Deviations
 * `parent_graph_index` is resolved by the caller (Rust: likewise, `set_parent_graph_index`).
