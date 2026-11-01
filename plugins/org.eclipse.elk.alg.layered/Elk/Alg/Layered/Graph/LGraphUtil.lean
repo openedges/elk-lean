@@ -341,9 +341,13 @@ def createPort (node : LNodeId) (endPoint : Option KVector) (portType : PortType
 
 /-- `createExternalPortDummy(propertyHolder, portConstraints, portSide, netFlow, portNodeSize,
 portPosition, portSize, layoutDirection, layeredGraph)`: the dummy node representing an external
-port; returns it with the (possibly updated: `PORT_SIDE`) property holder. -/
+port; returns it with the (possibly updated: `PORT_SIDE`) property holder. `portNodeSize = none` is
+Java's `null` (the `CompoundGraphPreprocessor` calls): like Java, `FIXED_RATIO` constraints then fail
+with the `NullPointerException` of `portNodeSize.x`/`.y` (unless `FIXED_ORDER` with an index decides);
+a size of `0` divides like Java (`±Infinity`/`NaN`). -/
 def createExternalPortDummy (propertyHolder : PropertyMap) (portConstraints : PortConstraints) (portSide : PortSide)
-    (netFlow : Int) (portNodeSize portPosition portSize : KVector) (layoutDirection : Direction) (graph : LGraphId) :
+    (netFlow : Int) (portNodeSize : Option KVector) (portPosition portSize : KVector) (layoutDirection : Direction)
+    (graph : LGraphId) :
     LayeredM (LNodeId × PropertyMap) := do
   let mut holder := propertyHolder
   let mut finalExternalPortSide := portSide
@@ -405,10 +409,16 @@ def createExternalPortDummy (propertyHolder : PropertyMap) (portConstraints : Po
       match finalExternalPortSide with
       | .west | .east =>
         infoValue := portPosition.y
-        if portConstraints.isRatioFixed && portNodeSize.y > 0.0 then infoValue := infoValue / portNodeSize.y
+        if portConstraints.isRatioFixed then
+          let some size := portNodeSize
+            | throwNullPointer "Cannot read field \"y\" because \"portNodeSize\" is null"
+          infoValue := infoValue / size.y
       | .north | .south =>
         infoValue := portPosition.x
-        if portConstraints.isRatioFixed && portNodeSize.x > 0.0 then infoValue := infoValue / portNodeSize.x
+        if portConstraints.isRatioFixed then
+          let some size := portNodeSize
+            | throwNullPointer "Cannot read field \"x\" because \"portNodeSize\" is null"
+          infoValue := infoValue / size.x
       | .undefined => pure ()
     let v := infoValue
     modifyNode dummy fun nd => { nd with internal := { nd.internal with portRatioOrPosition := v } }

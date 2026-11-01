@@ -751,7 +751,7 @@ def transformExternalPort (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph :
       else withElk (ElkUtil.calcPortOffset · elkport portSide)
     liftElk (ElkM.modifyPort elkport fun p => { p with props := p.props.set LayeredOptions.PORT_BORDER_OFFSET portBorderOffset })
   let holder := (← elkPort elkport).props
-  let (dummy, holder) ← LGraphUtil.createExternalPortDummy holder portConstraints portSide netFlow graphSize
+  let (dummy, holder) ← LGraphUtil.createExternalPortDummy holder portConstraints portSide netFlow (some graphSize)
     portPosition portSize layoutDirection lgraph
   liftElk (ElkM.modifyPort elkport fun p => { p with props := holder })
   modifyNode dummy fun n => { n with
@@ -835,13 +835,17 @@ private def edgeParentLGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgrap
   | some parentLNode => return (parentElkGraph, (← getNode parentLNode).nestedGraph.getD lgraph)
   | none => return (parentElkGraph, lgraph)
 
-/-- The inside self loops of `elkgraph` that are contained in its parent (second loop of Rust
-`import_flat_graph_edges`). -/
+/-- The inside self loops of `elkgraph` that are contained in its parent (second loop of Java
+`importFlatGraph`). Java calls `ElkGraphUtil.getSourceNode` on every edge of the parent, so a
+hyperedge there fails with `IllegalArgumentException("Passed edge is not 'simple'.")` (elk-rs and
+elk-lean before EXT skipped it). -/
 private def importParentInsideSelfLoops (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) :
     LImportM Unit := do
   let some parentGraph := (← elkNode elkgraph).parent | return
   for e in (← elkNode parentGraph).containedEdges do
     let edge ← elkEdge e
+    if edge.sources.size != 1 || edge.targets.size != 1 then
+      throwIllegalArgument "Passed edge is not 'simple'."
     let some sourceNode ← withElk (firstNode · edge.sources) | continue
     let isSelfLoop ← withElk (ElkGraphUtil.isSelfloop · e)
     if sourceNode != elkgraph || !isSelfLoop then continue

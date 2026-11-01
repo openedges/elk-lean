@@ -9,7 +9,9 @@ Stages (each skipped when its result is already in <out_dir> unless --force):
          <out>/gen/h<seed> (gen_hierarchical_mo_graphs.py OUT COUNT SEED: INCLUDE_CHILDREN layered graphs
          with model order options and NO_LAYOUT nodes),
          <out>/gen/w<seed> (gen_wrapping_graphs.py OUT COUNT SEED: layered wrapping, comment boxes,
-         hypernodes, edge labels, splines, BK alignments, merged edges)
+         hypernodes, edge labels, splines, BK alignments, merged edges),
+         <out>/gen/x<seed> (gen_external_port_graphs.py OUT COUNT SEED: compound nodes with external
+         ports, port constraints/labels/alignment, mixed hierarchy handling, cross-hierarchy edges)
   java   <out>/java/<set>/ : ELK Java 0.12.0 (`ElkJavaBaseline`), one JVM per set with a watchdog: a
          model that makes no progress for --java-timeout seconds is recorded as `timeout`, the JVM is
          killed and restarted on the remaining models (chunk directories of symlinks); a per-set alarm
@@ -110,6 +112,15 @@ def stage_gen(a, seeds, sets):
             if a.force or not os.path.isdir(w_dir) or len(inputs_of(w_dir)) != a.count:
                 shutil.rmtree(w_dir, ignore_errors=True)
                 subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_wrapping_graphs.py"), w_dir,
+                                str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
+        if "x" in sets:
+            # compound nodes with external ports on all sides, port constraints / labels / alignment, mixed
+            # hierarchy handling and cross-hierarchy edges (gen_external_port_graphs.py; graph k of a seed
+            # does not depend on COUNT)
+            x_dir = os.path.join(a.out, "gen", f"x{seed}")
+            if a.force or not os.path.isdir(x_dir) or len(inputs_of(x_dir)) != a.count:
+                shutil.rmtree(x_dir, ignore_errors=True)
+                subprocess.run([sys.executable, "-I", os.path.join(HERE, "gen_external_port_graphs.py"), x_dir,
                                 str(a.count), str(seed)], check=True, stdout=subprocess.DEVNULL)
         if not {"s", "v", "d", "p"} & set(sets):
             continue
@@ -434,7 +445,9 @@ def write_report(a, rows, set_names):
       "layout nodes with random components and DisCo options (`gen_disco_graphs.py`), `h` = hierarchical "
       "(`INCLUDE_CHILDREN`) layered graphs with model order options, `NO_LAYOUT` nodes, group ids and layer "
       "constraints (`gen_hierarchical_mo_graphs.py`), `w` = layered graphs with graph wrapping, comment boxes, "
-      "hypernodes, edge labels, splines, BK alignments and merged edges (`gen_wrapping_graphs.py`).")
+      "hypernodes, edge labels, splines, BK alignments and merged edges (`gen_wrapping_graphs.py`), `x` = "
+      "compound nodes with external ports on all sides, port constraints, labels and alignment, mixed "
+      "hierarchy handling, cross-hierarchy edges and inside self loops (`gen_external_port_graphs.py`).")
     w("")
     w("## Per set")
     w("")
