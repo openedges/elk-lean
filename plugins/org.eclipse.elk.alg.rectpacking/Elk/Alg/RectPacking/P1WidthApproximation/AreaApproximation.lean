@@ -142,9 +142,9 @@ def checkSpecialCases (g : ElkGraph) (drawing1 drawing2 : DrawingData) (lastPlac
 
 /-- `find_best_candidate(opt1, opt2, opt3, opt4, to_place, last_placed, padding)`: applies the
 goal's filters while more than one candidate remains; one candidate wins, two go to
-`checkSpecialCases`, otherwise the first remaining one. Rust panics (`expect`) when the filters
-removed every candidate (only possible with NaN metrics); that is an
-`IllegalStateException` here. -/
+`checkSpecialCases`; otherwise Java returns `null` and `approxBoundingBox` fails with a
+`NullPointerException` (three or four candidates with equal measures, or none with NaN metrics;
+elk-rs took the first remaining one or panicked). -/
 def findBestCandidate (self : AreaApproximation) (g : ElkGraph) (opt1 opt2 opt3 opt4 : DrawingData)
     (toPlace lastPlaced : NodeId) (padding : ElkPadding) : Except String DrawingData := Id.run do
   let mut candidates := #[opt1, opt2, opt3, opt4]
@@ -154,9 +154,10 @@ def findBestCandidate (self : AreaApproximation) (g : ElkGraph) (opt1 opt2 opt3 
   if h : candidates.size = 1 then return .ok candidates[0]
   if h : candidates.size = 2 then
     return .ok (checkSpecialCases g candidates[0] candidates[1] lastPlaced toPlace)
-  match candidates[0]? with
-  | some c => return .ok c
-  | none => return .error "java.lang.IllegalStateException: candidate exists"
+  -- Java returns `null` when no or more than two candidates survive the filters (equal measures of
+  -- three or four options); `approxBoundingBox` then dereferences it (elk-rs took the first one)
+  return .error ("java.lang.NullPointerException: Cannot invoke " ++
+    "\"org.eclipse.elk.alg.rectpacking.util.DrawingData.getNextXcoordinate()\" because \"bestOpt\" is null")
 
 /-- `approx_bounding_box(rectangles, node_node_spacing, padding)`: places the first rectangle at
 `(0, 0)` and every further one at its best candidate position (moving the rectangles), and

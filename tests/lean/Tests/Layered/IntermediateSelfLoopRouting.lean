@@ -178,7 +178,7 @@ def routerRustTests : Suite := suite "layered.intermediate.selfLoopRouter.rust" 
   checkEq "keeps_duplicate_bend_points_for_same_port: two bend points" bs.size 2
   check "keeps_duplicate_bend_points_for_same_port: identical" (bs.size == 2 && (bs[0]!.x - bs[1]!.x).abs < 1e-9 && (bs[0]!.y - bs[1]!.y).abs < 1e-9)
   checkEq "hand: one-port loop bend points (slot N0 at -10, + node position)" bs #[⟨30, 10⟩, ⟨30, 10⟩]
-  checkEq "hand: one-port loop routingSlotCount (unoccupied sides count slot 0)" (holderOf a n).routingSlotCount #[0, 1, 1, 1, 1]
+  checkEq "hand: one-port loop routingSlotCount (Java: unoccupied sides have no slot)" (holderOf a n).routingSlotCount #[0, 1, 0, 0, 0]
   checkEqR "hand: one-port loop margins" (marginOf a n) { top := 10 }
   -- self_loop_router_creates_outside_bend_points_for_hidden_loops
   let ((n, es), a) ← LayeredM.run (do
@@ -199,7 +199,7 @@ def routerRustTests : Suite := suite "layered.intermediate.selfLoopRouter.rust" 
   check "assigns_separate_slots: bend points present" (es.all fun e => !(bends a e).isEmpty)
   check "assigns_separate_slots: routes above the node" (es.all fun e => minY (bends a e) < nodeY)
   checkEq "hand: nested loops: inner loop N slot 0, outer loop N slot 1" (slotsOf a n 0, slotsOf a n 1) (#[0, 0, 0, 0], #[1, 0, 0, 0])
-  checkEq "hand: nested loops routingSlotCount" (holderOf a n).routingSlotCount #[0, 2, 1, 1, 1]
+  checkEq "hand: nested loops routingSlotCount" (holderOf a n).routingSlotCount #[0, 2, 0, 0, 0]
   checkEq "hand: inner loop bend points" (bends a es[0]!) #[⟨20, 20⟩, ⟨40, 20⟩]
   checkEq "hand: outer loop bend points" (bends a es[1]!) #[⟨60, 10⟩, ⟨80, 10⟩]
   checkEqR "hand: nested loops margins" (marginOf a n) { top := 20 }
@@ -322,7 +322,7 @@ def ptidesTests : Suite := suite "layered.intermediate.selfLoopRouter.ptides" do
   checkEq "hand: occupied E, S, W (option 1 wins the penalty tie)" (loopOf a n 0).occupiedPortSides
     (EnumSet.of #[PortSide.east, .south, .west])
   checkEq "hand: WEST shifted to slot 1 by the shared port column" (slotsOf a n 0) #[0, 0, 0, 1]
-  checkEq "hand: routingSlotCount" (holderOf a n).routingSlotCount #[0, 1, 1, 1, 2]
+  checkEq "hand: routingSlotCount" (holderOf a n).routingSlotCount #[0, 0, 1, 1, 2]
   checkEq "hand: route (WEST slot 1 at -(8+10)-10)" (bends a e) #[⟨131, 7⟩, ⟨131, 40⟩, ⟨-28, 40⟩, ⟨-28, 15⟩]
   checkEqR "hand: margins" (marginOf a n) { left := 28, right := 10, bottom := 10 }
 
@@ -434,7 +434,7 @@ def handRouteTests : Suite := suite "layered.intermediate.selfLoopRouter.hand" d
   checkEq "hand: ORTHOGONAL three-sided loop, west → north" (bends a es[0]!) #[⟨-10, 20⟩, ⟨-10, -10⟩, ⟨20, -10⟩]
   checkEq "hand: ORTHOGONAL three-sided loop, west → east (opposite, clockwise)" (bends a es[1]!)
     #[⟨-10, 20⟩, ⟨-10, -10⟩, ⟨50, -10⟩, ⟨50, 10⟩]
-  checkEq "hand: three-sided routingSlotCount" (holderOf a n).routingSlotCount #[0, 1, 1, 1, 1]
+  checkEq "hand: three-sided routingSlotCount" (holderOf a n).routingSlotCount #[0, 1, 1, 0, 1]
   let ((_, es), a) ← LayeredM.run (threeSidedCase (some .polyline))
   checkEq "hand: POLYLINE three-sided loop, west → east" (bends a es[1]!)
     #[⟨-5, 20⟩, ⟨-10, 15⟩, ⟨-10, 0⟩, ⟨0, -10⟩, ⟨40, -10⟩, ⟨50, 0⟩, ⟨50, 5⟩, ⟨45, 10⟩]
