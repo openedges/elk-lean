@@ -1,5 +1,7 @@
 import Elk.Core.Util.Ffi
 import Elk.Core.Util.FastFloat
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # Java / Rust numeric semantics helpers
 
@@ -11,8 +13,6 @@ is the default and the Java variant carries a `java` prefix.
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1e16 : Float := 1e16
 private def fl180p0 : Float := 180.0
 private def fl3p141592653589793 : Float := 3.141592653589793
 

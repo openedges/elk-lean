@@ -3,6 +3,8 @@ import Elk.Core.Data.LayoutMetaDataService
 import Elk.Core.Util.ExclusiveBounds
 import Elk.Core.Util.GraphElementVisitor
 import Elk.Core.Validation.GraphIssue
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.core.validation.LayoutOptionValidator`
 
@@ -18,8 +20,6 @@ which `PropValue` does not carry).
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1e16 : Float := 1e16
 private def fl1em4 : Float := 1e-4
 
 namespace Elk.Core.Validation

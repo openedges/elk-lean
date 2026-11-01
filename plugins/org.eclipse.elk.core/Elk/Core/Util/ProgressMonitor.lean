@@ -1,5 +1,7 @@
 import Elk.Core.Exceptions
 import Elk.Core.Util.Java
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # Progress monitors (`org.eclipse.elk.core.util.{IElkProgressMonitor, BasicProgressMonitor, NullElkProgressMonitor, LoggedGraph, LoggedGraphType, IElkCancelIndicator}`)
 
@@ -23,8 +25,6 @@ Deviations from the Rust port:
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
 private def fl1p0e9 : Float := 1.0e9
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Core.Util
 
