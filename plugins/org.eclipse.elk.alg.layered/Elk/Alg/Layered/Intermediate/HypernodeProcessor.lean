@@ -12,8 +12,8 @@ bend point (and the equal junction points).
 The processor name is the Java simple class name `HypernodesProcessor` (the elk-rs `type_name` is
 `HypernodeProcessor`).
 
-Rust deviation from Java, followed here: the removed bend point is removed from **all** equal
-entries of `JUNCTION_POINTS` (Java `KVectorChain.remove(Object)` removes the first one only).
+Follows Java (agent COV): the removed bend point is removed from the **first** equal entry of
+`JUNCTION_POINTS` only (`KVectorChain.remove(Object)`; elk-rs removed all equal entries).
 -/
 namespace Elk.Alg.Layered.Intermediate
 
@@ -25,11 +25,13 @@ namespace HypernodeProcessor
 /-- `i32::MAX as f64` (Java `Integer.MAX_VALUE` start values). -/
 private def INT_MAX : Float := 2147483647.0
 
-/-- `remove_junction_point(edge, removed_point)`: drops every junction point equal to the point. -/
+/-- `junctionPoints.remove(first)` (Java `KVectorChain.remove(Object)` = `LinkedList.remove`): drops
+the first junction point equal to the point (`KVector.equals`: `x == x' && y == y'`). -/
 def removeJunctionPoint (edge : LEdgeId) (removedPoint : KVector) : LayeredM Unit := do
   let some junctionPoints := (← getEdge edge).props.get LayeredOptions.JUNCTION_POINTS | return
-  let filtered := junctionPoints.filter (· != removedPoint)
-  modifyEdge edge fun e => { e with props := e.props.set LayeredOptions.JUNCTION_POINTS filtered }
+  let some i := junctionPoints.findIdx? (· == removedPoint) | return
+  let remaining := junctionPoints.eraseIdx! i
+  modifyEdge edge fun e => { e with props := e.props.set LayeredOptions.JUNCTION_POINTS remaining }
 
 /-- `process_right_edge(edge, north_port, south_port)`: removes the first bend point; the edge
 leaves through the south port when the next point (next bend point, else the target anchor) is

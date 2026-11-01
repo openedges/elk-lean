@@ -573,6 +573,10 @@ def buildParts (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrde
   let crossMinimizer ← createCrossMinimizer graph crossMinType currentNodeOrder barycenterDistributor hasParent
     s.forceModelOrder s.maxModelOrderNodes s.constraintsBetweenNonDummies s.groupOrderStrategy
   let decider ← LayerSweepTypeDecider.new graph s.parentNode hasParent crossMinimizer.isDeterministic
+  -- Java `LayerSweepTypeDecider.initAtLayerLevel` reads `nodeOrder[l][0]` of every layer: an empty
+  -- layer (for example the breaking point layers of a cut without open edges) throws (agent COV)
+  if currentNodeOrder.any (·.isEmpty) then
+    Elk.Core.throwJava "java.lang.ArrayIndexOutOfBoundsException" "Index 0 out of bounds for length 0"
   let (childGraphs, nPorts) ← if fused then
       FusedInit.run currentNodeOrder crossingsCounter decider portDistributor crossMinimizer
     else do

@@ -61,14 +61,41 @@ def parseOptionValue (od : LayoutOptionData) (value : String) : ImportM (Option 
     | none => return none
   | _ => return od.parseValue value
 
+/-- The options ELK Java 0.12.0 registers with type `OBJECT` and a class that is no `IDataObject`
+(Java ids, from `LayoutMetaDataService.getOptionData()` of the reference JVM): their string values
+cannot be parsed (`LayoutOptionData.createDataInstance` throws). Options that elk-lean registers as
+objects without parser but that ELK Java does not know (`mrtree.graphProperties`) stay ignored, like
+Java's unknown options. -/
+def javaObjectOptionsWithoutDataType : Array String := #[
+  "org.eclipse.elk.disco.debug.discoGraph", "org.eclipse.elk.disco.debug.discoPolys",
+  "org.eclipse.elk.labelManager", "org.eclipse.elk.labels.labelManager",
+  "org.eclipse.elk.layered.considerModelOrder.groupModelOrder.cmEnforcedGroupOrders",
+  "org.eclipse.elk.layered.wrapping.cutting.cuts", "org.eclipse.elk.layered.wrapping.validify.forbiddenIndices",
+  "org.eclipse.elk.resolvedAlgorithm", "org.eclipse.elk.topdown.sizeApproximator"]
+
 /-- `set_option`: parses the string value with the option's parser and stores
-it under the canonical id. Unknown options and unparsable values are ignored. -/
+it under the canonical id. Unknown options and unparsable values are ignored.
+
+An option of type `OBJECT` whose class is no `IDataObject` (no parser here: `labelManager`,
+`wrapping.cutting.cuts`, `wrapping.validify.forbiddenIndices`, `cmEnforcedGroupOrders`,
+`topdown.sizeApproximator`, `resolvedAlgorithm`, the DisCo debug options) cannot be parsed from a
+string: Java `LayoutOptionData.parseValue` → `createDataInstance` throws
+`IllegalStateException("IDataType class expected for layout option " + id)` for every value other
+than `null` and the empty string, which `JsonImporter.setOption` does not catch. -/
 def setOption (props : PropertyMap) (id : String) (value : String) : ImportM PropertyMap := do
   if id == CoreOptions.DIRECTION.id then
     if let some d := parseDirectionOption value then
       return props.set CoreOptions.DIRECTION d
   match ← optionDataFor id with
   | some od =>
+    if od.type == .object && od.parser.isNone && !value.isEmpty && value != "null" then
+      -- the Java id (elk-lean keeps the layered options under `org.eclipse.elk.alg.layered.*` with
+      -- the Java id `org.eclipse.elk.layered.*` as legacy id)
+      let javaId := match od.legacyIds.find? (·.startsWith "org.eclipse.elk.layered.") with
+        | some l => l
+        | none => od.id
+      if javaObjectOptionsWithoutDataType.contains javaId then
+        throwIllegalState s!"IDataType class expected for layout option {javaId}"
     match ← parseOptionValue od value with
     | some v => return props.setRawById od.id v
     | none => return props

@@ -16,7 +16,7 @@ Skipped Rust tests: the `TestController` tests of
 `recursive_graph_layout_engine_integration_test.rs` (no `TestController` in the Lean port) and
 `util_misc_test.rs` (no `DefaultFactory`, `Maybe`, `Triple`, `Quadruple`, `WrappedException`).
 
-Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `box`, `box_nested_box`, `box_nested_fixed`, `fixed`, `fixed_hier` equal ELK Java since RJ1 (box/fixed padding default 15); `boxgroup` and `topdown_box` are elk-lean outputs closer to Java (box `GROUP_*` packing still differs; Java rejects `topdown.sizeApproximator` in JSON).
+Re-pinned fixtures (RJ1, ELK Java 0.12.0 as the reference): `box`, `box_nested_box`, `box_nested_fixed`, `fixed`, `fixed_hier` equal ELK Java since RJ1 (box/fixed padding default 15); `boxgroup` and `topdown_box` are elk-lean outputs closer to Java (box `GROUP_*` packing still differs; Java rejects `topdown.sizeApproximator` in JSON, so the input no longer sets it: elk-lean throws the same `IllegalStateException` since COV).
 -/
 namespace Tests.Core.Engine
 

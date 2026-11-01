@@ -19,9 +19,12 @@ il_1 -> d_1 -> ... -> d_m -> il_2
  u
 ```
 
-Rust deviations from Java (followed): a missing end node or layer returns no edges; the layer
-indexes fall back to `0`/the source index; the insertion index of the first dummy saturates at `0`
-(Java would throw for a negative index).
+Follows Java (agent COV): a negative insertion index for the first dummy throws Java's
+`IllegalArgumentException` of `LNode.setLayer(int, Layer)` (elk-rs saturated it at `0`); it cannot
+occur in the pipeline (the offset is `1` in `SingleEdgeGraphWrapper` and the number of nodes just
+moved into the source layer in `BreakingPointProcessor`). The elk-rs guards for a missing end node or
+layer (no edges; layer indexes `0`/the source index) are unreachable: the reversed edge connects two
+layered nodes.
 
 Each dummy edge copies all properties of the current edge (Rust `copy_properties` into the empty
 map of the new edge = the public `props` and the typed `internal` values) except `JUNCTION_POINTS`.
@@ -101,8 +104,10 @@ def insertDummies (graph : LGraphId) (originalEdge : LEdgeId) (offsetFirstInLaye
     let some nextLayer := layers[layerIndex]? | break
     if layerIndex == srcIndex then
       let size := (← getLayer nextLayer).nodes.size
-      let insertionIndex := if size > offsetFirstInLayerDummy then size - offsetFirstInLayerDummy else 0
-      setNodeLayerAtIndex dummyNode insertionIndex (some nextLayer)
+      -- Java `dummyNode.setLayer(size - offset, layer)`: a negative index throws
+      if size < offsetFirstInLayerDummy then
+        throwIllegalArgument "index must be >= 0 and <= layer node count"
+      setNodeLayerAtIndex dummyNode (size - offsetFirstInLayerDummy) (some nextLayer)
     else
       setNodeLayer dummyNode (some nextLayer)
     let mut thickness := ((← getEdge edge).props.get CoreOptions.EDGE_THICKNESS).getD fl1p0

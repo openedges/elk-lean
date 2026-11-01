@@ -18,6 +18,14 @@ open Elk.Graph Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph
 def unspecifiedSpacing (message : Option String := none) : IO.Error :=
   IO.userError s!"org.eclipse.elk.alg.layered.options.UnspecifiedSpacingException: {message.getD "Unspecified spacing"}"
 
+/-- Java's `NullPointerException` of `getLocalSpacing` for a pair of node types without spacing option
+in the table (for example a `BREAKING_POINT` dummy next to another node): the `null` option reaches
+`getIndividualOrDefault` / `graph.getProperty(null)` and `MapPropertyHolder.getProperty` dereferences
+it (agent COV; elk-rs threw `UnspecifiedSpacingException`). -/
+def nullSpacingOption : IO.Error :=
+  IO.userError ("java.lang.NullPointerException: Cannot invoke " ++
+    "\"org.eclipse.elk.graph.properties.IProperty.getDefault()\" because \"property\" is null")
+
 /-- `Spacings`. -/
 structure Spacings where
   /-- `nodeTypeSpacingOptionsHorizontal[t1][t2]`. -/
@@ -184,7 +192,7 @@ the table's option (`slots`: the table's `horizontalSlots`/`verticalSlots`). -/
   let j := ElkEnum.ordinal t2
   let option ← (table[i]?.bind (·[j]?)).bind id
   let graphValue := s.slotValue slots i j option
-  return fmax (individualOr p1 option graphValue) (individualOr p2 option graphValue)
+  return javaMax (individualOr p1 option graphValue) (individualOr p2 option graphValue)
 
 @[inline] private def localSpacingForTypes? (s : Spacings) (table : Array (Array (Option (Property Float)))) (slots : Array Nat)
     (t1 t2 : NodeType) : Option Float := do
@@ -209,23 +217,23 @@ the table's option (`slots`: the table's `horizontalSlots`/`verticalSlots`). -/
 @[inline] def getVerticalSpacingForTypes? (s : Spacings) (t1 t2 : NodeType) : Option Float :=
   s.localSpacingForTypes? s.vertical s.verticalSlots t1 t2
 
-/-- Throwing variants (the Java methods throw `UnspecifiedSpacingException`). -/
+/-- Throwing variants: a missing table entry is Java's `NullPointerException` (`nullSpacingOption`). -/
 def getHorizontalSpacing (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : IO Float :=
   match s.getHorizontalSpacing? t1 p1 t2 p2 with
   | some v => pure v
-  | none => throw (unspecifiedSpacing)
+  | none => throw nullSpacingOption
 def getVerticalSpacing (s : Spacings) (t1 : NodeType) (p1 : PropertyMap) (t2 : NodeType) (p2 : PropertyMap) : IO Float :=
   match s.getVerticalSpacing? t1 p1 t2 p2 with
   | some v => pure v
-  | none => throw (unspecifiedSpacing)
+  | none => throw nullSpacingOption
 def getHorizontalSpacingForTypes (s : Spacings) (t1 t2 : NodeType) : IO Float :=
   match s.getHorizontalSpacingForTypes? t1 t2 with
   | some v => pure v
-  | none => throw (unspecifiedSpacing)
+  | none => throw nullSpacingOption
 def getVerticalSpacingForTypes (s : Spacings) (t1 t2 : NodeType) : IO Float :=
   match s.getVerticalSpacingForTypes? t1 t2 with
   | some v => pure v
-  | none => throw (unspecifiedSpacing)
+  | none => throw nullSpacingOption
 
 /-- `getIndividualOrDefault(graph, node, property)`: node individual value, else the graph's
 stored-or-default value, else the property default; `none` = `UnspecifiedSpacingException`. -/

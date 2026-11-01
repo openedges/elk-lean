@@ -27,8 +27,10 @@ snapshot is released. The layouts are local values (Rust `Vec<BKAlignedLayout>`)
 local node ids (see `BKUtil`). Iteration orders: `graph.layers` in order and each layer's
 `nodes` in order, unless stated otherwise.
 
-Rust deviations from Java that are followed: the balanced layout's `min`/`max` start at `±∞`
-(Java `Integer.MAX_VALUE`/`MIN_VALUE`), `f64::min/max`, the class debug output keyed by sink id.
+Follows Java (agent COV): the balanced layout's `min`/`max` start at `Integer.MAX_VALUE`/`MIN_VALUE`
+with `Math.min`/`Math.max` (elk-rs: `±∞` and `f64::min/max`, which differ only for `NaN` positions or
+a layering without nodes, where Java's shift is `0` and elk-rs' `NaN`). Kept from elk-rs: the class
+debug output keyed by sink id (logging only).
 The `ELK_TRACE_BK*` diagnostics are printed to stderr like elk-rs (`{:.3}` via `fmt3`).
 -/
 
@@ -136,6 +138,11 @@ def markConflicts (a : LGraphArena) (layers : Array LayerId) (ni : NeighborhoodI
         k0 := k1
   return marked
 
+/-- Java `Integer.MAX_VALUE` as a `double`. -/
+private def INT_MAX_F : Float := 2147483647.0
+/-- Java `Integer.MIN_VALUE` as a `double`. -/
+private def INT_MIN_F : Float := -2147483648.0
+
 /-- `createBalancedLayout(layouts, nodeCount)`: the median of the given layouts. The smallest
 layout (first one of minimal `layoutSize`) is the reference: every layout is shifted to align
 its top (`DOWN`) or bottom (`UP`) with it, and each node gets the average of the two middle
@@ -144,8 +151,9 @@ def createBalancedLayout (ctx : BKContext) (layouts : Array BKAlignedLayout) : B
   let noOfLayouts := layouts.size
   let mut balanced := BKAlignedLayout.new ctx.nodeCount none none
   let mut width : Array Float := Array.replicate noOfLayouts fl0p0
-  let mut mn : Array Float := Array.replicate noOfLayouts Float.posInf
-  let mut mx : Array Float := Array.replicate noOfLayouts Float.negInf
+  -- Java `Integer.MAX_VALUE` / `Integer.MIN_VALUE` starts and `Math.min`/`Math.max`
+  let mut mn : Array Float := Array.replicate noOfLayouts INT_MAX_F
+  let mut mx : Array Float := Array.replicate noOfLayouts INT_MIN_F
   let mut minWidthLayout := 0
   for i in [0:noOfLayouts] do
     let layout := layouts[i]!
@@ -155,8 +163,8 @@ def createBalancedLayout (ctx : BKContext) (layouts : Array BKAlignedLayout) : B
       for n in (ctx.arena.layer l).nodes do
         let id := ctx.nodeId n
         let nodePos := layout.yOf id + layout.innerShiftOf id
-        mn := mn.set! i (fmin mn[i]! nodePos)
-        mx := mx.set! i (fmax mx[i]! (nodePos + ctx.sizeY n))
+        mn := mn.set! i (javaMin mn[i]! nodePos)
+        mx := mx.set! i (javaMax mx[i]! (nodePos + ctx.sizeY n))
   let mut shift : Array Float := Array.replicate noOfLayouts fl0p0
   for i in [0:noOfLayouts] do
     if layouts[i]!.vdir == some .down then

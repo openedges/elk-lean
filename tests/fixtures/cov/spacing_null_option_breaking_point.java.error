@@ -1,0 +1,1 @@
+java.lang.NullPointerException: Cannot invoke "org.eclipse.elk.graph.properties.IProperty.getDefault()" because "property" is null

@@ -17,8 +17,15 @@ Slot: before phase 4. `IntermediateProcessorStrategy.END_NODE_PORT_LABEL_MANAGEM
 `LabelManagementProcessor(true)`; both have the trace name `LabelManagementProcessor` (Rust
 `type_name`).
 
-Rust deviation from Java (followed here): in center mode a label dummy without represented labels
-manages its own labels (Java: an empty list, i.e. size `(0, 0)` plus thickness and spacing).
+Unreachable from the public API (agent COV): Java adds this processor only when the graph has a
+`labels.labelManager` (`GraphConfigurator`: `getProperty(LABEL_MANAGER) != null`), and that option
+is an `OBJECT` option whose class (`ILabelManager`) is no `IDataObject`: ELK Java's JSON importer
+throws `IllegalStateException: IDataType class expected for layout option
+org.eclipse.elk.labels.labelManager` for every value (elkjs: no `ElkReflect` factory either), and
+elk-lean's importer throws the same exception. The processor is therefore only reachable from Lean
+code that sets a manager directly (the unit tests). The elk-rs behaviour kept there: in center mode
+a label dummy without represented labels manages its own labels (Java: an empty list, i.e. size
+`(0, 0)` plus thickness and spacing).
 
 The label manager: Rust calls `ILabelManager::manage_label_size(&origin, target_width)` with the
 label's `InternalProperties::ORIGIN` (an `Origin` value) as the `&dyn Any` label. The Lean core type

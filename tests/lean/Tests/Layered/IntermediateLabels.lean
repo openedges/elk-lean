@@ -457,7 +457,8 @@ def sideStrategyTests : Suite := suite "layered.intermediate.labelSideSelector.s
     return nodes)
   let d := a.node nodes[0]!
   checkEq "hand: ALWAYS_UP dummy ABOVE" d.internal.labelSide LabelSide.above
-  checkEq "hand: ALWAYS_UP represented label ABOVE" (a.label d.internal.representedLabels[0]!).internal.labelSide LabelSide.above
+  -- Java writes the side to the label dummy only (elk-rs also wrote it to the represented labels)
+  checkEq "hand: ALWAYS_UP represented label keeps its side (Java)" (a.label d.internal.representedLabels[0]!).internal.labelSide LabelSide.unknown
   -- ports at height - ceil(thickness / 2) = 11 - 1
   checkFloat "hand: ABOVE moves the ports to 10" (a.port d.ports[0]!).position.y 10.0
   let (nodesB, b) ← LayeredM.run (do
@@ -588,24 +589,61 @@ def managementTests : Suite := suite "layered.intermediate.labelManagementProces
 -- ===============================================================================================
 -- EndLabelSorter
 
+open Elk.Alg.Common.NodeSpacing in
+/-- The end label cell of `labels` (horizontal layout mode). -/
+def endCell (labels : Array LLabelId) : CellSystem.Cell LLabelId :=
+  let d0 : CellSystem.LabelCellData LLabelId := { gap := 1.0, horizontalLayoutMode := true }
+  { kind := .label (labels.foldl (fun d l => CellSystem.LabelCell.addLabel d l ⟨10.0, 4.0⟩) d0) }
+
+open Elk.Alg.Common.NodeSpacing in
+/-- The labels of an end label cell, in cell order. -/
+def endCellLabels (cell : CellSystem.Cell LLabelId) : Array LLabelId :=
+  match cell.kind with
+  | .label d => d.labels.map (·.1)
+  | _ => #[]
+
 def sorterTests : Suite := suite "layered.intermediate.endLabelSorter" do
-  -- test_correct_order
-  let ((dummy, normal, la2), a) ← LayeredM.run (do
-    let (g, layers) ← mkGraph 1
-    let dummy ← addNode g layers[0]! .label
-    let lc ← LayeredM.createLabel "c"
-    let la ← LayeredM.createLabel "a"
-    let lb ← LayeredM.createLabel "b"
-    let la2 ← LayeredM.createLabel "a"
-    setRepresented dummy #[lc, la, lb, la2]
-    let normal ← addNode g layers[0]! .normal
-    setRepresented normal #[lc, la]
+  -- Java `EndLabelSorter`: the end labels of a port with two edges carrying tail labels are grouped
+  -- by edge and sorted by target node id (ids assigned in layer/node/port order)
+  let tailProps : PropertyMap := ({} : PropertyMap).set LayeredOptions.EDGE_LABELS_PLACEMENT EdgeLabelPlacement.tail
+  let ((src, ok1, ok2, ok3), a) ← LayeredM.run (do
+    let (g, layers) ← mkGraph 2
+    let src ← addNode g layers[0]! .normal
+    let out ← addPort src .east
+    let t1 ← addNode g layers[1]! .normal
+    let t2 ← addNode g layers[1]! .normal
+    let e2 ← connect out (← addPort t2 .west)
+    let e1 ← connect out (← addPort t1 .west)
+    let l2a ← mkLabel "e2a" 10.0 4.0 tailProps
+    let l1 ← mkLabel "e1" 10.0 4.0 tailProps
+    let l2b ← mkLabel "e2b" 10.0 4.0 tailProps
+    addEdgeLabel e2 l2a
+    addEdgeLabel e2 l2b
+    addEdgeLabel e1 l1
+    for (l, e) in #[(l2a, e2), (l1, e1), (l2b, e2)] do
+      LayeredM.modifyLabel l fun x => { x with internal := { x.internal with endLabelEdge := some e } }
+    LayeredM.modifyNode src fun x => { x with internal := { x.internal with
+      endLabels := some #[(out, endCell #[l2a, l1, l2b])] } }
     runProc EndLabelSorter.processor g
-    return (dummy, normal, la2))
-  let texts := (a.node dummy).internal.representedLabels.map fun l => (a.label l).text
-  checkEq "test_correct_order" texts #["a", "a", "b", "c"]
-  checkEq "hand: stable for equal texts (first `a` stays first)" (a.node dummy).internal.representedLabels[1]! la2
-  checkEq "hand: non-label nodes are not sorted" ((a.node normal).internal.representedLabels.map fun l => (a.label l).text) #["c", "a"]
+    return (src, l1, l2a, l2b))
+  let cell := ((a.node src).internal.endLabels.getD #[])[0]!.2
+  checkEq "groups sorted by target node id, labels of a group stay together" (endCellLabels cell) #[ok1, ok2, ok3]
+  -- a port that needs sorting without a label cell: Java `createLabelGroups(null)` throws
+  checkThrows "port without label cell throws NullPointerException" (do
+    let _ ← LayeredM.run (do
+      let (g, layers) ← mkGraph 2
+      let src ← addNode g layers[0]! .normal
+      let out ← addPort src .east
+      let other ← addPort src .east
+      let t ← addNode g layers[1]! .normal
+      let e1 ← connect out (← addPort t .west)
+      let e2 ← connect out (← addPort t .west)
+      addEdgeLabel e1 (← mkLabel "a" 10.0 4.0 tailProps)
+      addEdgeLabel e2 (← mkLabel "b" 10.0 4.0 tailProps)
+      LayeredM.modifyNode src fun x => { x with internal := { x.internal with
+        endLabels := some #[(other, endCell #[])] } }
+      runProc EndLabelSorter.processor g)
+    pure ())
 
 -- ===============================================================================================
 -- EndLabelPostprocessor

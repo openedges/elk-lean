@@ -12,8 +12,10 @@ The row list (`List<RectRow> rows`) is threaded through the functions and return
 from the list stays the parent row of blocks that still reference it (Java strong references; a
 block from a removed next row then counts as `wasFromNextRow`, see the arena module).
 
-Rust deviation from Java kept: `something_was_changed |= absorb_blocks(..)` always runs the
-absorption (no short circuit), like Java's `|=`.
+Follows Java (agent COV re-audit): `somethingWasChanged |= absorbBlocks(..)` always runs the
+absorption — Java's boolean `|=` does not short-circuit, and neither does elk-rs; the Lean code calls
+`absorbBlocks` first and then combines the flags. (The note used to call this an elk-rs deviation;
+there is none.)
 -/
 
 namespace Elk.Alg.RectPacking.P2Packing

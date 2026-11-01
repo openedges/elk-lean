@@ -34,20 +34,25 @@ private def joinJunctionPoints (survivingEdge : LEdgeId) (dropped : LEdge) : Lay
 
 /-- `LongEdgeJoiner::join_at(long_edge_dummy, add_unnecessary_bendpoints)` (Java `joinAt`): joins
 the edges of the dummy's first western input port with those of its first eastern output port,
-pairing them by index (the splitter and the hyperedge merger keep both lists aligned). -/
+pairing them by index (the splitter and the hyperedge merger keep both lists aligned). As in Java,
+the loop runs once per incoming edge and takes the first remaining outgoing edge each time: with
+fewer outgoing than incoming edges (after merged hyperedge dummies or wrapping dummies) Java's
+`outputPortEdges.get(0)` throws `IndexOutOfBoundsException: Index 0 out of bounds for length 0`
+(elk-rs paired only `min(in, out)` edges). -/
 def joinAt (longEdgeDummy : LNodeId) (addUnnecessaryBendpoints : Bool) : LayeredM Unit := do
   let westPort := (← withArena (·.nodePortsBySide longEdgeDummy .west))[0]?
   let eastPort := (← withArena (·.nodePortsBySide longEdgeDummy .east))[0]?
   let (some westPort, some eastPort) := (westPort, eastPort) | return
   let inputEdges := (← getPort westPort).incomingEdges
   let outputEdges := (← getPort eastPort).outgoingEdges
-  let edgeCount := min inputEdges.size outputEdges.size
+  let edgeCount := inputEdges.size
   let unnecessaryBendpoint ← match (← getNode longEdgeDummy).ports[0]? with
     | some p => withArena (·.portAbsoluteAnchor p)
     | none => pure none
   for i in [0:edgeCount] do
     let survivingEdge := inputEdges[i]!
-    let droppedEdge := outputEdges[i]!
+    let some droppedEdge := outputEdges[i]?
+      | throwJava indexOutOfBoundsExceptionClass "Index 0 out of bounds for length 0"
     let some droppedTarget := (← getEdge droppedEdge).target | continue
     let droppedEdgeListIndex := ((← getPort droppedTarget).incomingEdges.findIdx? (· == droppedEdge)).getD 0
     setEdgeTargetAndInsertAtIndex survivingEdge (some droppedTarget) droppedEdgeListIndex

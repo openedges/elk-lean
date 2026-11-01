@@ -13,7 +13,7 @@ open Elk.Core.Util.FloatConst
 
 Port of elk-rs `p5edges/polyline_edge_router.rs`. Layers are placed left to right; the space between
 two layers grows with the largest vertical distance an edge has to bridge (`LAYER_SPACE_FAC ×
-min(1, edgeSpacing / nodeSpacing)` of it). A port whose anchor lies further than the sloped edge zone
+Math.min(1, edgeSpacing / nodeSpacing)` of it, with Java's division by a zero node spacing). A port whose anchor lies further than the sloped edge zone
 width (`EDGE_ROUTING_POLYLINE_SLOPED_EDGE_ZONE_WIDTH`) away from its layer's border gets a bend point
 on the border (junction points for ports with several edges), so that the sloped part of an edge
 starts at the layer border; in-layer edges get one bend point beside the layer.
@@ -227,7 +227,9 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   let slopedEdgeZoneWidth := (gr.props.get LayeredOptions.EDGE_ROUTING_POLYLINE_SLOPED_EDGE_ZONE_WIDTH).getD fl0p0
   let nodeSpacing := (gr.props.get LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS).getD fl0p0
   let edgeSpacing := (gr.props.get LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS).getD fl0p0
-  let edgeSpaceFac := if nodeSpacing.abs < Float.epsilon then fl0p0 else fmin (edgeSpacing / nodeSpacing) fl1p0
+  -- Java `Math.min(1.0, edgeSpacing / nodeSpacing)`: a node spacing of `0` gives `+Infinity` → `1`
+  -- (`NaN` for an edge spacing of `0` too); elk-rs used `0` below `f64::EPSILON` (agent COV)
+  let edgeSpaceFac := javaMin fl1p0 (edgeSpacing / nodeSpacing)
   let scope ← withArena (ArenaScope.ofGraph · graph)
   let layers := gr.layers
   let mut layerSizeX : Std.HashMap LayerId Float := {}

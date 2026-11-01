@@ -13,8 +13,11 @@ and stack); the subclasses are the constructors of `ThresholdStrategyKind`. The 
 is the `StateRefT` layer of `ThresholdM` on top of the layout monad `BalM` (the Java strategy
 keeps a reference to the current layout, `init(bal, ni)`).
 
-Rust deviations from Java that are followed: the `usize` id range checks in `pick_edge` and
-`get_bound` (out-of-range ids yield "no edge"/the invalid threshold instead of an exception).
+Unreachable elk-rs guards kept (agent COV re-audit): the `usize` id range checks in `pick_edge` and
+`get_bound` (out-of-range ids yield "no edge"/the invalid threshold where Java would index the
+arrays). `BKNodePlacer` numbers every node of every layer before the strategies run, and at node
+placement every edge of a layered node ends at a node of a layer (merged hyperedge dummies have no
+edges left), so the ids are always in range.
 The `debug_assert!`s on the available space in `process` are not ported.
 -/
 namespace Elk.Alg.Layered.P4Nodes.BK

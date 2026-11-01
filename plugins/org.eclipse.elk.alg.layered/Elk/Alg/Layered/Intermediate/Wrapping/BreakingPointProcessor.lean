@@ -18,12 +18,20 @@ the start dummies). These steps keep each node's index within its layer in `LNod
 
 Slots: after phase 3.
 
-Rust deviations from Java (followed):
-* `performWrapping` stops when the target layer index leaves the layer list;
-* the merge step also relinks the neighbours (`prev.next`, `next.prev`) to the merged info;
-* missing infos/dummies end the respective loop instead of throwing;
-* `setLayer(index, layer)` clamps the index to `[0, size]` (Rust `set_layer_at_index_clamped`);
-* `isAdjacentOrSeparatedByBreakingPoints` returns `false` for an index outside the layer.
+Follows Java (agent COV):
+* the backward pass of `improveUnneccesarilyLongEdges` visits the nodes of each layer in layer order:
+  Java's `Lists.reverse(nodes)` result is discarded (elk-rs reversed the nodes);
+* `setLayer(index, layer)` throws like Java's `LNode.setLayer(int, Layer)` (elk-rs clamped);
+* `isAdjacentOrSeparatedByBreakingPoints` throws Java's `IndexOutOfBoundsException` for an index
+  outside the layer (elk-rs returned `false`); `nextLongEdgeDummy` compares the layers like Java's
+  reference comparison;
+* `performWrapping`'s target layer index never leaves the layer list (it is at most the current
+  position), so the bounds check is unreachable;
+* the merge step also relinks the neighbours (`prev.next`, `next.prev`) to the merged info: Java
+  leaves the old objects there, but a chain is merged completely from its head (`prev == null`) and
+  only `next` links are followed while merging, so the extra links are never read;
+* missing infos/in-layer dummies end the respective loop where Java would dereference `null`:
+  `performWrapping` gives every breaking point its in-layer dummies and edges.
 
 Dummies are joined with `LongEdgeJoiner.joinAt` (elk-rs `LongEdgeJoiner::join_at`).
 -/
@@ -50,15 +58,18 @@ def updateIndexesAfter (node : LNodeId) : LayeredM Unit := do
     let candidate := nodes[i]!
     setNodeId candidate ((← nodeId candidate) - 1)
 
-/-- Rust `set_layer_at_index_clamped`: `setLayer(clamp(index, 0, size), layer)` with the size
-taken before the node leaves its current layer; like Rust (`panic!`) an index beyond the layer
-after that removal throws. -/
-def setLayerAtIndexClamped (node : LNodeId) (index : Int) (layer : LayerId) : LayeredM Unit := do
-  let maxLen := (← getLayer layer).nodes.size
-  let clamped := (max 0 (min index (maxLen : Int))).toNat
-  if (← getNode node).layer == some layer && clamped > maxLen - 1 then
-    throw (IO.userError "java.lang.IllegalStateException: index must be >= 0 and <= layer node count")
-  setNodeLayerAtIndex node clamped (some layer)
+/-- Java `LNode.setLayer(index, layer)`: `IllegalArgumentException` for an index outside
+`[0, size]` of the target layer (size taken before the node leaves its current layer); otherwise the
+node leaves its layer and is inserted at `index`, which throws `ArrayList.add`'s
+`IndexOutOfBoundsException` when the node left the same layer and `index` is now past its end
+(elk-rs clamped the index). -/
+def setLayerAtIndexJava (node : LNodeId) (index : Int) (layer : LayerId) : LayeredM Unit := do
+  let size := (← getLayer layer).nodes.size
+  if index < 0 || index > (size : Int) then
+    throwIllegalArgument "index must be >= 0 and <= layer node count"
+  if (← getNode node).layer == some layer && index.toNat > size - 1 then
+    throwJava indexOutOfBoundsExceptionClass s!"Index: {index}, Size: {size - 1}"
+  setNodeLayerAtIndex node index.toNat (some layer)
 
 /-- `isInLayerDummy(node)`: a `LONG_EDGE` dummy with a non-self-loop edge to a node of its own
 layer. -/
@@ -80,9 +91,8 @@ def nextLongEdgeDummy (start : LNodeId) (forwards : Bool) : LayeredM (Option LNo
   for edge in edges do
     let some other := (← withArena (·.edgeOtherNode edge start)) | continue
     let o ← getNode other
-    if o.type != .longEdge then continue
-    if let (some sl, some ol) := (startLayer, o.layer) then
-      if sl != ol then return some other
+    -- Java `other.getLayer() != start.getLayer()` (reference comparison, `null` included)
+    if o.type == .longEdge && o.layer != startLayer then return some other
   return none
 
 /-- `isAdjacentOrSeparatedByBreakingpoints(dummy1, dummy2, forwards)`: all nodes strictly between
@@ -97,8 +107,9 @@ def isAdjacentOrSeparatedByBreakingPoints (dummy1 dummy2 : LNodeId) (forwards : 
   let nodes := (← getLayer layer).nodes
   let mut i := startId + 1
   while i < endId do
-    if i < 0 then return false
-    let some node := nodes[i.toNat]? | return false
+    -- Java `layer.getNodes().get(i)` (the ids are the in-layer indexes)
+    let some node := (if i < 0 then none else nodes[i.toNat]?)
+      | throwJava indexOutOfBoundsExceptionClass s!"Index {i} out of bounds for length {nodes.size}"
     let isBreaking := (← getNode node).type == .breakingPoint
     if !(isBreaking || (← isInLayerDummy node)) then return false
     i := i + 1
@@ -111,14 +122,14 @@ private def moveIntoLayer (bpNode inLayerDummy predOne predTwo : LNodeId) (newLa
   let predTwoId ← nodeId predTwo
   let predOneId ← nodeId predOne
   if forwards then
-    setLayerAtIndexClamped inLayerDummy predTwoId newLayer
+    setLayerAtIndexJava inLayerDummy predTwoId newLayer
     setNodeId inLayerDummy predTwoId
-    setLayerAtIndexClamped bpNode (predOneId + 1) newLayer
+    setLayerAtIndexJava bpNode (predOneId + 1) newLayer
     setNodeId bpNode predOneId
   else
-    setLayerAtIndexClamped bpNode predOneId newLayer
+    setLayerAtIndexJava bpNode predOneId newLayer
     setNodeId bpNode predOneId
-    setLayerAtIndexClamped inLayerDummy (predTwoId + 1) newLayer
+    setLayerAtIndexJava inLayerDummy (predTwoId + 1) newLayer
     setNodeId inLayerDummy predTwoId
 
 /-- `dropDummies(bpNode, inLayerDummy, forwards, force)`: while the next long edge dummies of both
@@ -252,16 +263,18 @@ def improveMultiCutIndexEdges (graph : LGraphId) : LayeredM Unit := do
         | none => break
 
 /-- `improveUnneccesarilyLongEdges(graph, forwards)`: repeats sweeps (layers right to left for
-`forwards`, nodes right to left otherwise) over the end (`forwards`) or start dummies until a
-sweep's last `dropDummies` call drops nothing (Java/Rust overwrite `didsome` per call). -/
+`forwards`, left to right otherwise; nodes always in layer order, see below) over the end
+(`forwards`) or start dummies until a sweep's last `dropDummies` call drops nothing (Java overwrites
+`didsome` per call). -/
 def improveUnnecessarilyLongEdges (graph : LGraphId) (forwards : Bool) : LayeredM Unit := do
   while true do
     let mut didsome := false
     let layers := (← getGraph graph).layers
     let layers := if forwards then layers.reverse else layers
     for layer in layers do
+      -- Java's `if (!forwards) { Lists.reverse(nodes); }` discards the reversed view, so the nodes
+      -- are visited in layer order in both directions (elk-rs reversed them)
       let nodes := (← getLayer layer).nodes
-      let nodes := if forwards then nodes else nodes.reverse
       for node in nodes do
         let ok ← if forwards then BreakingPointInfo.isEnd node else BreakingPointInfo.isStart node
         if !ok then continue

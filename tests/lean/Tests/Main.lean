@@ -48,6 +48,7 @@ import Tests.Api.RandomJavaSpv
 import Tests.Api.RandomJavaLm
 import Tests.Api.RandomJavaGs
 import Tests.Api.RandomJavaHmo
+import Tests.Api.RandomJavaCov
 
 /-- Test driver (`lake test`). Add each plugin's `suites` here. `lake test -- --suite <prefix>` runs
 only the suites whose name starts with `<prefix>`. -/
@@ -83,6 +84,7 @@ def main (args : List String) : IO UInt32 := do
     Tests.Api.RandomJavaLm.suites ++
     Tests.Api.RandomJavaGs.suites ++
     Tests.Api.RandomJavaHmo.suites ++
+    Tests.Api.RandomJavaCov.suites ++
     Tests.Core.Alg.suites ++
     -- keep `Tests.Core.Engine` last: it registers an extra test algorithm (`core.meta.counts` expects 4)
     Tests.Core.Engine.suites

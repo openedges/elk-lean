@@ -1,0 +1,1 @@
+java.lang.NullPointerException: Cannot invoke "java.util.Collection.toArray()" because "c" is null

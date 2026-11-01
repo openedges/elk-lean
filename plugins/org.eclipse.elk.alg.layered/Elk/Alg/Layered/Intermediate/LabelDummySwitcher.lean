@@ -36,6 +36,16 @@ labels are sorted by descending width with `total_cmp` (stable); the chains of l
 followed with a visited set (no endless loops on cyclic chains); the minimum space between layers is
 `max(2 * SPACING_EDGE_NODE_BETWEEN_LAYERS, SPACING_NODE_NODE_BETWEEN_LAYERS)` of the processed graph.
 The `ELK_TRACE_LABEL_DUMMY_SWITCHER` debug output is omitted.
+
+Java `int` semantics of the layer range (agent COV): a long edge turned back by a wrapping step
+(`SingleEdgeGraphWrapper`/`BreakingPointProcessor` run before this processor) can have its rightmost
+dummy in an earlier layer than its leftmost one. `totalDummyCount`, the median and the target index
+are then Java `int`s (negative or too small), and the Java exceptions they cause are reproduced:
+`NegativeArraySizeException`/`ArrayIndexOutOfBoundsException` in `computeLayerWidthSums`,
+`IndexOutOfBoundsException` in `ithDummyNode`, `IllegalArgumentException` of `subList` in
+`assignToWiderLayer`, and `NoSuchElementException` for a long edge dummy without incoming or outgoing
+edge while gathering the chain (Java `iterator().next()`). A cyclic chain (Java would loop forever)
+still ends at the visited set.
 -/
 
 namespace Elk.Alg.Layered.Intermediate
@@ -88,14 +98,16 @@ def nodeLayerId (node : LNodeId) : LayeredM (Option Nat) := do
 /-- Rust `previous_long_edge_node(node)`: source node of the node's first incoming edge. -/
 def previousLongEdgeNode (node : LNodeId) : LayeredM (Option LNodeId) := do
   let incoming ← withArena (·.nodeIncomingEdges node)
-  let some edge := incoming[0]? | return none
+  -- Java `getIncomingEdges().iterator().next()` on a node without incoming edges
+  let some edge := incoming[0]? | throw (IO.userError "java.util.NoSuchElementException")
   let some source := (← getEdge edge).source | return none
   return (← getPort source).owner
 
 /-- Rust `next` in `gather_right_long_edge_dummies`: target node of the node's first outgoing edge. -/
 def nextLongEdgeNode (node : LNodeId) : LayeredM (Option LNodeId) := do
   let outgoing ← withArena (·.nodeOutgoingEdges node)
-  let some edge := outgoing[0]? | return none
+  -- Java `getOutgoingEdges().iterator().next()` on a node without outgoing edges
+  let some edge := outgoing[0]? | throw (IO.userError "java.util.NoSuchElementException")
   let some target := (← getEdge edge).target | return none
   return (← getPort target).owner
 
@@ -154,16 +166,27 @@ def LabelDummyInfo.create (labelDummy : LNodeId) (defaultStrategy : CenterEdgeLa
   return { labelDummy := labelDummy, placementStrategy := strategy, leftLongEdgeDummies := left,
            rightLongEdgeDummies := right, leftmostLayerId := leftmost, rightmostLayerId := rightmost }
 
-/-- Rust `total_dummy_count`: `rightmost - leftmost + 1` (saturating). -/
-def LabelDummyInfo.totalDummyCount (info : LabelDummyInfo) : Nat :=
-  info.rightmostLayerId - info.leftmostLayerId + 1
+/-- `totalDummyCount()`: `rightmostLayerId - leftmostLayerId + 1` as a Java `int`. It is the number
+of dummies of the long edge only while the edge runs left to right; a long edge that a wrapping step
+turned back (its later dummies in earlier layers) gives a smaller or negative count, as in Java. -/
+def LabelDummyInfo.totalDummyCount (info : LabelDummyInfo) : Int :=
+  (info.rightmostLayerId : Int) - info.leftmostLayerId + 1
 
-/-- Rust `ith_dummy_node(index)`: left dummies, the label dummy, right dummies (`none` out of range,
-where Rust would panic). -/
-def LabelDummyInfo.ithDummyNode (info : LabelDummyInfo) (index : Nat) : Option LNodeId :=
-  if index < info.leftLongEdgeDummies.size then info.leftLongEdgeDummies[index]?
-  else if index == info.leftLongEdgeDummies.size then some info.labelDummy
-  else info.rightLongEdgeDummies[index - info.leftLongEdgeDummies.size - 1]?
+/-- `ithDummyNode(i)`: left dummies, the label dummy, right dummies; an index outside the lists
+throws Java's `ArrayList.get` `IndexOutOfBoundsException`. -/
+def LabelDummyInfo.ithDummyNode (info : LabelDummyInfo) (index : Int) : LayeredM LNodeId := do
+  let left := info.leftLongEdgeDummies
+  if index < left.size then
+    let some n := (if index < 0 then none else left[index.toNat]?)
+      | throwJava indexOutOfBoundsExceptionClass s!"Index {index} out of bounds for length {left.size}"
+    return n
+  else if index == left.size then return info.labelDummy
+  else
+    let i := index - left.size - 1
+    let some n := info.rightLongEdgeDummies[i.toNat]?
+      | throwJava indexOutOfBoundsExceptionClass
+          s!"Index {i} out of bounds for length {info.rightLongEdgeDummies.size}"
+    return n
 
 /-- Rust `label_dummy_width`: the label dummy's current width. -/
 def LabelDummyInfo.width (info : LabelDummyInfo) : LayeredM Float := do
@@ -207,44 +230,44 @@ def findWidestLayerTargetId (info : LabelDummyInfo) : SwitcherM Nat := do
     if widthAt s index > widthAt s widestLayer then widestLayer := index
   return widestLayer
 
-/-- Rust `compute_layer_width_sums`: accumulated widths (each plus the minimum layer spacing) of the
-layers of the left dummies, the label dummy and the right dummies. -/
+/-- `computeLayerWidthSums(info)`: accumulated widths (each plus the minimum layer spacing) of the
+layers of the left dummies, the label dummy and the right dummies, in an array of
+`totalDummyCount()` entries: like Java, a negative count throws `NegativeArraySizeException` and
+more dummies than entries throw `ArrayIndexOutOfBoundsException` (a long edge turned back by a
+wrapping step; elk-rs skipped the extra entries). -/
 def computeLayerWidthSums (info : LabelDummyInfo) : SwitcherM (Array Float) := do
   let s ← get
   let minSpace := s.minSpaceBetweenLayers
-  let mut sums : Array Float := Array.replicate info.totalDummyCount 0.0
+  let count := info.totalDummyCount
+  if count < 0 then throwJava "java.lang.NegativeArraySizeException" s!"{count}"
+  let length := count.toNat
+  let mut sums : Array Float := Array.replicate length 0.0
   let mut currentSum := -minSpace
   let mut index := 0
-  for leftDummy in info.leftLongEdgeDummies do
-    let layerId := (← nodeLayerId leftDummy).getD 0
+  let dummies := info.leftLongEdgeDummies.push info.labelDummy ++ info.rightLongEdgeDummies
+  for dummy in dummies do
+    let layerId := (← nodeLayerId dummy).getD 0
     currentSum := currentSum + (widthAt s layerId + minSpace)
-    sums := sums.setIfInBounds index currentSum
+    if index >= length then
+      throwJava "java.lang.ArrayIndexOutOfBoundsException" s!"Index {index} out of bounds for length {length}"
+    sums := sums.set! index currentSum
     index := index + 1
-  let labelLayerId := (← nodeLayerId info.labelDummy).getD 0
-  currentSum := currentSum + (widthAt s labelLayerId + minSpace)
-  if index < sums.size then
-    sums := sums.setIfInBounds index currentSum
-    index := index + 1
-  for rightDummy in info.rightLongEdgeDummies do
-    let layerId := (← nodeLayerId rightDummy).getD 0
-    currentSum := currentSum + (widthAt s layerId + minSpace)
-    if index < sums.size then
-      sums := sums.setIfInBounds index currentSum
-      index := index + 1
   return sums
 
-/-- Rust `find_center_layer_target_id`: the first layer at which the accumulated width reaches half
-of the total. -/
-def findCenterLayerTargetId (info : LabelDummyInfo) : SwitcherM Nat := do
+/-- `findCenterLayerTargetId(info)`: the first layer at which the accumulated width reaches half of
+the total (`layerWidthSums[length - 1]` throws for an empty array, as in Java). -/
+def findCenterLayerTargetId (info : LabelDummyInfo) : SwitcherM Int := do
   let sums ← computeLayerWidthSums info
-  let threshold := sums.back?.getD 0.0 / 2.0
+  let some last := sums.back?
+    | throwJava "java.lang.ArrayIndexOutOfBoundsException" "Index -1 out of bounds for length 0"
+  let threshold := last / 2.0
   for h : i in [0:sums.size] do
     if sums[i] >= threshold then return info.leftmostLayerId + i
   return info.leftmostLayerId + info.leftLongEdgeDummies.size
 
 /-- Rust `find_median_layer_target_id`: the lower median of the layer range. -/
-def findMedianLayerTargetId (info : LabelDummyInfo) : Nat :=
-  info.leftmostLayerId + (info.totalDummyCount - 1) / 2
+def findMedianLayerTargetId (info : LabelDummyInfo) : Int :=
+  (info.leftmostLayerId : Int) + Int.tdiv (info.totalDummyCount - 1) 2
 
 /-- Rust `is_part_of_reversed_edge`: the first incoming or the first outgoing edge is `REVERSED`. -/
 def isPartOfReversedEdge (info : LabelDummyInfo) : LayeredM Bool := do
@@ -299,13 +322,12 @@ def swapNodes (labelDummy longEdgeDummy : LNodeId) : LayeredM Unit := do
 /-- Rust `assign_layer(info, target_layer_index)`: swaps the label dummy into the target layer if
 needed, widens the layer's recorded width to the dummy width and marks the represented labels with
 `INCLUDE_LABEL`. -/
-def assignLayer (info : LabelDummyInfo) (targetLayerIndex : Nat) : SwitcherM Unit := do
-  let currentLayerIndex := info.leftmostLayerId + info.leftLongEdgeDummies.size
+def assignLayer (info : LabelDummyInfo) (targetLayerIndex : Int) : SwitcherM Unit := do
+  let currentLayerIndex : Int := info.leftmostLayerId + info.leftLongEdgeDummies.size
   if targetLayerIndex != currentLayerIndex then
-    -- `ith_dummy_node` is always defined for targets inside the label's layer range
-    if let some swapNode := info.ithDummyNode (targetLayerIndex - info.leftmostLayerId) then
-      swapNodes info.labelDummy swapNode
-  let newLayerId := (← nodeLayerId info.labelDummy).getD targetLayerIndex
+    let swapNode ← info.ithDummyNode (targetLayerIndex - info.leftmostLayerId)
+    swapNodes info.labelDummy swapNode
+  let newLayerId := (← nodeLayerId info.labelDummy).getD targetLayerIndex.toNat
   let dummyWidth ← info.width
   modify fun s =>
     { s with layerWidths := s.layerWidths.modify newLayerId fun w => if dummyWidth > w then dummyWidth else w }
@@ -316,6 +338,9 @@ def assignLayer (info : LabelDummyInfo) (targetLayerIndex : Nat) : SwitcherM Uni
 width. -/
 def assignToWiderLayer (info : LabelDummyInfo) : SwitcherM Bool := do
   let dummyWidth ← info.width
+  -- Java `getLayers().subList(leftmost, rightmost + 1)`
+  if info.leftmostLayerId > info.rightmostLayerId + 1 then
+    throwIllegalArgument s!"fromIndex({info.leftmostLayerId}) > toIndex({info.rightmostLayerId + 1})"
   for layerIndex in [info.leftmostLayerId:info.rightmostLayerId + 1] do
     if let some layer := (← get).layers[layerIndex]? then
       let layerWidth := (← getLayer layer).size.x
@@ -330,7 +355,7 @@ def performTrivialAssignments (infos : Array LabelDummyInfo) : SwitcherM (Array 
   let mut remaining : Array LabelDummyInfo := #[]
   for info in infos do
     if info.leftmostLayerId == info.rightmostLayerId then
-      assignLayer info info.leftmostLayerId
+      assignLayer info (info.leftmostLayerId : Int)
     else if !(← assignToWiderLayer info) then
       remaining := remaining.push info
   return remaining

@@ -20,10 +20,11 @@ for everything), `DIRECTION_UP`/`DIRECTION_DOWN` (by whether the edge points rig
 `REVERSED`) and `SMART_UP`/`SMART_DOWN` (patterns of consecutive dummy runs and end labels per port
 side, falling back to the default side).
 
-Rust deviations from Java (followed here): `apply_label_side_to_dummy` also writes the side to the
-dummy's represented labels; the edge thickness used to move the ports is the `EDGE_THICKNESS` of the
-dummy's first incoming (else first outgoing) edge (Java: of the `ORIGIN` edge); the edge label
-spacing is read once from the graph (`2.0` when not stored).
+Follows Java (agent COV): the side is written to the label dummy only (elk-rs also wrote it to the
+represented labels), and the edge thickness used to move the ports is the `EDGE_THICKNESS` of the
+dummy's `ORIGIN` edge (elk-rs: of its first incoming, else first outgoing edge). The edge label
+spacing is read once from the graph: Java reads `labelDummy.getGraph()`'s value per dummy, which is
+the processed graph's value for every dummy of its layers.
 
 The Rust `VecDeque`s are arrays (`push_back` = `push`, `front`/`back` = first/last element).
 The end labels of a port are gathered with `EndLabelPreprocessor.gatherLabels` (elk-rs
@@ -38,27 +39,25 @@ open Elk.Graph Elk.Core Elk.Core.Alg Elk.Core.Math Elk.Core.Options Elk.Core.Uti
 
 namespace LabelSideSelector
 
-/-- Rust `get_origin_edge_thickness(label_dummy)`: `EDGE_THICKNESS` of the first incoming edge, else
-of the first outgoing edge, else `0`. -/
+/-- `((LEdge) labelDummy.getProperty(ORIGIN)).getProperty(EDGE_THICKNESS)`: the thickness of the
+edge the label dummy was created for (`LabelDummyInserter`; elk-rs read the first incoming, else the
+first outgoing edge of the dummy, which carries a copy of the same value in the regular pipeline). A
+label dummy without `LEdge` origin makes Java throw (`null` unboxing or a `ClassCastException`); label
+dummies always have one. -/
 def originEdgeThickness (labelDummy : LNodeId) : LayeredM Float := do
-  let incoming ← withArena (·.nodeIncomingEdges labelDummy)
-  if let some edge := incoming[0]? then
-    return (← getEdge edge).props.getD CoreOptions.EDGE_THICKNESS 0.0
-  let outgoing ← withArena (·.nodeOutgoingEdges labelDummy)
-  if let some edge := outgoing[0]? then
-    return (← getEdge edge).props.getD CoreOptions.EDGE_THICKNESS 0.0
-  return 0.0
+  match (← getNode labelDummy).internal.origin with
+  | some (.lEdge edge) => return (← getEdge edge).props.getD CoreOptions.EDGE_THICKNESS fl1p0
+  | _ => throwNullPointer "Cannot invoke \"org.eclipse.elk.alg.layered.graph.LEdge.getProperty(org.eclipse.elk.graph.properties.IProperty)\" because \"originEdge\" is null"
 
-/-- Rust `apply_label_side_to_dummy(node, side, edge_label_spacing)`: only for `LABEL` nodes. The side
-(`INLINE` for inline edge label dummies) is set on the dummy and its represented labels; unless the
-labels go `BELOW` the edge, the ports move to `height - ceil(thickness / 2)` (`ABOVE`) or to
-`ceil(height - spacing - thickness) / 2` with the dummy shrunk by `spacing + thickness` (`INLINE`). -/
+/-- `applyLabelSide(LNode, LabelSide)`: only for `LABEL` nodes. The side (`INLINE` for inline edge
+label dummies) is set on the dummy (Java; elk-rs also wrote it to the represented labels, which no
+later processor reads); unless the labels go `BELOW` the edge, the ports move to
+`height - ceil(thickness / 2)` (`ABOVE`) or to `ceil(height - spacing - thickness) / 2` with the
+dummy shrunk by `spacing + thickness` (`INLINE`), with the thickness of the dummy's `ORIGIN` edge. -/
 def applyLabelSideToDummy (node : LNodeId) (side : LabelSide) (edgeLabelSpacing : Float) : LayeredM Unit := do
   if (← getNode node).type != .label then return
   let effectiveSide := if ← withArena (·.nodeIsInlineEdgeLabel node) then LabelSide.inline else side
   modifyNode node fun n => { n with internal := { n.internal with labelSide := effectiveSide } }
-  for label in (← getNode node).internal.representedLabels do
-    modifyLabel label fun l => { l with internal := { l.internal with labelSide := effectiveSide } }
   if effectiveSide != .below then
     let thickness ← originEdgeThickness node
     let mut portPos : Float := fl0p0

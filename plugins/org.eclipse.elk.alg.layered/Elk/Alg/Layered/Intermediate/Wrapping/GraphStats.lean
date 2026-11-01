@@ -10,8 +10,9 @@ computes the widths, heights and allowed cuts lazily; elk-rs (and this port) com
 eagerly in the constructor, before any processor modifies the graph, which yields the same values.
 The Java `getApproximate*` methods were not ported by elk-rs and are omitted.
 
-Option reads follow Rust `get_property(..).unwrap_or(..)`: the stored value, else the property
-default, else the Rust fallback (`ASPECT_RATIO` has no default, fallback `1.0`).
+Option reads: the stored value, else the property default; `ASPECT_RATIO` falls back to Java's
+`LayeredOptions.ASPECT_RATIO` default `1.6f` (`ASPECT_RATIO_DEFAULT`; elk-rs used `1.0`). The widths
+and heights use Java's addition order and `Math.max` (agent COV).
 -/
 
 namespace Elk.Alg.Layered.Intermediate.Wrapping
@@ -41,14 +42,14 @@ structure GraphStats where
 
 namespace GraphStats
 
-/-- `determineLayerWidth(layer)`: the maximum of `size.x + margin.left + margin.right + spacing`
-over the layer's nodes (Rust addition order; Java adds `right` before `left`), `0` if empty. -/
+/-- `determineLayerWidth(layer)`: the maximum (`Math.max`) of `size.x + margin.right + margin.left +
+spacing` (Java's addition order; elk-rs added `left` first) over the layer's nodes, `0` if empty. -/
 def determineLayerWidth (layer : LayerId) (spacing : Float) : LayeredM Float := do
   let mut maxWidth : Float := 0.0
   for node in (← getLayer layer).nodes do
     let nd ← getNode node
-    let nodeWidth := nd.size.x + nd.margin.left + nd.margin.right + spacing
-    maxWidth := fmax maxWidth nodeWidth
+    let nodeWidth := nd.size.x + nd.margin.right + nd.margin.left + spacing
+    maxWidth := javaMax maxWidth nodeWidth
   return maxWidth
 
 /-- `determineLayerHeight(layer)`: the sum of `size.y + margin.bottom + margin.top +
@@ -106,7 +107,7 @@ def initCutAllowed (graph : LGraphId) (layers : Array LayerId) : LayeredM (Array
 def new (graph : LGraphId) : LayeredM GraphStats := do
   let gr ← getGraph graph
   let direction := (gr.props.get LayeredOptions.DIRECTION).getD .undefined
-  let aspectRatio := (gr.props.get LayeredOptions.ASPECT_RATIO).getD fl1p0
+  let aspectRatio := (gr.props.get LayeredOptions.ASPECT_RATIO).getD LayeredOptions.ASPECT_RATIO_DEFAULT
   let correction := (gr.props.get LayeredOptions.WRAPPING_CORRECTION_FACTOR).getD fl1p0
   let dar := match direction with
     | .left | .right | .undefined => aspectRatio * correction
@@ -119,10 +120,11 @@ def new (graph : LGraphId) : LayeredM GraphStats := do
   for layer in layers do
     widths := widths.push (← determineLayerWidth layer spacing)
     heights := heights.push (← determineLayerHeight layer inLayerSpacing)
-  let maxWidth := if widths.isEmpty then fl0p0 else widths.foldl fmax widths[0]!
-  let maxHeight := if heights.isEmpty then fl0p0 else heights.foldl fmax heights[0]!
-  -- Rust `iter().sum()` (neutral element `-0.0`)
-  let sumWidth := widths.foldl (· + ·) (-fl0p0)
+  -- Java `stream().reduce(Math::max).get()` / `reduce((a, b) -> a + b).get()`: a left fold from the
+  -- first layer (the processors return before for an empty layering)
+  let maxWidth := if widths.isEmpty then fl0p0 else (widths.extract 1 widths.size).foldl javaMax widths[0]!
+  let maxHeight := if heights.isEmpty then fl0p0 else (heights.extract 1 heights.size).foldl javaMax heights[0]!
+  let sumWidth := if widths.isEmpty then fl0p0 else (widths.extract 1 widths.size).foldl (· + ·) widths[0]!
   let cutsAllowed ← initCutAllowed graph layers
   return { dar, longestPath := layers.size, maxWidth, maxHeight, sumWidth, widths, heights, cutsAllowed }
 

@@ -59,7 +59,7 @@ def combine (components : Array LGraphId) (target : LGraphId) : LayeredM Unit :=
   if let some first := components[0]? then
     copyProperties target first
   let tg ← getGraph target
-  let aspectRatio := tg.props.getD LayeredOptions.ASPECT_RATIO fl1p6
+  let aspectRatio := tg.props.getD LayeredOptions.ASPECT_RATIO LayeredOptions.ASPECT_RATIO_DEFAULT
   let componentSpacing := tg.props.getD LayeredOptions.SPACING_COMPONENT_COMPONENT fl20p0
   let mut maxRowWidth := fl0p0
   let mut totalArea := fl0p0

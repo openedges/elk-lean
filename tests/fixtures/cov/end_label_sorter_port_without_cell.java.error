@@ -1,0 +1,1 @@
+java.lang.NullPointerException: Cannot invoke "org.eclipse.elk.alg.common.nodespacing.cellsystem.LabelCell.getLabels()" because "portLabelCell" is null

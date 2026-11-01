@@ -11,13 +11,17 @@ are computed (`WRAPPING_CUTTING_STRATEGY`: `MANUAL`, `ARD`, default `MSD`), made
 cut are moved back to the first layers. Edges entering the first layer of a new row are reversed
 (the graph becomes `CYCLIC`) and get in-layer/long edge dummies (`CuttingUtils.insertDummies`).
 
-Rust deviations from Java (followed):
-* the early exit computes `currentAR = 0` for `maxWidth == 0` (Java `NaN`, never exits);
-* `validifyIndexesGreedily` treats negative indexes as forbidden (Java throws);
-* `validifyIndexesLookingBack` uses saturating `i32` distances (Java's `current - MIN_VALUE`
-  overflows) and bounds checks; the running offset is an unbounded `Int` here (Rust `i32`, only
-  different for cuts next to the `±inf` sentinels);
-* `performCuts` stops when an index leaves the layer list.
+Follows Java (agent COV):
+* the early exit compares `dar > currentAR` with `currentAR = (maxWidth * longestPath) / maxWidth`
+  (`NaN` for `maxWidth == 0`, so Java never exits early there; elk-rs used `0`);
+* `validifyIndexesLookingBack` uses Java `int` arithmetic (`current - Integer.MIN_VALUE` overflows,
+  see `validifyIndexesLookingBackWithValids`); elk-rs saturated the distances;
+* `validifyIndexesGreedily` only ever sees cuts `≥ 1` (the ARD/MSD heuristics produce indexes `≥ 1`,
+  the offset only grows, and manual cuts cannot be set: `WRAPPING_CUTTING_CUTS` is an `OBJECT` option
+  without `IDataObject` class, which Java's JSON importer rejects), so `isCutAllowed` is never asked
+  for a negative index (Java would throw there);
+* `performCuts` receives cuts below the layer count in increasing order, so the bounds check on the
+  layer list never triggers.
 
 Slots: before phase 4.
 -/
@@ -39,9 +43,6 @@ def I32_MIN : Int := -2147483648
 /-- `i32::MAX`. -/
 def I32_MAX : Int := 2147483647
 
-/-- Rust `i32::saturating_sub`. -/
-def saturatingSubI32 (a b : Int) : Int := max I32_MIN (min I32_MAX (a - b))
-
 /-- `validifyIndexesGreedily(graphStats, cuts)`: shifts every forbidden cut (and with it all
 following cuts) to the next allowed index; cuts that fall off the end are dropped. -/
 def validifyIndexesGreedily (gs : GraphStats) (cuts : Array Int) : Array Int := Id.run do
@@ -58,28 +59,30 @@ def validifyIndexesGreedily (gs : GraphStats) (cuts : Array Int) : Array Int := 
   return validCuts
 
 /-- `validifyIndexesLookingBack(desiredCuts, validCuts)`: `validCuts` starts with `-inf`
-(`i32::MIN`) and ends with `+inf` (`i32::MAX`); every desired cut (shifted by the accumulated
-offset) snaps to the nearer of the enclosing valid cuts (the lower one on ties). -/
+(`Integer.MIN_VALUE`) and ends with `+inf` (`Integer.MAX_VALUE`); every desired cut (shifted by the
+accumulated offset) snaps to the nearer of the enclosing valid cuts (the lower one on ties). All
+arithmetic is Java `int` arithmetic: for a desired cut before the first valid cut,
+`current - Integer.MIN_VALUE` overflows to a negative distance, so Java selects the `-inf` sentinel
+itself as a cut (which no layer index ever equals, so the wrapping then performs no cut at all). -/
 def validifyIndexesLookingBackWithValids (desiredCuts validCuts : Array Int) : Array Int := Id.run do
-  if desiredCuts.isEmpty || validCuts.size < 2 then return #[]
   let mut finalCuts : Array Int := #[]
   let mut iIdx : Nat := 0
   let mut cIdx : Nat := 0
   let mut offset : Int := 0
-  while iIdx < validCuts.size - 1 && cIdx < desiredCuts.size do
-    let current := desiredCuts[cIdx]! + offset
+  while iIdx + 1 < validCuts.size && cIdx < desiredCuts.size do
+    let current := Int.wrap32 (desiredCuts[cIdx]! + offset)
+    -- terminates at the `+inf` sentinel (no `int` exceeds `Integer.MAX_VALUE`)
     while iIdx + 1 < validCuts.size && validCuts[iIdx + 1]! < current do
       iIdx := iIdx + 1
-    if iIdx + 1 >= validCuts.size then break
     let mut select : Nat := 0
-    let distLower := saturatingSubI32 current validCuts[iIdx]!
-    let distHigher := saturatingSubI32 validCuts[iIdx + 1]! current
+    let distLower := Int.wrap32 (current - validCuts[iIdx]!)
+    let distHigher := Int.wrap32 (validCuts[iIdx + 1]! - current)
     if distLower > distHigher then select := 1
     let selected := validCuts[iIdx + select]!
     finalCuts := finalCuts.push selected
-    offset := offset + (selected - current)
+    offset := Int.wrap32 (offset + (selected - current))
     cIdx := cIdx + 1
-    while cIdx < desiredCuts.size && desiredCuts[cIdx]! + offset <= selected do
+    while cIdx < desiredCuts.size && Int.wrap32 (desiredCuts[cIdx]! + offset) <= selected do
       cIdx := cIdx + 1
     iIdx := iIdx + 1 + select
   return finalCuts
@@ -144,7 +147,7 @@ def process (graph : LGraphId) (monitor : ProgressMonitor) : LayeredM Unit := do
   let gs ← GraphStats.new graph
   -- Keep Java behavior: this simplifies to longestPath and is used as-is there.
   let sumWidth := gs.maxWidth * gs.longestPath.toFloat
-  let currentAR := if gs.maxWidth == 0.0 then 0.0 else sumWidth / gs.maxWidth
+  let currentAR := sumWidth / gs.maxWidth
   if gs.dar > currentAR then
     monitor.done
     return

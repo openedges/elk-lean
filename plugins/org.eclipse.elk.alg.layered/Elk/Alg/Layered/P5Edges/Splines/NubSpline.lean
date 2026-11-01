@@ -23,16 +23,20 @@ lies on the curve. The knot vector does not store the irrelevant first and last 
   `setOuterBox`, `generateDerivedNubs`, `generateInvertedNubs`, `getFirst/LastVertical/HorizontalPoint`,
   `generateNiceCurve`.
 
-## Rust details kept
-- `insert_knot` passes `knot_index - 1` to `insert_knot_at_current_position`, which inserts at
-  that index: for a knot that is not yet in the vector Rust therefore inserts one position earlier
-  than Java's `ListIterator.add` (Java keeps the vector sorted). Bezier conversion is unaffected
-  (it only inserts copies of an existing knot); `getPointOnCurve` follows Rust.
-- `to_bezier` on an unclamped spline starts at index `dim - 1` after removing `dim - 1` leading
+## elk-rs details kept, unreachable from the layout pipeline (agent COV)
+The layered algorithm only builds clamped splines (`NubSpline.new true 3 ..`, Java `new
+NubSpline(true, 3, ..)` in `FinalSplineBendpointsCalculator` and `SplineSelfLoopRouter`) and reads
+their Bezier control points (`getBezierCP` → clamped `toBezier`), which follow Java; `NubsSelfLoop`
+(the only unclamped spline) is not used by the pipeline, in Java either.
+- `insertKnot` (used by `getPointOnCurve` only) passes `knot_index - 1` to
+  `insertKnotAtCurrentPosition`: for a knot that is not yet in the vector elk-rs inserts one
+  position earlier than Java's `ListIterator.add`. `toBezier` calls `insertKnotAtCurrentPosition`
+  directly with copies of an existing knot and is unaffected.
+- `toBezier` on an unclamped spline starts at index `dim - 1` after removing `dim - 1` leading
   knots (Java starts at index 0) and removes the trailing knots at `knot_index`.
-- `get_t_from_polar` sums with `Iterator::sum` (neutral element `-0.0`).
-- Rust panics on out-of-range indices (`Vec` indexing, `Vec::insert`); the Lean port stops the
+- elk-rs panics on out-of-range indices (`Vec` indexing, `Vec::insert`); the Lean port stops the
   scan / skips the operation instead (unreachable for splines built by `new`).
+`getTFromPolar` sums from `0.0` like Java (elk-rs: `Iterator::sum`, neutral element `-0.0`).
 
 `Display` impls (debug output only) are not ported.
 -/
@@ -265,9 +269,9 @@ def getMultiplicity (s : NubSpline) (knotToCheck : Float) : Nat := Id.run do
     else if diff > -EPSILON then count := count + 1
   return count
 
-/-- `getTFromPolar(polar)`: the mean of the polar coordinates. -/
+/-- `getTFromPolar(polar)`: the mean of the polar coordinates (Java's sum starts at `0.0`). -/
 def getTFromPolar (polar : Array Float) : Float :=
-  polar.foldl (· + ·) (-0.0) / polar.size.toFloat
+  polar.foldl (· + ·) 0.0 / polar.size.toFloat
 
 /-- `insertKnotAtCurrentPosition(insertions, knotToInsert, iterCP, iterKnot)` (Rust
 `insert_knot_at_current_position`): inserts `knotToInsert` `insertions` times at `knotIndex` and

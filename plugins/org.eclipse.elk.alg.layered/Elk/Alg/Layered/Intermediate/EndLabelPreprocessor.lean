@@ -31,7 +31,8 @@ size through the adapter; the port reads `LLabel.size` directly (the same value)
 The overlap remover works on copies of the cell rectangles (Rust: raw pointers into the cells); the
 updated rectangles are written back into the cells in insertion order.
 
-Rust deviation from Java (followed here): Java writes the port index into `port.id`; elk-rs does not.
+Follows Java (agent COV): the port index is written into `port.id` like Java (elk-rs did not; no
+later processor reads a port id without assigning it first, so the value was never observable).
 `gatherLabels`/`gatherLabelsFromPort` are public (Rust `pub(crate)`): `LabelSideSelector` uses them.
 -/
 
@@ -282,7 +283,10 @@ def processNode (node : LNodeId) (edgeLabelSpacing labelLabelSpacing : Float) (v
   let ports := (← getNode node).ports
   if ports.isEmpty then return
   let mut cells : Array (Option EndLabelCell) := Array.mkEmpty ports.size
-  for port in ports do
+  for h : portIndex in [0:ports.size] do
+    let port := ports[portIndex]
+    -- Java `port.id = portIndex`
+    modifyPort port fun p => { p with id := (portIndex : Int) }
     let labels ← gatherLabels port
     cells := cells.push (← createConfiguredLabelCell labels labelLabelSpacing verticalLayout)
   cells ← placeLabels node ports cells labelLabelSpacing edgeLabelSpacing verticalLayout

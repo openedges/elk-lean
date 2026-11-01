@@ -1293,3 +1293,112 @@ Lean과 같고, 원인 단위 `n4_n2`만 떼면 `SelfLoopRouter`의 self-loop �
   Java 클래스 이름(`BFSNodeOrderCycleBreaker`·`DFSNodeOrderCycleBreaker`·`SCCNodeTypeCycleBreaker`·`SCConnectivity`·`HypernodesProcessor`)으로 바꿨다.
   elk-rs trace 비교는 `scripts/compare_phase_traces.py`의 `_PROCESSOR_ALIASES` 별칭 표가 양쪽을 Java 이름으로 정규화한다.
 - `LongestPathLayerer`류에서 `LNode.id`가 범위를 벗어나는 경우(Java는 `nodeHeights[node.id]`에서 AIOOBE) — 관찰된 입력 없음.
+
+## 21. COV: layered 커버리지 세트 `w` — wrapping·comment box·hypernode·edge label·spline·BK 정렬·merged edge (2026-11-01)
+
+방법: 코퍼스(1,998개)와 무작위 세트 s/v/d/o/p/c/h는 wrapping(0개)·hypernode(0개)·label management(0개)·comment box(5개)·inline
+edge label(1개)을 거의 다루지 않고, 바로 그 영역의 Lean 모듈 17개가 "elk-rs의 Java 차이를 따른다"는 주석을 달고 있었다. 새 생성기
+`scripts/gen_wrapping_graphs.py`(파이프라인 세트 `w`, `--sets w`)로 시드 1~10 × 600 = 6,000개의 layered 그래프를 만들었다. 옵션 id는 Java
+id이고 JSON 경로는 범위를 검사하지 않으므로 범위 밖·퇴화 값을 일부러 뽑는다: wrapping(`wrapping.strategy` SINGLE_EDGE/MULTI_EDGE/OFF,
+`cutting.strategy` ARD/MSD/MANUAL, `msd.freedom` −5~10, `correctionFactor` 0·−1·1e-9 포함, `additionalEdgeSpacing`, `multiEdge.improveCuts`/
+`distancePenalty`/`improveWrappedEdges`, `validify.strategy`, `elk.aspectRatio` 0·−1·1e-6·1e9 포함, wrapping 그래프의 70%는 경로 모양),
+comment box(노드·네 변 포트에 한 간선, 두 노드, 사슬, 연결 없음), hypernode(여러 간선, 대개 직교 라우팅), edge label(inline,
+HEAD/CENTER/TAIL, side selection, center label placement strategy, 간선당 1~3개, self loop 라벨), 노드·포트 라벨 배치, spline
+(CONSERVATIVE/SLOPPY, `sloppy.layerSpacingFactor` 0·음수 포함), BK `fixedAlignment` 전 값·`edgeStraightening`, `mergeEdges`/
+`mergeHierarchyEdges`(15%는 `INCLUDE_CHILDREN` 복합 자식과 계층 간선), thoroughness(0·−1 포함), edge thickness, 그리고 그래프의 3.5%에
+Java JSON 임포터가 받지 않는 `OBJECT` 옵션 하나(`wrapping.cutting.cuts`·`wrapping.validify.forbiddenIndices`·`labels.labelManager`·
+`cmEnforcedGroupOrders`). `STRETCH_WIDTH` 층 배정은 이 그래프들에서 Java와 Lean 모두 끝나지 않는 경우가 많아(첫 시험의 시드 1에서
+12개) 뽑지 않는다. 그래프 k는 COUNT와 무관하다(그래프마다 `random.Random("seed/k")`). Java와 다른 입력마다 Java/Lean 단계별 trace로 첫
+차이 프로세서를 찾고, Java 쪽 원인은 스택 트레이스 하네스(`ElkGraphJson` + `RecursiveGraphLayoutEngine`, 실패 시 프레임 25개)로
+확인했다. Java 실행 컨텍스트 의존 여부는 §20의 컨텍스트(입력마다 새 JVM, `-XX:+UnlockExperimentalVMOptions -XX:hashCode=0/2/3/4`,
+`-Xint`)에 더해 **같은 JVM에서 다른 입력을 먼저 배치**하는 방법으로 갈랐다: identity hash는 스레드별 생성기의 상태로 정해지므로 앞선
+입력이 바뀌면 같은 입력의 Java 결과가 바뀐다. 고정 입력은 Java 결과와 "COV 이전 바이너리 ≠ Java"를 유지하는 탐욕 축소(노드·간선·
+포트·라벨·옵션 제거, 후보마다 한 JVM 배치)로 줄여 `tests/fixtures/cov/`에 두었다(`Tests/Api/RandomJavaCov.lean`, `cov.java` 14개).
+
+### 21.1 결정적 차이와 수정(전부 ELK Java가 기준)
+
+| 차이 | Java | 수정(모듈) | 고정 |
+|---|---|---|---|
+| `OBJECT` 옵션의 JSON 파싱 | `LayoutOptionData.parseValue` → `createDataInstance`가 `IDataObject`가 아닌 클래스(`List`, `ILabelManager`, `ITopdownSizeApproximator`, `LayoutAlgorithmData`, DisCo debug)에 `IllegalStateException: IDataType class expected for layout option <Java id>`(값이 `null`/빈 문자열이 아니면 언제나; `JsonImporter.setOption`은 잡지 않는다) | 같은 예외(`Elk/Json/Importer.lean`; 메시지의 id는 Java id `org.eclipse.elk.layered.*`). 결과: manual cuts·forbidden indices·label manager는 JSON으로 설정할 수 없다 | `object_option_cuts`, `object_option_label_manager`; `core/topdown_box` 입력에서 `sizeApproximator` 제거(출력 불변) |
+| layered `ASPECT_RATIO` 기본값 | `Layered.melk`의 `1.6f` → `double` `1.600000023841858` | `LayeredOptions.ASPECT_RATIO_DEFAULT`를 wrapping `GraphStats`(elk-rs `1.0`)와 컴포넌트 배치 3곳(`1.6`)에 사용 | `wrapping_default_aspect_ratio` |
+| `BreakingPointInserter.applyCuts` | `ListIterator.add`로 넣은 두 층을 건너뛰고 원래 층 번호로 `idx + 1 == cut` | 같은 순회(elk-rs는 넣은 층을 방문해 둘째 이후 컷을 2층씩 앞당김) | `apply_cuts_original_layer_indexes` |
+| `ARDCutIndexHeuristic.getChunkCount` | `(int) Math.round(Math.sqrt(x / 0))` = `(int) Long.MAX_VALUE` = −1 행; 반올림은 `Math.round` | Java 반올림·`int` 절단(elk-rs: `longestPath`, 포화 `i32`) | 단위 테스트 |
+| `MSDCutIndexHeuristic` | `1d / width`, `(1d / dar) / height`(IEEE), `Math.max/min`, `int` 랩 | 같은 산술(elk-rs: 분모 `0`이면 `+∞`) | — |
+| `validifyIndexesLookingBack` | `current - Integer.MIN_VALUE`가 넘쳐 음수 → `-inf` 보초 자체를 컷으로 고름(이후 컷은 하나도 적용되지 않음) | `int` 랩 산술(elk-rs: 포화) | 단위 테스트 |
+| `GraphStats` | 층 폭 `size.x + margin.right + margin.left + spacing`(이 순서), `Math.max`, `reduce` | 같은 덧셈 순서·`javaMax` | — |
+| `SingleEdgeGraphWrapper` 조기 종료 | `currentAR = (maxWidth·L) / maxWidth`(`maxWidth = 0`이면 `NaN` → 끝내지 않음) | 같은 식(elk-rs: `0`) | — |
+| `BreakingPointProcessor` | 역방향 개선 패스의 `Lists.reverse(nodes)` 결과를 버려 노드를 층 순서로 방문; `LNode.setLayer(int, Layer)`의 `IllegalArgumentException`/`IndexOutOfBoundsException`; 인덱스 밖 `get(i)` | 같은 순서와 예외(elk-rs: 노드 역순, 인덱스 클램프, `false`) | — |
+| `BreakingPointRemover`(spline) | 시작 간선이 아닌 간선의 `null` 경로에 `addAll`/`forEach` NPE; 원래 간선의 bend point를 비움 | 같은 NPE·비움(elk-rs: 빈 목록, bend point 유지) | `breaking_point_remover_null_spline_route` |
+| `CommentPreprocessor` 포트 스캔 | 라벨 붙은 `break portLoop`: 첫 북쪽 **또는 남쪽** 연결에서 끝 | 같음(elk-rs: 남쪽 뒤에도 북쪽을 찾음) | `comment_box_port_scan_south` |
+| `EndLabelSorter` | 끝 라벨 셀을 간선별로 묶어 source port id·target node id·target port id(역순)로 정렬(id는 그래프 전체에 층/노드/포트 순서로 다시 매김); 정렬이 필요한 포트에 셀이 없으면 NPE | Java 클래스를 처음으로 이식(elk-rs는 label dummy의 `REPRESENTED_LABELS`를 텍스트로 정렬 = 정규 파이프라인에서 no-op) | `end_label_sorter_groups`, `end_label_sorter_port_without_cell` |
+| `LabelDummySwitcher` | 사슬을 `iterator().next()`로 따라감(`NoSuchElementException`); 층 범위·`totalDummyCount`·중앙값·`ithDummyNode`가 `int`(wrapping으로 되돌아간 긴 간선에서 음수·부족 → `NegativeArraySize`/`ArrayIndexOutOfBounds`/`IndexOutOfBounds`/`subList`의 `IllegalArgument`) | 같은 `int` 의미론과 예외(elk-rs: 중단·포화 `usize`) | `label_dummy_chain_no_incoming_edge`, `label_dummy_switcher_turned_back_edge` |
+| `LongEdgeJoiner.joinAt` | 들어오는 간선마다 남은 첫 나가는 간선을 `get(0)`(부족하면 `IndexOutOfBoundsException`) | 같음(elk-rs: `min(in, out)`) | `long_edge_joiner_fewer_outgoing_edges` |
+| P3 초기화의 빈 층 | `LayerSweepTypeDecider.initAtLayerLevel`의 `nodeOrder[l][0]`(열린 간선 없는 컷의 빈 breaking point 층 → AIOOBE) | 같은 예외(`GraphInfoHolder`) | `layer_sweep_empty_layer` |
+| `Spacings.getLocalSpacing` | 표에 옵션이 없는 노드 타입 쌍(`BREAKING_POINT` 등)은 `getProperty(null)` NPE | 같은 NPE(elk-rs: `UnspecifiedSpacingException`) | `spacing_null_option_breaking_point` |
+| `PolylineEdgeRouter` | `Math.min(1, edgeSpacing / nodeSpacing)`(층간 노드 간격 0 → 1, 둘 다 0이면 `NaN`) | 같음(elk-rs: `0`) | `polyline_zero_node_spacing` |
+| `LabelSideSelector` | 포트를 옮기는 두께는 `ORIGIN` 간선의 `EDGE_THICKNESS`; 면은 dummy에만 기록 | 같음 | 단위 테스트 |
+| `HypernodesProcessor` | `KVectorChain.remove(Object)`: 같은 junction point 중 첫 하나만 제거 | 같음 | — |
+| `BKNodePlacer` 균형 레이아웃 | `min`/`max` 시작값 `Integer.MAX_VALUE`/`MIN_VALUE`, `Math.min/max` | 같음 | — |
+| `EndLabelPreprocessor` | `port.id = portIndex` | 같음(이전에도 관찰 불가) | — |
+
+### 21.2 17개 모듈 주석의 정리
+
+| 모듈 | 처리 |
+|---|---|
+| `Wrapping/BreakingPointInserter` | Java로 변경(`applyCuts`); `improveCuts`의 `null` 검사는 Java에도 있고 `null` hit는 생길 수 없음; 빈 층 배치 조기 반환은 도달 불가 |
+| `Wrapping/BreakingPointProcessor` | Java로 변경(역방향 노드 순서, `setLayer`·`get(i)` 예외, 층 참조 비교); 병합 시 이웃 재연결은 관찰 불가(사슬은 머리부터 끝까지 병합되고 `next`만 따라감); 대상 층 범위 검사·누락 정보 중단은 도달 불가 |
+| `Wrapping/CuttingUtils` | Java로 변경(음수 삽입 위치 → `IllegalArgumentException`, 파이프라인에서는 생기지 않음); 끝 노드·층 누락 가드는 도달 불가 |
+| `Wrapping/SingleEdgeGraphWrapper` | Java로 변경(`NaN` 조기 종료, look-back `int` 랩); greedy의 음수 컷과 `performCuts` 범위 검사는 도달 불가(ARD/MSD 컷 ≥ 1, manual cuts는 JSON으로 설정 불가) |
+| `Wrapping/ARDCutIndexHeuristic` | Java로 변경 |
+| `Wrapping/MSDCutIndexHeuristic` | Java로 변경; 빈 폭 배열은 도달 불가 |
+| `CommentPreprocessor` | Java로 변경 |
+| `HypernodeProcessor` | Java로 변경 |
+| `LabelManagementProcessor` | 공개 API에서 도달 불가: Java는 `LABEL_MANAGER`가 있을 때만 이 프로세서를 넣고(`GraphConfigurator`), 그 옵션은 JSON으로 설정할 수 없다(Java·elk-lean `IllegalStateException`, elkjs는 `ElkReflect` 팩토리가 없어 역시 예외; CLI의 JSON 경로도 같은 임포터). elk-rs 동작(중심 모드의 표현 라벨 없는 dummy)은 Lean 단위 테스트 경로에만 남음 |
+| `LabelSideSelector` | Java로 변경(`ORIGIN` 두께, dummy에만 면 기록); 간선 라벨 간격은 Java도 처리 그래프의 값 |
+| `EndLabelPreprocessor` | Java로 변경(`port.id`); 이전에도 관찰 불가(이후 프로세서는 포트 id를 스스로 매김) |
+| `HyperedgeDummyMerger` | 관찰 불가: 성분 id는 별도 맵(이후 포트 id를 읽는 프로세서 없음), 병합된 노드의 `layer` 필드(간선 없음, 어느 층 목록에도 없음) |
+| `Compaction/CompactionMetadata` | 표현 차이만(원점 측면 표 = Java `instanceof`) |
+| `BK/BKNodePlacer` | Java로 변경 |
+| `BK/ThresholdStrategy` | 도달 불가: 모든 층의 노드에 id가 매겨지고 층 노드의 간선은 층 노드에서 끝남 |
+| `Splines/NubSpline` | 도달 불가: 파이프라인은 clamped spline(`new true 3`)과 `getBezierCP`만 쓴다; `insertKnot`(→ `getPointOnCurve`만)·unclamped `toBezier`(`NubsSelfLoop`, Java에서도 파이프라인 밖)는 elk-rs 그대로. `getTFromPolar`는 Java처럼 `0.0`에서 합산 |
+| `RectPacking/P2Packing/Compaction` | 이미 Java와 같음(Java `|=`도 단락하지 않음); 주석을 바로잡음 |
+
+### 21.3 Java 실행 컨텍스트 의존(재현하지 않음)과 Java 결함
+
+- `SelfHyperLoop.slPortsBySide`는 `ArrayListMultimap`(`HashMap`)이고 키 `PortSide`는 identity hash를 쓰는 enum이다. 두 변 마주보기 self loop의
+  두 경로 벌점이 같으면(포트 두 개짜리 노드에서는 늘 같다) `keySet()`의 첫 변이 경로(위/아래, 왼쪽/오른쪽)를 정한다. 그 순서는 PortSide
+  상수 identity hash의 버킷 순서이고, 그 값은 처음 해시가 요청될 때까지 그 스레드가 만든 identity hash 수에 달려 있다: 같은 입력이 앞에
+  배치된 입력과 hashCode 모드에 따라 결과를 바꾼다(`w5/w0430`: 앞선 입력 6가지에 결과 2가지, `w3/w0122`: 8가지에 4가지, 측정 하네스의
+  새 JVM은 W, N, S, E 순서). Lean은 N, E, S, W 순서로 고정(elk-rs와 같음).
+- `EndLabelSorter.createLabelGroups`의 `HashMap<LEdge, LabelGroup>`: 비교자가 같다고 보는 그룹(같은 포트 사이의 병렬 간선, `mergeEdges`)은
+  identity hash 순서로 남는다. Lean은 셀 안 첫 라벨의 순서.
+- 위 두 가지가 세트 `w`의 남은 레이아웃 차이 171개의 전부다: 154개는 Java를 다른 배치(trace 실행 JVM)로 다시 돌리면 단계별 trace까지
+  Lean과 같고, 나머지 17개도 새 JVM·hashCode 모드·앞선 입력 중 적어도 둘에서 Java 결과가 갈린다(대부분 그중 하나가 Lean과 같다). 세트별로
+  몰리는 것(`w3` 65·`w8` 53·`w10` 45, 다른 세트 0~3)도 같은 원인이다: 세트 JVM마다 PortSide 해시 순서가 하나로 정해진다.
+- `PolylineEdgeRouter`에서 층간 노드 간격과 간선 간격이 모두 0이면 `0 / 0 = NaN` 좌표: Java `NaN`, Lean 출력 `null`(표기 차이, 2개).
+- `w9/w0558`: Java는 메시지 없는 `NullPointerException`(HotSpot fast throw), Lean은 helpful NPE 문구(1개, 같은 예외 클래스).
+
+### 21.4 결과(시드 1~10 × 600, Java는 세트마다 배치 JVM; 같은 Java 결과로 기준·COV 바이너리 비교)
+
+| 세트 | Java ok/exc | 기준(`8508e66`) Lean ok/exc | COV Lean ok/exc | 정확 일치(양쪽 ok) | 예외 문구 일치(양쪽 예외) |
+|---|---|---|---|---|---|
+| w1 | 566/34 | 594/6 | 566/34 | 517/562 → **564/566** | 1/2 → **34/34** |
+| w2 | 562/38 | 591/9 | 562/38 | 518/555 → **562/562** | 0/2 → **38/38** |
+| w3 | 562/38 | 594/6 | 562/38 | 463/558 → **497/562** | 1/2 → **38/38** |
+| w4 | 563/37 | 588/12 | 563/37 | 524/557 → **563/563** | 2/6 → **37/37** |
+| w5 | 568/32 | 589/11 | 568/32 | 524/561 → **566/568** | 3/4 → **32/32** |
+| w6 | 568/32 | 594/6 | 568/32 | 515/563 → **566/568** | 0/1 → **32/32** |
+| w7 | 572/28 | 592/8 | 572/28 | 533/567 → **571/572** | 0/3 → **28/28** |
+| w8 | 566/34 | 593/7 | 566/34 | 479/560 → **513/566** | 0/1 → **34/34** |
+| w9 | 566/34 | 590/10 | 566/34 | 513/562 → **563/566** | 2/6 → **33/34** |
+| w10 | 559/41 | 593/7 | 559/41 | 484/556 → **514/559** | 1/4 → **41/41** |
+| 합 | 5,652/348 | 5,918/82 | **5,652/348** | 5,070/5,601 → **5,479/5,652** | 10/31 → **347/348** |
+
+timeout·overflow는 양쪽 0. 결과(ok/예외) 불일치는 368개(Lean ok/Java 예외 317, Lean 예외/Java ok 51)에서 0개가 되었다. 남은 174개는
+21.3의 컨텍스트 의존 171·`NaN` 표기 2·fast throw 1이다.
+
+다른 검증(COV 바이너리 vs 기준 바이너리, 같은 Java 결과):
+- 무작위 s/v/d/o/p/c/h(시드 1~10, 41,802개): Lean 출력(결과·예외 문구·레이아웃 바이트) **전부 동일** → 정확 일치 s 1,197·v 5,711·d 5,711·
+  o 5,224·p 1,359·c 5,070·h 2,175, 예외 문구 4,793·227·227·745·424·813·3,716 그대로.
+- 코퍼스(ELK Java 기준): Lean 출력 1,997개 바이트 동일, 정확 일치 1,878/119(드리프트 집합 `corpus_drift_set.txt`와 동일; comment box 모델
+  5개도 바뀌지 않음). 합성 26개 바이트 동일(23/26).

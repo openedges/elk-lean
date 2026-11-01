@@ -18,9 +18,10 @@ Side choice (`choose_comment_side`): with fixed port sides, ports connected to n
 mean label centre decides (`topFirst` when it is in the lower half); the box goes to the preferred side
 unless the other side has fewer boxes.
 
-Rust/Java parity notes (follows Rust): Java stops the port scan at the first southern connection too
-(Rust keeps scanning for a northern one); Rust's `has_property(TOP_COMMENTS)` is "non-empty" here since
-the lists only ever grow.
+Follows Java (agent COV): the port scan stops at the first northern *or* southern connection
+(Java's `break portLoop`; elk-rs kept scanning after a southern one for a northern one, so a node with
+both made `onlyTop` false where Java sets it). Java's `TOP_COMMENTS == null` test is "empty" here
+since the lists only ever grow and are created together with their first box.
 -/
 
 namespace Elk.Alg.Layered.Intermediate
@@ -57,21 +58,17 @@ def reverseOddlyConnectedEdges (commentNode : LNodeId) : LayeredM Unit := do
     for edge in reversedEdges do
       LGraphUtil.reverseEdge edge graph true
 
-/-- The northern/southern connection flags of `choose_comment_side` (fixed port sides only); the scan
-stops at the first northern connection. -/
+/-- The northern/southern connection flags of `processBox` (fixed port sides only): Java's labelled
+`break portLoop` ends the scan at the first connection to a non-comment node through a northern
+*or* a southern port, so at most one of the flags is set. -/
 def connectionSides (ports : Array LPortId) : LayeredM (Bool × Bool) := do
-  let mut hasNorth := false
-  let mut hasSouth := false
   for port in ports do
     let side := (← getPort port).side
     for connected in (← withArena (·.portConnectedPorts port)) do
       if ← portOwnerIsCommentBox connected then continue
-      if side == .north then
-        hasNorth := true
-        break
-      if side == .south then hasSouth := true
-    if hasNorth then break
-  return (hasNorth, hasSouth)
+      if side == .north then return (true, false)
+      if side == .south then return (false, true)
+  return (false, false)
 
 /-- Rust `choose_comment_side(realNode)`: `(onlyTop, onlyBottom, topFirst)`. -/
 def chooseCommentSide (realNode : LNodeId) : LayeredM (Bool × Bool × Bool) := do
