@@ -29,8 +29,9 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   **elkjs-compatible npm package** `elk-lean` (`plugins/org.eclipse.elk.js`): native addon with a
   WASM fallback, elkjs API and typings, `workerUrl` worker support with a stack-enlarged
   `worker_threads` Worker for deeply nested or deeply recursive graphs (`workerStackSizeMb`, default
-  64 MB). JS tests: 56/56 (including the three WASM modes and the deep-recursion cases). Addon vs
-  CLI output: 1447/1448 byte identical.
+  64 MB), a `threads` option (constructor or per call). JS tests: 72/73 (1 skipped; including the
+  three WASM modes, the deep-recursion cases and the thread caps). Addon vs CLI output: 1447/1448
+  byte identical.
 - **Release build** (`scripts/build_release.sh`): the native CLI and the addon (`build_napi.sh
   --release`) are linked with ThinLTO across the generated C and the GMP-free Lean runtime, with
   profile-guided optimisation from `scripts/build_pgo.sh` (profile under `.reference/pgo/`,
@@ -56,10 +57,19 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   model, the elk-models examples, ELK JSON input, elk-live-compatible links, SVG/JSON export.
   Static `dist/` (about 26 MB, the WASM compresses to about 2 MB); tested in Chrome 156 (Node smoke
   test: 45/45 examples equal the CLI; 7 headless browser checks).
+- **Parallel layout** (`docs/parallel-layout.md`, an elk-lean extension): the recursive engine lays
+  out independent sibling sub-graphs of a compound graph on Lean tasks and merges them back in
+  sibling order, with byte-identical output, traces and error messages in every mode (checked on
+  the Java corpus, the phase traces and all random sets with the sequential, default and forced
+  settings). Default on for the CLI (`--threads N`, `ELK_LEAN_THREADS`; `elk bench` stays
+  sequential) and the addon (`elk_lean_init_threads`, npm `threads`); the WASM build and the Lean
+  library stay sequential. Hierarchical ptolemy models: 1.39x in total with 8 threads (large models
+  about 2x); connected components of a single layered graph are not parallelised because they share
+  one `Random`, as in Java.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17218 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17317 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo, hierarchical model-order and
@@ -88,14 +98,15 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - **Parity against elk-rs** (secondary): model parity 1447/1447 (tolerance 1e-6), strict phase
   trace 1447/1447. Byte identity with elk-rs is 1060/1447; the rest differ only in `-0.0`,
   snapping or values below 4e-12 and are no longer a gate.
-- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.73x
+- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios (sequential `elk bench`): geometric mean 0.71x
   (layered 0.82 to 0.99x, force 0.80 to 0.87x, stress 0.96 to 1.03x, mrtree 0.64 to 0.70x,
   rectpacking 0.57 to 0.65x, radial 0.15 to 0.69x, edge routing 0.84 to 0.96x, crossing
   minimisation 0.91 to 0.95x, hierarchy 0.86 to 0.96x; mrtree and radial follow Java's full
   algorithms and stay at about 0.7x and 0.2 to 0.7x); JSON parse, import, transfer and print
   take about 40% of mrtree_xlarge and 20% of radial_xlarge after the overlay transfer and the
   importer's member masks (the output buffer is sized from the laid-out graph, not 4x the input);
-  over the 1,447 corpus models 0.92x in total and 0.87x per model (geometric mean; the slowest
+  over the 1,447 corpus models 0.88x in total and 0.83x per model (geometric mean; with 8 threads the
+  corpus total is 0.85x of the sequential time and the hierarchical ptolemy models 0.71x; the slowest
   are small interactive models below 0.2 ms, ticket 213 and the model-order example, all below
   about 1.7x after the pure model-order comparators and the pure scanline compaction kernel). Repeated layouts keep RSS flat; the orthogonal router's dependency table is packed
   (24 B per dependency), so a node with 5,000 ports peaks at 648 MB instead of 1.2 GB. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
@@ -137,7 +148,7 @@ modules no longer follow elk-rs where it deviated from Java (`docs/robustness-ra
   GitLab Pages job is a disabled draft (`.pages`); Firefox and Safari were not tested.
 - Only macOS arm64 builds have been exercised. Linux (glibc x64/arm64, musl), Windows and
   CI builds are drafted in `.gitlab-ci.yml` but untested, including the GMP-free runtime build on
-  Linux. See `docs/release-dry-run-0.12.0.md`.
+  Linux and the parallel layout's task manager in the addon. See `docs/release-dry-run-0.12.0.md`.
 
 ## Project scaffold (pre-release history)
 

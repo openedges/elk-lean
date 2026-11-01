@@ -195,6 +195,13 @@ dependencies, supported features).
   in `.lake/build/runtime-nogmp/bin/elk`), `ELK_NO_GMP=1 sh scripts/build_ffi.sh --check`,
   `ELK_NO_GMP=1 sh scripts/build_napi.sh`; the relinked CLI must give byte-identical corpus layouts
   and `nm <artefact> | grep -c __gmp` must print 0 for the CLI, the smoke binary and the addon.
+- Parallel layout (`docs/parallel-layout.md`): the CLI lays out independent sibling sub-graphs on
+  Lean tasks by default. The sequential mode (`ELK_LEAN_THREADS=1`), the default and the forced mode
+  (`ELK_LEAN_PAR_MIN_WORK=0`, every eligible sibling on a task) must give byte-identical layouts and
+  error texts: run `scripts/run_java_parity.sh` once per mode into separate directories and compare
+  the md5 of their `*.json` files; `ELK_LEAN_PAR_STATS=1` prints the number of parallel segments,
+  fallbacks and failures. `lake test -- --suite parallel` runs the unit tests (ownership, merge,
+  differential, failure order).
 
 ## 3. Release checklist
 1. `lake build` and `lake test` clean.

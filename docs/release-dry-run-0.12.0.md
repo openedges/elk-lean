@@ -8,13 +8,13 @@
 
 | # | 항목 | 상태 | 근거 / 부족한 것 |
 |---|---|---|---|
-| 1 | `lake build`·`lake test` clean | 충족(16차 BLD 병합본 `5962504`), 태그 직전 재실행 | `lake build` 경고 0, `lake test` 17200 통과 / 0 실패 / 1 skip(BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요); 무작위 Java parity `sh scripts/run_random_java_parity.sh` v 5,711/5,761, Java 예외 문구 전부 일치 |
+| 1 | `lake build`·`lake test` clean | 충족(16차 PAR 병합본 `299a23b`), 태그 직전 재실행 | `lake build` 경고 0, `lake test` 17317 통과 / 0 실패 / 1 skip(BK oracle replay, `ELK_BK_ORACLE_TRACES` 필요); 무작위 Java parity `sh scripts/run_random_java_parity.sh` v 5,711/5,761, Java 예외 문구 전부 일치 |
 | 2a | ELK Java 결과 parity | 충족(스냅샷) | 1,997개 비교, 정확 일치 1,878, 나머지 119는 Java 컨텍스트 의존(패치 0001 적용 Java와 전부 일치), ticket 213은 Java NaN. `HISTORY.md` 160~161행 |
 | 2b | Java 단계별 trace parity | 충족(스냅샷) | 1,817/1,997 전 단계 일치, 180은 Java 측 요인(170 비유한 포트 좌표, 7 self-loop 변 순서, 3 partition 포트 순서) |
 | 2c | 컨텍스트 의존 모델 목록화 | 부분 충족 | 분석 결과는 `HISTORY.md`(172개 변동 모델, `scripts/java_outcomes.py`)에 있으나 모델 이름 목록이 릴리스 문서에는 없음. 목록 산출물 위치를 담당자가 확인 필요 |
 | 2d | elk-rs parity / 바이트 일치 재생성 | 충족(스냅샷), 재실행 필요 | model parity 1447/1447, strict trace 1447/1447, 바이트 일치 1060/1447(보조 지표) |
 | 3 | 메타데이터 parity | 근거 확인 필요 | `TESTING.md` 2.C가 `elk algorithms/options/categories` vs elk-rs `known_layout_*` 비교를 규정. 스냅샷 수치에 별도 항목이 없어 `HISTORY.md`의 해당 단계 기록을 릴리스 담당자가 가리켜야 함 |
-| 4a | 성능 기준선 5% 이내 | 충족(16차 BLD 병합본 `5962504`), 태그 직전 재실행 | Lake 빌드 `tests/perf/report.md`: 기하평균 lean/rust_api 0.73배, 회귀 게이트 pass; 코퍼스 총합 0.92배·기하평균 0.87배. 릴리스 빌드(`scripts/build_release.sh`, ThinLTO+PGO) `tests/perf/release/report.md`: 0.61배, 코퍼스 총합 0.73배·기하평균 0.65배(기준선 별도). 재실행: `sh scripts/run_perf_benchmark.sh 20 3 tests/perf`(머신 의존) |
+| 4a | 성능 기준선 5% 이내 | 충족(16차 PAR 병합본 `299a23b`), 태그 직전 재실행 | Lake 빌드 `tests/perf/report.md`: 기하평균 lean/rust_api 0.71배, 회귀 게이트 pass; 코퍼스 총합 0.88배·기하평균 0.83배(`elk bench`는 순차; `--threads 8`이면 코퍼스 총합 시간이 순차의 0.85배, 세 모드 출력 바이트 동일). 릴리스 빌드(`scripts/build_release.sh`, ThinLTO+PGO) `tests/perf/release/report.md`: 0.60배, 코퍼스 총합 0.72배·기하평균 0.65배(기준선 별도). 재실행: `sh scripts/run_perf_benchmark.sh 20 3 tests/perf`(머신 의존) |
 | 4b | 메모리 검사 | 충족(`HISTORY.md` 523854c), 재실행 필요 | `elk bench --iterations 50` vs `500`의 최대 RSS 동일; 코퍼스 실행에 `PANIC` 없음 |
 | 4c | FFI 스모크 | 충족(수동, macOS), 재실행 필요 | `sh scripts/build_ffi.sh --check` (CLI와 레이아웃 동일, 메타데이터·오류 경로) |
 | 5a | `CHANGELOG.md` 갱신 | 충족(이번 작업) | `[0.12.0] - unreleased` 절 추가. 태그 시점에 날짜 기입 필요 |
