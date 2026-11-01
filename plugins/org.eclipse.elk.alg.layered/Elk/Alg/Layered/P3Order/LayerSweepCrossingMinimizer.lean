@@ -412,20 +412,25 @@ def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array 
 /-! ## Holder access -/
 
 /-- The holder of a graph index (`graph_info_holders[index]`). -/
-def holderAt (index : Nat) : SweepM GraphInfoHolder := do
+@[inline] def holderAt (index : Nat) : SweepM GraphInfoHolder := do
   match (← get).graphInfoHolders[index]? with
   | some h => return h
   | none => throw (IO.userError s!"java.lang.IndexOutOfBoundsException: graph info holder {index}")
 
-/-- Updates a holder in place. -/
-@[inline] def modifyHolder (index : Nat) (f : GraphInfoHolder → GraphInfoHolder) : SweepM Unit :=
+/-- Updates a holder in place. Not inlined: with the update lambda inlined into `Array.modify`, the
+compiler tests the holder's exclusivity before the slot is cleared and every update allocated a
+fresh 17-field holder (PLAN 7.1 item 16; `GraphInfoHolder` has no `Inhabited` instance for
+`modifyIn`). As a closure the update runs on the unshared holder. -/
+@[noinline] def modifyHolder (index : Nat) (f : GraphInfoHolder → GraphInfoHolder) : SweepM Unit :=
   modify fun s => { s with graphInfoHolders := s.graphInfoHolders.modify index f }
 
-/-- Takes the current node order out of a holder (so the heuristics own it uniquely). -/
+/-- Takes the current node order out of a holder (so the heuristics own it uniquely). The order is
+projected before the update, so the holder itself is no longer referenced and is updated in
+place. -/
 def takeOrder (index : Nat) : SweepM (Array (Array LNodeId)) := do
-  let h ← holderAt index
+  let order := (← holderAt index).currentNodeOrder
   modifyHolder index fun h => { h with currentNodeOrder := #[] }
-  return h.currentNodeOrder
+  return order
 
 /-- Puts a node order back. -/
 @[inline] def putOrder (index : Nat) (order : Array (Array LNodeId)) : SweepM Unit :=
@@ -506,14 +511,20 @@ def collectChildGraphIndices (index : Nat) : SweepM (Array Nat) := do
 /-- `save_all_node_orders_of_changed_graphs()`. -/
 def saveAllNodeOrdersOfChangedGraphs : SweepM Unit := do
   for index in setMembers (← get).graphsWhoseNodeOrderChanged do
-    let h ← (← holderAt index).updateBestFromCurrentlyBestOrCurrent
-    modifyHolder index fun _ => h
+    -- `updateBestFromCurrentlyBestOrCurrent` with the copy made first and the holder updated in place
+    let h ← holderAt index
+    let best ← match h.currentlyBestNodeAndPortOrder with
+      | some src => pure src
+      | none => SweepCopy.new h.currentNodeOrder h.snapshot
+    modifyHolder index fun h => { h with bestNodeAndPortOrder := some best }
 
 /-- `set_currently_best_node_orders()`. -/
 def setCurrentlyBestNodeOrders : SweepM Unit := do
   for index in setMembers (← get).graphsWhoseNodeOrderChanged do
-    let h ← (← holderAt index).updateCurrentlyBestFromCurrent
-    modifyHolder index fun _ => h
+    -- `updateCurrentlyBestFromCurrent` with the copy made first and the holder updated in place
+    let h ← holderAt index
+    let copy ← SweepCopy.new h.currentNodeOrder h.snapshot
+    modifyHolder index fun h => { h with currentlyBestNodeAndPortOrder := some copy }
 
 /-! ## Crossing counts -/
 
