@@ -22,7 +22,7 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   follows elk-rs; source layout mirrors the Java plugin structure (one Lean file per Java class).
 - **CLI** (`elk`): `layout`, `convert` (`.elkt` parser, `.elkt`/`.elkg` to JSON),
   `algorithms|options|categories`, `bench` (the 26 elk-rs `perf_benchmark` scenarios, same CSV),
-  `--trace-dir` layered phase traces, `--version`.
+  `--trace-dir` layered phase traces (step files named after the Java processor classes), `--version`.
 - **C API** (`plugins/org.eclipse.elk.ffi/include/elk_lean.h`, `scripts/build_ffi.sh`): JSON in /
   JSON out layout, metadata queries, error reporting, thread registration; native smoke test.
 - **Node.js addon** (`plugins/org.eclipse.elk.napi`, Node-API C, worker_threads capable) and the
