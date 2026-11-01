@@ -17,8 +17,14 @@ lean_object *elk_ffi_known_layout_algorithms(lean_obj_arg unit);
 lean_object *elk_ffi_known_layout_options(lean_obj_arg unit);
 lean_object *elk_ffi_known_layout_categories(lean_obj_arg unit);
 lean_object *elk_ffi_convert_elkt(lean_obj_arg elkt, uint32_t flags);       /* consumes elkt */
+lean_object *elk_ffi_set_threads(uint32_t threads);                          /* returns box(0) */
+lean_object *elk_ffi_layout_json_threads(lean_obj_arg graph, lean_obj_arg options, uint32_t threads);
 lean_object *elk_version(void);   /* persistent string constant */
 ```
+`elk_ffi_set_threads` / `elk_ffi_layout_json_threads` (elk-lean, agent PAR) configure the parallel
+sibling layout (`Elk.Core.Parallel`, `docs/parallel-layout.md`); the library default without them is
+sequential. The C glue calls them from `elk_lean_init_threads` / `elk_lean_layout_json_threads`
+after starting the Lean task manager.
 -/
 namespace Elk.Ffi
 
@@ -61,5 +67,18 @@ the output of `elk convert INPUT.elkt`. Errors are the CLI's message
 @[export elk_ffi_convert_elkt]
 def convertElkt (text : String) (flags : UInt32) : BaseIO (Except String String) :=
   guard (Elk.Api.convertElktWith text (Elk.Api.ConvertFlags.ofBits flags))
+
+/-- elk-lean addition (agent PAR): the thread cap of the parallel sibling layout
+(`Elk.Core.Parallel.configure`; `0` = `ELK_LEAN_THREADS` or `min(hardware threads, 8)`, `1` =
+sequential). Called by `elk_lean_init_threads` once the task manager runs. -/
+@[export elk_ffi_set_threads]
+def setThreads (threads : UInt32) : BaseIO Unit := do
+  let _ ← (Elk.Core.Parallel.configure threads.toNat).toBaseIO
+
+/-- `layoutJson` with the thread cap `threads` for this call (`0` = the configured cap,
+`Elk.Core.Parallel.withThreads`). The result does not depend on it. -/
+@[export elk_ffi_layout_json_threads]
+def layoutJsonThreads (graph options : String) (threads : UInt32) : BaseIO (Except String String) :=
+  guard (Elk.Core.Parallel.withThreads threads.toNat (Elk.Api.layoutJson graph options (sortKeys := true)))
 
 end Elk.Ffi

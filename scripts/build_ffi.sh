@@ -60,6 +60,14 @@ if [ "${1:-}" = "--check" ]; then
   "$OUT/smoke" "$T/g.json" '{}' > "$T/ffi.json"
   .lake/build/bin/elk layout "$T/g.json" --sort-keys > "$T/cli.json"
   if cmp -s "$T/ffi.json" "$T/cli.json"; then echo "smoke: layout identical to elk layout --sort-keys"; else echo "smoke: MISMATCH"; diff "$T/ffi.json" "$T/cli.json" | head; exit 1; fi
+  # parallel sibling layout (elk_lean_init_threads, every sibling sub-graph on a task): thread caps 1
+  # and 4 give the bytes of `elk layout --sort-keys`
+  python3 -c "import json; print(json.dumps({'id':'root','children':[{'id':'c%d'%c,'children':[{'id':'c%d_%d'%(c,i),'width':20,'height':10+i} for i in range(6)],'edges':[{'id':'c%d_e%d'%(c,i),'sources':['c%d_%d'%(c,i-1)],'targets':['c%d_%d'%(c,i)]} for i in range(1,6)]} for c in range(5)]}))" > "$T/h.json"
+  ELK_LEAN_PAR_MIN_WORK=0 "$OUT/smoke" --threads 1 "$T/h.json" '{}' > "$T/h1.json"
+  ELK_LEAN_PAR_MIN_WORK=0 "$OUT/smoke" --threads 4 "$T/h.json" '{}' > "$T/h4.json"
+  .lake/build/bin/elk layout "$T/h.json" --sort-keys > "$T/hcli.json"
+  if cmp -s "$T/h1.json" "$T/hcli.json" && cmp -s "$T/h4.json" "$T/hcli.json"; then echo "smoke: threads 1 and 4 identical to elk layout --sort-keys"
+  else echo "smoke: threads MISMATCH"; exit 1; fi
   "$OUT/smoke" --algorithms > "$T/algs.json"
   python3 -c "import json,sys; a=json.load(open(sys.argv[1])); print('smoke: algorithms', len(a))" "$T/algs.json"
   if "$OUT/smoke" "$T/g.json" '{"elk.algorithm":"doesNotExist"}' 2> "$T/err.txt"; then echo "smoke: expected an error"; exit 1; fi

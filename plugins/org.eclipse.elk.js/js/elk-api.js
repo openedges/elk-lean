@@ -15,8 +15,23 @@
  * known_layout_options(), known_layout_categories(), and (elk-lean addition, needed by
  * convertElkt only) convert_elkt(elktText, flags).
  *
+ * elk-lean addition: `threads` (constructor option, or per call in `layout(graph, { threads })`)
+ * is passed to the backend as the third argument of layout_json: the cap of the parallel sibling
+ * layout of the native addon (1 = sequential; omitted = the addon default, ELK_LEAN_THREADS or
+ * min(hardware threads, 8)). The WASM backend ignores it (single-threaded). Results do not depend
+ * on it.
+ *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
+/** elk-lean: validates the `threads` option (undefined/null = backend default). */
+function checkThreads(threads) {
+  if (threads === undefined || threads === null) return undefined;
+  if (typeof threads !== 'number' || !Number.isInteger(threads) || threads < 1 || threads > 4096) {
+    throw new TypeError("'threads' must be a positive integer, got " + threads);
+  }
+  return threads;
+}
+
 class ELK {
 
   constructor({
@@ -36,10 +51,13 @@ class ELK {
     workerFactory,
     workerUrl,
     // elk-lean direct mode: backend object with layout_json, known_layout_algorithms, etc.
-    backend
+    backend,
+    // elk-lean: thread cap of the parallel sibling layout (native addon; undefined = its default)
+    threads
   } = {}) {
     this.defaultLayoutOptions = defaultLayoutOptions;
     this.initialized = false;
+    this.threads = checkThreads(threads);
 
     // Direct mode: backend provided, no worker
     if (backend && typeof workerUrl === 'undefined' && typeof workerFactory === 'undefined') {
@@ -81,9 +99,15 @@ class ELK {
     layoutOptions = this.defaultLayoutOptions,
     logging = false,
     measureExecutionTime = false,
+    threads = this.threads,
   } = {}) {
     if (!graph) {
       return Promise.reject(new Error("Missing mandatory parameter 'graph'."));
+    }
+    try {
+      threads = checkThreads(threads);
+    } catch (err) {
+      return Promise.reject(err);
     }
 
     // Direct mode
@@ -91,7 +115,9 @@ class ELK {
       try {
         const graphJson = JSON.stringify(graph);
         const optionsJson = JSON.stringify(layoutOptions || {});
-        const resultJson = this.backend.layout_json(graphJson, optionsJson);
+        const resultJson = threads === undefined
+          ? this.backend.layout_json(graphJson, optionsJson)
+          : this.backend.layout_json(graphJson, optionsJson, threads);
         return Promise.resolve(resultJson).then(JSON.parse);
       } catch (err) {
         return Promise.reject(err);
@@ -113,6 +139,7 @@ class ELK {
       cmd: 'layout',
       graphJson: graphJson,
       optionsJson: optionsJson,
+      threads: threads,
       options: {
         logging: logging,
         measureExecutionTime: measureExecutionTime,

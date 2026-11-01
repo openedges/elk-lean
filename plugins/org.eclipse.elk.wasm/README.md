@@ -56,7 +56,9 @@ const out = layout_json(JSON.stringify(graph), '{}');
   엔진에서 돌고, Lean 생성 C가 가정하는 객체 표현(2^63 미만 스칼라 `Nat`, 64비트 `USize`)이 네이티브와
   같다. 순수 wasm32는 쓰지 않는다(아래 "32비트 문제").
 - **Lean 런타임**: Lean 소스의 `src/runtime/*.cpp`(`RUNTIME_OBJS`에서 `uv/*` 제외)를 `-DLEAN_EMSCRIPTEN`으로
-  컴파일한다. 단일 스레드(`LEAN_MULTI_THREAD`·`-pthread` 없음 → SharedArrayBuffer/COOP·COEP 불필요),
+  컴파일한다. 단일 스레드(`LEAN_MULTI_THREAD`·`-pthread` 없음 → SharedArrayBuffer/COOP·COEP 불필요; 그래서
+  병렬 형제 레이아웃(`docs/parallel-layout.md`)은 쓰지 않는다: JS 글루는 `elk_lean_init`만 부르고 엔진의 task
+  manager 탐침도 같은 스레드를 보므로 항상 순차이며, npm의 `threads` 옵션은 무시된다),
   GMP 없음(Lean 내장 `mpn` 큰 수), `LEAN_MIMALLOC` 없음(작은 객체도 `malloc`; 링크는 emscripten
   `-sMALLOC=mimalloc`, dlmalloc보다 약 13% 빠름), libuv 없음. Lean 4.35의 `io.cpp`가 `<uv.h>`를 무조건
   포함하므로 `c/uv_compat/uv.h` + `c/lean_wasm_compat.c`가 io.cpp가 쓰는 libuv 부분집합(오류 코드,

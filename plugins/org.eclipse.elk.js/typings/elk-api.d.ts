@@ -93,6 +93,8 @@ export interface ElkLayoutArguments {
     layoutOptions?: LayoutOptions
     logging?: boolean
     measureExecutionTime?: boolean
+    /** elk-lean: thread cap for this call (overrides the constructor's `threads`). */
+    threads?: number
 }
 
 export interface ElkConvertArguments {
@@ -152,6 +154,13 @@ export interface ELKConstructorArguments {
      * default (native addon). Ignored with `workerFactory` and in browsers.
      */
     workerStackSizeMb?: number
+    /**
+     * elk-lean (native addon): thread cap of the parallel sibling layout, a positive integer
+     * (`1` = sequential; default: `ELK_LEAN_THREADS` or `min(hardware threads, 8)`). Independent
+     * sibling sub-graphs are laid out on Lean worker threads inside one call; results are
+     * byte-identical for every value. The WASM backend ignores it (single-threaded).
+     */
+    threads?: number
 }
 
 declare const ElkConstructor: {

@@ -2,7 +2,9 @@
  * Native smoke test of the plain C API (include/elk_lean.h): initialises elk-lean, lays out
  * the graph given as argv[1] (a JSON file) with the options argv[2] (JSON text, optional) and
  * prints the result; `--algorithms`, `--options`, `--categories` print the metadata;
- * `--convert FILE.elkt [FLAGS]` converts ELK Text to ELK JSON (elk_lean_convert_elkt_flags).
+ * `--convert FILE.elkt [FLAGS]` converts ELK Text to ELK JSON (elk_lean_convert_elkt_flags);
+ * `--threads N GRAPH.json [OPTIONS_JSON]` initialises with elk_lean_init_threads(0) (Lean task
+ * manager, parallel sibling layout) and lays out with the thread cap N (elk_lean_layout_json_threads).
  * Exit code 0 on success, 1 when the API reported an error, 2 on usage/init errors.
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
@@ -37,7 +39,19 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: smoke GRAPH.json [OPTIONS_JSON] | --convert FILE.elkt [FLAGS] | --algorithms | --options | --categories\n");
         return 2;
     }
-    if (elk_lean_init() != 0) {
+    int threads = 0;
+    if (strcmp(argv[1], "--threads") == 0) {
+        if (argc < 4) {
+            fprintf(stderr, "usage: smoke --threads N GRAPH.json [OPTIONS_JSON]\n");
+            return 2;
+        }
+        threads = atoi(argv[2]);
+        argv += 2;
+        argc -= 2;
+        if (elk_lean_init_threads(0) != 0 || elk_lean_init_threads(0) != 0 /* second call: no-op */) {
+            return 2;
+        }
+    } else if (elk_lean_init() != 0) {
         return 2;
     }
     int is_error = 0;
@@ -66,7 +80,8 @@ int main(int argc, char **argv) {
             fprintf(stderr, "cannot read %s\n", argv[1]);
             return 2;
         }
-        out = elk_lean_layout_json(graph, argc > 2 ? argv[2] : "{}", &is_error);
+        out = threads > 0 ? elk_lean_layout_json_threads(graph, argc > 2 ? argv[2] : "{}", threads, &is_error)
+                          : elk_lean_layout_json(graph, argc > 2 ? argv[2] : "{}", &is_error);
         free(graph);
     }
     if (out == NULL) {

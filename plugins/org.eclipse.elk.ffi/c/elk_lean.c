@@ -17,6 +17,7 @@
 extern void lean_initialize_runtime_module(void);
 extern void lean_initialize_thread(void);
 extern void lean_finalize_thread(void);
+extern void lean_init_task_manager(void);
 extern lean_object *initialize_elk_x2dlean_Elk_Ffi(uint8_t builtin);
 
 /* `Elk.Ffi` exports. */
@@ -25,8 +26,11 @@ extern lean_object *elk_ffi_known_layout_algorithms(lean_obj_arg unit);
 extern lean_object *elk_ffi_known_layout_options(lean_obj_arg unit);
 extern lean_object *elk_ffi_known_layout_categories(lean_obj_arg unit);
 extern lean_object *elk_ffi_convert_elkt(lean_obj_arg elkt, uint32_t flags);
+extern lean_object *elk_ffi_set_threads(uint32_t threads);
+extern lean_object *elk_ffi_layout_json_threads(lean_obj_arg graph, lean_obj_arg options, uint32_t threads);
 
 static int g_state = 0; /* 0: not initialised, 1: ready, -1: initialisation failed */
+static int g_threads_state = 0; /* 1 once elk_lean_init_threads has run (the task manager is started) */
 
 int elk_lean_init(void) {
     if (g_state != 0) {
@@ -47,6 +51,23 @@ int elk_lean_init(void) {
     lean_dec_ref(res);
     g_state = -1;
     return -1;
+}
+
+/* elk_lean_init + the Lean task manager (once per process; LEAN_NUM_THREADS or the hardware
+ * threads, workers are created on first use) + the thread cap of the parallel sibling layout
+ * (Elk.Core.Parallel: 0 = ELK_LEAN_THREADS or min(hardware threads, 8), 1 = sequential). Later
+ * calls change nothing. Without a multi-threaded Lean runtime (the WASM build) the task manager is
+ * not created and the engine stays sequential (its probe sees tasks run on the calling thread). */
+int elk_lean_init_threads(int threads) {
+    int rc = elk_lean_init();
+    if (rc != 0 || g_threads_state != 0) {
+        return rc;
+    }
+    g_threads_state = 1;
+    lean_init_task_manager();
+    lean_object *r = elk_ffi_set_threads(threads > 0 ? (uint32_t)threads : 0u);
+    lean_dec(r);
+    return 0;
 }
 
 void elk_lean_thread_init(void) { lean_initialize_thread(); }
@@ -98,6 +119,20 @@ char *elk_lean_layout_json(const char *graph_json, const char *options_json, int
     lean_object *g = lean_mk_string_from_bytes(graph_json, strlen(graph_json));
     lean_object *o = lean_mk_string_from_bytes(options_json, strlen(options_json));
     lean_object *r = elk_ffi_layout_json(g, o); /* consumes g and o (exports take owned arguments) */
+    return take_result(r, is_error);
+}
+
+char *elk_lean_layout_json_threads(const char *graph_json, const char *options_json, int threads,
+                                   int *is_error) {
+    if (g_state != 1) {
+        return not_initialised(is_error);
+    }
+    if (options_json == NULL) {
+        options_json = "";
+    }
+    lean_object *g = lean_mk_string_from_bytes(graph_json, strlen(graph_json));
+    lean_object *o = lean_mk_string_from_bytes(options_json, strlen(options_json));
+    lean_object *r = elk_ffi_layout_json_threads(g, o, threads > 0 ? (uint32_t)threads : 0u);
     return take_result(r, is_error);
 }
 

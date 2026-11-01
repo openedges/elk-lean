@@ -3,6 +3,7 @@ import Elk.Alg.Layered.Graph
 import Elk.Json.Value
 import Elk.Json.Printer
 import Elk.Core.Util.FloatConst
+import Elk.Core.Parallel.Settings
 open Elk.Core.Util.FloatConst
 /-!
 # Phase-step trace recorder (elk-rs `trace_recorder.rs` + the trace scope of `elk_layered.rs`)
@@ -215,16 +216,18 @@ override (set between runs by `elk batch`) nor the environment changes during a 
 builtin_initialize runTraceDir : IO.Ref (Option String) ← IO.mkRef none
 
 /-- `TraceLayoutScope::enter`/`Drop`: runs `x` one nesting level deeper, restoring the depth
-afterwards (also on exceptions). -/
+afterwards (also on exceptions). The depth is incremented and decremented atomically
+(`modifyGet`/`modify` hold the reference while they update it): layered runs of independent
+sibling sub-graphs may run on several threads (`Elk.Core.Parallel`, never in trace mode, see the
+sequential guard below), and each must leave the depth as it found it. -/
 def withLayoutScope {α : Type} (x : IO α) : IO α := do
-  let previous ← layoutDepth.get
-  layoutDepth.set (previous + 1)
+  let previous ← layoutDepth.modifyGet fun d => (d, d + 1)
   if previous == 0 then
     let dir ← traceDir
     runTraceDir.set dir
     -- `prepareTraceDirectoryForRun` on the directory just read
     if dir.isSome && (← stepCounter.get) == 0 then clearTraceDirectory
-  try x finally layoutDepth.set previous
+  try x finally layoutDepth.modify (· - 1)
 
 /-- `record_trace_snapshot_for_root`: records the root graph of the outermost run. -/
 def recordSnapshotForRoot (a : LGraphArena) (g : LGraphId) (processorName : String) : IO Unit := do
@@ -234,6 +237,11 @@ def recordSnapshotForRoot (a : LGraphArena) (g : LGraphId) (processorName : Stri
   stepCounter.set (step + 1)
   try writeSnapshot a g step processorName dir
   catch e => throw (IO.userError s!"failed to write trace snapshot step={step} proc={processorName}: {e}")
+
+/-- Trace mode forces the sequential layout (`Elk.Core.Parallel`): step numbers and trace files are
+the ones of the sequential run (`ELK_TRACE_DIR` or the `elk batch --trace-dir` override). -/
+builtin_initialize registerTraceSequentialGuard : Unit ←
+  Elk.Core.Parallel.registerSequentialGuard (do return (← traceDir).isSome)
 
 end TraceRecorder
 

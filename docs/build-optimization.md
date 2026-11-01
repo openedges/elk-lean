@@ -136,7 +136,8 @@ rectpacking 0.81/0.79, routing 0.82/0.80, crossmin 0.85/0.77, hierarchy 0.80/0.7
   `Task` 때 만들어지므로 `LEAN_NUM_THREADS`는 비용이 없다), FFI의 `elk_lean_init`은 `lean_initialize_runtime_module`
   → 초기화 중 `lean_set_panic_messages(false)` → `true`로 Lake의 `main`과 같다. FFI는 task manager를 만들지
   않으므로 `Task.spawn`이 호출 스레드에서 동기 실행된다(`object.cpp` `if (!g_task_manager) return lean_task_pure(...)`)
-  — 병렬 레이아웃(PAR)을 애드온/WASM에서 쓰려면 `elk_lean_init`에 task manager 초기화가 필요하다. 프로세스 시작
+  — 병렬 레이아웃(PAR)을 애드온/WASM에서 쓰려면 `elk_lean_init`에 task manager 초기화가 필요하다(PAR 이후:
+  `elk_lean_init_threads`가 시작하고 애드온이 쓴다, WASM은 순차; `docs/parallel-layout.md` §5). 프로세스 시작
   비용(`elk --version`)은 명령 수 7,020만 → 릴리스판 5,910만(모듈 초기화가 대부분, 약 6~8 ms).
 
 ## 7. 최종 릴리스 산출물의 게이트

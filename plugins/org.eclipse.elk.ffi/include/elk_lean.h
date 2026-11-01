@@ -9,10 +9,16 @@
  * keys sorted, exactly like elk-rs `serde_json::to_string`. elk_lean_convert_elkt (an elk-lean
  * addition) converts ELK Text (.elkt) to ELK JSON like the CLI `elk convert`.
  *
- * Threads: elk_lean_init must run once before anything else. Every other thread that calls
- * the API must call elk_lean_thread_init first (and elk_lean_thread_finalize before it
- * exits). Calls must not overlap: the layout engine keeps process-wide registries, so hosts
- * serialise calls (Node.js does on its main thread; a worker_threads pool needs a lock).
+ * Threads: elk_lean_init (or elk_lean_init_threads) must run once before anything else. Every
+ * other thread that calls the API must call elk_lean_thread_init first (and
+ * elk_lean_thread_finalize before it exits). Calls must not overlap: the layout engine keeps
+ * process-wide registries, so hosts serialise calls (Node.js does on its main thread; a
+ * worker_threads pool needs a lock).
+ *
+ * Parallel layout (elk-lean addition): after elk_lean_init_threads the engine may lay out
+ * independent sibling sub-graphs on Lean worker threads inside one call; results are
+ * byte-identical to the sequential layout (docs/parallel-layout.md). With elk_lean_init alone the
+ * engine is sequential.
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
@@ -27,12 +33,26 @@ extern "C" {
  * a module initialiser failed (the error is printed to stderr). */
 int elk_lean_init(void);
 
+/* elk_lean_init, then (first call only; later calls change nothing) starts the Lean task
+ * manager and sets the thread cap of the parallel sibling layout: 0 = ELK_LEAN_THREADS or
+ * min(hardware threads, 8), 1 = sequential, n = at most n threads per call (the calling thread
+ * plus n - 1 Lean workers). Lean workers have the Lean runtime's thread stack (1 GB reserved; only
+ * Lean executables apply LEAN_STACK_SIZE_KB), not the stack of the calling thread. 0 on success, -1 as
+ * elk_lean_init. */
+int elk_lean_init_threads(int threads);
+
 /* Registers / unregisters the calling thread with the Lean runtime. */
 void elk_lean_thread_init(void);
 void elk_lean_thread_finalize(void);
 
 /* elk-rs layout_api::layout_json(graph_json, options_json). options_json may be "" or "{}". */
 char *elk_lean_layout_json(const char *graph_json, const char *options_json, int *is_error);
+
+/* elk_lean_layout_json with the thread cap `threads` for this call (<= 0: the cap set by
+ * elk_lean_init_threads; 1: sequential). The result does not depend on it. Without
+ * elk_lean_init_threads there is no task manager and the call is sequential. */
+char *elk_lean_layout_json_threads(const char *graph_json, const char *options_json, int threads,
+                                   int *is_error);
 
 /* elk-rs layout_api::known_layout_algorithms/options/categories (JSON arrays). */
 char *elk_lean_known_layout_algorithms(int *is_error);
