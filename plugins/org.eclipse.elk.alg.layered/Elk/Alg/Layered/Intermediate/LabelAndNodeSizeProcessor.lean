@@ -6,6 +6,7 @@ import Elk.Alg.Common.NodeSpacing.NodeDimensionCalculation
 import Elk.Alg.Layered.Intermediate.LabelAndNodeSize.PortPlacement
 import Elk.Alg.Layered.Intermediate.LabelAndNodeSize.PortDrivenSizing
 import Elk.Alg.Layered.Intermediate.LabelAndNodeSize.ExternalPortDummyLabels
+import Elk.Alg.Layered.Intermediate.LabelAndNodeSize.ArenaNodeSize
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.LabelAndNodeSizeProcessor`
 
@@ -67,6 +68,9 @@ structure LabelAndNodeSizeFlags where
   enablePhase1PortPlacement : Bool := false
   /-- `DISABLE_CLOCKWISE_SIDE_ORDER`: `ELK_DISABLE_CLOCKWISE_SIDE_ORDER` set. -/
   disableClockwiseSideOrder : Bool := false
+  /-- Step 1 with the arena reads of `LabelAndNodeSize.ArenaNodeSize` (same results; `false` runs the
+  generic adapter pipeline, the reference of the differential test). Not an environment switch. -/
+  arenaFastPath : Bool := true
   deriving Inhabited, Repr
 
 namespace LabelAndNodeSizeFlags
@@ -387,7 +391,10 @@ def processWith (flags : LabelAndNodeSizeFlags) (graph : LGraphId) (monitor : Pr
   if flags.useFullProcess then
     -- Java: `NodeLabelAndSizeCalculator.process(graph, node, true, false)` per node, without the
     -- elk-rs `processNode` pre-pass for fixed port labels (`needsProcessNodeForFixedPortLabels`)
-    NodeDimensionCalculation.calculateLabelAndNodeSizesJava adapter graph
+    if flags.arenaFastPath then
+      ArenaNodeSize.calculateLabelAndNodeSizes adapter graph
+    else
+      NodeDimensionCalculation.calculateLabelAndNodeSizesJava adapter graph
   else
     NodeDimensionCalculation.calculateLabelAndNodeSizesWith adapter graph false
   traceNodeSize "label-node-size: step1 (node sizing) done"

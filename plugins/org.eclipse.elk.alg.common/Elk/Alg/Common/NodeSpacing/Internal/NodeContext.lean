@@ -140,64 +140,97 @@ def validatePlacements {m : Type → Type} [Monad m] [MonadExcept IO.Error m]
   if !NodeLabelPlacement.isValid nodeLabelPlacement then
     Elk.Core.throwUnsupportedConfiguration s!"Invalid node label placement: {nodeLabelPlacement.toJavaString}"
 
-/-- Creates a new context for the given node, fully initialized with the node's settings (Java
-`new NodeContext(parentGraph, node)`, elk-rs `NodeContext::new(node)`). Creates the node
-container (vertical strip) and its middle row (horizontal strip, in the container's center), both
-symmetrical unless `SizeOptions.ASYMMETRICAL` is set and without gap. Throws like Java for an
-invalid port or node label placement (`validatePlacements`; elk-rs does not check). -/
-def new {m : Type → Type} [Monad m] [MonadExcept IO.Error m] {G E : Type} (a : GraphAdapters m G N P L E)
-    (node : N) : m (NodeContext N P L) := do
-  let nodeSize ← a.node.getSize node
-  -- The node's options are read from its option map, read once (`ElementOps.getProps`)
-  let props ← a.node.getProps node
-  let ops := a.node
+/-- `ElementOps.getPropertyFrom` with the adapter's `defaultOverride` passed as a function (the
+same decoding: the stored value, else the override's value, else the property default). -/
+@[inline] def propertyFrom {α : Type} [PropCodec α] (override : PropKey → Option PropValue) (props : PropertyMap)
+    (p : Property α) : Option α :=
+  match props.getRaw? p.key with
+  | some raw =>
+    match PropCodec.dec raw with
+    | some v => some v
+    | none => p.default
+  | none =>
+    match override p.key with
+    | some raw => (PropCodec.dec raw : Option α) <|> p.default
+    | none => p.default
+
+/-- `ElementOps.getPropertyDFrom` with the override passed as a function. -/
+@[inline] def propertyDFrom {α : Type} [PropCodec α] (override : PropKey → Option PropValue) (props : PropertyMap)
+    (p : Property α) (d : α) : α :=
+  (propertyFrom override props p).getD d
+
+/-- `GraphAdapters.getIndividualOrInheritedIn` with the graph adapter's override passed as a
+function: the individual spacing if set, else the graph's value, else the property default. -/
+@[inline] def individualOrInheritedIn {α : Type} [PropCodec α] (graphOverride : PropKey → Option PropValue)
+    (individual : Option IndividualSpacings) (graphProps : Option PropertyMap) (p : Property α) : Option α :=
+  let fromIndividual : Option α := match individual with
+    | some ind => if ind.props.has p then ind.props.get p else none
+    | none => none
+  match fromIndividual with
+  | some v => some v
+  | none =>
+    let fromGraph : Option α := match graphProps with
+      | some gp => propertyFrom graphOverride gp p
+      | none => none
+    match fromGraph with
+    | some v => some v
+    | none => p.default
+
+/-- The body of `new` on the values read through the adapters: the node, its size and option map,
+`isCompoundNode`, the option map of its graph (`none` without graph) and the `defaultOverride`s of
+the node and graph adapters. `@[specialize]`: the LGraph fast path passes constant overrides.
+Throws like `new` (`validatePlacements`). -/
+@[specialize] def build {m : Type → Type} [Monad m] [MonadExcept IO.Error m] (nodeOverride graphOverride : PropKey → Option PropValue)
+    (node : N) (nodeSize : KVector) (props : PropertyMap) (isCompound : Bool) (graphProps : Option PropertyMap) :
+    m (NodeContext N P L) := do
   -- Top-down layout
-  let topdownLayout := ops.getPropertyDFrom props CoreOptions.TOPDOWN_LAYOUT false
+  let topdownLayout := propertyDFrom nodeOverride props CoreOptions.TOPDOWN_LAYOUT false
   -- Compound node
-  let isCompound ← a.isCompoundNode node
-  let insideSelfLoops := ops.getPropertyDFrom props CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
+  let insideSelfLoops := propertyDFrom nodeOverride props CoreOptions.INSIDE_SELF_LOOPS_ACTIVATE false
   let treatAsCompoundNode := isCompound || insideSelfLoops
   -- Core size settings
-  let sizeConstraints := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
-  let sizeOptions := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
-  let portConstraints := ops.getPropertyDFrom props CoreOptions.PORT_CONSTRAINTS PortConstraints.undefined
-  let portLabelsPlacement := ops.getPropertyDFrom props CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
-  let portLabelsTreatAsGroup := ops.getPropertyDFrom props CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
-  let nodeLabelPlacement := ops.getPropertyDFrom props CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty
+  let sizeConstraints := propertyDFrom nodeOverride props CoreOptions.NODE_SIZE_CONSTRAINTS EnumSet.empty
+  let sizeOptions := propertyDFrom nodeOverride props CoreOptions.NODE_SIZE_OPTIONS EnumSet.empty
+  let portConstraints := propertyDFrom nodeOverride props CoreOptions.PORT_CONSTRAINTS PortConstraints.undefined
+  let portLabelsPlacement := propertyDFrom nodeOverride props CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty
+  let portLabelsTreatAsGroup := propertyDFrom nodeOverride props CoreOptions.PORT_LABELS_TREAT_AS_GROUP true
+  let nodeLabelPlacement := propertyDFrom nodeOverride props CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty
   -- Java checks the port label placement right after reading it and the node label placement right
   -- after reading that; the reads in between have no side effects
   validatePlacements portLabelsPlacement nodeLabelPlacement
   -- Copy spacings for convenience (`getIndividualOrInherited`, the node's individual spacings and
-  -- the graph's option map read once)
-  let spacings ← a.spacingSourceFrom node props
-  let graphProps ← match spacings.graph with
-    | some g => some <$> a.graph.getProps g
-    | none => pure none
-  let nodeLabelsPadding := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.NODE_LABELS_PADDING).getD {}
-  let nodeLabelSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_NODE).getD fl0p0
+  -- the graph's option map read once; `GraphAdapters.spacingSourceFrom`)
+  let individual : Option IndividualSpacings :=
+    if props.hasKey CoreOptions.SPACING_INDIVIDUAL.key then propertyFrom nodeOverride props CoreOptions.SPACING_INDIVIDUAL
+    else none
+  let nodeLabelsPadding :=
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.NODE_LABELS_PADDING).getD {}
+  let nodeLabelSpacing :=
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.SPACING_LABEL_NODE).getD fl0p0
   let labelLabelSpacing :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_LABEL).getD fl0p0
-  let portPortSpacing := (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORT_PORT).getD fl0p0
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.SPACING_LABEL_LABEL).getD fl0p0
+  let portPortSpacing :=
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.SPACING_PORT_PORT).getD fl0p0
   let portLabelSpacingHorizontal :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD fl0p0
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.SPACING_LABEL_PORT_HORIZONTAL).getD fl0p0
   let portLabelSpacingVertical :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD fl0p0
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.SPACING_LABEL_PORT_VERTICAL).getD fl0p0
   let surroundingPortMargins :=
-    (a.getIndividualOrInheritedIn spacings graphProps CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
+    (individualOrInheritedIn graphOverride individual graphProps CoreOptions.SPACING_PORTS_SURROUNDING).getD {}
   let labelCellSpacing := fl2p0 * labelLabelSpacing
   -- Port alignment per side
-  let portAlignmentDefault := ops.getPropertyDFrom props CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
+  let portAlignmentDefault := propertyDFrom nodeOverride props CoreOptions.PORT_ALIGNMENT_DEFAULT PortAlignment.justified
   let sideAlignment (p : Property PortAlignment) : Option PortAlignment :=
-    if props.hasKey p.key then ops.getPropertyFrom props p else none
+    if props.hasKey p.key then propertyFrom nodeOverride props p else none
   let portAlignmentNorth := sideAlignment CoreOptions.PORT_ALIGNMENT_NORTH
   let portAlignmentSouth := sideAlignment CoreOptions.PORT_ALIGNMENT_SOUTH
   let portAlignmentEast := sideAlignment CoreOptions.PORT_ALIGNMENT_EAST
   let portAlignmentWest := sideAlignment CoreOptions.PORT_ALIGNMENT_WEST
   -- Node minimum size
-  let nodeSizeMinimum := ops.getPropertyDFrom props CoreOptions.NODE_SIZE_MINIMUM KVector.zero
+  let nodeSizeMinimum := propertyDFrom nodeOverride props CoreOptions.NODE_SIZE_MINIMUM KVector.zero
   -- NODE_SIZE_FIXED_GRAPH_SIZE comes from the parent graph
   let nodeSizeFixedGraphSize := match graphProps with
-    | some gp => a.graph.getPropertyDFrom gp CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
+    | some gp => propertyDFrom graphOverride gp CoreOptions.NODE_SIZE_FIXED_GRAPH_SIZE false
     | none => false
   -- Create main cells (the others will be created later by the algorithm phases)
   let symmetry := !sizeOptions.contains .asymmetrical
@@ -217,6 +250,24 @@ def new {m : Type → Type} [Monad m] [MonadExcept IO.Error m] {G E : Type} (a :
     insidePortLabelCells := Array.replicate (ElkEnum.count (α := PortSide)) none
     outsideNodeLabelContainers := Array.replicate (ElkEnum.count (α := PortSide)) none
     nodeLabelCells := Array.replicate (ElkEnum.count (α := NodeLabelLocation)) none }
+
+/-- Creates a new context for the given node, fully initialized with the node's settings (Java
+`new NodeContext(parentGraph, node)`, elk-rs `NodeContext::new(node)`). Creates the node
+container (vertical strip) and its middle row (horizontal strip, in the container's center), both
+symmetrical unless `SizeOptions.ASYMMETRICAL` is set and without gap. Throws like Java for an
+invalid port or node label placement (`validatePlacements`; elk-rs does not check). The adapter
+reads (size, option map, `isCompoundNode`, graph and its option map) come first; they have no side
+effects, so reading the graph before the placement check is unobservable. -/
+def new {m : Type → Type} [Monad m] [MonadExcept IO.Error m] {G E : Type} (a : GraphAdapters m G N P L E)
+    (node : N) : m (NodeContext N P L) := do
+  let nodeSize ← a.node.getSize node
+  -- The node's options are read from its option map, read once (`ElementOps.getProps`)
+  let props ← a.node.getProps node
+  let isCompound ← a.isCompoundNode node
+  let graphProps ← match ← a.getGraph node with
+    | some g => some <$> a.graph.getProps g
+    | none => pure none
+  build a.node.defaultOverride a.graph.defaultOverride node nodeSize props isCompound graphProps
 
 /-! ### Cell system access -/
 

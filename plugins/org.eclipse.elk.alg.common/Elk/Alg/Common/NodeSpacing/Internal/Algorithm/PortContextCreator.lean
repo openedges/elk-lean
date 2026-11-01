@@ -22,7 +22,7 @@ connections and the sizes/positions of the port labels once, when the context is
 -/
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
-open Elk Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
+open Elk Elk.Graph Elk.Core Elk.Core.Math Elk.Core.Util Elk.Core.Options Elk.Core.Util.Adapters
 open Elk.Alg.Common.NodeSpacing.CellSystem Elk.Alg.Common.NodeSpacing.Internal
 
 namespace PortContextCreator
@@ -53,30 +53,20 @@ def computeLabelsNextToPort (a : GraphAdapters m G N P L E) (ctx : NodeContext N
   else
     return false
 
-/-- `createPortContext` for a port whose side and volatile id the caller has read already. The
-port's options (`ElementOps.getProps`), labels and label sizes are read once (Java/elk-rs read
-them again for the label cell; adapter reads have no side effects). A port without labels gets no
-label cell: an empty label cell (zero padding) has minimum size `0` and no labels, which every
-consumer treats like a missing cell (port margins, inside port label widths, label placement); no
-Java counterpart. -/
-def createPortContextOnSide (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
-    (portSide : PortSide) (volatileId : Int) (imPortLabels : Bool) : m (NodeContext N P L) := do
-  let portSize ← a.port.getSize port
-  let portPosition ← a.port.getPosition port
-  let props ← a.port.getProps port
-  let portBorderOffset := a.port.getPropertyDFrom props CoreOptions.PORT_BORDER_OFFSET 0.0
+/-- The pure part of `createPortContextOnSide` on the values read from the adapters (`portOverride`
+is the port adapter's `defaultOverride`, for `PORT_BORDER_OFFSET`): builds the context, creates the
+port label cell if needed and appends the context to its side. `@[specialize]`: the LGraph fast
+path passes a constant override. -/
+@[specialize] def addPortContextFrom (portOverride : PropKey → Option PropValue) (ctx : NodeContext N P L)
+    (port : P) (portSide : PortSide) (volatileId : Int) (imPortLabels : Bool) (portSize portPosition : KVector)
+    (props : PropertyMap) (hasCompoundConnections : Bool) (labels : Array L) (labelSizes labelPositions : Array KVector)
+    (labelsNextToPort : Bool) (portRatioOrPosition : Float) : NodeContext N P L :=
+  let portBorderOffset := NodeContext.propertyDFrom portOverride props CoreOptions.PORT_BORDER_OFFSET 0.0
   let hasPortBorderOffset := props.hasKey CoreOptions.PORT_BORDER_OFFSET.key
-  let hasCompoundConnections ← a.hasCompoundConnections port
-  -- Collect label sizes and positions
-  let labels ← a.portLabels port
-  let labelSizes ← labels.mapM a.label.getSize
-  let labelPositions ← labels.mapM a.label.getPosition
-  let labelsNextToPort ← computeLabelsNextToPort a ctx port hasCompoundConnections
   let pc : PortContext P L := PortContext.new port portSize portSide volatileId portPosition
     portBorderOffset hasPortBorderOffset hasCompoundConnections
   -- Java reads `PORT_RATIO_OR_POSITION` from the port whenever it places a FIXED_RATIO port; the
   -- value does not change during the calculation (elk-rs never sets it: always `0.0`)
-  let portRatioOrPosition ← a.portRatioOrPosition port
   let pc := { pc with labelsNextToPort, labels, labelSizes, labelPositions, portRatioOrPosition }
   -- If the port has labels and if port labels are to be placed, we need to remember them
   if imPortLabels && !labels.isEmpty && !PortLabelPlacement.isFixed ctx.portLabelsPlacement then
@@ -89,8 +79,29 @@ def createPortContextOnSide (a : GraphAdapters m G N P L E) (ctx : NodeContext N
         if h : i < labels.size then
           cells := cells.addLabel labelCell labels[i] (labelSizes.getD i {})
       return (cells, labelCell)
-    return ctx.addPortContext { pc with portLabelCell := some labelCell }
-  return ctx.addPortContext pc
+    ctx.addPortContext { pc with portLabelCell := some labelCell }
+  else ctx.addPortContext pc
+
+/-- `createPortContext` for a port whose side and volatile id the caller has read already. The
+port's options (`ElementOps.getProps`), labels and label sizes are read once (Java/elk-rs read
+them again for the label cell; adapter reads have no side effects). A port without labels gets no
+label cell: an empty label cell (zero padding) has minimum size `0` and no labels, which every
+consumer treats like a missing cell (port margins, inside port label widths, label placement); no
+Java counterpart. -/
+def createPortContextOnSide (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L) (port : P)
+    (portSide : PortSide) (volatileId : Int) (imPortLabels : Bool) : m (NodeContext N P L) := do
+  let portSize ← a.port.getSize port
+  let portPosition ← a.port.getPosition port
+  let props ← a.port.getProps port
+  let hasCompoundConnections ← a.hasCompoundConnections port
+  -- Collect label sizes and positions
+  let labels ← a.portLabels port
+  let labelSizes ← labels.mapM a.label.getSize
+  let labelPositions ← labels.mapM a.label.getPosition
+  let labelsNextToPort ← computeLabelsNextToPort a ctx port hasCompoundConnections
+  let portRatioOrPosition ← a.portRatioOrPosition port
+  return addPortContextFrom a.port.defaultOverride ctx port portSide volatileId imPortLabels portSize portPosition
+    props hasCompoundConnections labels labelSizes labelPositions labelsNextToPort portRatioOrPosition
 
 /-- `PortContextCreator.createPortContext(nodeContext, port, imPortLabels)` (elk-rs
 `create_port_context`): extracts the port's data into a new `PortContext`, creates the port label
