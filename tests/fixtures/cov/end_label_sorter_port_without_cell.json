@@ -1,0 +1,76 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g306_n3",
+   "width": 30,
+   "height": 30
+  },
+  {
+   "id": "g306_n6",
+   "width": 10,
+   "height": 30,
+   "ports": [
+    {
+     "id": "g306_n6_p0",
+     "width": 4,
+     "height": 4
+    }
+   ],
+   "layoutOptions": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "g306_e5",
+   "sources": [
+    "g306_n3"
+   ],
+   "targets": [
+    "g306_n6"
+   ],
+   "labels": [
+    {
+     "text": "g306_e5_l2",
+     "width": 60,
+     "height": 10,
+     "layoutOptions": {
+      "elk.edgeLabels.placement": "HEAD"
+     }
+    }
+   ]
+  },
+  {
+   "id": "g306_e10",
+   "sources": [
+    "g306_n6_p0"
+   ],
+   "targets": [
+    "g306_n6_p0"
+   ],
+   "labels": [
+    {
+     "text": "g306_e10_l0",
+     "width": 60,
+     "height": 14,
+     "layoutOptions": {
+      "elk.edgeLabels.placement": "TAIL",
+      "elk.edgeLabels.inline": true
+     }
+    },
+    {
+     "text": "g306_e10_l1",
+     "width": 30,
+     "height": 0,
+     "layoutOptions": {
+      "elk.edgeLabels.placement": "HEAD",
+      "elk.edgeLabels.inline": true
+     }
+    }
+   ]
+  }
+ ]
+}

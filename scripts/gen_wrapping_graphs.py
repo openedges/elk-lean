@@ -19,7 +19,8 @@ Some graphs also set one of the object-typed options that ELK Java cannot parse 
 (`wrapping.cutting.cuts`, `wrapping.validify.forbiddenIndices`, `labels.labelManager`, ...: Java
 throws `IllegalStateException: IDataType class expected for layout option ...` in the importer).
 The JSON path does not validate option ranges, so out-of-range and degenerate values are drawn on
-purpose. Graph k of a seed does not depend on COUNT (one `random.Random` per graph, seeded with
+purpose. `STRETCH_WIDTH` layering is not drawn: it does not terminate on many of these graphs, in
+ELK Java and elk-lean alike. Graph k of a seed does not depend on COUNT (one `random.Random` per graph, seeded with
 SEED and k), so a smaller count is a prefix of a larger one.
 """
 import json, os, random, sys
