@@ -29,8 +29,11 @@ Lean `Task`s and merges them back in sibling order, with byte-identical results.
 -/
 namespace Elk.Core.Parallel
 
-/-- The default minimum number of elements (nodes + ports + edges) of a sibling sub-tree for a task. -/
-def defaultMinWork : Nat := 200
+/-- The default minimum number of elements (nodes + ports + contained edges) of a sibling sub-tree
+for a task: 25. Measured on the 256 ptolemy hierarchical models (`docs/parallel-layout.md` §7):
+thresholds 10-25 give the largest total speed-up (1.39-1.40x, 200: 1.10x) without slowing the models
+below 1 ms; 0 slows more small models down. -/
+def defaultMinWork : Nat := 25
 
 /-- The default thread cap: `min(hardware threads, 8)` (at least 1). -/
 def defaultMaxThreads : Nat := 8

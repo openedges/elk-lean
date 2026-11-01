@@ -164,6 +164,10 @@ def layoutSiblings? {α : Type} (children : Array NodeId) (monitor : ProgressMon
   let heavy (w : Nat) : Bool := w ≥ max minW 1
   if (work.filter heavy).size < 2 then return none
   let own := computeOwnership g children
+  -- fewer than two heavy eligible units: the plain loop (nothing to win)
+  let nHeavyClosed := (List.range children.size).foldl (init := 0) fun n k =>
+    if (own.closed[k]?.getD false) && heavy (work[k]?.getD 0) then n + 1 else n
+  if nHeavyClosed < 2 then return none
   -- segments: maximal runs of eligible units; barriers in between
   let mut out : Array α := Array.mkEmpty children.size
   let mut i := 0
