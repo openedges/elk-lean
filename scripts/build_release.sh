@@ -28,8 +28,12 @@
 # env:
 #   ELK_PGO_PROFILE  profile (default: <main checkout>/.reference/pgo/elk-lean-<lean version>-<arch>.profdata,
 #                    written by scripts/build_pgo.sh; used when the file exists)
-#   ELK_NATIVE_CPU=1 add -mcpu=native (local builds only: distributed artefacts keep the default
+#   ELK_NATIVE_CPU=1 add -mcpu=native (x86: -march=native; local builds only: distributed artefacts keep the default
 #                    target CPU, apple-m1 on macOS arm64)
+#   ELK_PGO_EXCLUDE  module path prefixes (below .lake/build/ir) compiled without the profile, default
+#                    "Elk/Alg/Force/": with the profile, the force/stress kernel FruchtermanReingoldModel
+#                    .scanForcesU is inlined into its loop and force_xlarge gets 10 % slower
+#                    (docs/build-optimization.md 3); set to "" to profile every module
 #   JOBS             parallel compiles and ThinLTO backend jobs (default 3)
 set -eu
 HERE=$(cd "$(dirname "$0")/.." && pwd)
@@ -91,8 +95,15 @@ if [ "$LTO" = 1 ]; then
   case "$(uname -s)" in Darwin) CACHE="-Wl,-cache_path_lto,$OUT/lto-cache" ;; *) CACHE="-Wl,--thinlto-cache-dir=$OUT/lto-cache" ;; esac
   LDEXTRA="-flto=thin -Wl,--thinlto-jobs=$JOBS $CACHE"
 fi
-if [ "${ELK_NATIVE_CPU:-0}" = 1 ]; then EXTRA="$EXTRA -mcpu=native"; RT_EXTRA="$RT_EXTRA -mcpu=native"; fi
+if [ "${ELK_NATIVE_CPU:-0}" = 1 ]; then
+  case "$(uname -m)" in arm64|aarch64) NATIVE="-mcpu=native" ;; *) NATIVE="-march=native" ;; esac
+  EXTRA="$EXTRA $NATIVE"; RT_EXTRA="$RT_EXTRA $NATIVE"
+fi
 PROFILE_HASH=none
+# modules compiled without the profile even when PGO is on (space separated prefixes of the module
+# path below .lake/build/ir); see docs/build-optimization.md
+PGO_EXCLUDE=${ELK_PGO_EXCLUDE-"Elk/Alg/Force/"}
+EXTRA_NOPGO=$EXTRA
 if [ -n "$GEN" ]; then
   [ -f "$GEN" ] || { echo "error: profile runtime $GEN not found" >&2; exit 1; }
   EXTRA="$EXTRA -fprofile-generate"
@@ -115,7 +126,7 @@ LIB="$OUT/runtime/lib/libleanrt_nogmp.a"
 
 # --- compile ------------------------------------------------------------------------------------
 OBJ="$OUT/obj"
-STAMP=$(printf '%s\n' "$($CC --version | head -1)" "$BASE_CFLAGS" "$EXTRA" "$PROFILE_HASH" | shasum -a 256 | cut -c1-16)
+STAMP=$(printf '%s\n' "$($CC --version | head -1)" "$BASE_CFLAGS" "$EXTRA" "$PROFILE_HASH" "$PGO_EXCLUDE" | shasum -a 256 | cut -c1-16)
 if [ "$(cat "$OBJ/stamp" 2>/dev/null || true)" != "$STAMP" ]; then
   rm -rf "$OBJ"; mkdir -p "$OBJ"; echo "$STAMP" > "$OBJ/stamp"
 fi
@@ -130,7 +141,11 @@ while IFS= read -r x; do
   o="$OBJ/${src#"$IR"/}.o"
   N_OBJ=$((N_OBJ + 1))
   if [ ! -f "$o" ] || [ "$src" -nt "$o" ]; then
-    echo "mkdir -p '$(dirname "$o")' && '$CC' -c -o '$o.tmp' '$src' $BASE_CFLAGS $EXTRA && mv '$o.tmp' '$o'" >> "$OBJ/jobs.txt"
+    flags=$EXTRA
+    if [ "$PGO" = 1 ]; then
+      for pfx in $PGO_EXCLUDE; do case "${src#"$IR"/}" in "$pfx"*) flags=$EXTRA_NOPGO ;; esac; done
+    fi
+    echo "mkdir -p '$(dirname "$o")' && '$CC' -c -o '$o.tmp' '$src' $BASE_CFLAGS $flags && mv '$o.tmp' '$o'" >> "$OBJ/jobs.txt"
   fi
 done < "$OBJ/sources.txt"
 # the C API glue of the NAPI addon / C library (scripts/build_ffi.sh's flags, toolchain clang)
