@@ -236,9 +236,15 @@ def writeBackMove (master : CGraph) (m : Membership) (phase : CGraph) : CGraph :
 other nodes the default; the spacing of a pair is the `f64::min` of both. Built per projection
 (`isPlaceholder` is master-indexed). -/
 def spacingsFor (isPlaceholder : Array Bool) (m : Membership) (default : Float) : SpacingsHandler :=
+  .individualMin (m.nodes.foldl (fun acc n => acc.push (if isPlaceholder[n.idx]?.getD false then fl1p0 else default))
+    (FloatArray.emptyWithCapacity m.nodes.size)) default
+
+/-- The original `spacingsFor` with closures (reference of the `individualMin` form, differential test
+`layered.components.packFastPath`). -/
+def spacingsForReference (isPlaceholder : Array Bool) (m : Membership) (default : Float) : SpacingsHandler :=
   let flags := m.nodes.map fun n => isPlaceholder[n.idx]?.getD false
   let sp : CNodeId → Float := fun n => if flags[n.idx]?.getD false then fl1p0 else default
-  ⟨fun _ a b => fmin (sp a) (sp b), fun _ a b => fmin (sp a) (sp b)⟩
+  .mk (fun _ a b => fmin (sp a) (sp b)) (fun _ a b => fmin (sp a) (sp b))
 
 /-- The compaction state: master graph, current membership and the compactor (whose `cGraph`
 is the projection of the membership). -/
@@ -275,7 +281,7 @@ def sync (p : Packer) : IO Packer := do
 
 /-- Hands the compactor the projection of the current membership. -/
 def rebuild (p : Packer) : Packer :=
-  let handler := spacingsFor p.isPlaceholder p.members p.spacing
+  let handler := (if p.fastPath then spacingsFor else spacingsForReference) p.isPlaceholder p.members p.spacing
   if p.fastPath && !hasDuplicates (p.members.nodes.map (·.idx)) p.master.cNodes.size &&
       !hasDuplicates (p.members.groups.map (·.idx)) p.master.cGroups.size then
     match p with
@@ -366,7 +372,9 @@ def compactPass (p : Packer) (extensions : Array PackExtension) (topLeft : KVect
           | some grp => (g.cGroup grp).outDegree != 0
           | none => false
       !reposition
-    c ← (c.setLockFunction (some fun _ n _ => frozen[n.idx]?.getD false)).compact
+    let lock : LockFunction :=
+      if p.fastPath then .flags frozen else .fn fun _ n _ => frozen[n.idx]?.getD false
+    c ← (c.setLockFunction (some lock)).compact
   c ← (c.setLockFunction none).changeDirection .left
   p := { p with compactor := c }
   p ← p.sync
@@ -456,7 +464,7 @@ def pack (components : Array Component) (spacing : Float) (fastPath : Bool := tr
     let rect := (graph.cNode n).hitbox
     topLeft := ⟨fmin topLeft.x rect.x, fmin topLeft.y rect.y⟩
   let compactor := (OneDimensionalCompactor.new (project graph members)).setSpacingsHandler
-    (spacingsFor isPlaceholder members spacing)
+    ((if fastPath then spacingsFor else spacingsForReference) isPlaceholder members spacing)
   let mut p : Packer :=
     { master := graph, members, compactor, isPlaceholder, nodeLocks, spacing, fastPath }
   p ← p.sync
