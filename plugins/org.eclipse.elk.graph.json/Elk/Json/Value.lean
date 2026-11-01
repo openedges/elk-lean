@@ -203,6 +203,70 @@ def candidateIndex (s : String) (b n : Nat) : Nat :=
   | 18 => 28
   | _ => 29
 
+/-- Index in `all` of the member name `k` (`all.size` for other names): `candidateIndex` confirmed by
+string equality (pointer-equal for the parser's shared keys). Since `candidateIndex` maps the bytes of
+every `all[j]` to `j` (`Tests.Json.KeyMask` checks it), `idOf k = j` exactly when `k == all[j]`. -/
+@[inline] def idOf (k : String) : Nat :=
+  let j := candidateIndex k 0 k.utf8ByteSize
+  if h : j < all.size then (if k == all[j] then j else all.size) else all.size
+
+/-! Bits of the member mask (`Value.keyMask`): bit `j` stands for `all[j]`. -/
+
+/-- Bit of `"id"`. -/
+def bId : UInt64 := 0x1
+/-- Bit of `"x"`. -/
+def bX : UInt64 := 0x2
+/-- Bit of `"y"`. -/
+def bY : UInt64 := 0x4
+/-- Bit of `"width"`. -/
+def bWidth : UInt64 := 0x8
+/-- Bit of `"height"`. -/
+def bHeight : UInt64 := 0x10
+/-- Bit of `"labels"`. -/
+def bLabels : UInt64 := 0x20
+/-- Bit of `"text"`. -/
+def bText : UInt64 := 0x40
+/-- Bit of `"ports"`. -/
+def bPorts : UInt64 := 0x80
+/-- Bit of `"layoutOptions"`. -/
+def bLayoutOptions : UInt64 := 0x100
+/-- Bit of `"properties"`. -/
+def bProperties : UInt64 := 0x200
+/-- Bit of `"children"`. -/
+def bChildren : UInt64 := 0x400
+/-- Bit of `"edges"`. -/
+def bEdges : UInt64 := 0x800
+/-- Bit of `"sources"`. -/
+def bSources : UInt64 := 0x1000
+/-- Bit of `"targets"`. -/
+def bTargets : UInt64 := 0x2000
+/-- Bit of `"source"`. -/
+def bSource : UInt64 := 0x4000
+/-- Bit of `"target"`. -/
+def bTarget : UInt64 := 0x8000
+/-- Bit of `"sourcePort"`. -/
+def bSourcePort : UInt64 := 0x10000
+/-- Bit of `"targetPort"`. -/
+def bTargetPort : UInt64 := 0x20000
+/-- Bit of `"sections"`. -/
+def bSections : UInt64 := 0x40000
+/-- Bit of `"startPoint"`. -/
+def bStartPoint : UInt64 := 0x80000
+/-- Bit of `"endPoint"`. -/
+def bEndPoint : UInt64 := 0x100000
+/-- Bit of `"bendPoints"`. -/
+def bBendPoints : UInt64 := 0x200000
+/-- Bit of `"incomingShape"`. -/
+def bIncomingShape : UInt64 := 0x400000
+/-- Bit of `"outgoingShape"`. -/
+def bOutgoingShape : UInt64 := 0x800000
+/-- Bit of `"incomingSections"`. -/
+def bIncomingSections : UInt64 := 0x1000000
+/-- Bit of `"outgoingSections"`. -/
+def bOutgoingSections : UInt64 := 0x2000000
+/-- Bit of `"individualSpacings"`. -/
+def bIndividualSpacings : UInt64 := 0x10000000
+
 end Key
 
 /-! Unchecked byte reads with `USize` indices for the byte loops of the parser and printer (no
@@ -242,40 +306,40 @@ namespace Value
 @[inline] def emptyObj : Value := .obj #[]
 @[inline] def emptyArr : Value := .arr #[]
 
-def isNull : Value → Bool
+@[inline] def isNull : Value → Bool
   | .null => true
   | _ => false
 
-def isObj : Value → Bool
+@[inline] def isObj : Value → Bool
   | .obj _ => true
   | _ => false
 
-def isArr : Value → Bool
+@[inline] def isArr : Value → Bool
   | .arr _ => true
   | _ => false
 
-def getObj? : Value → Option (Array (String × Value))
+@[inline] def getObj? : Value → Option (Array (String × Value))
   | .obj kvs => some kvs
   | _ => none
 
-def getArr? : Value → Option (Array Value)
+@[inline] def getArr? : Value → Option (Array Value)
   | .arr xs => some xs
   | _ => none
 
-def getStr? : Value → Option String
+@[inline] def getStr? : Value → Option String
   | .str s => some s
   | _ => none
 
-def getBool? : Value → Option Bool
+@[inline] def getBool? : Value → Option Bool
   | .bool b => some b
   | _ => none
 
-def getNum? : Value → Option Number
+@[inline] def getNum? : Value → Option Number
   | .num n => some n
   | _ => none
 
 /-- Numeric value as a double. -/
-def getFloat? : Value → Option Float
+@[inline] def getFloat? : Value → Option Float
   | .num n => some n.toFloat
   | _ => none
 
@@ -291,18 +355,45 @@ def keyIndex (kvs : Array (String × Value)) (key : String) (i : Nat := 0) : Nat
   else kvs.size
 termination_by kvs.size - i
 
+/-- `keyMask` of the members from `i` on, added to `acc`. -/
+private def keyMaskFrom (kvs : Array (String × Value)) (i : Nat) (acc : UInt64) : UInt64 :=
+  if h : i < kvs.size then
+    let j := Key.idOf kvs[i].1
+    keyMaskFrom kvs (i + 1) (if j < Key.all.size then acc ||| ((1 : UInt64) <<< j.toUInt64) else acc)
+  else acc
+termination_by kvs.size - i
+
+/-- The member mask of an object's entry array: bit `j` (`Key.bId`, …) is set exactly when some member
+is named `Key.all[j]`. One pass over the members; then `lookupK` answers for an absent ELK member name
+without scanning (the importer asks each object for a dozen names, most of them absent). -/
+def keyMask (kvs : Array (String × Value)) : UInt64 := keyMaskFrom kvs 0 0
+
 /-- Member lookup on an object's entry array (first matching key). -/
-def lookup (kvs : Array (String × Value)) (key : String) : Option Value :=
+@[inline] def lookup (kvs : Array (String × Value)) (key : String) : Option Value :=
   let i := keyIndex kvs key
   if h : i < kvs.size then some kvs[i].2 else none
 
+/-- `lookup kvs key` given `m = keyMask kvs` and the bit `b` of `key` in it (`Key.bX` for `Key.x`, …):
+`none` straight from the mask when no member has the name, otherwise the first matching member. -/
+@[inline] def lookupK (kvs : Array (String × Value)) (m b : UInt64) (key : String) : Option Value :=
+  if m &&& b == 0 then none else lookup kvs key
+
 /-- Object member lookup (first matching key). -/
-def get? (v : Value) (key : String) : Option Value :=
+@[inline] def get? (v : Value) (key : String) : Option Value :=
   match v with
   | .obj kvs => lookup kvs key
   | _ => none
 
-def hasKey (v : Value) (key : String) : Bool :=
+/-- `keyMask` of an object's members (`0` for other values, which have no members). -/
+def keyMaskOf : Value → UInt64
+  | .obj kvs => keyMask kvs
+  | _ => 0
+
+/-- `v.get? key` given `m = v.keyMaskOf` and the bit `b` of `key` (`lookupK`). -/
+@[inline] def getK (v : Value) (m b : UInt64) (key : String) : Option Value :=
+  if m &&& b == 0 then none else v.get? key
+
+@[inline] def hasKey (v : Value) (key : String) : Bool :=
   match v with
   | .obj kvs => keyIndex kvs key < kvs.size
   | _ => false

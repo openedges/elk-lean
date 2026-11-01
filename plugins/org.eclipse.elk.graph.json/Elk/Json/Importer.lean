@@ -77,41 +77,43 @@ def setOption (props : PropertyMap) (id : String) (value : String) : ImportM Pro
   | none => return props
 
 /-- `transform_authored_properties`: `layoutOptions` (or `properties`) of the element. -/
-def transformAuthoredProperties (obj : Value) (props : PropertyMap) : ImportM PropertyMap := do
-  let options := match JsonAdapter.optObject obj Key.layoutOptions with
+def transformAuthoredProperties (obj : Value) (m : UInt64) (props : PropertyMap) : ImportM PropertyMap := do
+  let options := match JsonAdapter.optObjectK obj m Key.bLayoutOptions Key.layoutOptions with
     | some o => some o
-    | none => JsonAdapter.optObject obj Key.properties
+    | none => JsonAdapter.optObjectK obj m Key.bProperties Key.properties
   let mut props := props
   if let some (.obj kvs) := options then
     for (k, v) in kvs do
       props ← setOption props k (← JsonAdapter.stringVal v)
   return props
 
-/-- `transform_properties`: authored options merged with the per-call defaults. -/
-def transformProperties (obj : Value) (props : PropertyMap) : ImportM PropertyMap := do
+/-- `transform_properties`: authored options merged with the per-call defaults (`m`: member mask of
+`obj`, `Value.keyMaskOf`). -/
+def transformProperties (obj : Value) (m : UInt64) (props : PropertyMap) : ImportM PropertyMap := do
   match (← getI).defaults with
   | some g =>
     -- without defaults the effective options are the authored ones (and the cache is unchanged)
-    if g.values.isEmpty then return ← transformAuthoredProperties obj props
+    if g.values.isEmpty then return ← transformAuthoredProperties obj m props
     let (opts, g') ← g.effectiveOptions obj
     modI (·.setDefaults g')
     let mut props := props
     for (k, v) in opts do
       props ← setOption props k (← JsonAdapter.stringVal v)
     return props
-  | none => transformAuthoredProperties obj props
+  | none => transformAuthoredProperties obj m props
 
 /-- Whether `transformProperties obj` can change the properties: per-call defaults, or an options
 object (`layoutOptions` or `properties`) on the element. -/
-def hasProperties (obj : Value) : ImportM Bool := do
+def hasProperties (obj : Value) (m : UInt64) : ImportM Bool := do
   match (← getI).defaults with
   | some g => if !g.values.isEmpty then return true
   | none => pure ()
-  return (JsonAdapter.optObject obj Key.layoutOptions).isSome || (JsonAdapter.optObject obj Key.properties).isSome
+  return (JsonAdapter.optObjectK obj m Key.bLayoutOptions Key.layoutOptions).isSome ||
+    (JsonAdapter.optObjectK obj m Key.bProperties Key.properties).isSome
 
 /-- `transform_individual_spacings`: the `individualSpacings` object. -/
-def transformIndividualSpacings (obj : Value) (props : PropertyMap) : ImportM PropertyMap := do
-  match JsonAdapter.optObject obj Key.individualSpacings with
+def transformIndividualSpacings (obj : Value) (m : UInt64) (props : PropertyMap) : ImportM PropertyMap := do
+  match JsonAdapter.optObjectK obj m Key.bIndividualSpacings Key.individualSpacings with
   | some (.obj kvs) =>
     let individual : IndividualSpacings := (props.get CoreOptions.SPACING_INDIVIDUAL).getD {}
     let mut inner := individual.props
@@ -134,8 +136,9 @@ structure ShapeRead where
 
 /-- `optDouble` + `double_value_valid` of the member `key` (first occurrence), pure: `cur` when
 absent or `null`, `false` in the second component for an invalid value. -/
-@[inline] private def shapeField (kvs : Array (String × Value)) (key : String) (cur : Float) : Float × Bool :=
-  let i := Value.keyIndex kvs key
+@[inline] private def shapeField (kvs : Array (String × Value)) (m b : UInt64) (key : String) (cur : Float) :
+    Float × Bool :=
+  let i := if m &&& b == 0 then kvs.size else Value.keyIndex kvs key
   if h : i < kvs.size then
     match kvs[i].2 with
     | .num n => (validCoord n.toFloat, true)
@@ -149,38 +152,38 @@ absent or `null`, `false` in the second component for an invalid value. -/
 
 /-- `readShapeLayout` and the coordinate update (absent members keep `cx`, …) as one pure function
 (no `Option`/tuple results, the update closure gets plain floats). -/
-def readShape (obj : Value) (cx cy cw ch : Float) : ShapeRead :=
+def readShape (obj : Value) (m : UInt64) (cx cy cw ch : Float) : ShapeRead :=
   match obj with
   | .obj kvs =>
-    let (x, okx) := shapeField kvs Key.x cx
-    let (y, oky) := shapeField kvs Key.y cy
-    let (w, okw) := shapeField kvs Key.width cw
-    let (h, okh) := shapeField kvs Key.height ch
+    let (x, okx) := shapeField kvs m Key.bX Key.x cx
+    let (y, oky) := shapeField kvs m Key.bY Key.y cy
+    let (w, okw) := shapeField kvs m Key.bWidth Key.width cw
+    let (h, okh) := shapeField kvs m Key.bHeight Key.height ch
     ⟨x, y, w, h, okx && oky && okw && okh⟩
   | _ => ⟨cx, cy, cw, ch, true⟩
 
 /-- `register_node`; returns the JSON id. -/
-def registerNode (n : NodeId) (obj : Value) (path : JPath) : ImportM JsonId := do
-  let id ← JsonAdapter.getId obj
+def registerNode (n : NodeId) (obj : Value) (m : UInt64) (path : JPath) : ImportM JsonId := do
+  let id ← JsonAdapter.getIdK obj m
   modI (·.addNode id n path)
   return id
 
 /-- `register_port`; returns the JSON id. -/
-def registerPort (p : PortId) (obj : Value) (path : JPath) : ImportM JsonId := do
-  let id ← JsonAdapter.getId obj
+def registerPort (p : PortId) (obj : Value) (m : UInt64) (path : JPath) : ImportM JsonId := do
+  let id ← JsonAdapter.getIdK obj m
   modI (·.addPort id p path)
   return id
 
 /-- `register_edge`; returns the JSON id. -/
-def registerEdge (e : EdgeId) (obj : Value) (path : JPath) : ImportM JsonId := do
-  let id ← JsonAdapter.getId obj
+def registerEdge (e : EdgeId) (obj : Value) (m : UInt64) (path : JPath) : ImportM JsonId := do
+  let id ← JsonAdapter.getIdK obj m
   let containing := ((← getG).edge e).containingNode
   modI (·.addEdge id e path containing)
   return id
 
 /-- `register_section`; returns the JSON id. -/
-def registerSection (sec : SectionId) (obj : Value) (path : JPath) : ImportM JsonId := do
-  let id ← JsonAdapter.getId obj
+def registerSection (sec : SectionId) (obj : Value) (m : UInt64) (path : JPath) : ImportM JsonId := do
+  let id ← JsonAdapter.getIdK obj m
   modI (·.addSection id sec path)
   return id
 
@@ -202,41 +205,43 @@ def shapeById (id : JsonId) : ImportM ConnectableId := do
     | none => throwJsonImport s!"Referenced shape does not exist: {id.asString}"
 
 /-- `transform_labels`. -/
-def transformLabels (obj : Value) (parent : ElementId) (path : JPath) : ImportM Unit := do
-  let some labels := JsonAdapter.optArray obj Key.labels | return
+def transformLabels (obj : Value) (m : UInt64) (parent : ElementId) (path : JPath) : ImportM Unit := do
+  let some labels := JsonAdapter.optArrayK obj m Key.bLabels Key.labels | return
   for h : i in [0:labels.size] do
     let labelObj := labels[i]
     if !labelObj.isObj then continue
     let labelPath := JPath.child path Key.labels i
-    let text := (← JsonAdapter.optString labelObj Key.text).getD ""
+    let lm := labelObj.keyMaskOf
+    let text := (← JsonAdapter.optStringK labelObj lm Key.bText Key.text).getD ""
     let l ← ElkM.createLabel (some parent) text
-    let ident ← if JsonAdapter.hasKey labelObj Key.id then JsonAdapter.idSave labelObj else pure none
+    let ident ← if JsonAdapter.hasKeyK lm Key.bId then JsonAdapter.idSave labelObj else pure none
     modI (·.addLabelPath l labelPath)
     let lb0 := (← getG).label l
     let ident := if ident.isSome then ident else lb0.identifier
-    let props ← transformProperties labelObj lb0.props
-    let sh := readShape labelObj lb0.x lb0.y lb0.width lb0.height
+    let props ← transformProperties labelObj lm lb0.props
+    let sh := readShape labelObj lm lb0.x lb0.y lb0.width lb0.height
     if !sh.ok then throwJsonImport "Invalid number value."
     modG (·.modifyLabel l fun lb => { lb with identifier := ident, props, x := sh.x, y := sh.y, width := sh.w, height := sh.h })
 
 /-- `transform_port`. -/
 def transformPort (obj : Value) (parent : NodeId) (path : JPath) : ImportM Unit := do
+  let m := obj.keyMaskOf
   let p ← ElkM.createPort (some parent)
-  let id ← registerPort p obj path
+  let id ← registerPort p obj m path
   let ident ← idSaveOf obj id
   let pt0 := (← getG).port p
   let ident := if ident.isSome then ident else pt0.identifier
-  let props ← transformProperties obj pt0.props
-  let sh := readShape obj pt0.x pt0.y pt0.width pt0.height
+  let props ← transformProperties obj m pt0.props
+  let sh := readShape obj m pt0.x pt0.y pt0.width pt0.height
   if !sh.ok then throwJsonImport "Invalid number value."
   modG (·.modifyPort p fun pt => { pt with identifier := ident, props, x := sh.x, y := sh.y, width := sh.w, height := sh.h })
   let firstLabel := (← getG).labels.size
   modI (·.modifyIndex (·.setPortFirstLabel p.idx firstLabel))
-  transformLabels obj (.port p) path
+  transformLabels obj m (.port p) path
 
 /-- `transform_ports`. -/
-def transformPorts (obj : Value) (parent : NodeId) (path : JPath) : ImportM Unit := do
-  let some ports := JsonAdapter.optArray obj Key.ports | return
+def transformPorts (obj : Value) (m : UInt64) (parent : NodeId) (path : JPath) : ImportM Unit := do
+  let some ports := JsonAdapter.optArrayK obj m Key.bPorts Key.ports | return
   for h : i in [0:ports.size] do
     let portObj := ports[i]
     if !portObj.isObj then continue
@@ -244,23 +249,24 @@ def transformPorts (obj : Value) (parent : NodeId) (path : JPath) : ImportM Unit
 
 /-- `transform_node` (recursively imports the children). -/
 partial def transformNode (obj : Value) (path : JPath) (parent : Option NodeId) : ImportM NodeId := do
+  let m := obj.keyMaskOf
   let n ← ElkM.createNode parent
   let firstPort := (← getG).ports.size
   modI (·.modifyIndex (·.setNodeFirstPort n.idx firstPort))
-  let id ← registerNode n obj path
+  let id ← registerNode n obj m path
   let ident ← idSaveOf obj id
   let nd0 := (← getG).node n
   let ident := if ident.isSome then ident else nd0.identifier
-  let props ← transformProperties obj nd0.props
-  let props ← transformIndividualSpacings obj props
-  let sh := readShape obj nd0.x nd0.y nd0.width nd0.height
+  let props ← transformProperties obj m nd0.props
+  let props ← transformIndividualSpacings obj m props
+  let sh := readShape obj m nd0.x nd0.y nd0.width nd0.height
   if !sh.ok then throwJsonImport "Invalid number value."
   modG (·.modifyNode n fun nd => { nd with identifier := ident, props, x := sh.x, y := sh.y, width := sh.w, height := sh.h })
-  transformPorts obj n path
+  transformPorts obj m n path
   let firstLabel := (← getG).labels.size
   modI (·.modifyIndex (·.setNodeFirstLabel n.idx firstLabel))
-  transformLabels obj (.node n) path
-  if let some children := JsonAdapter.optArray obj Key.children then
+  transformLabels obj m (.node n) path
+  if let some children := JsonAdapter.optArrayK obj m Key.bChildren Key.children then
     for h : i in [0:children.size] do
       let child := children[i]
       if child.isObj then
@@ -270,10 +276,10 @@ partial def transformNode (obj : Value) (path : JPath) (parent : Option NodeId) 
   return n
 
 /-- `transform_primitive_edge_layout`: `sourcePoint`/`targetPoint`/`bendPoints` into one section. -/
-def transformPrimitiveEdgeLayout (obj : Value) (e : EdgeId) : ImportM Unit := do
+def transformPrimitiveEdgeLayout (obj : Value) (m : UInt64) (e : EdgeId) : ImportM Unit := do
   let hasSource := JsonAdapter.hasKey obj "sourcePoint"
   let hasTarget := JsonAdapter.hasKey obj "targetPoint"
-  let hasBend := JsonAdapter.hasKey obj Key.bendPoints
+  let hasBend := JsonAdapter.hasKeyK m Key.bBendPoints
   if !hasSource && !hasTarget && !hasBend then return
   let sec ← ElkM.createSection (some e)
   if let some sp := JsonAdapter.optObject obj "sourcePoint" then
@@ -286,7 +292,7 @@ def transformPrimitiveEdgeLayout (obj : Value) (e : EdgeId) : ImportM Unit := do
       modG (·.modifySection sec fun s => { s with endX := doubleValueValid (some x) })
     if let some y ← JsonAdapter.optDouble tp Key.y then
       modG (·.modifySection sec fun s => { s with endY := doubleValueValid (some y) })
-  if let some bends := JsonAdapter.optArray obj Key.bendPoints then
+  if let some bends := JsonAdapter.optArrayK obj m Key.bBendPoints Key.bendPoints then
     for b in bends do
       if b.isObj then
         let x := doubleValueValid (← JsonAdapter.optDouble b Key.x)
@@ -294,16 +300,16 @@ def transformPrimitiveEdgeLayout (obj : Value) (e : EdgeId) : ImportM Unit := do
         modG (ElkGraphUtil.createBendPoint · sec x y)
 
 /-- `transform_primitive_edge`: `source`/`target` (+ `sourcePort`/`targetPort`). -/
-def transformPrimitiveEdge (obj : Value) (parent : NodeId) (path : JPath) : ImportM EdgeId := do
+def transformPrimitiveEdge (obj : Value) (m : UInt64) (parent : NodeId) (path : JPath) : ImportM EdgeId := do
   let e ← ElkM.createEdge (some parent)
-  let id ← registerEdge e obj path
+  let id ← registerEdge e obj m path
   if let some ident ← idSaveOf obj id then
     modG (·.modifyEdge e fun x => { x with identifier := some ident })
   -- source
-  let some sourceIdValue := obj.get? Key.source | throwJsonImport "An edge must have a source node."
+  let some sourceIdValue := obj.getK m Key.bSource Key.source | throwJsonImport "An edge must have a source node."
   let sourceId ← JsonAdapter.asId sourceIdValue
   let some sourceNode := (← getI).nodeIdMap.get? sourceId | throwJsonImport "An edge must have a source node."
-  let sourcePort ← match obj.get? Key.sourcePort with
+  let sourcePort ← match obj.getK m Key.bSourcePort Key.sourcePort with
     | some pv => do
       let pid ← JsonAdapter.asId pv
       pure ((← getI).portIdMap.get? pid)
@@ -315,10 +321,10 @@ def transformPrimitiveEdge (obj : Value) (parent : NodeId) (path : JPath) : Impo
     ElkM.addEdgeSource e (.port p)
   | none => ElkM.addEdgeSource e (.node sourceNode)
   -- target
-  let some targetIdValue := obj.get? Key.target | throwJsonImport "An edge must have a target node."
+  let some targetIdValue := obj.getK m Key.bTarget Key.target | throwJsonImport "An edge must have a target node."
   let targetId ← JsonAdapter.asId targetIdValue
   let some targetNode := (← getI).nodeIdMap.get? targetId | throwJsonImport "An edge must have a target node."
-  let targetPort ← match obj.get? Key.targetPort with
+  let targetPort ← match obj.getK m Key.bTargetPort Key.targetPort with
     | some pv => do
       let pid ← JsonAdapter.asId pv
       pure ((← getI).portIdMap.get? pid)
@@ -332,19 +338,19 @@ def transformPrimitiveEdge (obj : Value) (parent : NodeId) (path : JPath) : Impo
   let edge := (← getG).edge e
   if edge.sources.isEmpty || edge.targets.isEmpty then
     throwJsonImport "An edge must have at least one source and one target."
-  if ← hasProperties obj then
-    let props ← transformProperties obj edge.props
+  if ← hasProperties obj m then
+    let props ← transformProperties obj m edge.props
     modG (·.modifyEdge e fun x => { x with props })
-  transformPrimitiveEdgeLayout obj e
+  transformPrimitiveEdgeLayout obj m e
   let firstLabel := (← getG).labels.size
   modI (·.modifyIndex (·.setEdgeFirstLabel e.idx firstLabel))
-  transformLabels obj (.edge e) path
+  transformLabels obj m (.edge e) path
   return e
 
 /-- `fill_edge_section_coordinates`. -/
-def fillEdgeSectionCoordinates (obj : Value) (sec : SectionId) : ImportM Unit := do
-  let some sp := JsonAdapter.optObject obj Key.startPoint | throwJsonImport "All edge sections need a start point."
-  let some ep := JsonAdapter.optObject obj Key.endPoint | throwJsonImport "All edge sections need an end point."
+def fillEdgeSectionCoordinates (obj : Value) (m : UInt64) (sec : SectionId) : ImportM Unit := do
+  let some sp := JsonAdapter.optObjectK obj m Key.bStartPoint Key.startPoint | throwJsonImport "All edge sections need a start point."
+  let some ep := JsonAdapter.optObjectK obj m Key.bEndPoint Key.endPoint | throwJsonImport "All edge sections need an end point."
   if let some x ← JsonAdapter.optDouble sp Key.x then
     modG (·.modifySection sec fun s => { s with startX := doubleValueValid (some x) })
   if let some y ← JsonAdapter.optDouble sp Key.y then
@@ -353,7 +359,7 @@ def fillEdgeSectionCoordinates (obj : Value) (sec : SectionId) : ImportM Unit :=
     modG (·.modifySection sec fun s => { s with endX := doubleValueValid (some x) })
   if let some y ← JsonAdapter.optDouble ep Key.y then
     modG (·.modifySection sec fun s => { s with endY := doubleValueValid (some y) })
-  if let some bends := JsonAdapter.optArray obj Key.bendPoints then
+  if let some bends := JsonAdapter.optArrayK obj m Key.bBendPoints Key.bendPoints then
     for b in bends do
       if b.isObj then
         let x := doubleValueValid (← JsonAdapter.optDouble b Key.x)
@@ -361,9 +367,9 @@ def fillEdgeSectionCoordinates (obj : Value) (sec : SectionId) : ImportM Unit :=
         modG (ElkGraphUtil.createBendPoint · sec x y)
 
 /-- `transform_edge_sections`. -/
-def transformEdgeSections (obj : Value) (e : EdgeId) : ImportM Unit := do
+def transformEdgeSections (obj : Value) (m : UInt64) (e : EdgeId) : ImportM Unit := do
   -- without a `sections` array the edge has no sections (they are only created below)
-  let some sections := JsonAdapter.optArray obj Key.sections | return
+  let some sections := JsonAdapter.optArrayK obj m Key.bSections Key.sections | return
   let mut incomingIds : Array (SectionId × Array JsonId) := #[]
   let mut outgoingIds : Array (SectionId × Array JsonId) := #[]
   do
@@ -372,26 +378,27 @@ def transformEdgeSections (obj : Value) (e : EdgeId) : ImportM Unit := do
       let secObj := sections[i]
       if !secObj.isObj then continue
       let secPath := JPath.child edgePath Key.sections i
+      let sm := secObj.keyMaskOf
       let sec ← ElkM.createSection (some e)
-      let id ← registerSection sec secObj secPath
+      let id ← registerSection sec secObj sm secPath
       if let some ident ← idSaveOf secObj id then
         modG (·.modifySection sec fun x => { x with identifier := some ident })
-      fillEdgeSectionCoordinates secObj sec
-      if let some shapeId ← JsonAdapter.optString secObj Key.incomingShape then
+      fillEdgeSectionCoordinates secObj sm sec
+      if let some shapeId ← JsonAdapter.optStringK secObj sm Key.bIncomingShape Key.incomingShape then
         let shape ← shapeById (.str shapeId)
         modG (·.modifySection sec fun x => { x with incomingShape := some shape })
-      if let some shapeId ← JsonAdapter.optString secObj Key.outgoingShape then
+      if let some shapeId ← JsonAdapter.optStringK secObj sm Key.bOutgoingShape Key.outgoingShape then
         let shape ← shapeById (.str shapeId)
         modG (·.modifySection sec fun x => { x with outgoingShape := some shape })
-      if let some ids := JsonAdapter.optArray secObj Key.incomingSections then
+      if let some ids := JsonAdapter.optArrayK secObj sm Key.bIncomingSections Key.incomingSections then
         let mut arr : Array JsonId := #[]
         for v in ids do arr := arr.push (← JsonAdapter.asId v)
         incomingIds := incomingIds.push (sec, arr)
-      if let some ids := JsonAdapter.optArray secObj Key.outgoingSections then
+      if let some ids := JsonAdapter.optArrayK secObj sm Key.bOutgoingSections Key.outgoingSections then
         let mut arr : Array JsonId := #[]
         for v in ids do arr := arr.push (← JsonAdapter.asId v)
         outgoingIds := outgoingIds.push (sec, arr)
-      let props ← transformAuthoredProperties secObj ((← getG).edgeSection sec).props
+      let props ← transformAuthoredProperties secObj sm ((← getG).edgeSection sec).props
       modG (·.modifySection sec fun x => { x with props })
   let st ← getI
   for (sec, ids) in incomingIds do
@@ -417,29 +424,29 @@ def transformEdgeSections (obj : Value) (e : EdgeId) : ImportM Unit := do
       modG (·.modifySection sec fun x => { x with incomingShape := some source, outgoingShape := some target })
 
 /-- `transform_edge`: `sources`/`targets` edge with optional sections. -/
-def transformEdge (obj : Value) (parent : NodeId) (path : JPath) : ImportM EdgeId := do
+def transformEdge (obj : Value) (m : UInt64) (parent : NodeId) (path : JPath) : ImportM EdgeId := do
   let e ← ElkM.createEdge (some parent)
-  let id ← registerEdge e obj path
+  let id ← registerEdge e obj m path
   if let some ident ← idSaveOf obj id then
     modG (·.modifyEdge e fun x => { x with identifier := some ident })
-  if let some sources := JsonAdapter.optArray obj Key.sources then
+  if let some sources := JsonAdapter.optArrayK obj m Key.bSources Key.sources then
     for v in sources do
       let shape ← shapeById (← JsonAdapter.asId v)
       ElkM.addEdgeSource e shape
-  if let some targets := JsonAdapter.optArray obj Key.targets then
+  if let some targets := JsonAdapter.optArrayK obj m Key.bTargets Key.targets then
     for v in targets do
       let shape ← shapeById (← JsonAdapter.asId v)
       ElkM.addEdgeTarget e shape
   let edge := (← getG).edge e
   if edge.sources.isEmpty || edge.targets.isEmpty then
     throwJsonImport "An edge must have at least one source and one target."
-  if ← hasProperties obj then
-    let props ← transformProperties obj edge.props
+  if ← hasProperties obj m then
+    let props ← transformProperties obj m edge.props
     modG (·.modifyEdge e fun x => { x with props })
-  transformEdgeSections obj e
+  transformEdgeSections obj m e
   let firstLabel := (← getG).labels.size
   modI (·.modifyIndex (·.setEdgeFirstLabel e.idx firstLabel))
-  transformLabels obj (.edge e) path
+  transformLabels obj m (.edge e) path
   return e
 
 mutual
@@ -452,18 +459,20 @@ partial def transformEdgesOf (obj : Value) (node : NodeId) (regular : Bool) : Im
   let nodePath := pathGet (← getI).nodePath node.idx
   let firstEdge := (← getG).edges.size
   modI (·.modifyIndex (·.setNodeFirstEdge node.idx firstEdge))
-  if let some edges := JsonAdapter.optArray obj Key.edges then
+  let m := obj.keyMaskOf
+  if let some edges := JsonAdapter.optArrayK obj m Key.bEdges Key.edges then
     for h : i in [0:edges.size] do
       let edgeObj := edges[i]
       if !edgeObj.isObj then continue
       let edgePath := JPath.child nodePath Key.edges i
+      let em := edgeObj.keyMaskOf
       -- the edge registered last under the edge's id (`edgeIdMap`) is the one just imported
-      let e ← if JsonAdapter.hasKey edgeObj Key.sources || JsonAdapter.hasKey edgeObj Key.targets then
-          transformEdge edgeObj node edgePath
+      let e ← if JsonAdapter.hasKeyK em Key.bSources || JsonAdapter.hasKeyK em Key.bTargets then
+          transformEdge edgeObj em node edgePath
         else
-          transformPrimitiveEdge edgeObj node edgePath
+          transformPrimitiveEdge edgeObj em node edgePath
       ElkM.updateContainment e
-  if let some children := JsonAdapter.optArray obj Key.children then
+  if let some children := JsonAdapter.optArrayK obj m Key.bChildren Key.children then
     if regular then
       let mut next := node.idx + 1
       for child in children do
@@ -496,14 +505,15 @@ mutual
 
 /-- `ElemCounts` of the node object `obj` and its children added to `acc`. -/
 partial def countElements (obj : Value) (acc : ElemCounts) : ElemCounts :=
-  let ports := match JsonAdapter.optArray obj Key.ports with
+  let m := obj.keyMaskOf
+  let ports := match JsonAdapter.optArrayK obj m Key.bPorts Key.ports with
     | some xs => countObjects xs 0 0
     | none => 0
-  let edges := match JsonAdapter.optArray obj Key.edges with
+  let edges := match JsonAdapter.optArrayK obj m Key.bEdges Key.edges with
     | some xs => countObjects xs 0 0
     | none => 0
   let acc := { nodes := acc.nodes + 1, ports := acc.ports + ports, edges := acc.edges + edges }
-  match JsonAdapter.optArray obj Key.children with
+  match JsonAdapter.optArrayK obj m Key.bChildren Key.children with
   | some xs => countChildren xs 0 acc
   | none => acc
 

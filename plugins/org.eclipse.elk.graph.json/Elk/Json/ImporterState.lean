@@ -348,13 +348,13 @@ def asId (v : Value) : ImportM JsonId := do
   | _ => throwJsonImport s!"Id must be a string or an integer: '{v.render}'."
 
 /-- `getId`: the mandatory `id` member. -/
-def getId (obj : Value) : ImportM JsonId := do
+@[inline] def getId (obj : Value) : ImportM JsonId := do
   match obj.get? Key.id with
   | some v => asId v
   | none => throwJsonImport "Every element must have an id."
 
 /-- `stringVal`: primitive values as strings (numbers in Rust `Display` form). -/
-def stringVal (v : Value) : ImportM String := do
+@[inline] def stringVal (v : Value) : ImportM String := do
   match v with
   | .str s => return s
   | .num n => return n.toRustString
@@ -362,16 +362,16 @@ def stringVal (v : Value) : ImportM String := do
   | .null => return "null"
   | _ => throwJsonImport "Expected a primitive JSON value."
 
-def optString (obj : Value) (key : String) : ImportM (Option String) := do
+@[inline] def optString (obj : Value) (key : String) : ImportM (Option String) := do
   match obj.get? key with
   | some v => return some (← stringVal v)
   | none => return none
 
 /-- `idSave`: the `id` member as a string, if present. -/
-def idSave (obj : Value) : ImportM (Option String) := optString obj Key.id
+@[inline] def idSave (obj : Value) : ImportM (Option String) := optString obj Key.id
 
 /-- `optDouble`: numbers, numeric strings; `null` counts as absent. -/
-def optDouble (obj : Value) (key : String) : ImportM (Option Float) := do
+@[inline] def optDouble (obj : Value) (key : String) : ImportM (Option Float) := do
   match obj.get? key with
   | some (.num n) => return some n.toFloat
   | some (.str s) =>
@@ -382,14 +382,44 @@ def optDouble (obj : Value) (key : String) : ImportM (Option Float) := do
   | some _ => throwJsonImport "Invalid number value."
   | none => return none
 
-def optArray (obj : Value) (key : String) : Option (Array Value) := (obj.get? key).bind (·.getArr?)
+@[inline] def optArray (obj : Value) (key : String) : Option (Array Value) := (obj.get? key).bind (·.getArr?)
 
-def optObject (obj : Value) (key : String) : Option Value :=
+@[inline] def optObject (obj : Value) (key : String) : Option Value :=
   match obj.get? key with
   | some v@(.obj _) => some v
   | _ => none
 
-def hasKey (obj : Value) (key : String) : Bool := obj.hasKey key
+@[inline] def hasKey (obj : Value) (key : String) : Bool := obj.hasKey key
+
+/-! The accessors above for an ELK member name `key` with bit `b`, given the member mask
+`m = obj.keyMaskOf` (`Value.getK`): an absent member is answered from the mask, a present one is
+looked up as before (first occurrence), so results and errors are those of the plain accessors. -/
+
+/-- `getId` (`m`: member mask of `obj`). -/
+@[inline] def getIdK (obj : Value) (m : UInt64) : ImportM JsonId :=
+  if m &&& Key.bId == 0 then throwJsonImport "Every element must have an id." else getId obj
+
+/-- `optString` of a member name (`m`: member mask of `obj`, `b`: bit of `key`). -/
+@[inline] def optStringK (obj : Value) (m b : UInt64) (key : String) : ImportM (Option String) :=
+  if m &&& b == 0 then pure none else optString obj key
+
+/-- `idSave` (`m`: member mask of `obj`). -/
+@[inline] def idSaveK (obj : Value) (m : UInt64) : ImportM (Option String) := optStringK obj m Key.bId Key.id
+
+/-- `optDouble` of a member name (`m`: member mask of `obj`, `b`: bit of `key`). -/
+@[inline] def optDoubleK (obj : Value) (m b : UInt64) (key : String) : ImportM (Option Float) :=
+  if m &&& b == 0 then pure none else optDouble obj key
+
+/-- `optArray` of a member name (`m`: member mask of `obj`, `b`: bit of `key`). -/
+@[inline] def optArrayK (obj : Value) (m b : UInt64) (key : String) : Option (Array Value) :=
+  if m &&& b == 0 then none else optArray obj key
+
+/-- `optObject` of a member name (`m`: member mask of `obj`, `b`: bit of `key`). -/
+@[inline] def optObjectK (obj : Value) (m b : UInt64) (key : String) : Option Value :=
+  if m &&& b == 0 then none else optObject obj key
+
+/-- `hasKey` of a member name (`m`: member mask of `obj`, `b`: bit of `key`): the mask alone decides. -/
+@[inline] def hasKeyK (m b : UInt64) : Bool := m &&& b != 0
 
 end JsonAdapter
 
