@@ -5,57 +5,57 @@
 
 | engine | total ms | models |
 |---|---|---|
-| rust_api | 3522.4 | 1447 |
-| lean_api | 3418.0 | 1447 |
+| rust_api | 3526.6 | 1447 |
+| lean_api | 3362.0 | 1447 |
 
-- total lean/rust_api (paired models): 0.97x (3418.0 ms vs 3522.4 ms)
-- per-model ratio: geometric mean 0.93x, median 0.93x, min 0.63x, max 1.25x
+- total lean/rust_api (paired models): 0.95x (3362.0 ms vs 3526.6 ms)
+- per-model ratio: geometric mean 0.91x, median 0.91x, min 0.63x, max 1.20x
 
 | ratio | models |
 |---|---|
-| 0 – 0.8 | 99 |
-| 0.8 – 1.0 | 951 |
-| 1.0 – 1.2 | 395 |
-| 1.2 – 1.5 | 2 |
+| 0 – 0.8 | 140 |
+| 0.8 – 1.0 | 1015 |
+| 1.0 – 1.2 | 292 |
+| 1.2 – 1.5 | 0 |
 | 1.5 – 2.0 | 0 |
 | 2.0 – 3.0 | 0 |
 | ≥ 3.0 | 0 |
 
 | slowest by ratio | lean ms | rust_api ms | ratio |
 |---|---|---|---|
-| tickets_layered_411_north_south_port_anchor_a | 0.234 | 0.186 | 1.25x |
-| tickets_layered_213_componentsCompaction | 1.458 | 1.197 | 1.22x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim.json | 5.199 | 4.355 | 1.19x |
-| examples_user-hints_model-order_modelOrderCrossingMinimization | 4.290 | 3.637 | 1.18x |
-| tickets_layered_528_nodeEdgeOverlap | 0.727 | 0.617 | 1.18x |
-| tickets_layered_528_violatedNodeOrder | 0.323 | 0.281 | 1.15x |
-| tests_layered_north_south_ports_linear_segments_cycle | 0.421 | 0.366 | 1.15x |
-| realworld_ptolemy_flattened_ddf_eratosthenes_Eratosthenes | 1.408 | 1.230 | 1.15x |
-| realworld_ptolemy_flattened_ddf_eratosthenes_Eratosthenes.json | 1.396 | 1.221 | 1.14x |
-| realworld_ptolemy_hierarchical_ddf_eratosthenes_Eratosthenes | 1.717 | 1.505 | 1.14x |
-| realworld_ptolemy_hierarchical_ddf_eratosthenes_Eratosthenes.json | 1.709 | 1.500 | 1.14x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim | 4.956 | 4.360 | 1.14x |
-| realworld_ptolemy_flattened_continuous_continuousinsidede_ContinuousInsideDE | 1.606 | 1.419 | 1.13x |
-| tests_layered_compaction_oned_labels_edgeLabelAndSplines | 0.299 | 0.264 | 1.13x |
-| tests_layered_compaction_oned_labels_edgeLabelShouldBeCentered | 0.186 | 0.165 | 1.13x |
+| tests_layered_compaction_oned_labels_edgeLabelAndSplines | 0.318 | 0.265 | 1.20x |
+| tickets_layered_411_north_south_port_anchor_a | 0.223 | 0.188 | 1.19x |
+| tickets_layered_213_componentsCompaction | 1.424 | 1.202 | 1.18x |
+| realworld_ptolemy_flattened_de_ramprollback_RampRollback.json | 1.303 | 1.103 | 1.18x |
+| examples_user-hints_model-order_modelOrderCrossingMinimization | 4.157 | 3.627 | 1.15x |
+| tickets_layered_528_nodeEdgeOverlap | 0.706 | 0.618 | 1.14x |
+| tests_layered_compaction_oned_labels_edgeLabelShouldBeCentered | 0.185 | 0.164 | 1.13x |
+| realworld_ptolemy_hierarchical_ddf_eratosthenes_Eratosthenes | 1.696 | 1.504 | 1.13x |
+| realworld_ptolemy_flattened_pn_blindcommunication_BlindCommunication.json | 3.454 | 3.070 | 1.13x |
+| tickets_layered_403_stackedSelfLoopLabels | 0.281 | 0.250 | 1.12x |
+| tickets_layered_528_violatedNodeOrder | 0.312 | 0.279 | 1.12x |
+| realworld_ptolemy_flattened_ddf_eratosthenes_Eratosthenes | 1.377 | 1.233 | 1.12x |
+| tests_layered_splines_north_south_ports_3 | 0.273 | 0.245 | 1.11x |
+| realworld_ptolemy_flattened_ddf_eratosthenes_Eratosthenes.json | 1.355 | 1.219 | 1.11x |
+| realworld_ptolemy_hierarchical_ddf_eratosthenes_Eratosthenes.json | 1.663 | 1.500 | 1.11x |
 
 | largest absolute gap | lean ms | rust_api ms | ratio |
 |---|---|---|---|
-| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics.json | 40.430 | 37.892 | 1.07x |
-| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics | 40.162 | 37.816 | 1.06x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException.json | 22.726 | 20.544 | 1.11x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException | 25.824 | 23.666 | 1.09x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException | 22.642 | 20.605 | 1.10x |
-| realworld_ptolemy_flattened_ptides_printingpress_PrintingPress.json | 27.297 | 25.524 | 1.07x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine.json | 19.498 | 17.849 | 1.09x |
-| realworld_ptolemy_hierarchical_ptango_temperaturesimulation_EPlusSimulation | 45.273 | 43.860 | 1.03x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine | 19.197 | 17.832 | 1.08x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException.json | 24.844 | 23.659 | 1.05x |
-| realworld_ptolemy_flattened_ptides_printingpress_PrintingPress | 26.503 | 25.359 | 1.05x |
-| realworld_ptolemy_hierarchical_de_linefault_LineFault | 14.217 | 13.110 | 1.08x |
-| realworld_ptolemy_hierarchical_de_linefault_LineFault.json | 14.168 | 13.143 | 1.08x |
-| realworld_ptolemy_hierarchical_de_trilateration_Trilateration.json | 55.875 | 54.884 | 1.02x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachine | 23.049 | 22.152 | 1.04x |
+| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics.json | 40.418 | 38.053 | 1.06x |
+| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics | 40.609 | 38.754 | 1.05x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException.json | 22.358 | 20.579 | 1.09x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException | 22.214 | 20.676 | 1.07x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine.json | 18.793 | 17.528 | 1.07x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine | 18.782 | 17.632 | 1.07x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException | 24.903 | 23.850 | 1.04x |
+| realworld_ptolemy_hierarchical_de_linefault_LineFault | 13.922 | 13.088 | 1.06x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException.json | 24.671 | 23.876 | 1.03x |
+| realworld_ptolemy_flattened_ptides_printingpress_PrintingPress | 26.114 | 25.433 | 1.03x |
+| realworld_ptolemy_hierarchical_de_linefault_LineFault.json | 14.026 | 13.366 | 1.05x |
+| realworld_ptolemy_flattened_ptides_printingpress_PrintingPress.json | 26.044 | 25.400 | 1.03x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachine | 22.986 | 22.345 | 1.03x |
+| realworld_ptolemy_hierarchical_ptides_trex_TREXNoNetworkAllDigital | 17.252 | 16.650 | 1.04x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachine.json | 22.809 | 22.273 | 1.02x |
 
-- lean_api total vs baseline (1447 common models): +0.2%
+- lean_api total vs baseline (1447 common models): -1.0%
 - regression gate (5%): pass
