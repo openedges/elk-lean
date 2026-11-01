@@ -6,6 +6,8 @@ import Elk.Core.Util.Java
 import Elk.Core.Util.ProgressMonitor
 import Elk.Alg.Force.Graph.FGraph
 import Elk.Alg.Force.Options.ForceOptions
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.force.model.AbstractForceModel`
 
@@ -24,12 +26,6 @@ afterwards. The accumulation happens in a local array indexed by the first entry
 
 `wiggle` delegates to `Elk.Core.Math.KVector.wiggle` (Rust/Java rounding `x + (r * a - a / 2)`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Force.Model
 
