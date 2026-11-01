@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.CommentNodeMarginCalculator`
 
@@ -11,10 +13,6 @@ them) is wider than the node, the left/right margins are raised to half the prot
 The spacings are read like elk-rs `Spacings::get_individual_or_default_with_graph`: the node's individual
 spacing, else the processed graph's value (stored or default), else the property default.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.Intermediate
 

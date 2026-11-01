@@ -2,6 +2,8 @@ import Elk.Alg.Common.Compaction.Scanline
 import Elk.Alg.Common.Compaction.OneD.IConstraintCalculationAlgorithm
 import Elk.Alg.Common.Compaction.OneD.ScanlineConstraintCalculator
 import Elk.Alg.Layered.Intermediate.Compaction.CompactionMetadata
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.compaction.EdgeAwareScanlineConstraintCalculation`
 
@@ -30,12 +32,6 @@ invalid hitbox check), as described in `ScanlineConstraintCalculator`; different
 The scheduled undo operations (Java `Runnable`s) are replayed in the same order. Unknown routing
 styles do nothing (Rust `_ => {}`; Java throws `UnsupportedConfigurationException`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.Intermediate.Compaction
 

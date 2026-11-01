@@ -1,4 +1,6 @@
 import Elk.Alg.Layered.Components.Compaction.ComponentsCompactor
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.components.SimpleRowGraphPlacer`
 
@@ -8,12 +10,6 @@ Port of `combine_simple_row`, `sort_components_by_priority`, `component_priority
 priority (or by model order), breaking rows at
 `max(widest component, sqrt(total area) * aspect ratio)`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p6 : Float := 1.6
-private def fl20p0 : Float := 20.0
 
 namespace Elk.Alg.Layered.Components
 

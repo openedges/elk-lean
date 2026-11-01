@@ -3,6 +3,8 @@ import Elk.Alg.Layered.P5Edges.Orthogonal.HyperEdgeCycleDetector
 import Elk.Alg.Layered.P5Edges.Orthogonal.HyperEdgeSegmentSplitter
 import Elk.Alg.Layered.P5Edges.Orthogonal.Direction
 import Elk.Core.Util.ElkTrace
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.orthogonal.OrthogonalRoutingGenerator`
 
@@ -35,10 +37,6 @@ that read the arena and thread only what they change (`SegmentGraph` updates are
 `HyperEdgeSegmentDependency`); `topologicalNumbering` keeps slots and weights in local arrays;
 `minimumDifference` sorts a `FloatArray` by the `total_cmp` key.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.P5Edges.Orthogonal
 

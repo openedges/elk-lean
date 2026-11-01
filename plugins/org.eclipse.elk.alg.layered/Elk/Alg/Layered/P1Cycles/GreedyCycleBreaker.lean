@@ -5,6 +5,8 @@ import Elk.Alg.Layered.Options.CycleBreakingStrategy
 import Elk.Alg.Layered.P1Cycles.GroupModelOrderCalculator
 import Elk.Core.Util.ElkTrace
 import Elk.Core.Util.Sort
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p1cycles.GreedyCycleBreaker` (+ `GreedyModelOrderCycleBreaker`)
 
@@ -25,10 +27,6 @@ Debug hooks of elk-rs are ported: `ELK_DEBUG_CYCLE_RANDOM_PREFETCH` (discard `n`
 `nextInt(2)`), `ELK_DEBUG_CYCLE_FORCE_REVERSE_ORIGINS` (reverse exactly the edges whose ElkEdge
 origin index is listed), `ELK_TRACE_CYCLE_CHOICES` / `ELK_TRACE_CYCLE_REVERSALS` (stderr lines).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.P1Cycles
 

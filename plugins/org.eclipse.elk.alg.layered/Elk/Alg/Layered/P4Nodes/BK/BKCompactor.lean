@@ -2,6 +2,8 @@ import Elk.Alg.Layered.P4Nodes.BK.ThresholdStrategy
 import Elk.Alg.Layered.P4Nodes.BK.ICompactor
 import Std.Data.HashMap
 import Std.Data.HashSet
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.bk.BKCompactor` (elk-rs `compactor.rs`)
 
@@ -28,10 +30,6 @@ Not ported: the `ELK_BK_REVERSE_SINK_QUEUE` debug switch of elk-rs (reverses the
 The compactor state is the outermost `StateRefT` layer of `CompactM`, over the threshold strategy
 (`ThresholdM`) and the layout (`BalM`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.P4Nodes.BK
 

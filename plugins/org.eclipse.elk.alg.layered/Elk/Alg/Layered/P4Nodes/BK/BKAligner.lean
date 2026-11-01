@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.P4Nodes.BK.BKAlignedLayout
 import Std.Data.HashSet
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.bk.BKAligner` (elk-rs `aligner.rs`)
 
@@ -9,10 +11,6 @@ Köpf node placer. For documentation see `BKNodePlacer`.
 Both steps take the layout by value and return the updated layout (the arrays are updated in
 place while the layout is unshared).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.P4Nodes.BK
 

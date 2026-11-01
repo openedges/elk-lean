@@ -3,6 +3,8 @@ import Std.Data.HashSet
 import Elk.Core.Util.ElkUtil
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Alg.Layered.Intermediate.LabelDummySwitcher
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.graph.transform.ElkGraphLayoutTransferrer`
 
@@ -48,11 +50,6 @@ Deviations from the Rust code:
   the moved positions are seen by the edges processed afterwards); the arena is therefore
   threaded through the recursion locally and the final arena is discarded.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.Graph.Transform
 

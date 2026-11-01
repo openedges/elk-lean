@@ -6,6 +6,8 @@ import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.Options.GraphProperties
 import Elk.Alg.Layered.P5Edges.Orthogonal.Direction.BaseRoutingDirectionStrategy
 import Elk.Core.Options
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.PolylineEdgeRouter`
 
@@ -28,11 +30,6 @@ starts at the layer border; in-layer edges get one bend point beside the layer.
 Everything else (port anchors, connected edges, in-layer and self-loop tests of `addBendPoint`) is read
 live, as in Rust.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.P5Edges
 

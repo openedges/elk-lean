@@ -2,6 +2,8 @@ import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.P4Nodes.BK.BKAligner
 import Elk.Alg.Layered.P4Nodes.BK.BKCompactor
 import Elk.Core.Util.ProgressMonitor
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.bk.BKNodePlacer` (elk-rs `node_placer.rs`)
 
@@ -29,11 +31,6 @@ Rust deviations from Java that are followed: the balanced layout's `min`/`max` s
 (Java `Integer.MAX_VALUE`/`MIN_VALUE`), `f64::min/max`, the class debug output keyed by sink id.
 The `ELK_TRACE_BK*` diagnostics are printed to stderr like elk-rs (`{:.3}` via `fmt3`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.P4Nodes.BK
 

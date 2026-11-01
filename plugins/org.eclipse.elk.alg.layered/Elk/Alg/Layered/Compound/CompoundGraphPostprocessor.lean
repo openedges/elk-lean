@@ -2,6 +2,8 @@ import Std.Data.HashSet
 import Elk.Core.Alg.LayoutProcessor
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Alg.Layered.Compound.CrossHierarchyEdgeComparator
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.compound.CompoundGraphPostprocessor`
 
@@ -17,10 +19,6 @@ disconnected (each once, in first-use order).
 code; it is defined locally as `TOLERANCE`. The `ElkTrace` debug prints (`[compound-post]`) are
 not ported.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.Compound
 

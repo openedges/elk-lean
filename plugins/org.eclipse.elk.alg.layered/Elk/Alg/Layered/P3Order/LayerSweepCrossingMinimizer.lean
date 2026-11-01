@@ -4,6 +4,8 @@ import Elk.Alg.Layered.P3Order.GraphInfoHolder
 import Elk.Alg.Layered.Intermediate.Preserveorder.ModelOrderNodeComparator
 import Elk.Alg.Layered.Intermediate.SortByInputModelProcessor
 import Elk.Core.Util.ElkTrace
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p3order.LayerSweepCrossingMinimizer`
 
@@ -69,10 +71,6 @@ else reads a `RANDOM` while the minimiser runs, so every shared state is written
   `crossmin: with_counter …` lines are reproduced (same format); `CROSSMIN_RANDOM_TRACE` lines are for the
   seed, the sweep directions and (in `GraphInfoHolder`) the distributor draw.
 -/
-/-! Float literals as global constants (FL): with `holderAt` inlined, the compiler shares a literal's
-`Nat`/`Bool` arguments with unrelated values (CSE) and parses it on every evaluation
-(`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.P3Order
 

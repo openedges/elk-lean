@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Graph.LGraphUtil
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.CommentPostprocessor`
 
@@ -14,11 +16,6 @@ node's layer **without** setting their `layer` (Java `layer.getNodes().addAll(..
 The comment spacing is the node's individual `SPACING_COMMENT_COMMENT`, else the graph's (`10.0` when the
 graph does not set it). Rust's compound assignments `x += a + b` are reproduced as `x + (a + b)`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.Intermediate
 

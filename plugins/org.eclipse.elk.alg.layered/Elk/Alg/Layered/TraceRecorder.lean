@@ -2,6 +2,8 @@ import Std.Data.HashMap
 import Elk.Alg.Layered.Graph
 import Elk.Json.Value
 import Elk.Json.Printer
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # Phase-step trace recorder (elk-rs `trace_recorder.rs` + the trace scope of `elk_layered.rs`)
 
@@ -11,10 +13,6 @@ every processor: `<dir>/step_NNN_<Processor>.json`. The schema, the element id s
 format and the `NaN`/`Infinity` sentinels are those of elk-rs so that
 `scripts/compare_phase_traces.py` can compare both.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered
 

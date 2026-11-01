@@ -1,4 +1,6 @@
 import Elk.Alg.Layered.P5Edges.Splines.Rectangle
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.splines.NubSpline`
 
@@ -37,24 +39,16 @@ lies on the curve. The knot vector does not store the irrelevant first and last 
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl0p5 : Float := 0.5
-private def fl10p0 : Float := 10.0
 private def fl12p0 : Float := 12.0
 private def fl23p0 : Float := 23.0
 private def fl2p2 : Float := 2.2
 private def fl2p5 : Float := 2.5
 private def fl3p5 : Float := 3.5
 private def fl3p8 : Float := 3.8
-private def fl4p0 : Float := 4.0
 private def fl50p0 : Float := 50.0
-private def fl5p0 : Float := 5.0
 private def fl5p5 : Float := 5.5
 private def fl6p0 : Float := 6.0
 private def fl7p0 : Float := 7.0
-private def fl80p0 : Float := 80.0
-private def fl8p0 : Float := 8.0
 private def fl9p0 : Float := 9.0
 
 namespace Elk.Alg.Layered.P5Edges.Splines

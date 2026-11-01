@@ -1,6 +1,8 @@
 import Elk.Alg.Layered.Graph
 import Elk.Core.Util.Java
 import Elk.Core.Util.Sort
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `LabelAndNodeSizeProcessor` — phase 1 port placement helpers
 
@@ -19,12 +21,6 @@ The Rust functions lock one node and read its properties through `get_property`/
 the Lean helpers read the `LNode` value (`props`, `internal`) and the arena. Every `f64`
 expression keeps the Rust operand order; `f64::max`/`min` are `fmax`/`fmin`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.Intermediate.LabelAndNodeSize
 
