@@ -22,10 +22,13 @@ structure Built where
   deriving Inhabited
 
 /-- Node `i` goes to layer `layerOf[i]` (appended in node order), size `sizes[i]` (default
-`30 × 20`) and type `types[i]`; one edge (own `EAST` source / `WEST` target port) per pair. -/
+`30 × 20`) and type `types[i]`; one edge (own `EAST` source / `WEST` target port) per pair. The
+graph's `ASPECT_RATIO` is `aspectRatio` (the hand computations use `1`; without it Java's layered
+default `1.6f` applies). -/
 def build (layerOf : Array Nat) (edges : Array (Nat × Nat)) (sizes : Array KVector := #[])
-    (types : Array NodeType := #[]) : LayeredM Built := do
+    (types : Array NodeType := #[]) (aspectRatio : Option Float := some 1.0) : LayeredM Built := do
   let g ← LayeredM.createGraph
+  if let some ar := aspectRatio then LayeredM.setGraphProp g LayeredOptions.ASPECT_RATIO ar
   let layerCount := layerOf.foldl (fun m l => max m (l + 1)) 0
   let mut layers : Array LayerId := #[]
   for _ in [0:layerCount] do
@@ -103,13 +106,17 @@ def statsTests : Suite := suite "layered.wrapping.GraphStats" do
     setG b LayeredOptions.ASPECT_RATIO 2.0
     let gsDown ← GraphStats.new b.graph
     return (gs, gsDown))
+  let (gsDefault, _) ← LayeredM.run (do
+    let b ← build #[0, 1] #[(0, 1)] (aspectRatio := none)
+    GraphStats.new b.graph)
+  checkFloat "dar without aspect ratio: Java's layered default 1.6f widened" gsDefault.dar 1.600000023841858
   checkEq "longestPath = layer count" gs.longestPath 3
   checkEq "widths (hand: 30, max(60, 40), 25)" gs.widths #[30.0, 60.0, 25.0]
   checkEq "heights (hand: 25, 30 + 50, 25)" gs.heights #[25.0, 80.0, 25.0]
   checkFloat "maxWidth" gs.maxWidth 60.0
   checkFloat "maxHeight" gs.maxHeight 80.0
   checkFloat "sumWidth" gs.sumWidth 115.0
-  checkFloat "dar (no aspect ratio: 1 * 1)" gs.dar 1.0
+  checkFloat "dar (aspect ratio 1: 1 * 1)" gs.dar 1.0
   checkFloat "dar for DOWN (hand: 1 / (2 * 1))" gsDown.dar 0.5
   -- layer 1 has incoming edges only from n0 but into two targets, layer 2 from two sources
   checkEq "cuts allowed (hand: never before 0; two targets; two sources)" gs.cutsAllowed #[false, false, false]
@@ -163,7 +170,8 @@ def heuristicTests : Suite := suite "layered.wrapping.cutIndexHeuristics" do
   checkEq "MSD profile, freedom 0: only m = 2" msd6f0 #[1, 5]
   -- hand: m = 2 → [3, 6] (scale 1/150) beats m = 1 → [5] (1/250); m = 3 gives [3, 6] again
   checkEq "MSD path 9: cuts [3, 6]" msd9 #[3, 6]
-  checkEq "ARD chunk count with zero height (Rust: longestPath)" zero 3
+  -- Java: sqrt(30 / 0) = +inf, Math.round → Long.MAX_VALUE, (int) → -1 (elk-rs: longestPath)
+  checkEq "ARD chunk count with zero height (Java: (int) Long.MAX_VALUE = -1)" zero (-1)
   checkEq "manual cuts read from WRAPPING_CUTTING_CUTS" manual #[1, 7]
   checkEq "manual cuts unset: empty" manualUnset #[]
   check "no heuristic guarantees valid cuts"
@@ -194,9 +202,11 @@ def validifyTests : Suite := suite "layered.wrapping.validify" do
   checkEq "look back: no desired cuts" (SingleEdgeGraphWrapper.validifyIndexesLookingBack forbidStats #[]) #[]
   checkEq "look back with valids: far below +inf selects the lower cut"
     (SingleEdgeGraphWrapper.validifyIndexesLookingBackWithValids #[5] #[SingleEdgeGraphWrapper.I32_MIN, 2, SingleEdgeGraphWrapper.I32_MAX]) #[2]
-  checkEq "look back with valids: saturating distance to -inf selects the higher cut"
-    (SingleEdgeGraphWrapper.validifyIndexesLookingBackWithValids #[3] #[SingleEdgeGraphWrapper.I32_MIN, 10, SingleEdgeGraphWrapper.I32_MAX]) #[10]
-  checkEq "saturating_sub(3, i32::MIN) = i32::MAX" (SingleEdgeGraphWrapper.saturatingSubI32 3 SingleEdgeGraphWrapper.I32_MIN) 2147483647
+  -- Java `int`: `3 - Integer.MIN_VALUE` overflows to `-2147483645 < 7`, so the `-inf` sentinel itself is
+  -- selected (elk-rs saturated the distance and selected 10)
+  checkEq "look back with valids: overflowing distance to -inf selects the -inf sentinel (Java)"
+    (SingleEdgeGraphWrapper.validifyIndexesLookingBackWithValids #[3] #[SingleEdgeGraphWrapper.I32_MIN, 10, SingleEdgeGraphWrapper.I32_MAX])
+    #[SingleEdgeGraphWrapper.I32_MIN]
   let ((onlyFirst), _) ← LayeredM.run (do
     let b ← build #[0, 1, 1] #[(0, 1), (0, 2)]
     let s ← GraphStats.new b.graph
@@ -319,24 +329,29 @@ def inserterTests : Suite := suite "layered.wrapping.BreakingPointInserter" do
   -- hand: round 1 moves cut 0 to 1 and offsets cut 1 to 2; round 2 moves it to 1 as well
   checkEq "improveCuts [2, 3] → [1, 1]" imp23 #[1, 1]
   checkEq "improveCuts [] → []" impEmpty #[]
-  -- Rust apply_cuts visits the inserted layers: cuts [2, 4] on a path split edge n1→n2 twice
+  -- Java `applyCuts` skips the inserted layers (`ListIterator.add`): cuts [2, 4] split after the
+  -- original layers 1 and 3; the edge n0 → n5 spans both cuts and its two breaking points are chained
+  -- (elk-rs visited the inserted layers and applied the second cut two layers early)
   let ((c, chainEdge), ca) ← LayeredM.run (do
-    let c ← path 6
+    let c ← build #[0, 1, 2, 3, 4, 5] #[(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (0, 5)]
     setG c LayeredOptions.WRAPPING_CUTTING_STRATEGY CuttingStrategy.manual
     setG c LayeredOptions.WRAPPING_CUTTING_CUTS #[(2 : Int), (4 : Int)]
     setG c LayeredOptions.WRAPPING_MULTI_EDGE_IMPROVE_CUTS false
     runP BreakingPointInserter.processor c
-    return (c, c.edges[1]!))
-  checkEq "cuts [2, 4] (Rust): layering" (layering ca c)
-    #[#["n0"], #["n1"], #["BREAKING_POINT"], #["BREAKING_POINT"], #["BREAKING_POINT"], #["BREAKING_POINT"],
-      #["n2"], #["n3"], #["n4"], #["n5"]]
+    return (c, c.edges[5]!))
+  checkEq "cuts [2, 4] (Java): layering" (layering ca c)
+    #[#["n0"], #["n1"], #["BREAKING_POINT", "BREAKING_POINT"], #["BREAKING_POINT", "BREAKING_POINT"],
+      #["n2"], #["n3"], #["BREAKING_POINT", "BREAKING_POINT"], #["BREAKING_POINT", "BREAKING_POINT"],
+      #["n4"], #["n5"]]
   let some t2 := srcNode ca chainEdge | check "chained edge source" false
   let some info2 := infoOf ca t2 | check "second info" false
   let some prevStart := info2.prev | check "second info has prev" false
   let some info1 := infoOf ca prevStart | check "first info" false
   check "chain: first.next = second.start" (info1.next == some info2.start)
   checkEq "chain: second nodeStartEdge leaves the first end marker" (srcNode ca info2.nodeStartEdge) (some info1.endNode)
-  checkEq "edge n3→n4 not split (Rust)" (srcNode ca c.edges[3]!) (some c.nodes[3]!)
+  check "edge n1→n2 split at the first cut" ((srcNode ca c.edges[1]!).any fun n => (ca.node n).type == .breakingPoint)
+  check "edge n3→n4 split at the second cut" ((srcNode ca c.edges[3]!).any fun n => (ca.node n).type == .breakingPoint)
+  checkEq "edge n2→n3 not split" (srcNode ca c.edges[2]!) (some c.nodes[2]!)
 
 /-! ## BreakingPointProcessor -/
 
@@ -391,11 +406,12 @@ def processorTests : Suite := suite "layered.wrapping.BreakingPointProcessor" do
   checkEq "drop dummies: in-layer ids (hand: eIL 1, t 2, s 0, sIL 1)"
     (#[ci.endInLayerDummy.map fun n => (ca.node n).id, some (ca.node ct).id, some (ca.node ci.start).id,
        ci.startInLayerDummy.map fun n => (ca.node n).id]) #[some 1, some 2, some 0, some 1]
-  -- chain merge: edge n0 → n5 split at cuts [2, 5] (Rust indexes) into two chained breaking points
+  -- chain merge: edge n0 → n5 split at cuts [2, 3] (Java's original layer indexes; the elk-rs test
+  -- used [2, 5], which elk-rs applied at the same layers) into two chained breaking points
   let (m, ma) ← LayeredM.run (do
     let m ← build #[0, 1, 2, 3, 4, 5] #[(0, 5)]
     setG m LayeredOptions.WRAPPING_CUTTING_STRATEGY CuttingStrategy.manual
-    setG m LayeredOptions.WRAPPING_CUTTING_CUTS #[(2 : Int), (5 : Int)]
+    setG m LayeredOptions.WRAPPING_CUTTING_CUTS #[(2 : Int), (3 : Int)]
     setG m LayeredOptions.WRAPPING_MULTI_EDGE_IMPROVE_CUTS false
     runP BreakingPointInserter.processor m
     runP BreakingPointProcessor.processor m
@@ -477,7 +493,16 @@ def removerTests : Suite := suite "layered.wrapping.BreakingPointRemover" do
   checkEq "undefined routing behaves like orthogonal" (ua.edge ub.edges[0]!).bendPoints
     #[⟨1, 1⟩, ⟨3, 3⟩, ⟨2, 2⟩, ⟨9, 9⟩]
   let (sb, sinfo, sa) ← removerRun .splines
-  checkEq "splines: bend points untouched (Rust)" (sa.edge sb.edges[0]!).bendPoints #[⟨9, 9⟩]
+  checkEq "splines: bend points cleared (Java)" (sa.edge sb.edges[0]!).bendPoints #[]
+  -- Java `joinedSegments.addAll(s1)` with no spline route on the nodeStartEdge
+  checkThrows "splines: missing route throws NullPointerException (Java)" (do
+    let _ ← LayeredM.run (do
+      let b ← multiEdgeGraph
+      setG b LayeredOptions.EDGE_ROUTING EdgeRouting.splines
+      runP BreakingPointInserter.processor b
+      runP BreakingPointProcessor.processor b
+      runP BreakingPointRemover.processor b)
+    pure ())
   checkEq "splines: joined edge chain e1 ++ reverse(e2) ++ e3" (sa.edge sb.edges[0]!).internal.splineEdgeChain
     #[⟨101⟩, ⟨103⟩, ⟨102⟩, ⟨100⟩]
   checkEq "splines: surviving edge" (sa.edge sb.edges[0]!).internal.splineSurvivingEdge (some sb.edges[0]!)

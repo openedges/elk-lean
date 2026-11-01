@@ -61,7 +61,6 @@
       "layoutOptions": {
         "elk.algorithm": "box",
         "elk.topdown.nodeType": "HIERARCHICAL_NODE",
-        "elk.topdown.sizeApproximator": "COUNT_CHILDREN",
         "elk.topdownLayout": "true"
       },
       "width": 114,

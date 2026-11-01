@@ -457,7 +457,8 @@ def sideStrategyTests : Suite := suite "layered.intermediate.labelSideSelector.s
     return nodes)
   let d := a.node nodes[0]!
   checkEq "hand: ALWAYS_UP dummy ABOVE" d.internal.labelSide LabelSide.above
-  checkEq "hand: ALWAYS_UP represented label ABOVE" (a.label d.internal.representedLabels[0]!).internal.labelSide LabelSide.above
+  -- Java writes the side to the label dummy only (elk-rs also wrote it to the represented labels)
+  checkEq "hand: ALWAYS_UP represented label keeps its side (Java)" (a.label d.internal.representedLabels[0]!).internal.labelSide LabelSide.unknown
   -- ports at height - ceil(thickness / 2) = 11 - 1
   checkFloat "hand: ABOVE moves the ports to 10" (a.port d.ports[0]!).position.y 10.0
   let (nodesB, b) ← LayeredM.run (do
