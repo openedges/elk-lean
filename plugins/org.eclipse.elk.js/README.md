@@ -81,6 +81,17 @@ elk-lean additions and differences:
   (addon, WASM, Worker; worker command `{ cmd: 'convertElkt', elkt, flags }`). The demo
   `plugins/org.eclipse.elk.live` uses it to edit `.elkt` in the browser without a server.
 
+- `threads` (constructor option, or per call `elk.layout(graph, { threads })`; native addon only):
+  the cap of the parallel sibling layout (`docs/parallel-layout.md`). Independent sibling sub-graphs
+  of separately laid out compound nodes run on Lean worker threads inside one call; the result is
+  byte-identical for every value. `1` = sequential; omitted = the addon default, `ELK_LEAN_THREADS`
+  or `min(hardware threads, 8)` (the addon starts the Lean task manager when it loads,
+  `elk_lean_init_threads(0)`). A value that is not a positive integer throws `TypeError` (rejects in
+  `layout`). The WASM backend is single-threaded and ignores it (sequential); in worker mode it is
+  passed to the worker's backend (`{ cmd: 'layout', graphJson, optionsJson, threads }`). Lean worker
+  threads have the Lean thread stack (1 GB reserved, `LEAN_STACK_SIZE_KB`), not the calling
+  thread's: a sub-graph that is too deep for the calling thread's stack can lay out there (see
+  "Limits").
 - `workerStackSizeMb` (Node.js only, default 64, `ELK.DEFAULT_WORKER_STACK_SIZE_MB`): stack size of
   the `worker_threads` Worker created for `workerUrl` (`resourceLimits.stackSizeMb`). Ignored with
   `workerFactory` (pass `resourceLimits` to your own `Worker`) and in browsers. A non-positive or
@@ -125,7 +136,9 @@ limit, `--stack-size=984`):
 - **Native addon**: runs on the calling thread's stack (Node.js main thread 8 MB, `worker_threads`
   default 4 MB). Overflow is a `SIGSEGV`/`SIGILL` that kills the whole process (V8's signal handlers
   are kept, the Lean stack-overflow handler is not installed). The CLI runs `main` on Lean's 1 GB
-  thread (`LEAN_STACK_SIZE_KB`), hence its much higher limit.
+  thread (`LEAN_STACK_SIZE_KB`), hence its much higher limit. With the parallel sibling layout
+  (`threads` > 1, the default) the sibling sub-graphs laid out by Lean worker threads get that 1 GB
+  stack too; the calling thread lays out the first chunk and everything else on its own stack.
 - **Worker mode** raises the limit of both backends: the worker's thread stack and V8's limit are
   both `workerStackSizeMb` (reserved address space, committed only when used). The graph must still
   pass `JSON.stringify` on the calling thread (~3,000 compound levels by default).
@@ -167,6 +180,11 @@ in a worktree without submodules the main checkout's copy) with the addon and th
 and with flags 5, and compares the strings byte-for-byte with `elk convert` (and
 `--defaults --sort-keys`) of `.lake/build/bin/elk` (`ELK_LEAN_BIN`), plus syntax errors and
 `convertElkt` in direct, fake-worker and `worker_threads` modes.
+`test/testThreads.test.mjs` (with `ELK_LEAN_PAR_MIN_WORK=0`, every sibling sub-graph on a task)
+checks that the addon gives the same bytes for thread caps 1, 2, 3, 8 and the default on hierarchical
+and multi-component graphs, the same graphs through `new ELK({ threads })` and `layout(g, { threads })`,
+the first throwing child in sibling order, the `TypeError`s, and concurrent `worker_threads` that each
+use the parallel layout.
 `test/testEntryPoints.test.mjs` runs the WASM fallback in direct, fake-worker and `worker_threads`
 modes in a copy of the package without native addon; `test/testDeepRecursion.test.mjs` checks the
 stack limits above (8,000-node mrtree chain: `RangeError` in WASM direct mode and with
