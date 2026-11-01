@@ -7,6 +7,8 @@ import Elk.Alg.Radial.RadialUtil
 import Elk.Alg.Radial.Options.SortingStrategy
 import Elk.Alg.Radial.Sorting.IRadialSorter
 import Elk.Alg.Radial.Sorting.IDSorter
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.radial.sorting.PolarCoordinateSorter`
 
@@ -27,10 +29,6 @@ The state of the Rust struct (`id_sorter: Option<IDSorter>`) is an `IO.Ref Bool`
 This module also hosts `SortingStrategy.create`, the factory half of the Rust
 `sorting_strategy.rs`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Radial.Sorting
 

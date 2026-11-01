@@ -7,6 +7,8 @@ import Elk.Alg.Radial.RadialLayoutPhases
 import Elk.Alg.Radial.RadialUtil
 import Elk.Alg.Radial.Intermediate.IntermediateProcessorStrategy
 import Elk.Alg.Radial.P2Routing.IRadialEdgeRouter
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.radial.p2routing.StraightLineEdgeRouter`
 
@@ -20,10 +22,6 @@ recursively in edge order (a node reachable twice is routed twice, with the same
 The Rust geometry cache (`build_node_geom`) is a snapshot of the children taken before routing;
 node boxes do not change in this phase, so the live boxes are used.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Radial.P2Routing
 

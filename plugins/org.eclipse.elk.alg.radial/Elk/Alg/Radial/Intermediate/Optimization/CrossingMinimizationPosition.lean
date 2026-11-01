@@ -3,6 +3,8 @@ import Elk.Graph
 import Elk.Core.Options
 import Elk.Alg.Radial.RadialUtil
 import Elk.Alg.Radial.Intermediate.Optimization.IEvaluation
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.radial.intermediate.optimization.CrossingMinimizationPosition`
 
@@ -18,11 +20,6 @@ Java semantics (agent OPT; elk-rs reads an unset position as `(0, 0)` and never 
 evaluations of later rotation offsets see the moved values; an unset position is a
 `NullPointerException` (`"position1"` for the first node of the pair, then `"position2"`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Radial.Intermediate.Optimization
 
