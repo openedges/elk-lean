@@ -43,14 +43,14 @@ namespace HorizontalGraphCompactor
 
 /-- The lock function of `LEFT_RIGHT_CONSTRAINT_LOCKING`: nodes whose group is not constrained
 (`outDegreeReal == 0`) are locked. -/
-def constraintLockFunction : LockFunction := fun g n _ =>
+def constraintLockFunction : LockFunction := .fn fun g n _ =>
   match (g.cNode n).cGroup with
   | some group => (g.cGroup group).outDegreeReal == 0
   | none => false
 
 /-- The lock function of `LEFT_RIGHT_CONNECTION_LOCKING`: the connection locks of the
 transformer (`LEFT`/`RIGHT` only). -/
-def connectionLockFunction (locks : Array DirectionLocks) : LockFunction := fun _ n dir =>
+def connectionLockFunction (locks : Array DirectionLocks) : LockFunction := .fn fun _ n dir =>
   match locks[n.idx]? with
   | some l =>
     match dir with

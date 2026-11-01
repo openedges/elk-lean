@@ -10,7 +10,8 @@ implementations:
   pure handler kernel) against `sweepReference` on random hitbox sets (duplicate y values,
   zero-height and zero-width boxes, NaN coordinates, groups);
 * `alg.common.compaction.longestPathFast`: `LongestPathCompaction.compact` (pure) against
-  `compactReference`, with lock functions reading the graph and spacing handlers;
+  `compactReference`, with lock functions reading the graph, `flags` locks, closure and
+  `individualMin` spacings handlers, and the `flags`/`individualMin` forms against equivalent closures;
 * `alg.common.compaction.cgraphFast`: `CGraph.calculateGroupOffsets` and
   `calculateConstraintsForCGroups` against their `…Reference`, including empty groups, nodes in
   several groups, out-of-range ids and self constraints.
@@ -155,7 +156,7 @@ def scanlineFast : Suite := suite "alg.common.compaction.scanlineFast" do
   report "scanline sweeps mostly succeed" (errors * 4 <= 300) s!"{errors} errors"
 
 /-- A lock function that reads the graph (group degree, node position) and the direction. -/
-def readingLock (seed : Nat) : LockFunction := fun g n dir =>
+def readingLock (seed : Nat) : LockFunction := .fn fun g n dir =>
   let c := g.cNode n
   let byGroup := match c.cGroup with
     | some gr => (g.cGroup gr).outDegreeReal % 2 == 0
@@ -168,7 +169,21 @@ def readingLock (seed : Nat) : LockFunction := fun g n dir =>
 
 /-- A spacing handler depending on the node ids. -/
 def idSpacing : SpacingsHandler :=
-  ⟨fun _ a b => (a.idx % 3).toFloat + (b.idx % 2).toFloat * 0.5, fun _ a b => ((a.idx + b.idx) % 4).toFloat⟩
+  .mk (fun _ a b => (a.idx % 3).toFloat + (b.idx % 2).toFloat * 0.5) (fun _ a b => ((a.idx + b.idx) % 4).toFloat)
+
+/-- Individual node spacings (some nodes beyond the table: default) for an `individualMin` handler. -/
+def individualSpacings (seed n : Nat) : FloatArray × Float :=
+  let sp := (Array.range (n * 2 / 3)).foldl (fun acc i => acc.push (((i * 7 + seed) % 5).toFloat * 1.5)) FloatArray.empty
+  (sp, ((seed % 3).toFloat + 0.25))
+
+/-- The closures equivalent to `SpacingsHandler.individualMin sp d`. -/
+def individualClosures (sp : FloatArray) (d : Float) : SpacingsHandler :=
+  let f : CNodeId → Float := fun c => if h : c.idx < sp.size then sp[c.idx] else d
+  .mk (fun _ a b => fmin (f a) (f b)) (fun _ a b => fmin (f a) (f b))
+
+/-- Random per-node lock flags (shorter than the node list: the rest is unlocked). -/
+def randomFlags (seed n : Nat) : Array Bool :=
+  (Array.range (n * 3 / 4)).map fun i => (i * 5 + seed) % 3 == 0
 
 def longestPathFast : Suite := suite "alg.common.compaction.longestPathFast" do
   let mut same := 0
@@ -182,15 +197,34 @@ def longestPathFast : Suite := suite "alg.common.compaction.longestPathFast" do
       let c := ((OneDimensionalCompactor.new g).setConstraintAlgorithm QuadraticConstraintCalculation).setSpacingsHandler
         (if seed % 2 == 0 then idSpacing else SpacingsHandler.default)
       let c ← (try c.changeDirection dir catch _ => pure c)
-      for lockKind in [0:3] do
-        let lockFun : Option LockFunction := if lockKind == 0 then none else some (readingLock (seed + lockKind))
-        let st : CompactorState := { c.toCompactorState with lockFun }
-        -- start positions as `compact` sets them
-        let a ← outcome LongestPathCompaction.compact st
-        let b ← outcome LongestPathCompaction.compactReference st
-        if a != graphKey st.cGraph then moved := moved + 1
-        total := total + 1
-        if a == b then same := same + 1 else IO.println s!"longest path mismatch seed {seed} {dir} {lockKind}"
+      let (isp, idflt) := individualSpacings seed n
+      let flags := randomFlags seed n
+      for lockKind in [0:5] do
+        let lockFun : Option LockFunction := match lockKind with
+          | 0 => none
+          | 3 => some (.flags flags)
+          | 4 => some (.fn fun _ m _ => flags[m.idx]?.getD false)
+          | _ => some (readingLock (seed + lockKind))
+        for spKind in [0:3] do
+          let sh := match spKind with
+            | 0 => c.spacingsHandler
+            | 1 => SpacingsHandler.individualMin isp idflt
+            | _ => individualClosures isp idflt
+          let st : CompactorState := { c.toCompactorState with lockFun, spacingsHandler := sh }
+          -- start positions as `compact` sets them
+          let a ← outcome LongestPathCompaction.compact st
+          let b ← outcome LongestPathCompaction.compactReference st
+          if a != graphKey st.cGraph then moved := moved + 1
+          total := total + 1
+          if a == b then same := same + 1 else IO.println s!"longest path mismatch seed {seed} {dir} {lockKind} {spKind}"
+          -- the `flags`/`individualMin` forms against the equivalent closures (both on the fast path)
+          if lockKind == 3 || spKind == 1 then
+            let lockFun' : Option LockFunction :=
+              if lockKind == 3 then some (.fn fun _ m _ => flags[m.idx]?.getD false) else lockFun
+            let sh' := if spKind == 1 then individualClosures isp idflt else sh
+            let b' ← outcome LongestPathCompaction.compact { st with lockFun := lockFun', spacingsHandler := sh' }
+            total := total + 1
+            if a == b' then same := same + 1 else IO.println s!"longest path form mismatch seed {seed} {dir} {lockKind} {spKind}"
   checkEq "compact = compactReference" same total
   report "longest path changes the graph" (moved * 2 >= total) s!"{moved}/{total}"
 

@@ -43,7 +43,7 @@ namespace CompactorState
 /-- `OneDimensionalCompactor::is_locked_node(node, direction)`. -/
 def isLockedNode (s : CompactorState) (node : CNodeId) (direction : Direction) : Bool :=
   match s.lockFun with
-  | some f => f s.cGraph node direction
+  | some f => f.isLocked s.cGraph node direction
   | none => false
 
 /-- `OneDimensionalCompactor::is_locked_group(group, direction)`: some node of the group is

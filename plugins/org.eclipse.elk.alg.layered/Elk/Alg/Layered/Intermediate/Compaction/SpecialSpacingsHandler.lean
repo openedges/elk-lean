@@ -85,7 +85,7 @@ def verticalSpacing (h : SpecialSpacingsHandler) (c1 c2 : CNodeId) : Float :=
 
 /-- The handler as an alg.common `SpacingsHandler` (Rust `Box<dyn ISpacingsHandler>`). -/
 def toSpacingsHandler (h : SpecialSpacingsHandler) : SpacingsHandler :=
-  ⟨fun _ c1 c2 => h.horizontalSpacing c1 c2, fun _ c1 c2 => h.verticalSpacing c1 c2⟩
+  .mk (fun _ c1 c2 => h.horizontalSpacing c1 c2) (fun _ c1 c2 => h.verticalSpacing c1 c2)
 
 end SpecialSpacingsHandler
 

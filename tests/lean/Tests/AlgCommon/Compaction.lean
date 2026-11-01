@@ -14,7 +14,7 @@ private def EPSILON : Float := 0.0001
 private def SPACING : Float := 5.0
 
 /-- `TestSpacingHandler`: `SPACING` in both dimensions. -/
-private def testSpacingHandler : SpacingsHandler := ⟨fun _ _ _ => SPACING, fun _ _ _ => SPACING⟩
+private def testSpacingHandler : SpacingsHandler := .mk (fun _ _ _ => SPACING) (fun _ _ _ => SPACING)
 
 /-- Test helper `node(graph, x, y, w, h)` (state-passing). -/
 private def mkNode (x y w h : Float) : StateM CGraph CNodeId :=
@@ -221,7 +221,7 @@ def spacings : Suite := suite "alg.common.compaction.OneDimensionalCompactor.spa
       let b ← mkNode 50.0 0.0 20.0 20.0
       let c ← mkNode 150.0 0.0 20.0 20.0
       return (a, b, c) : StateM CGraph _).run CGraph.allDirections
-    let handler : SpacingsHandler := ⟨tieredSpacing one two three SPACING, fun _ _ _ => SPACING⟩
+    let handler : SpacingsHandler := .mk (tieredSpacing one two three SPACING) (fun _ _ _ => SPACING)
     let mut hg := g
     for (step, dir) in #[(1, Direction.left), (2, .right), (3, .left)] do
       let c := (compacter hg).setSpacingsHandler handler
@@ -237,7 +237,7 @@ def spacings : Suite := suite "alg.common.compaction.OneDimensionalCompactor.spa
       let b ← mkNode 0.0 50.0 20.0 20.0
       let c ← mkNode 0.0 150.0 20.0 20.0
       return (a, b, c) : StateM CGraph _).run CGraph.allDirections
-    let handler : SpacingsHandler := ⟨fun _ _ _ => 0.0, tieredSpacing one two three 0.0⟩
+    let handler : SpacingsHandler := .mk (fun _ _ _ => 0.0) (tieredSpacing one two three 0.0)
     let mut vg := g
     for (step, dir) in #[(1, Direction.up), (2, .down), (3, .up)] do
       let c := (compacter vg).setSpacingsHandler handler
@@ -258,7 +258,7 @@ def spacings : Suite := suite "alg.common.compaction.OneDimensionalCompactor.spa
       else if a == one || b == one then 10.0
       else if a == two || b == two then 5.0
       else 0.0
-    let c := (compacter g).setSpacingsHandler ⟨fun _ _ _ => 0.0, vertical⟩
+    let c := (compacter g).setSpacingsHandler (.mk (fun _ _ _ => 0.0) vertical)
     let c ← c.changeDirection .left >>= (·.compact) >>= (·.finish)
     close "test_vertical_spacing_during_horizontal_compaction one" (hx c one) 20.0
     close "test_vertical_spacing_during_horizontal_compaction two" (hx c two) 0.0
@@ -275,7 +275,7 @@ def spacings : Suite := suite "alg.common.compaction.OneDimensionalCompactor.spa
       else if a == two || b == two then 10.0
       else if a == one || b == one then 5.0
       else 0.0
-    let c := (compacter g).setSpacingsHandler ⟨horizontal, fun _ _ _ => 0.0⟩
+    let c := (compacter g).setSpacingsHandler (.mk horizontal (fun _ _ _ => 0.0))
     let c ← c.changeDirection .up >>= (·.compact) >>= (·.finish)
     close "test_horizontal_spacing_during_vertical_compaction one" (hy c one) 20.0
     close "test_horizontal_spacing_during_vertical_compaction two" (hy c two) 0.0
