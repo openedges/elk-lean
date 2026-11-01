@@ -4,6 +4,8 @@ import Elk.Alg.RectPacking.P1WidthApproximation.Calculations
 import Elk.Alg.RectPacking.P1WidthApproximation.AreaFilter
 import Elk.Alg.RectPacking.P1WidthApproximation.AspectRatioFilter
 import Elk.Alg.RectPacking.P1WidthApproximation.ScaleMeasureFilter
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.rectpacking.p1widthapproximation.AreaApproximation`
 
@@ -11,10 +13,6 @@ Port of `p1widthapproximation/area_approximation.rs` (elk-rs): the greedy first 
 places the rectangles one by one at the best of four candidate positions (right of / below the
 last placed rectangle, right of / below the whole drawing) and returns the resulting drawing.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.RectPacking.P1WidthApproximation
 

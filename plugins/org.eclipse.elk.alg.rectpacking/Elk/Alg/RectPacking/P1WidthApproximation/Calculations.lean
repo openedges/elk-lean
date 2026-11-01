@@ -1,15 +1,13 @@
 import Elk.Graph
 import Elk.Alg.RectPacking.Util.DrawingData
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.rectpacking.p1widthapproximation.Calculations`
 
 Port of `p1widthapproximation/calculations.rs` (elk-rs): geometry helpers of the width
 approximation. They only read the rectangles, so they are pure functions of the `ElkGraph`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.RectPacking.P1WidthApproximation
 

@@ -1,6 +1,8 @@
 import Elk.Graph
 import Elk.Core.Util.Java
 import Elk.Graph.ArrayModify
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # Rectangle packing arena (`util::{Block, BlockRow, BlockStack, RectRow}` data and `RectPackingM`)
 
@@ -33,10 +35,6 @@ Java reference semantics (ELK Java is the reference; elk-rs used `Weak`/`RefCell
 * **No borrows.** `RectRow.notifyAboutNodeChange` recomputes the row from all its blocks; elk-rs
   skipped the update ("defer") when a block was listed twice (a second `RefCell` borrow).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.RectPacking.Util
 
