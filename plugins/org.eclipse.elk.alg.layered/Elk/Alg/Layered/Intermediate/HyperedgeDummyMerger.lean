@@ -9,11 +9,15 @@ Port of elk-rs `intermediate/hyperedge_dummy_merger.rs`. Merges adjacent `LONG_E
 dummies they must be in the same hyperedge component (`identify_hyperedges`); with label dummies
 they must share the long edge source (both before their label dummies) or target (both after).
 
-Rust deviations from Java, followed here:
+Representation differences from Java, unobservable (agent COV re-audit):
 * the hyperedge components are kept in a port → component map instead of being written to the
   ports' `id` fields (the port ids are left unchanged); the components are found with an explicit
-  stack (same partition and component numbering as the Java recursion);
-* the merged node is removed with `set_layer(None)` (Java only removes it from the layer list).
+  stack (same partition and component numbering as the Java recursion). No later processor reads a
+  port id without assigning it first (`EndLabelSorter` and the self-loop routers number the ports
+  themselves), so the stale ids Java leaves behind never matter;
+* the merged node is removed with `set_layer(None)` (Java only removes it from the layer list and
+  leaves its `layer` field): the merged node has no edges and is in no layer list, so nothing reaches
+  it afterwards.
 -/
 namespace Elk.Alg.Layered.Intermediate
 

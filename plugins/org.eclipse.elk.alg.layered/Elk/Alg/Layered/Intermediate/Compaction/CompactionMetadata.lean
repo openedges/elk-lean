@@ -13,6 +13,10 @@ strategies a `CompactionMetadata` snapshot of them. The Lean port follows Rust: 
 
 The metadata also snapshots the node types (Rust `is_external_port_node` locks the `LNode` at
 call time); node types do not change while the compactor runs, so the snapshot is equivalent.
+
+Resolution (agent COV re-audit): this is a representation choice only. Java's `instanceof` tests on
+`CNode.origin` and the dense side tables answer the same questions for every `CNode` (each one is
+created for exactly one `LNode` or `VerticalSegment`), so no layout differs.
 -/
 namespace Elk.Alg.Layered.Intermediate.Compaction
 
