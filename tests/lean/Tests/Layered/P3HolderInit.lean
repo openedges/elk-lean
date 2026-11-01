@@ -47,6 +47,19 @@ def holderGraph (seed : UInt64) : LayeredM LGraphId := do
     if v == 8 && !rg.layers.isEmpty then
       let l := rg.layers[w % rg.layers.size]!
       LayeredM.modifyLayer l fun x => { x with nodes := x.nodes.push nd }
+  -- side caches: current ones, stale ones (a port's side changed afterwards) and disabled ones
+  for h : i in [0:rg.nodes.size] do
+    let nd := rg.nodes[i]
+    let (v, s1) := rnd s 6
+    let (side, s2) := rnd s1 5
+    s := s2
+    if v <= 3 then LayeredM.cachePortSides nd
+    if v == 2 then
+      if let some p := (← LayeredM.getNode nd).ports[0]? then
+        let sd : PortSide := match side with
+          | 0 => .north | 1 => .east | 2 => .south | 3 => .west | _ => .undefined
+        LayeredM.modifyPort p fun x => x.setSide sd
+    if v == 3 then LayeredM.modifyNode nd fun x => { x with portSidesCached := false }
   for p in rg.ports do
     let (v, s1) := rnd s 7
     s := s1
@@ -195,6 +208,27 @@ def idIndexTests : Suite := suite "layered.p3.idIndex.ofPairs" do
   checkEq "ofPairs = ofPairsRef (600 key sets)" bad 0
   check "sparse indices are exercised" (sparse > 50)
 
-def suites : Array Suite := #[fusedInitTests, idIndexTests]
+/-- `FusedInit.sideCacheCurrent` = "the cache holds what `findPortIndices` computes" on random nodes
+(unsorted port sides, current, stale and disabled caches, nodes without ports). -/
+def sideCacheTests : Suite := suite "layered.p3.fusedInit.sideCacheCurrent" do
+  let mut bad := 0
+  let mut current := 0
+  let mut stale := 0
+  for k in [0:300] do
+    let seed : UInt64 := (k.toUInt64 + 11) * 0xd1b54a32d192ed03
+    let (g, a) ← LayeredM.run (holderGraph seed)
+    let _ := g
+    for h : i in [0:a.nodes.size] do
+      let n : LNodeId := ⟨i⟩
+      let nd := a.nodes[i]
+      let expected := nd.portSidesCached && nd.portSideIndices == some (a.findPortIndices n)
+      let fast := FusedInit.sideCacheCurrent a nd
+      if fast != expected then bad := bad + 1
+      if expected then current := current + 1
+      else if nd.portSidesCached then stale := stale + 1
+  checkEq "sideCacheCurrent = cache equals findPortIndices" bad 0
+  check s!"current ({current}) and stale ({stale}) caches are exercised" (current > 200 && stale > 50)
+
+def suites : Array Suite := #[fusedInitTests, idIndexTests, sideCacheTests]
 
 end Tests.Layered.P3HolderInit

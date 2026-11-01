@@ -349,6 +349,39 @@ partial def portLoop (a : LGraphArena) (ports : Array LPortId) (l i k : Nat) (hy
     portLoop a ports l (i + 1) (k + 1) hyper
   else (a, hyper, k)
 
+/-- The side ordinal of `ports[i]` (`5`, no side, out of range). -/
+@[inline] def sideOrd (a : LGraphArena) (ports : Array LPortId) (i : Nat) : Nat :=
+  if h : i < ports.size then ElkEnum.ordinal (a.port ports[i]).side else 5
+
+/-- The index after the last port of side ordinal `o` in `ports[0:j]` (`0`: none). -/
+partial def lastOfSide (a : LGraphArena) (ports : Array LPortId) (o j : Nat) : Nat :=
+  if j == 0 then 0 else if sideOrd a ports (j - 1) == o then j else lastOfSide a ports o (j - 1)
+
+/-- The start of the run of side ordinal `o` that ends at `j` (`ports[j - 1]` has side `o`). -/
+partial def runStart (a : LGraphArena) (ports : Array LPortId) (o j : Nat) : Nat :=
+  if j == 0 then 0 else if sideOrd a ports (j - 1) == o then runStart a ports o (j - 1) else j
+
+/-- Whether `cached[o:5]` are the entries `LGraphArena.findPortIndices` computes for `ports`: per side
+ordinal the `[first, last)` range of the last run of that side (`findPortIndicesLoop` writes the range
+of every run when it ends, so a later run of a side overwrites an earlier one; the leading empty
+`NORTH` run is not written), `none` for a side without ports. Allocation free. -/
+partial def indicesMatchFrom (a : LGraphArena) (ports : Array LPortId) (cached : Array (Option (Nat × Nat))) (o : Nat) :
+    Bool :=
+  if o < 5 then
+    let last := lastOfSide a ports o ports.size
+    let ok := match cached[o]? with
+      | some (some (f, l)) => last != 0 && l == last && f == runStart a ports o last
+      | some none => last == 0
+      | none => false
+    ok && indicesMatchFrom a ports cached (o + 1)
+  else true
+
+/-- Whether a node's side cache is current: `cachePortSides` would write the values it holds. -/
+@[inline] def sideCacheCurrent (a : LGraphArena) (nd : LNode) : Bool :=
+  nd.portSidesCached && (match nd.portSideIndices with
+    | some idx => idx.size == 5 && indicesMatchFrom a nd.ports idx 0
+    | none => false)
+
 /-- The state of the pass between nodes. -/
 structure St where
   arena : LGraphArena
@@ -375,8 +408,12 @@ partial def nodeLoop (withForster : Bool) (layer : Array LNodeId) (l n : Nat) (s
         | some g => children.push g
         | none => children
       let hasNS := if isNS then hasNS.setIfInBounds l true else hasNS
-      let indices := a.findPortIndices node
-      let a := a.modifyNode node fun x => { x with portSidesCached := true, portSideIndices := some indices, id := (n : Int) }
+      -- `cachePortSides`: a current cache is left as it is (the same values, without building them)
+      let current := sideCacheCurrent a nd
+      let a := if current then a.modifyNode node fun x => { x with id := (n : Int) }
+        else
+          let indices := a.findPortIndices node
+          a.modifyNode node fun x => { x with portSidesCached := true, portSideIndices := some indices, id := (n : Int) }
       let f := if withForster then forsterNode a node f else f
       let ports := (a.node node).ports
       let (a, hyper, k) := portLoop a ports l 0 k hyper
