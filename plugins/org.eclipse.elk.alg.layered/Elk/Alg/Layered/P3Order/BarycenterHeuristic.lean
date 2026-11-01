@@ -715,7 +715,7 @@ def context (h : BarycenterHeuristic) (forward : Bool) : LayeredM BarycenterCont
 
 /-- Runs a pure step on the resolver's barycenter states and the caller's generator, then prints
 the pending `CROSSMIN_RANDOM_TRACE` lines. -/
-def runOnStates (h : BarycenterHeuristic) (random : IO.Ref Random) (f : BarycenterData → BarycenterData) : LayeredM Unit := do
+@[inline] def runOnStates (h : BarycenterHeuristic) (random : IO.Ref Random) (f : BarycenterData → BarycenterData) : LayeredM Unit := do
   let states ← h.constraintResolver.barycenterStates.swap #[]
   let rnd ← random.get
   let d := f { states, random := rnd }

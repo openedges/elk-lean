@@ -162,6 +162,39 @@ def fusedInitTests : Suite := suite "layered.p3.fusedInit" do
   checkEq s!"fused initialisation = generic initialisation ({runs} holders, {errors} failing alike)" bad 0
   check "layout units are exercised" (withUnits > 20)
 
-def suites : Array Suite := #[fusedInitTests]
+/-- `IdIndex.ofPairs` (tail loops) = `IdIndex.ofPairsRef` (the `for` loops) on random pairs: dense and
+sparse ranges, duplicate keys (the later pair wins), empty input; compared on every key around the range. -/
+def idIndexTests : Suite := suite "layered.p3.idIndex.ofPairs" do
+  let mut bad := 0
+  let mut sparse := 0
+  let mut s : UInt64 := 0x2545F4914F6CDD1D
+  for k in [0:600] do
+    let (n, s1) := rnd s 40
+    let (spread, s2) := rnd s1 4
+    s := s2
+    let span := match spread with
+      | 0 => n + 1
+      | 1 => 3 * n + 5
+      | 2 => 5000
+      | _ => 200000
+    let mut keys : Array Nat := #[]
+    let mut values : Array Nat := #[]
+    for _ in [0:n] do
+      let (key, s1) := rnd s span
+      let (v, s2) := rnd s1 1000
+      s := s2
+      keys := keys.push (key + k % 7)
+      values := values.push v
+    let fast := IdIndex.ofPairs keys values
+    let ref := IdIndex.ofPairsRef keys values
+    if !fast.isDense then sparse := sparse + 1
+    let hi := (keys.foldl max 0) + 3
+    if fast.isDense != ref.isDense || fast.base != ref.base || fast.dense != ref.dense ||
+        !((Array.range (hi + 1)).all fun x => fast.get x == ref.get x) then
+      bad := bad + 1
+  checkEq "ofPairs = ofPairsRef (600 key sets)" bad 0
+  check "sparse indices are exercised" (sparse > 50)
+
+def suites : Array Suite := #[fusedInitTests, idIndexTests]
 
 end Tests.Layered.P3HolderInit
