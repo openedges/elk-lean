@@ -421,7 +421,7 @@ def applyLayout (graph : DCGraph) : TransformM Unit := do
       ElkUtil.applyVectorChain points sec
       let edgeData ← ElkM.getEdge edge
       if let some junctionPoints := edgeData.props.get CoreOptions.JUNCTION_POINTS then
-        let moved := junctionPoints.map fun p => p.addValues offset.x offset.y
+        let moved := KVectorChain.offsetValues junctionPoints offset.x offset.y
         ElkM.modifyEdge edge fun e => { e with props := e.props.set CoreOptions.JUNCTION_POINTS moved }
     | .node n =>
       ElkM.modifyNode n fun nd => { nd with x := nd.x + offset.x, y := nd.y + offset.y }

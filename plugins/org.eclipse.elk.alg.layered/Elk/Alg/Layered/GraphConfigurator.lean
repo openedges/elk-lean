@@ -148,8 +148,10 @@ partial def copyPortConstraints (graph : LGraphId) : LayeredM Unit := do
   for n in nodes do
     let nd ← getNode n
     let original := nd.props.get CoreOptions.PORT_CONSTRAINTS
+    -- read before the update: a live `nd` would make `modifyNode` copy the node (PLAN 7.1 item 27)
+    let nested := nd.nestedGraph
     modifyNode n fun x => { x with internal := { x.internal with originalPortConstraints := original } }
-    if let some nested := nd.nestedGraph then copyPortConstraints nested
+    if let some nested := nested then copyPortConstraints nested
 
 /-- `configureGraphProperties(graph)`. -/
 def configureGraphProperties (graph : LGraphId) : LayeredM Unit := do

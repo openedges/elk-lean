@@ -128,7 +128,7 @@ def moveGraph (dest : Option TGraphId) (source : TGraphId) (offsetx offsety : Fl
   for edge in src.edges do
     if seenEdges.contains edge then continue
     seenEdges := seenEdges.insert edge
-    MrTreeM.modifyEdge edge fun e => { e with bendPoints := e.bendPoints.map (· + graphOffset) }
+    MrTreeM.modifyEdge edge fun e => { e with bendPoints := KVectorChain.offset e.bendPoints graphOffset }
     if let some d := dest then MrTreeM.modifyGraph d fun x => { x with edges := x.edges.push edge }
 
 /-- `apply_padding_and_normalize_positions(graph)`. -/

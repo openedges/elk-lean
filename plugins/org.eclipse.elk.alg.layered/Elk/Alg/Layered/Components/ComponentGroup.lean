@@ -153,7 +153,7 @@ def entriesHaveMask (entries : Array (Nat × Array LGraphId)) (mask : Nat) : Boo
 def entriesAdd (entries : Array (Nat × Array LGraphId)) (mask : Nat) (component : LGraphId) :
     Array (Nat × Array LGraphId) :=
   match entries.findIdx? (·.1 == mask) with
-  | some i => entries.modify i fun (m, cs) => (m, cs.push component)
+  | some i => entries.modifyIn i fun (m, cs) => (m, cs.push component)
   | none => entries.push (mask, #[component])
 
 /-- Rust `get_components_for(connections)` on an entry list. -/

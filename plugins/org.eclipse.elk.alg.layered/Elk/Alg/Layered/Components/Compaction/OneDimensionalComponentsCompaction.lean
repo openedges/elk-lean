@@ -300,9 +300,13 @@ def removeGroupMember (p : Packer) (g : CGroupId) : Packer :=
 
 end Packer
 
+/-- A group with zero deltas; out of line so that `Array.map` hands it the unshared group (PLAN 7.1
+items 16, 59). -/
+@[noinline] private def resetGroupDeltas (grp : CGroup) : CGroup := { grp with delta := fl0p0, deltaNormalized := fl0p0 }
+
 /-- Rust `reset_deltas(graph)` on the projection. -/
 def resetDeltas (g : CGraph) : CGraph :=
-  { g with cGroups := g.cGroups.map fun grp => { grp with delta := fl0p0, deltaNormalized := fl0p0 } }
+  { g with cGroups := g.cGroups.map resetGroupDeltas }
 
 /-- Sum of `|delta_normalized|` over the groups of the projection (Rust `.map(abs).sum()`). -/
 def deltaSum (g : CGraph) : Float :=

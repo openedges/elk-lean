@@ -89,16 +89,19 @@ def isMinimalKey (m : LayerNodeMap) (key : Int) : Bool := m.layers.all (·.1 >= 
 /-- `put(key, node)` with the `Integer` box `box`: removes the node from its old key's list and appends
 it to the list of `key` (created when missing; empty lists keep their key). -/
 def putBoxed (m : LayerNodeMap) (key : Int) (box : Nat) (node : LNodeId) : LayerNodeMap := Id.run do
-  let mut layers := m.layers
-  if let some (oldKey, _) := m.reverse.get? node then
+  -- the fields are taken apart first so that the arrays are not shared with `m` while they are
+  -- updated, and the lists are updated with `modifyIn` (PLAN 7.1 items 13, 16)
+  let ⟨layers, reverse, nextBox⟩ := m
+  let mut layers := layers
+  if let some (oldKey, _) := reverse.get? node then
     if let some i := layers.findIdx? (·.1 == oldKey) then
-      layers := layers.modify i fun (k, ns) => (k, ns.filter (· != node))
+      layers := layers.modifyIn i fun (k, ns) => (k, ns.filter (· != node))
   match layers.findIdx? (·.1 == key) with
-  | some i => layers := layers.modify i fun (k, ns) => (k, ns.push node)
+  | some i => layers := layers.modifyIn i fun (k, ns) => (k, ns.push node)
   | none =>
     let pos := (layers.findIdx? (·.1 > key)).getD layers.size
     layers := layers.insertIdx! pos (key, #[node])
-  return { m with layers := layers, reverse := m.reverse.insert node (key, box) }
+  return ⟨layers, reverse.insert node (key, box), nextBox⟩
 
 /-- `put(key, node)` with a freshly boxed key (`Integer.valueOf`). -/
 def put (m : LayerNodeMap) (key : Int) (node : LNodeId) : LayerNodeMap :=

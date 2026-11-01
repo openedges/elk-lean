@@ -94,18 +94,23 @@ abbrev Nodes (α : Type) := Array (JavaTreeNode α)
 /-- Java `int` comparison `a > b` of two hashes. -/
 @[inline] private def hashGt (a b : UInt32) : Bool := a.toInt32 > b.toInt32
 
-@[inline] private def setParent (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α :=
-  ns.modify i fun n => { n with parent := v }
-@[inline] private def setLeft (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α :=
-  ns.modify i fun n => { n with left := v }
-@[inline] private def setRight (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α :=
-  ns.modify i fun n => { n with right := v }
-@[inline] private def setPrev (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α :=
-  ns.modify i fun n => { n with prev := v }
-@[inline] private def setNext (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α :=
-  ns.modify i fun n => { n with next := v }
-@[inline] private def setRed (ns : Nodes α) (i : Nat) (v : Bool) : Nodes α :=
-  ns.modify i fun n => { n with red := v }
+/-! The link setters update a node through an out-of-line updater (PLAN 7.1 items 16, 59): an
+inlined record-update lambda in `Array.modify` tests the node's exclusivity before the slot is
+cleared and so reallocated the node on every link change; the `@[noinline]` updater runs on the
+unshared node and reuses it. -/
+@[noinline] private def withParent (v : Option Nat) (n : JavaTreeNode α) : JavaTreeNode α := { n with parent := v }
+@[noinline] private def withLeft (v : Option Nat) (n : JavaTreeNode α) : JavaTreeNode α := { n with left := v }
+@[noinline] private def withRight (v : Option Nat) (n : JavaTreeNode α) : JavaTreeNode α := { n with right := v }
+@[noinline] private def withPrev (v : Option Nat) (n : JavaTreeNode α) : JavaTreeNode α := { n with prev := v }
+@[noinline] private def withNext (v : Option Nat) (n : JavaTreeNode α) : JavaTreeNode α := { n with next := v }
+@[noinline] private def withRed (v : Bool) (n : JavaTreeNode α) : JavaTreeNode α := { n with red := v }
+
+@[inline] private def setParent (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α := ns.modify i (withParent v)
+@[inline] private def setLeft (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α := ns.modify i (withLeft v)
+@[inline] private def setRight (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α := ns.modify i (withRight v)
+@[inline] private def setPrev (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α := ns.modify i (withPrev v)
+@[inline] private def setNext (ns : Nodes α) (i : Nat) (v : Option Nat) : Nodes α := ns.modify i (withNext v)
+@[inline] private def setRed (ns : Nodes α) (i : Nat) (v : Bool) : Nodes α := ns.modify i (withRed v)
 @[inline] private def isRed (ns : Nodes α) : Option Nat → Bool
   | some i => ns[i]!.red
   | none => false

@@ -85,10 +85,16 @@ def addFilter (c : LayoutConfigurator) (filter : OptionFilter) : LayoutConfigura
 /-- `getFilters()`. -/
 def filters (c : LayoutConfigurator) : Array OptionFilter := c.optionFilters
 
+/-- Applies `f` to the option map of an entry; out of line so that `Array.modify` hands it the
+unshared entry and `f` the unshared map (an inlined lambda reads the pair while the array still
+holds it, so the map was copied on every update; PLAN 7.1 items 16, 59). -/
+@[noinline] private def updateEntry {κ : Type} (f : PropertyMap → PropertyMap) : κ × PropertyMap → κ × PropertyMap
+  | (k, m) => (k, f m)
+
 /-- `configure(element)`: updates the options stored for the element. -/
 def configureElement (c : LayoutConfigurator) (el : ElementId) (f : PropertyMap → PropertyMap) : LayoutConfigurator :=
   match c.elementOptionMap.findIdx? (·.1 == el) with
-  | some i => { c with elementOptionMap := c.elementOptionMap.modify i fun (k, m) => (k, f m) }
+  | some i => { c with elementOptionMap := c.elementOptionMap.modify i (updateEntry f) }
   | none => { c with elementOptionMap := c.elementOptionMap.push (el, f {}) }
 
 /-- `configure(ElkNode)`. -/
@@ -111,7 +117,7 @@ def propertiesElement? (c : LayoutConfigurator) (el : ElementId) : Option Proper
 /-- `configure(elementClass)`: updates the options stored for an element class. -/
 def configureClass (c : LayoutConfigurator) (cls : LayoutConfiguratorClass) (f : PropertyMap → PropertyMap) : LayoutConfigurator :=
   match c.classOptionMap.findIdx? (·.1 == cls) with
-  | some i => { c with classOptionMap := c.classOptionMap.modify i fun (k, m) => (k, f m) }
+  | some i => { c with classOptionMap := c.classOptionMap.modify i (updateEntry f) }
   | none => { c with classOptionMap := c.classOptionMap.push (cls, f {}) }
 
 /-- `getProperties(elementClass)`. -/

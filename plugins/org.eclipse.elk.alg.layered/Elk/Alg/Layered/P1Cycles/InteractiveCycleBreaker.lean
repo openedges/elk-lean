@@ -56,7 +56,7 @@ def findCycles (start : LNodeId) (revEdges : Array LEdgeId) : LayeredM (Array LE
       modifyNode node fun n => { n with id := 0 }
       stack := stack.pop
       continue
-    stack := stack.modify (stack.size - 1) fun (n, es, i) => (n, es, i + 1)
+    stack := stack.modifyIn (stack.size - 1) fun (n, es, i) => (n, es, i + 1)
     let (edge, target) := edges[idx]!
     let targetId := (← getNode target).id
     if targetId < 0 then

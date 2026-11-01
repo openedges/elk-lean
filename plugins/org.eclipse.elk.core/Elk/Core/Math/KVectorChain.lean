@@ -44,14 +44,23 @@ namespace KVectorChain
 /-- `removeLast`. -/
 @[inline] def removeLast (c : KVectorChain) : KVectorChain := c.pop
 
+/-! The per-vector updaters are out of line (PLAN 7.1 items 16, 59): an inlined lambda in
+`Array.map` tests the vector's exclusivity before its slot is cleared, so every vector was
+reallocated; the `@[noinline]` updater receives the unshared vector and reuses it. -/
+@[noinline] private def addValuesTo (dx dy : Float) (v : KVector) : KVector := v.addValues dx dy
+-- `o` passed as its coordinates: with two vector arguments the compiler reuses the cell of `o`
+-- (shared by all calls) instead of the vector's
+@[noinline] private def addTo (ox oy : Float) (v : KVector) : KVector := ⟨v.x + ox, v.y + oy⟩
+@[noinline] private def scaleBy (s : Float) (v : KVector) : KVector := v.scale s
+
 /-- `offset(dx, dy)` applied to every vector. -/
-def offsetValues (c : KVectorChain) (dx dy : Float) : KVectorChain := c.map (·.addValues dx dy)
+def offsetValues (c : KVectorChain) (dx dy : Float) : KVectorChain := c.map (addValuesTo dx dy)
 
 /-- `offset(KVector)`. -/
-def offset (c : KVectorChain) (o : KVector) : KVectorChain := c.map (· + o)
+def offset (c : KVectorChain) (o : KVector) : KVectorChain := c.map (addTo o.x o.y)
 
 /-- `scale`. -/
-def scale (c : KVectorChain) (s : Float) : KVectorChain := c.map (·.scale s)
+def scale (c : KVectorChain) (s : Float) : KVectorChain := c.map (scaleBy s)
 
 /-- `KVectorChain.reverse(chain)`. -/
 def reverse (c : KVectorChain) : KVectorChain := Array.reverse c

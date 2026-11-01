@@ -1,3 +1,4 @@
+import Elk.Graph.ArrayModify
 import Elk.Core.Util.Java
 import Elk.Core.Util.Sort
 import Elk.Alg.Common.Overlaps.OverlapRemovalDirection
@@ -103,15 +104,21 @@ private def rightBorderCmp (a b : Float × Nat) : Ordering :=
   | .eq => compare a.2 b.2
   | o => o
 
+/-- A node with an empty overlap list; out of line so that `Array.map` hands it the unshared node
+(PLAN 7.1 items 16, 59). -/
+@[noinline] private def clearOverlaps (n : RectangleNode) : RectangleNode := { n with overlappingNodes := #[] }
+
 /-- Rust `compute_overlaps`: scanline over the nodes (already sorted by x) that records,
 for every pair whose x ranges intersect, each node in the other's `overlappingNodes`. The
 active set is kept sorted by `(right border, index)` like the Rust `BTreeSet`. -/
 def computeOverlaps (nodes : Array RectangleNode) : Array RectangleNode := Id.run do
-  let mut nodes := nodes.map fun n => { n with overlappingNodes := #[] }
+  let mut nodes := nodes.map clearOverlaps
   let mut intersecting : Array (Float × Nat) := #[]
   for currentIndex in [0:nodes.size] do
     let some current := nodes[currentIndex]? | continue
     let scanlinePos := current.rectangle.x
+    -- read before the updates below: a live `current` would make every update copy the node
+    let rightBorder := current.rectangle.x + current.rectangle.width
     while true do
       match intersecting[0]? with
       | some first =>
@@ -120,11 +127,11 @@ def computeOverlaps (nodes : Array RectangleNode) : Array RectangleNode := Id.ru
         else break
       | none => break
     for (_, otherIndex) in intersecting do
-      nodes := nodes.modify currentIndex fun n =>
+      nodes := nodes.modifyIn currentIndex fun n =>
         { n with overlappingNodes := n.overlappingNodes.push otherIndex }
-      nodes := nodes.modify otherIndex fun n =>
+      nodes := nodes.modifyIn otherIndex fun n =>
         { n with overlappingNodes := n.overlappingNodes.push currentIndex }
-    let key := (current.rectangle.x + current.rectangle.width, currentIndex)
+    let key := (rightBorder, currentIndex)
     let pos := (intersecting.findIdx? fun k => rightBorderCmp key k == .lt).getD intersecting.size
     intersecting := intersecting.insertIdxIfInBounds pos key
   return nodes

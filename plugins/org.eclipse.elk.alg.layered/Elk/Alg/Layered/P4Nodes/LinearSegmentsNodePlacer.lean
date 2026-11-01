@@ -215,9 +215,9 @@ private def createDependencyGraphEdges (layers : Array LayerId) (dg : Dependency
       if cycleFound then
         if let some prev := previousNode then
           let prevId ← segIndexOf prev
-          incomingCount := incomingCount.modify currentSegmentId (· - 1)
+          incomingCount := incomingCount.modifyIn currentSegmentId (· - 1)
           let cur := currentSegmentId
-          outgoing := outgoing.modify prevId fun l => match l.idxOf? cur with
+          outgoing := outgoing.modifyIn prevId fun l => match l.idxOf? cur with
             | some i => l.eraseIdx! i
             | none => l
         let (shortened, newSegment) ← segments[currentSegmentId]!.split node nextId
@@ -228,16 +228,16 @@ private def createDependencyGraphEdges (layers : Array LayerId) (dg : Dependency
         if let some prev := previousNode then
           let prevId ← segIndexOf prev
           let nid := nextId
-          outgoing := outgoing.modify prevId (·.push nid)
+          outgoing := outgoing.modifyIn prevId (·.push nid)
         currentSegmentId := nextId
         nextId := nextId + 1
       if h' : pos + 1 < nodes.size then
         let nextSegmentId ← segIndexOf nodes[pos + 1]
-        outgoing := outgoing.modify currentSegmentId (·.push nextSegmentId)
-        incomingCount := incomingCount.modify nextSegmentId (· + 1)
+        outgoing := outgoing.modifyIn currentSegmentId (·.push nextSegmentId)
+        incomingCount := incomingCount.modifyIn nextSegmentId (· + 1)
       let li := layerIndex
       let il := indexInLayer
-      segments := segments.modify currentSegmentId fun s => { s with lastLayer := li, indexInLastLayer := (il : Int) }
+      segments := segments.modifyIn currentSegmentId fun s => { s with lastLayer := li, indexInLastLayer := (il : Int) }
       previousNode := some node
       indexInLayer := indexInLayer + 1
     layerIndex := layerIndex + 1
@@ -279,7 +279,7 @@ def sortLinearSegments (graph : LGraphId) : LayeredM (Array LinearSegment × Pri
     let targets := outgoing[segId]!
     outgoing := outgoing.set! segId #[]
     for target in targets do
-      incomingCount := incomingCount.modify target (· - 1)
+      incomingCount := incomingCount.modifyIn target (· - 1)
       if incomingCount[target]! == 0 then
         noIncoming := noIncoming.push target
   -- Java: a segment the topological sort never reached keeps rank 0, so a slot of the new array
@@ -428,9 +428,9 @@ def mergeRegions (graph : LGraphId) (segments : Array LinearSegment) (spacings :
           let weightSum := s1.weight + s2.weight
           let newDeflection := (Float.ofInt s2.weight * s2.deflection + Float.ofInt s1.weight * s1.deflection) /
             Float.ofInt weightSum
-          segments := segments.modify region2 fun s => { s with deflection := newDeflection, weight := weightSum }
+          segments := segments.modifyIn region2 fun s => { s with deflection := newDeflection, weight := weightSum }
           let r2 := region2
-          segments := segments.modify region1 fun s => { s with refSegment := some r2 }
+          segments := segments.modifyIn region1 fun s => { s with refSegment := some r2 }
           changed := true
       node1 := node2
       region1 := region2
@@ -457,9 +457,9 @@ def balancePlacement (graph : LGraphId) (segments : Array LinearSegment) (prios 
     let outgoing := mode != .forwPendulum
     let mut totalDeflection := fl0p0
     for index in [0:segments.size] do
-      segments := segments.modify index fun s => { s with refSegment := none }
+      segments := segments.modifyIn index fun s => { s with refSegment := none }
       let (deflection, weight) ← computeDeflection segments prios index incoming outgoing deflectionDampening
-      segments := segments.modify index fun s => { s with deflection := deflection, weight := weight }
+      segments := segments.modifyIn index fun s => { s with deflection := deflection, weight := weight }
       totalDeflection := totalDeflection + deflection.abs
     while true do
       let (changed, segs) ← mergeRegions graph segments spacings

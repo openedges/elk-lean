@@ -264,6 +264,15 @@ private def horizontalContextMargin (ctx : PortPlacementContext) (s : PortMargin
       return { ctx with margin := margin }
   return ctx
 
+/-- The uniform left/right margins of a context; out of line so that `Array.map` hands it the
+unshared context (PLAN 7.1 items 16, 59). -/
+@[noinline] private def withLeftRightMargins (l r : Float) (c : PortPlacementContext) : PortPlacementContext :=
+  { c with margin := { c.margin with left := l, right := r } }
+
+/-- The uniform top/bottom margins of a context (see `withLeftRightMargins`). -/
+@[noinline] private def withTopBottomMargins (t b : Float) (c : PortPlacementContext) : PortPlacementContext :=
+  { c with margin := { c.margin with top := t, bottom := b } }
+
 /-- Rust `setup_horizontal_port_margins(contexts, …)`: left/right margins of NORTH/SOUTH port
 contexts from their labels (overhang of labels next to the port, label width plus spacing
 otherwise, the fixed label bounds); OUTSIDE labels drop the outer margins (and the first context's
@@ -275,10 +284,10 @@ def setupHorizontalPortMargins (contexts : Array PortPlacementContext) (s : Port
   let mut contexts ← contexts.mapM fun ctx => horizontalContextMargin ctx s portLabelSpacingHorizontal
   if s.portLabelsOutside && !contexts.isEmpty then
     let rightmost := contexts.size - 1
-    contexts := contexts.modify 0 fun c => { c with margin := { c.margin with left := fl0p0 } }
-    contexts := contexts.modify rightmost fun c => { c with margin := { c.margin with right := fl0p0 } }
+    contexts := contexts.modifyIn 0 fun c => { c with margin := { c.margin with left := fl0p0 } }
+    contexts := contexts.modifyIn rightmost fun c => { c with margin := { c.margin with right := fl0p0 } }
     if spaceEfficientLabels && !(contexts[0]?.map (·.labelsNextToPort)).getD false then
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with right := fl0p0 } }
+      contexts := contexts.modifyIn 0 fun c => { c with margin := { c.margin with right := fl0p0 } }
   if s.uniformPortSpacing && !contexts.isEmpty then
     let mut maxLeft := fl0p0
     let mut maxRight := fl0p0
@@ -286,11 +295,11 @@ def setupHorizontalPortMargins (contexts : Array PortPlacementContext) (s : Port
       maxLeft := fmax maxLeft ctx.margin.left
       maxRight := fmax maxRight ctx.margin.right
     let (l, r) := (maxLeft, maxRight)
-    contexts := contexts.map fun c => { c with margin := { c.margin with left := l, right := r } }
+    contexts := contexts.map (withLeftRightMargins l r)
     if s.portLabelsOutside then
       let rightmost := contexts.size - 1
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with left := fl0p0 } }
-      contexts := contexts.modify rightmost fun c => { c with margin := { c.margin with right := fl0p0 } }
+      contexts := contexts.modifyIn 0 fun c => { c with margin := { c.margin with left := fl0p0 } }
+      contexts := contexts.modifyIn rightmost fun c => { c with margin := { c.margin with right := fl0p0 } }
   return contexts
 
 /-- Vertical per-context margin of `setup_vertical_port_margins` (first loop body). -/
@@ -334,10 +343,10 @@ def setupVerticalPortMargins (contexts : Array PortPlacementContext) (s : PortMa
   let mut contexts ← contexts.mapM fun ctx => verticalContextMargin ctx s portLabelSpacingVertical
   if s.portLabelsOutside && !contexts.isEmpty then
     let bottommost := contexts.size - 1
-    contexts := contexts.modify 0 fun c => { c with margin := { c.margin with top := fl0p0 } }
-    contexts := contexts.modify bottommost fun c => { c with margin := { c.margin with bottom := fl0p0 } }
+    contexts := contexts.modifyIn 0 fun c => { c with margin := { c.margin with top := fl0p0 } }
+    contexts := contexts.modifyIn bottommost fun c => { c with margin := { c.margin with bottom := fl0p0 } }
     if spaceEfficientLabels && !(contexts[0]?.map (·.labelsNextToPort)).getD false then
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with bottom := fl0p0 } }
+      contexts := contexts.modifyIn 0 fun c => { c with margin := { c.margin with bottom := fl0p0 } }
   if s.uniformPortSpacing && !contexts.isEmpty then
     let mut maxTop := fl0p0
     let mut maxBottom := fl0p0
@@ -345,11 +354,11 @@ def setupVerticalPortMargins (contexts : Array PortPlacementContext) (s : PortMa
       maxTop := fmax maxTop ctx.margin.top
       maxBottom := fmax maxBottom ctx.margin.bottom
     let (t, b) := (maxTop, maxBottom)
-    contexts := contexts.map fun c => { c with margin := { c.margin with top := t, bottom := b } }
+    contexts := contexts.map (withTopBottomMargins t b)
     if s.portLabelsOutside then
       let bottommost := contexts.size - 1
-      contexts := contexts.modify 0 fun c => { c with margin := { c.margin with top := fl0p0 } }
-      contexts := contexts.modify bottommost fun c => { c with margin := { c.margin with bottom := fl0p0 } }
+      contexts := contexts.modifyIn 0 fun c => { c with margin := { c.margin with top := fl0p0 } }
+      contexts := contexts.modifyIn bottommost fun c => { c with margin := { c.margin with bottom := fl0p0 } }
   return contexts
 
 /-- The start/end surrounding spacing along a side (Rust inline `match side` of

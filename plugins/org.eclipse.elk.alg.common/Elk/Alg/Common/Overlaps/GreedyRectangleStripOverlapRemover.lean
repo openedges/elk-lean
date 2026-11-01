@@ -19,6 +19,11 @@ open Elk.Core.Util
 
 namespace GreedyRectangleStripOverlapRemover
 
+/-- The node moved to `y`; out of line so that the update runs on the unshared node although the node
+was read at the start of the iteration (PLAN 7.1 items 16, 59). -/
+@[noinline] private def withY (y : Float) (n : RectangleNode) : RectangleNode :=
+  { n with rectangle := { n.rectangle with y := y } }
+
 /-- `GreedyRectangleStripOverlapRemover.removeOverlaps(overlapRemover)`: nodes are placed in
 order; each node's overlapping, already placed nodes are visited by ascending y
 (`total_cmp`, stable) and the node is pushed below every one it would collide with. -/
@@ -41,7 +46,7 @@ def removeOverlaps (_horizontalGap verticalGap : Float) (nodes : Array Rectangle
       if yPos < overlapRect.y + overlapRect.height + verticalGap
           && yPos + currHeight + verticalGap > overlapRect.y then
         yPos := overlapRect.y + overlapRect.height + verticalGap
-    nodes := nodes.modify nodeIndex fun n => { n with rectangle := { n.rectangle with y := yPos } }
+    nodes := nodes.modify nodeIndex (withY yPos)
     alreadyPlaced := alreadyPlaced.setIfInBounds nodeIndex true
     stripSize := fmax stripSize (yPos + currHeight)
   return (nodes, stripSize)
