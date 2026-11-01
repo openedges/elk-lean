@@ -2,6 +2,8 @@ import Elk.Alg.Common.Compaction.OneD.LongestPathCompaction
 import Elk.Alg.Common.Compaction.OneD.QuadraticConstraintCalculation
 import Elk.Alg.Common.Compaction.OneD.ScanlineConstraintCalculator
 import Elk.Core.Exceptions
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.common.compaction.oned.OneDimensionalCompactor`
 
@@ -22,7 +24,6 @@ Strategies run on the `CompactorState` part of the compactor (see `ICompactionAl
 indexed by `CNodeId`.
 -/
 /-! Float literal as a global constant (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Common.Compaction.OneD
 

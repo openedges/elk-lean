@@ -2,6 +2,8 @@ import Elk.Alg.Common.Compaction.Scanline
 import Elk.Alg.Common.Compaction.OneD.IConstraintCalculationAlgorithm
 import Elk.Alg.Common.Compaction.OneD.CompareFuzzy
 import Elk.Core.Exceptions
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.common.compaction.oned.ScanlineConstraintCalculator`
 
@@ -26,10 +28,6 @@ appends the recorded constraints to the nodes in the order the handler adds them
 monadic handler is kept as `sweepReference` (differential test `alg.common.compaction.scanlineFast`).
 `EdgeAwareScanlineConstraintCalculation` (layered) uses the same kernel with its own comparator.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Common.Compaction.OneD
 

@@ -1,4 +1,6 @@
 import Elk.Alg.Common.NetworkSimplex.NNode
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.common.networksimplex.NEdge` (elk-rs `n_edge.rs`)
 
@@ -8,10 +10,6 @@ and a minimum length (`delta`).
 `NEdgeBuilder.create` and `NEdge.reverse` modify the incident nodes and are
 therefore defined in `Elk.Alg.Common.NetworkSimplex.NGraph`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Common.NetworkSimplex
 

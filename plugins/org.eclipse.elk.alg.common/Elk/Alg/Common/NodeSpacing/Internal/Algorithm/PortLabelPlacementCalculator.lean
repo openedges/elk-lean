@@ -1,6 +1,8 @@
 import Elk.Core.Util.Java
 import Elk.Alg.Common.Overlaps.RectangleStripOverlapRemover
 import Elk.Alg.Common.NodeSpacing.Internal.Algorithm.NodeLabelAndSizeUtilities
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.common.nodespacing.internal.algorithm.PortLabelPlacementCalculator`
 
@@ -31,11 +33,6 @@ Deviations from Java (following elk-rs): `ElkMath.maxd` / `Math.max` / `Math.min
 label cell. A northern/southern side without an inside port label cell skips the constrained
 inside placement (Java would throw a `NullPointerException`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Common.NodeSpacing.Internal.Algorithm
 
