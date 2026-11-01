@@ -297,6 +297,11 @@ elk-rs HEAD `trace_recorder.rs`와 동일한 `<trace_dir>/<model>/step_NNN_<Proc
 78. **어댑터 없는 fast path의 빌더는 공유한다**(FIX, `NodeContext.build`): 어댑터를 읽는 단계와 컨텍스트 빌더를 분리하고 `defaultOverride`를 `@[specialize]` 함수 인자로 받으면, arena 경로는 상수를 넘겨 클로저 호출이 사라지고 논리는 일반 경로와 공유된다(37번 계열; 차분 3,000 그래프).
 79. **핫 스캔의 `USize` 인덱스**(FIX, `PropertyMap.indexFrom`): 증명된 `USize` 인덱스와 `uget`으로 바꾼 키 스캔이 작은 모델에서 −1.5%(15번 관용구를 가장 뜨거운 스캔에 적용).
 80. **null 모니터의 인라인 디스패치**(FIX, `ProgressMonitor`): `begin/done/subTask/isCanceled`를 `ProgressMonitor.state`에 대한 `@[inline]` 디스패치로 두면 null 모니터에서는 호출도 `IO` 결과 객체도 없다(−1.4%; 58번 계열). 기본 모니터 경로(`beginBasic` 등)는 의미 불변.
+81. **`let mut g` + `modifyCNode`/`modifyCGroup` + `continue`/분기의 `for` 루프는 join마다 arena 레코드와 요소를 재구성한다**(P3R, `LongestPathCompaction.Pure`): 언팩 배열 위의 꼬리 재귀 루프로 쓰고 레코드는 클로저가 필요한 곳에서만 만든다(ticket 213 −4.2%).
+82. **자주 쓰는 데이터 모양의 경우가 있는 전략 클로저는 데이터형이 있는 inductive로 둔다**(P3R, `LockFunction.flags`, `SpacingsHandler.individualMin`): 데이터형은 클로저·박싱 결과·그래프 값 없이 인라인 평가되고 루프 불변 호이스팅(`isLockedGroup` 그룹마다 1회)이 가능하다. 클로저형은 일반 사용자용으로 유지.
+83. **사전식 정렬의 소비자가 키에서 유도되는 성질만 읽으면 키를 2^62 미만 `Nat`으로 패킹해 키 자체를 정렬한다**(P3R, 겹침 코너): 같은 키는 소비자에게 구별되지 않으므로 어떤 정렬이든 결과가 같다(범위 밖 값은 참조 경로 폴백; InverseKinematics −4.9%·CounterMachine −2.9%). `stableSort … compare`보다 keyed `Nat` 패스가 낫다(`Ordering`+`Ordering.ctorIdx` 비용 −1.2%).
+84. **정렬이 여전히 구조체를 옮겨야 하고 비교자가 싼 3필드라면 패킹은 손해다**(P3R, 하이퍼엣지 정렬 키: +0.4%).
+85. **모나드 접근자를 핸들러 형태 `match`로 나눌 때는 분기마다 `return` 하나씩 쓴다**(P3R): join 뒤에 클로저의 박싱된 `Float` 결과를 풀었다 다시 싸는 대신 그대로 전달된다.
 
 ## 8. 배포 설계
 - **CLI**: `elk layout [-f json|elkt] [-a <algorithm>] [-o out] [--pretty] [--sort-keys] [--trace-dir DIR] [--lenient] input`, `elk convert`, `elk algorithms|options|categories`, `elk --version`.
