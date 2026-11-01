@@ -61,6 +61,18 @@ def parseOptionValue (od : LayoutOptionData) (value : String) : ImportM (Option 
     | none => return none
   | _ => return od.parseValue value
 
+/-- The options ELK Java 0.12.0 registers with type `OBJECT` and a class that is no `IDataObject`
+(Java ids, from `LayoutMetaDataService.getOptionData()` of the reference JVM): their string values
+cannot be parsed (`LayoutOptionData.createDataInstance` throws). Options that elk-lean registers as
+objects without parser but that ELK Java does not know (`mrtree.graphProperties`) stay ignored, like
+Java's unknown options. -/
+def javaObjectOptionsWithoutDataType : Array String := #[
+  "org.eclipse.elk.disco.debug.discoGraph", "org.eclipse.elk.disco.debug.discoPolys",
+  "org.eclipse.elk.labelManager", "org.eclipse.elk.labels.labelManager",
+  "org.eclipse.elk.layered.considerModelOrder.groupModelOrder.cmEnforcedGroupOrders",
+  "org.eclipse.elk.layered.wrapping.cutting.cuts", "org.eclipse.elk.layered.wrapping.validify.forbiddenIndices",
+  "org.eclipse.elk.resolvedAlgorithm", "org.eclipse.elk.topdown.sizeApproximator"]
+
 /-- `set_option`: parses the string value with the option's parser and stores
 it under the canonical id. Unknown options and unparsable values are ignored.
 
@@ -82,7 +94,8 @@ def setOption (props : PropertyMap) (id : String) (value : String) : ImportM Pro
       let javaId := match od.legacyIds.find? (·.startsWith "org.eclipse.elk.layered.") with
         | some l => l
         | none => od.id
-      throwIllegalState s!"IDataType class expected for layout option {javaId}"
+      if javaObjectOptionsWithoutDataType.contains javaId then
+        throwIllegalState s!"IDataType class expected for layout option {javaId}"
     match ← parseOptionValue od value with
     | some v => return props.setRawById od.id v
     | none => return props
