@@ -42,15 +42,18 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17168 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17185 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
-  graphs per run plus option-focused, crossing-minimisation, DisCo and hierarchical model-order
-  variant sets): where both succeed, 5,711 of 5,761 layouts (99.1%) are exact (DisCo set: 5,067 to
-  5,073 of 5,104, varying with Java's own run; hierarchical model-order set: 2,175 of 2,271, the
+  graphs per run plus option-focused, crossing-minimisation, DisCo, hierarchical model-order and
+  feature-coverage variant sets): where both succeed, 5,711 of 5,761 layouts (99.1%) are exact (DisCo set: 5,067 to
+  5,073 of 5,104, varying with Java's own run; hierarchical model-order set: 2,175 of 2,271; the
+  wrapping / comment box / hypernode / edge-label / spline / BK-alignment set: 5,481/5,652; the
   rest depend on Java's run context); every input Java rejects fails in elk-lean with Java's
   exception class and message (hot-path exceptions whose message HotSpot omits excepted). Like ELK Java's JSON path, the engine
-  does not validate option ranges (out-of-range values reach the algorithm and behave as in Java).
+  does not validate option ranges (out-of-range values reach the algorithm and behave as in Java),
+  and object-typed options that Java cannot read from JSON (`labels.labelManager`, manual wrapping
+  cuts, ...) are rejected with Java's `IllegalStateException`.
   The remaining differences come from Java's own run context (identity hash codes, `HashSet` and
   `HashMap` orders, thread races, heap-size-dependent errors) and are documented in
   `docs/robustness-random-graphs.md`. To reach this, elk-lean reproduces JDK 21 `TimSort`
@@ -78,27 +81,36 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   (24 B per dependency), so a node with 5,000 ports peaks at 648 MB instead of 1.2 GB. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
 
 ### Known differences
-- **119 context-dependent models**: ELK Java iterates a few `HashMap`/`HashSet`s keyed by objects
-  without their own `hashCode` (self-loop port sides, partition members), so its result depends
-  on identity hash codes handed out earlier in the JVM. elk-lean uses the enumeration order
-  (patch 0001 for Java); of 172 models whose Java result varies between runs, 170 equal one of
-  the observed Java results. Models listed in `HISTORY.md`.
-- **ticket 213** (`tickets/layered/213_componentsCompaction.elkt`): unmodified Java emits NaN
-  coordinates; elk-lean keeps a finite result on purpose.
+All remaining differences to unmodified ELK Java 0.12.0 are cases where Java's own result depends
+on its run context, plus two deliberate choices; every deterministic difference found by the
+corpus and by the random sets (including the feature-coverage set `w`) has been fixed, and the
+modules no longer follow elk-rs where it deviated from Java (`docs/robustness-random-graphs.md`
+§21 lists the resolution of each former note).
+- **Java run context** (not reproducible: no two Java runs agree either): a few `HashMap`/`HashSet`s
+  are keyed by objects without their own `hashCode` (self-loop port sides, partition members,
+  parallel end-label groups, DisCo extension edges, radial next-level sets), so their order
+  depends on identity hash codes handed out earlier in the JVM; exceptions thrown inside DisCo's
+  parallel streams lose or wrap their message on worker threads; HotSpot omits the message of
+  hot-path exceptions (fast throw); `StackOverflowError` depth and out-of-memory depend on the
+  JVM's stack and heap; SPOrE uses `Math.random()` for nodes at the same centre. elk-lean uses the
+  enumeration / insertion order, which equals Java with a one-line patch (patch 0001) and equals
+  one of the observed Java results (corpus: 170 of 172 varying models; the 119 context-dependent
+  corpus models are listed in `HISTORY.md`).
+- **Deliberate choices**: Java's Gson writes `NaN` literals into the JSON where a layout produced
+  non-finite coordinates; elk-lean writes `null` (same numbers otherwise). For
+  `tickets/layered/213_componentsCompaction.elkt` unmodified Java emits NaN coordinates; elk-lean
+  keeps a finite result. Inputs on which Java does not terminate (`WEDGE_COMPACTION`,
+  `STRETCH_WIDTH` layering on some graphs) are not reproduced.
+- **Unreachable code**: `LabelManagementProcessor` cannot be reached through JSON, elkjs or the
+  CLI (Java's JSON importer rejects `labels.labelManager`, and so does elk-lean); it is covered by
+  unit tests only.
 - **topdownpacking** is registered by Java ELK but not by elk-rs/elkjs; elk-lean registers it as
   a Lean extension at rank 100, after the nine elk-rs algorithms (order layered, disco, force,
   mrtree, radial, rectpacking, spore, stress, vertiflex).
-- **Behaviours inherited from elk-rs where it deviates from Java** (recorded as "oracle
-  quirks" (오라클 특이점) rows in `HISTORY.md`): `NodePromotion` Nikolov strategies are no-ops (only the two
-  model-order strategies are implemented); `BreakingPointInserter.applyCuts` index counting for
-  the second and later cuts; vertiflex `considerNodeModelOrder` panics for nodes with exactly two
-  children in elk-rs; enum options without a parser (`elk.force.model`, `elk.stress.dimension`,
-  vertiflex `layoutStrategy`) ignore their JSON string value as in elk-rs; spore/overlap
-  handlers iterate sets in insertion order where elk-rs is nondeterministic. The result
-  reference remains ELK Java; wherever these differ from Java the Java comparison column of
-  the corpus run is authoritative.
 - 3 interactive models give different output with and without `--trace-dir`: tracing forces the
   layered algorithm (closed as intended behaviour, see `HISTORY.md`).
+- Phase-trace step files are named after the Java processor classes; the elk-rs comparison maps
+  the five differently named elk-rs processors through an alias table.
 
 ### Not yet available
 - Packages are not published (all `package.json` carry `"private": true`).
