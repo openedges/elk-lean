@@ -220,7 +220,7 @@ def createExternalPortDummyFor (graph : LGraphId) (parentNode : LNodeId) (portTy
       let netFlow : Int := if portType == .input then -1 else 1
       let props ← createExternalPortProperties graph
       let (dummy, _) ← LGraphUtil.createExternalPortDummy props portConstraints portSide netFlow
-        none ⟨0.0, 0.0⟩ ⟨0.0, 0.0⟩ layoutDirection graph
+        none ⟨fl0p0, fl0p0⟩ ⟨fl0p0, fl0p0⟩ layoutDirection graph
       let dummyPort ← createPortForDummy dummy parentNode portType
       modifyNode dummy fun nd => { nd with internal := { nd.internal with origin := some (.lPort dummyPort) } }
       putDummy dummyPort dummy
@@ -405,7 +405,7 @@ def ensureExternalPortDummy (graph : LGraphId) (port : LPortId) (fallbackConstra
   let props ← portPropertyHolder port
   -- Java inside-self-loop path uses PortConstraints.FREE with null position/node-size context.
   let (dummy, _) ← LGraphUtil.createExternalPortDummy props fallbackConstraints pt.side netFlow
-    none ⟨0.0, 0.0⟩ pt.size direction graph
+    none ⟨fl0p0, fl0p0⟩ pt.size direction graph
   modifyNode dummy fun nd => { nd with internal := { nd.internal with origin := some (.lPort port) } }
   putDummy port dummy
   modifyGraph graph fun g => { g with layerlessNodes := g.layerlessNodes.push dummy }

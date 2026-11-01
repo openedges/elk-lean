@@ -416,13 +416,13 @@ def createExternalPortDummy (propertyHolder : PropertyMap) (portConstraints : Po
         if portConstraints.isRatioFixed then
           let some size := portNodeSize
             | throwNullPointer "Cannot read field \"y\" because \"portNodeSize\" is null"
-          if size.y > 0.0 then infoValue := infoValue / size.y
+          if size.y > fl0p0 then infoValue := infoValue / size.y
       | .north | .south =>
         infoValue := portPosition.x
         if portConstraints.isRatioFixed then
           let some size := portNodeSize
             | throwNullPointer "Cannot read field \"x\" because \"portNodeSize\" is null"
-          if size.x > 0.0 then infoValue := infoValue / size.x
+          if size.x > fl0p0 then infoValue := infoValue / size.x
       | .undefined => pure ()
     let v := infoValue
     modifyNode dummy fun nd => { nd with internal := { nd.internal with portRatioOrPosition := v } }
