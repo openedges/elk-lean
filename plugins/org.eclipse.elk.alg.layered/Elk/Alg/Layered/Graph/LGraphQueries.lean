@@ -48,6 +48,25 @@ where
     else indices.set! (ElkEnum.ordinal currentSide) (some (firstIndex, i))
   termination_by ports.size - i
 
+/-- `findPortIndices` as the original `for` loop (reference of the differential test). -/
+def findPortIndicesRef (a : LGraphArena) (n : LNodeId) : Array (Option (Nat × Nat)) := Id.run do
+  let ports := (a.node n).ports
+  let mut indices : Array (Option (Nat × Nat)) := Array.replicate 5 none
+  if ports.isEmpty then return indices
+  let mut firstIndex := 0
+  let mut currentSide := PortSide.north
+  let mut currentIndex := 0
+  for p in ports do
+    let side := (a.port p).side
+    if side != currentSide then
+      if firstIndex != currentIndex then
+        indices := indices.set! (ElkEnum.ordinal currentSide) (some (firstIndex, currentIndex))
+      currentSide := side
+      firstIndex := currentIndex
+    currentIndex := currentIndex + 1
+  indices := indices.set! (ElkEnum.ordinal currentSide) (some (firstIndex, currentIndex))
+  return indices
+
 /-- `LNode.getPortSideView(side)`: `ports.subList(first, last)` of the `[first, last)` range of `side`
 in the port side cache (`cachePortSides()`, set by `PortListSorter` and `SweepCopy`), or in a fresh
 `findPortIndices()` without a cache. Like Java the range is not re-validated: ports added after

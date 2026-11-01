@@ -700,8 +700,72 @@ def marginFastPathTests : Suite := suite "alg.common.nodespacing.marginFastPath"
   check "NodeMicroLayout: forGraph (fast path) and forAdapter agree on 40 graphs" microAgree
   check "NodeMicroLayout: some graphs are laid out" (microRuns > 5)
 
+/-! ### `computeInsideNodeLabelPadding` (no-label fast path, SMF) against `computeInsideNodeLabelPaddingRef` -/
+
+/-- The padding as bit patterns, or the exception text. -/
+private def paddingBits (r : Except String ElkPadding) : String :=
+  match r with
+  | .ok p => toString #[p.top.toBits, p.bottom.toBits, p.left.toBits, p.right.toBits]
+  | .error e => "error: " ++ e
+
+def insidePaddingFastPathTests : Suite := suite "alg.common.nodespacing.insidePaddingFastPath" do
+  let mut mismatches := 0
+  let mut runs := 0
+  let mut errors := 0
+  let mut withoutLabels := 0
+  let mut nonZero := 0
+  for seed in [0:300] do
+    let (root, g) ← ElkM.run (randomMarginGraph (seed.toUInt64 * 2246822519 + 3)) {}
+    let nodes := #[root] ++ (g.node root).children
+    let mut r := seed.toUInt64 * 3266489917 + 1
+    let mut g := g
+    -- random node label placements (some invalid), port label placements, size options/constraints
+    for n in nodes do
+      let (nl, r1) := lcgBelow r 512; let (pl, r2) := lcgBelow r1 32; let (so, r3) := lcgBelow r2 4
+      let (sc, r4) := lcgBelow r3 4; let (gap, r5) := lcgBelow r4 4
+      r := r5
+      let nlp := (ElkEnum.values : Array NodeLabelPlacement).foldl (init := (EnumSet.empty, 0))
+        (fun (acc : EnumSet NodeLabelPlacement × Nat) x =>
+          (if (nl >>> acc.2) % 2 == 1 then acc.1.insert x else acc.1, acc.2 + 1)) |>.1
+      let plp := (ElkEnum.values : Array PortLabelPlacement).foldl (init := (EnumSet.empty, 0))
+        (fun (acc : EnumSet PortLabelPlacement × Nat) x =>
+          (if (pl >>> acc.2) % 2 == 1 then acc.1.insert x else acc.1, acc.2 + 1)) |>.1
+      let ((), g1) ← ElkM.run (do
+        if nl % 3 != 0 then ElkM.setNodeProp n CoreOptions.NODE_LABELS_PLACEMENT nlp
+        if pl % 2 == 1 then ElkM.setNodeProp n CoreOptions.PORT_LABELS_PLACEMENT plp
+        if so == 1 then
+          ElkM.setNodeProp n CoreOptions.NODE_SIZE_OPTIONS
+            (EnumSet.of #[SizeOptions.minimumSizeAccountsForPadding, .defaultMinimumSize])
+        if so == 2 then ElkM.setNodeProp n CoreOptions.NODE_SIZE_OPTIONS (EnumSet.of #[SizeOptions.forceTabularNodeLabels])
+        if sc != 0 then ElkM.setNodeProp n CoreOptions.NODE_SIZE_CONSTRAINTS (EnumSet.of #[SizeConstraint.minimumSize])
+        if gap != 0 then ElkM.setNodeProp n CoreOptions.SPACING_LABEL_LABEL (gap.toFloat * 1.25)
+        if gap == 3 then ElkM.setNodeProp n CoreOptions.NODE_LABELS_PADDING { top := 1.0, bottom := 2.0, left := 3.0, right := 4.0 })
+        g
+      g := g1
+    for n in nodes do
+      for dir in #[Direction.right, .down, .undefined] do
+        let run (ref : Bool) : IO (Except String ElkPadding) := do
+          try
+            let (p, _) ← ElkM.run (do
+              let a ← ElkGraphAdapters.adaptSingleNode n
+              if ref then NodeLabelAndSizeCalculator.computeInsideNodeLabelPaddingRef a n dir
+              else NodeLabelAndSizeCalculator.computeInsideNodeLabelPadding a n dir) g
+            pure (.ok p)
+          catch e => pure (.error (toString e))
+        let fast ← run false
+        let ref ← run true
+        runs := runs + 1
+        if (g.node n).labels.isEmpty then withoutLabels := withoutLabels + 1
+        match fast with
+        | .error _ => errors := errors + 1
+        | .ok p => if p.top != 0.0 || p.bottom != 0.0 || p.left != 0.0 || p.right != 0.0 then nonZero := nonZero + 1
+        if paddingBits fast != paddingBits ref then mismatches := mismatches + 1
+  checkEq s!"fast path padding = reference ({runs} runs, {errors} exceptions, {withoutLabels} without labels)" mismatches 0
+  check "the random nodes exercise exceptions, nodes without labels and non-zero paddings"
+    (errors > 0 && withoutLabels > 0 && nonZero > 0 && runs > errors)
+
 def suites : Array Tests.Suite :=
   #[nodeMarginTests, dimensionTests, microLayoutTests, nextToPortRuleTests, portLabelPlacementTests,
-    nodeMicroLayoutTests, cellSystemProcessTests, issue475Tests, marginFastPathTests]
+    nodeMicroLayoutTests, cellSystemProcessTests, issue475Tests, marginFastPathTests, insidePaddingFastPathTests]
 
 end Tests.AlgCommon.NodeSpacing.All

@@ -69,6 +69,11 @@ else reads a `RANDOM` while the minimiser runs, so every shared state is written
   `crossmin: with_counter …` lines are reproduced (same format); `CROSSMIN_RANDOM_TRACE` lines are for the
   seed, the sweep directions and (in `GraphInfoHolder`) the distributor draw.
 -/
+/-! Float literals as global constants (FL): with `holderAt` inlined, the compiler shares a literal's
+`Nat`/`Bool` arguments with unrelated values (CSE) and parses it on every evaluation
+(`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P3Order
 
 open Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -545,8 +550,8 @@ weighted by its node and port influence (counted first), plus its crossings, plu
 crossings of the nested graphs swept into, summed in Java's `double` order. -/
 def countCurrentNumberOfCrossingsNodePortOrder (startIndex : Nat) : SweepM Float := do
   let h ← holderAt startIndex
-  let mut totalCrossings : Float := 0.0
-  let mut modelOrderInfluence : Float := 0.0
+  let mut totalCrossings : Float := fl0p0
+  let mut modelOrderInfluence : Float := fl0p0
   if h.considerModelOrderStrategy != .none then
     let order := h.currentNodeOrder
     let ctx ← graphContext h.lGraph
@@ -688,7 +693,7 @@ def minimizeCrossingsWithCounter (index : Nat) : SweepM Int := do
   let initialCrossingsCount ← countCurrentNumberOfCrossings index
   let initialCrossings := Float.ofInt initialCrossingsCount
   if ElkTrace.global.crossmin then IO.eprintln s!"crossmin: with_counter initial_crossings={initialCrossingsCount}"
-  if initialCrossings == 0.0 && (← holderAt index).firstTryWithInitialOrder then return 0
+  if initialCrossings == fl0p0 && (← holderAt index).firstTryWithInitialOrder then return 0
   isForwardSweep ← firstSweepWithCounter index isForwardSweep
   let mut crossingsInGraph ← countCurrentNumberOfCrossings index
   if ElkTrace.global.crossmin then IO.eprintln s!"crossmin: with_counter crossings_in_graph={crossingsInGraph}"
@@ -710,13 +715,13 @@ with the model-order-weighted count. -/
 def minimizeCrossingsNodePortOrderWithCounter (index : Nat) : SweepM Float := do
   let mut isForwardSweep ← nextBooleanForGraph index
   let initialCrossings ← countCurrentNumberOfCrossingsNodePortOrder index
-  if initialCrossings == 0.0 && (← holderAt index).firstTryWithInitialOrder then return 0.0
+  if initialCrossings == fl0p0 && (← holderAt index).firstTryWithInitialOrder then return fl0p0
   isForwardSweep ← firstSweepWithCounter index isForwardSweep
   let mut crossingsInGraph ← countCurrentNumberOfCrossingsNodePortOrder index
-  let mut oldNumberOfCrossings : Float := 0.0
+  let mut oldNumberOfCrossings : Float := fl0p0
   repeat
     setCurrentlyBestNodeOrders
-    if crossingsInGraph == 0.0 then return 0.0
+    if crossingsInGraph == fl0p0 then return fl0p0
     isForwardSweep := !isForwardSweep
     oldNumberOfCrossings := crossingsInGraph
     let _ ← sweepReducingCrossings index isForwardSweep false
@@ -734,7 +739,7 @@ def compareRandomizedNodePortOrder (index : Nat) (thoroughness : Int) : SweepM U
     if crossings < bestCrossings then
       bestCrossings := crossings
       saveAllNodeOrdersOfChangedGraphs
-      if bestCrossings == 0.0 then break
+      if bestCrossings == fl0p0 then break
 
 /-- The plain branch of `compare_different_randomized_layouts`. -/
 def compareRandomizedPlain (index : Nat) (thoroughness : Int) : SweepM Unit := do
@@ -755,7 +760,7 @@ def compareDifferentRandomizedLayouts (index : Nat) : SweepM Unit := do
   if h.considerModelOrderStrategy != .none then
     modifyHolder index fun h => { h with firstTryWithInitialOrder := true }
   h.crossMinimizer.resetSweepIteration
-  if h.nodeInfluence != 0.0 then
+  if h.nodeInfluence != fl0p0 then
     compareRandomizedNodePortOrder index h.thoroughness
   else
     compareRandomizedPlain index h.thoroughness
