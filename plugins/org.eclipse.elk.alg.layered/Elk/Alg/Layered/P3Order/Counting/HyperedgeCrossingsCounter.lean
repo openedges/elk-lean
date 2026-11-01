@@ -579,13 +579,58 @@ partial def cornerUppers (k : Nat) (upper : ByteArray) : ByteArray :=
 
 /-- `countOverlapCrossings` of one side: the corners `(upper, lower, id, upper corner)` and
 `(lower, upper, id, lower corner)` of every hyperedge (`left`: the left bounds, else the right ones),
-in hyperedge order. -/
-def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int :=
+in hyperedge order, sorted by `cornerGreater` (the reference of `countOverlapCrossingsOf`). -/
+def countOverlapCrossingsOfRef (hyperedges : Array Hyperedge) (left : Bool) : Int :=
   let n := 2 * hyperedges.size
   let (pos, opp) := cornerPositions hyperedges left 0 (Array.emptyWithCapacity n) (Array.emptyWithCapacity n)
   let ids := cornerIds hyperedges 0 (Array.emptyWithCapacity n)
   let upper := cornerUppers hyperedges.size (ByteArray.emptyWithCapacity n)
   overlapSweep upper (keyedStableSort n (cornerGreater pos opp ids upper)) 0 0 0
+
+/-- `2^20`: the bound of a position in a packed corner key. -/
+private def cornerPosBound : Int := 1048576
+
+/-- `2^21`: the bound of an identity in a packed corner key. -/
+private def cornerIdBound : Nat := 2097152
+
+/-- The corners of `hyperedges[i:]` as packed keys pushed onto `keys` (`none` when a position is
+outside `[0, 2^20)` or an identity outside `[0, 2^21)`): position in bits 42–61, opposite position in
+bits 22–41, identity in bits 1–21, bit 0 set for a lower corner. The keys are below `2^62` (unboxed
+`Nat`s) and their order is `cornerGreater`'s lexicographic order (position, opposite position,
+identity, upper before lower). -/
+partial def packCorners (hyperedges : Array Hyperedge) (left : Bool) (i : Nat) (keys : Array Nat) : Option (Array Nat) :=
+  if h : i < hyperedges.size then
+    let he := hyperedges[i]
+    let u := if left then he.upperLeft else he.upperRight
+    let l := if left then he.lowerLeft else he.lowerRight
+    let id := he.identity
+    if 0 ≤ u && u < cornerPosBound && 0 ≤ l && l < cornerPosBound && id < cornerIdBound then
+      let u64 := u.toNat.toUInt64
+      let l64 := l.toNat.toUInt64
+      let id64 := id.toUInt64 <<< 1
+      let ku := ((u64 <<< 42) ||| (l64 <<< 22) ||| id64).toNat
+      let kl := ((l64 <<< 42) ||| (u64 <<< 22) ||| id64 ||| 1).toNat
+      packCorners hyperedges left (i + 1) ((keys.push ku).push kl)
+    else none
+  else some keys
+
+/-- `overlapSweep` over sorted packed corner keys `keys[k:]` (bit 0 clear: an upper corner). -/
+partial def overlapSweepKeys (keys : Array Nat) (k : Nat) (open_ crossings : Int) : Int :=
+  if h : k < keys.size then
+    if keys[k] % 2 == 0 then overlapSweepKeys keys (k + 1) (open_ + 1) crossings
+    else overlapSweepKeys keys (k + 1) (open_ - 1) (crossings + (open_ - 1))
+  else crossings
+
+/-- `countOverlapCrossings` of one side (see `countOverlapCrossingsOfRef`). The sweep only reads the
+kind (upper/lower) of the corners in sorted order. Each corner's key `(position, opposite position,
+identity, kind)` is packed into one `Nat` whose numeric order is `cornerGreater`'s order (when the
+values fit, else the reference runs), so the packed keys are sorted directly: two corners with equal
+keys have the same kind, so every sort by the key gives the same kind sequence as the stable index sort
+of the reference. -/
+def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int :=
+  match packCorners hyperedges left 0 (Array.emptyWithCapacity (2 * hyperedges.size)) with
+  | some keys => overlapSweepKeys (stableSort keys compare) 0 0 0
+  | none => countOverlapCrossingsOfRef hyperedges left
 
 /-- `countCrossingsPure` with the scratch arrays (see "Allocation-poor counting"); the scratch is
 returned zeroed. -/

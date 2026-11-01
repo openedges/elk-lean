@@ -1979,6 +1979,36 @@ def hyperedgeDifferential (seeds : Nat) : IO (Nat × Nat) := do
     nonZero := nonZero + nz
   return (mismatches, nonZero)
 
+/-- Random hyperedges (positions from a small range with ties, some out of the packed range or
+negative, repeated identities, some identities beyond the packed range) sorted like
+`countCrossingsFast`: whether `countOverlapCrossingsOf` (packed keys) and
+`countOverlapCrossingsOfRef` agree on both sides; the number of mismatches and of nonzero counts. -/
+def overlapPackedDifferential (seeds : Nat) : IO (Nat × Nat) := do
+  let mut mismatches := 0
+  let mut nonZero := 0
+  for seed in [0:seeds] do
+    let r ← IO.mkRef (Random.ofInt (seed + 7919))
+    let n := 1 + (← rnd r 40)
+    let range := 1 + (← rnd r 12)
+    let wide := (← rnd r 6) == 0
+    let mut hs : Array Hyperedge := #[]
+    for _ in [0:n] do
+      let v : IO Int := do
+        let k ← rnd r (range + 1)
+        if wide && (← rnd r 9) == 0 then
+          return (if (← rnd r 2) == 0 then -1 - (k : Int) else 1048576 + (k : Int))
+        return (k : Int)
+      let id ← if wide && (← rnd r 9) == 0 then pure (2097152 + (← rnd r 3)) else rnd r (n + 3)
+      hs := hs.push { identity := id, upperLeft := ← v, lowerLeft := ← v, upperRight := ← v, lowerRight := ← v }
+    let perm := keyedStableSort hs.size fun i j => HyperedgeCrossingsCounter.hyperedgeGreater hs[i]! hs[j]!
+    let sorted := perm.map fun i => hs[i]!
+    for left in [true, false] do
+      let a := HyperedgeCrossingsCounter.countOverlapCrossingsOf sorted left
+      let b := HyperedgeCrossingsCounter.countOverlapCrossingsOfRef sorted left
+      if a != b then mismatches := mismatches + 1
+      if a != 0 then nonZero := nonZero + 1
+  return (mismatches, nonZero)
+
 /-- A random graph of two layers with north/south port dummies (`addNorthSouthEdge`, both
 directions), long-edge dummies, normal nodes with east/west ports and random layout units; the
 layers shuffled, ids assigned, random port side caches. -/
@@ -2151,6 +2181,9 @@ def fastPathTests : Suite := suite "layered.p3counting.fast_paths" do
   let (mismatches, nonZero) ← hyperedgeDifferential 400
   checkEq "hyperedge fast = port (400 random graphs, 3200 layer pairs)" mismatches 0
   check s!"hyperedge differential runs count crossings ({nonZero} with crossings)" (nonZero > 400)
+  let (mismatches, nonZero) ← overlapPackedDifferential 3000
+  checkEq "overlap crossings: packed corner keys = index sort (3000 random hyperedge sets, both sides)" mismatches 0
+  check s!"overlap differential counts crossings ({nonZero} with crossings)" (nonZero > 3000)
   let (mismatches, nonZero) ← inLayerDifferential 400
   checkEq "in-layer snapshot path = live path (400 random graphs, 14400 calls)" mismatches 0
   check s!"in-layer differential calls count crossings ({nonZero} with crossings)" (nonZero > 300)
