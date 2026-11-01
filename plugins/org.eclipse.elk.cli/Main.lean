@@ -11,9 +11,11 @@ elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup
 elk algorithms | options [--choices] | categories
 elk --version
 ```
-Every command accepts `--threads N` (anywhere on the command line): the cap of the parallel sibling
-layout (`Elk.Core.Parallel`, `docs/parallel-layout.md`); `1` is sequential, the default is
-`ELK_LEAN_THREADS` or `min(hardware threads, 8)`. Outputs do not depend on it.
+Every command accepts `--threads N` (anywhere on the command line, the last one counts): the cap of
+the parallel sibling layout (`Elk.Core.Parallel`, `docs/parallel-layout.md`); `1` is sequential, the
+default is `ELK_LEAN_THREADS` or `min(hardware threads, 8)`, except for `elk bench`, which is sequential
+unless `--threads` or `ELK_LEAN_THREADS` is given (elk-rs `rust_api` is single-threaded). Outputs do not
+depend on it.
 `bench` is elk-rs `perf_benchmark --engine rust_api` (same graphs, same CSV; engine `lean_api`).
 `layout` and `convert` read ELK Text (`.elkt`) input through `Elk.Text.parseElkt`; `--defaults` applies the
 elk-live defaults (node size 30, port size 5) to shapes without a size.
@@ -267,21 +269,19 @@ def runBench (args : List String) : IO UInt32 := do
   | none => IO.print csv
   return 0
 
-/-- Removes `--threads N` from the arguments: `some (rest, N)`, `none` when absent; an invalid `N` is
-an error. -/
+/-- Removes every `--threads N` from the arguments; the last `N` counts (`none` when absent). An
+invalid `N` is an error. -/
 def extractThreads (args : List String) : Except String (List String × Option Nat) :=
-  go args []
+  go args [] none
 where
-  go : List String → List String → Except String (List String × Option Nat)
-    | [], acc => .ok (acc.reverse, none)
-    | "--threads" :: v :: rest, acc =>
+  go : List String → List String → Option Nat → Except String (List String × Option Nat)
+    | [], acc, t => .ok (acc.reverse, t)
+    | "--threads" :: v :: rest, acc, _ =>
       match v.toNat? with
-      | some n => do
-        let (rest', _) ← go rest []
-        .ok (acc.reverse ++ rest', some n)
+      | some n => go rest acc (some n)
       | none => .error s!"--threads expects a number, got '{v}'"
-    | ["--threads"], _ => .error "--threads expects a number"
-    | a :: rest, acc => go rest (a :: acc)
+    | ["--threads"], _, _ => .error "--threads expects a number"
+    | a :: rest, acc, t => go rest (a :: acc) t
 
 /-- The commands (`main` without the `--threads` handling). -/
 def runCommand (args : List String) : IO UInt32 := do
@@ -305,8 +305,12 @@ def main (args : List String) : IO UInt32 := do
   let (args, threads) ← match extractThreads args with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
-  -- the Lake-generated `main` has initialised the task manager (`lean_init_task_manager`)
-  Elk.Core.Parallel.configure (threads.getD 0)
+  -- the Lake-generated `main` has initialised the task manager (`lean_init_task_manager`).
+  -- `elk bench` stays sequential unless asked (`--threads`, `ELK_LEAN_THREADS`): its numbers are
+  -- compared with elk-rs `perf_benchmark --engine rust_api`, which is single-threaded
+  let benchDefault ← do
+    if args.head? == some "bench" && (← IO.getEnv "ELK_LEAN_THREADS").isNone then pure 1 else pure 0
+  Elk.Core.Parallel.configure (threads.getD benchDefault)
   let rc ← runCommand args
   if (← IO.getEnv "ELK_LEAN_PAR_STATS").isSome then
     let st ← Elk.Core.Parallel.stats

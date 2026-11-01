@@ -14,7 +14,8 @@ Tests of the parallel sibling layout (`Elk.Core.Parallel`, agent PAR, `docs/para
   children as barriers) and multi-component graphs, laid out with thread cap 1 and 4 at work threshold
   0: identical outputs, and the parallel path was taken.
 * `parallel.failures`: throwing children in every position and in pairs: the parallel layout reports the
-  exception of the first throwing child in sibling order, like the sequential one.
+  exception of the first throwing child in sibling order, like the sequential one, and leaves the same
+  arena behind (engine run caught inside `ElkM`).
 -/
 namespace Tests.Api.ParallelLayout
 
@@ -234,6 +235,24 @@ private def failingGraph (n : Nat) (throwing : List Nat) : String :=
   let cs := (List.range n).map fun i => child i (throwing.contains i)
   s!"\{\"id\":\"root\",\"children\":[{",".intercalate cs}]}"
 
+/-- The arena state an engine run leaves behind when it throws: the error and every node's geometry,
+every edge's sections (start, end, bend points), as text. -/
+private def engineState (threads minW : Nat) (json : String) : IO String := do
+  let (root, g) ← importJson json
+  let previous ← minWorkRef.get
+  minWorkRef.set minW
+  let (err, g) ← (try withThreads threads (((do
+        try
+          Elk.Core.RecursiveGraphLayoutEngine.layout root Elk.Core.Util.ProgressMonitor.null
+          pure "no error"
+        catch e => pure (toString e)) : ElkM String).run g)
+    finally minWorkRef.set previous)
+  let nodes := g.nodes.map fun n => s!"{n.identifier}:{n.x},{n.y},{n.width},{n.height}"
+  let edges := g.edges.map fun e => s!"{e.identifier}:{(e.sections.map fun sid =>
+    let sec := g.edgeSection sid
+    s!"{sec.startX},{sec.startY},{sec.endX},{sec.endY},{sec.bendPoints.size}").toList}"
+  return s!"{err}\n{nodes.toList}\n{edges.toList}\n{g.sections.size}"
+
 def failures : Suite := suite "parallel.failures" do
   let n := 6
   let before ← stats
@@ -249,6 +268,9 @@ def failures : Suite := suite "parallel.failures" do
     let first := p.head!
     checkEq s!"throwing {p}" (showResult par) (showResult sq)
     check s!"throwing {p}: first in order" (((showResult sq).splitOn s!"'root.c{first}.c{first}a'").length == 2)
+    -- the arena left behind by the exception is the sequential one (earlier siblings laid out, the
+    -- throwing one as far as it got, later ones untouched)
+    checkEq s!"throwing {p}: arena" (← engineState 4 0 json) (← engineState 1 0 json)
   let after ← stats
   let tm ← taskManagerAvailable
   check "failures went through the parallel path" (!tm || after.failures > before.failures)

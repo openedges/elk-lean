@@ -22,10 +22,12 @@ returns `none` otherwise (the caller then runs its own sequential loop, unchange
 4. *Join in order*: chunk by chunk, `checkChunk`/`mergeChunk` verify that the chunk changed nothing
    outside its domains and copy its domains into the merged arena (created elements renumbered).
    The first unit that threw — in sibling order — ends the loop with its exception, exactly as the
-   sequential loop does: earlier chunks have been merged and checked, later chunks are cancelled and
-   not waited for (they may not even terminate; in the sequential run they would never have
-   started). A write outside the domains makes the whole segment run sequentially on the original
-   arena (`fallback`).
+   sequential loop does: earlier chunks have been merged and checked, the failing chunk's arena (its
+   units up to the one that threw, as far as that one got) is checked and merged too, so the arena
+   left behind is the sequential one; later chunks are cancelled and not waited for (they may not
+   even terminate; in the sequential run they would never have started). A write outside the domains
+   makes the whole segment run sequentially on the original arena (`fallback`), which also reproduces
+   the exception and its arena exactly.
 
 Determinism argument and audit: `docs/parallel-layout.md`.
 -/
@@ -74,7 +76,8 @@ def balancedCuts (work : Array Nat) (parts : Nat) : Array Nat := Id.run do
 /-- How a segment ended. -/
 private inductive SegmentEnd (α : Type) where
   | merged (graph : ElkGraph) (results : Array α)
-  | failed (error : IO.Error)
+  /-- A unit threw; `graph` is the arena the sequential loop would leave behind. -/
+  | failed (error : IO.Error) (graph : ElkGraph)
   | fallback
 
 /-- Waits for the chunk tasks in order, checks and merges them (see the module doc). -/
@@ -84,23 +87,23 @@ private def joinChunks {α : Type} (orig : ElkGraph) (own : Ownership) (chunkOfU
   let cancelFrom (k : Nat) : IO Unit := do
     for h : j in [k:tasks.size] do IO.cancel tasks[j]
   let inChunk (c : Nat) (u : Nat) : Bool := chunkOfUnit[u]? == some c
-  if let some (_, e) := first.failure then
-    cancelFrom 0
-    return .failed e
   if !checkChunk orig first.graph own (inChunk 0) then
     cancelFrom 0
     return .fallback
+  if let some (_, e) := first.failure then
+    cancelFrom 0
+    return .failed e first.graph
   let mut merged := first.graph
   let mut results := first.results
   for h : t in [0:tasks.size] do
     let outcome ← match ← IO.wait tasks[t] with
       | .ok o => pure o
-      | .error e => cancelFrom (t + 1); return .failed e
-    if let some (_, e) := outcome.failure then
-      cancelFrom (t + 1)
-      return .failed e
+      | .error _ => cancelFrom (t + 1); return .fallback
     match mergeChunk orig outcome.graph merged own (inChunk (t + 1)) with
     | some (m, r) =>
+      if let some (_, e) := outcome.failure then
+        cancelFrom (t + 1)
+        return .failed e m
       merged := m
       results := results ++ (if r.isId then outcome.results else outcome.results.map (remapResult r))
     | none =>
@@ -131,8 +134,9 @@ private def runSegmentParallel {α : Type} (unit : NodeId → ElkM α) (remapRes
     bumpStats fun s => { s with parallelSegments := s.parallelSegments + 1, chunks := s.chunks + cuts.size }
     set g
     return some results
-  | .failed e =>
+  | .failed e g =>
     bumpStats fun s => { s with failures := s.failures + 1 }
+    set g
     throw e
   | .fallback =>
     bumpStats fun s => { s with fallbacks := s.fallbacks + 1 }
@@ -165,8 +169,9 @@ def layoutSiblings? {α : Type} (children : Array NodeId) (monitor : ProgressMon
   if (work.filter heavy).size < 2 then return none
   let own := computeOwnership g children
   -- fewer than two heavy eligible units: the plain loop (nothing to win)
-  let nHeavyClosed := (List.range children.size).foldl (init := 0) fun n k =>
-    if (own.closed[k]?.getD false) && heavy (work[k]?.getD 0) then n + 1 else n
+  let mut nHeavyClosed := 0
+  for k in [0:children.size] do
+    if (own.closed[k]?.getD false) && heavy (work[k]?.getD 0) then nHeavyClosed := nHeavyClosed + 1
   if nHeavyClosed < 2 then return none
   -- segments: maximal runs of eligible units; barriers in between
   let mut out : Array α := Array.mkEmpty children.size
@@ -189,7 +194,7 @@ def layoutSiblings? {α : Type} (children : Array NodeId) (monitor : ProgressMon
         -- changed it); the segment stays eligible
         let cur ← get
         let own' := if i == 0 then own else computeOwnership cur children
-        if (List.range (j - i)).all (fun k => own'.closed[i + k]?.getD false) then
+        if (own'.closed.extract i j).all id && own'.closed.size ≥ j then
           let cuts := balancedCuts segWork (helpers + 1)
           -- give back the slots the cuts do not use
           for _ in [cuts.size:helpers + 1] do releaseHelper

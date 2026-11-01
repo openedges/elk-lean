@@ -191,8 +191,9 @@ def computeOwnership (g : ElkGraph) (units : Array NodeId) : Ownership := Id.run
       labels := ownLabels g labels o g.edges[i].labels
       for s in g.edges[i].sections do
         if s.idx < sections.size then sections := sections.set! s.idx o
-  let eligible := (List.range units.size).toArray.map fun u =>
-    (closed[u]?.getD false) && !((algClass[u]?.getD 0) == 1 && (rootLinked[u]?.getD false))
+  let mut eligible : Array Bool := Array.mkEmpty units.size
+  for u in [0:units.size] do
+    eligible := eligible.push ((closed[u]?.getD false) && !((algClass[u]?.getD 0) == 1 && (rootLinked[u]?.getD false)))
   return { nodes, ports, edges, labels, sections, closed := eligible }
 
 /-- Work estimate of a sibling sub-tree: its nodes, their ports and their contained edges. -/

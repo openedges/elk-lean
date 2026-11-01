@@ -101,12 +101,15 @@ def taskManagerAvailable : IO Bool := do
   taskManagerRef.set (some b)
   return b
 
-/-- Whether a registered guard, the `ELK_TRACE_*` flags or the debug environment of the random
-generators (`CROSSMIN_RANDOM_TRACE`, `ELK_RANDOM_TRACE`) force the sequential path. -/
+/-- The debug environment of the random generators (`CROSSMIN_RANDOM_TRACE`, `ELK_RANDOM_TRACE`),
+read once at start-up like the other trace flags. -/
+builtin_initialize randomTraceEnv : Bool ← do
+  return (← IO.getEnv "CROSSMIN_RANDOM_TRACE").isSome || (← IO.getEnv "ELK_RANDOM_TRACE").isSome
+
+/-- Whether a registered guard, the `ELK_TRACE_*` flags or the random generators' debug output
+force the sequential path. -/
 def sequentialForced : IO Bool := do
-  if Elk.Core.Util.ElkTrace.global.anyEnabled then return true
-  if (← IO.getEnv "CROSSMIN_RANDOM_TRACE").isSome || (← IO.getEnv "ELK_RANDOM_TRACE").isSome then
-    return true
+  if Elk.Core.Util.ElkTrace.global.anyEnabled || randomTraceEnv then return true
   for g in ← guardsRef.get do
     if ← g then return true
   return false
