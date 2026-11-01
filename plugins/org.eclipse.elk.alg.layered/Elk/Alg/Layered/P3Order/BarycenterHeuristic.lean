@@ -683,8 +683,9 @@ structure BarycenterHeuristic where
   portRanks : IO.Ref FloatArray
   /-- `constraint_resolver` (shares its state, including `barycenterStates`). -/
   constraintResolver : ForsterConstraintResolver
-  /-- `port_distributor`. -/
-  portDistributor : BarycenterPortDistributor
+  /-- `port_distributor`: the distributor itself (Java's `AbstractBarycenterPortDistributor`; the
+  elk-rs `BarycenterPortDistributor` trait has this one implementation, so it is called directly). -/
+  portDistributor : AbstractBarycenterPortDistributor
   /-- `sweep_iteration` (only used by the elk-rs port rank traces). -/
   sweepIteration : IO.Ref Nat
   /-- `snapshot` (`set_snapshot`). -/
@@ -694,7 +695,7 @@ namespace BarycenterHeuristic
 
 /-- `BarycenterHeuristic::new(constraint_resolver, port_distributor)` (Java additionally takes the
 random generator and the node order). -/
-def new (constraintResolver : ForsterConstraintResolver) (portDistributor : BarycenterPortDistributor) :
+def new (constraintResolver : ForsterConstraintResolver) (portDistributor : AbstractBarycenterPortDistributor) :
     BaseIO BarycenterHeuristic := do
   return {
     portRanks := ← IO.mkRef FloatArray.empty, constraintResolver, portDistributor
@@ -714,7 +715,7 @@ def context (h : BarycenterHeuristic) (forward : Bool) : LayeredM BarycenterCont
 
 /-- Runs a pure step on the resolver's barycenter states and the caller's generator, then prints
 the pending `CROSSMIN_RANDOM_TRACE` lines. -/
-def runOnStates (h : BarycenterHeuristic) (random : IO.Ref Random) (f : BarycenterData → BarycenterData) : LayeredM Unit := do
+@[inline] def runOnStates (h : BarycenterHeuristic) (random : IO.Ref Random) (f : BarycenterData → BarycenterData) : LayeredM Unit := do
   let states ← h.constraintResolver.barycenterStates.swap #[]
   let rnd ← random.get
   let d := f { states, random := rnd }

@@ -64,7 +64,35 @@ namespace IdIndex
 
 /-- Builds the index of `(key, value)` pairs (a later pair overrides an earlier one with the same key,
 like `HashMap.insert`). -/
-def ofPairs (keys values : Array Nat) : IdIndex := Id.run do
+def ofPairs (keys values : Array Nat) : IdIndex :=
+  if h : 0 < keys.size then
+    let (lo, hi) := bounds keys 1 keys[0] keys[0]
+    let range := hi + 1 - lo
+    if range <= 4 * keys.size + 1024 then
+      { base := lo, dense := fillDense keys values lo 0 (Array.replicate range 0), isDense := true }
+    else
+      { sparse := fillSparse keys values 0 {}, isDense := false }
+  else {}
+where
+  /-- The smallest and largest key of `keys[i:]`, `lo`/`hi` so far. -/
+  bounds (keys : Array Nat) (i lo hi : Nat) : Nat × Nat :=
+    if h : i < keys.size then
+      let k := keys[i]
+      bounds keys (i + 1) (if k < lo then k else lo) (if k > hi then k else hi)
+    else (lo, hi)
+  termination_by keys.size - i
+  /-- `dense[keys[i] - lo] := values[i] + 1` for `i` from `i` on (in order: a later pair wins). -/
+  fillDense (keys values : Array Nat) (lo i : Nat) (dense : Array Nat) : Array Nat :=
+    if h : i < keys.size then fillDense keys values lo (i + 1) (dense.set! (keys[i] - lo) (values[i]! + 1))
+    else dense
+  termination_by keys.size - i
+  /-- The sparse map of the pairs from `i` on. -/
+  fillSparse (keys values : Array Nat) (i : Nat) (m : Std.HashMap Nat Nat) : Std.HashMap Nat Nat :=
+    if h : i < keys.size then fillSparse keys values (i + 1) (m.insert keys[i] values[i]!) else m
+  termination_by keys.size - i
+
+/-- `ofPairs` as the original `for` loops (reference of the differential test). -/
+def ofPairsRef (keys values : Array Nat) : IdIndex := Id.run do
   if keys.isEmpty then return {}
   let mut lo := keys[0]!
   let mut hi := keys[0]!
@@ -424,8 +452,11 @@ private partial def buildPortsFast (a : LGraphArena) (nPorts : Nat) (ports : Arr
     let b := b.addPortKey port pid
     let portIds := portIds.push pid
     if pid < nPorts then
-      let preds := pushEndIds a pt.incomingEdges true 0 (Array.emptyWithCapacity pt.incomingEdges.size)
-      let succs := pushEndIds a pt.outgoingEdges false 0 (Array.emptyWithCapacity pt.outgoingEdges.size)
+      -- no edges: the shared empty array (`appendEnds` keeps the slot's `#[]`), not a fresh one
+      let preds := if pt.incomingEdges.isEmpty then #[]
+        else pushEndIds a pt.incomingEdges true 0 (Array.emptyWithCapacity pt.incomingEdges.size)
+      let succs := if pt.outgoingEdges.isEmpty then #[]
+        else pushEndIds a pt.outgoingEdges false 0 (Array.emptyWithCapacity pt.outgoingEdges.size)
       buildPortsFast a nPorts ports (j + 1) flat portIds (b.capture pid flat port pt.side preds succs)
     else buildPortsFast a nPorts ports (j + 1) flat portIds b
   else (portIds, b)
@@ -439,7 +470,8 @@ private partial def buildNodesFast (a : LGraphArena) (nPorts : Nat) (order : Arr
       let node := layer[k]
       let nd := a.node node
       let b := b.addNode node nd li flat
-      let (portIds, b) := buildPortsFast a nPorts nd.ports 0 flat (Array.emptyWithCapacity nd.ports.size) b
+      let (portIds, b) := buildPortsFast a nPorts nd.ports 0 flat
+        (if nd.ports.isEmpty then #[] else Array.emptyWithCapacity nd.ports.size) b
       buildNodesFast a nPorts order li (k + 1) (flat + 1) (b.addPortIds portIds)
     else buildNodesFast a nPorts order (li + 1) 0 flat b
   else (flat, b)
@@ -597,11 +629,22 @@ partial def endsOkNodes (a : LGraphArena) (portRefs : Array (Option LPortId)) (p
       (endsOkPorts a portRefs portIns portOuts nPorts (a.node nodeRefs[f]).ports 0 ok)
   else ok
 
+/-- The number of nodes of `order[li:]` plus `acc` (a capacity hint). -/
+partial def countNodes (order : Array (Array LNodeId)) (li acc : Nat) : Nat :=
+  if h : li < order.size then countNodes order (li + 1) (acc + order[li].size) else acc
+
 /-- `CrossMinSnapshot::build(order, n_ports)` on an arena (see "Fewer allocations and passes"). -/
 def ofArena (a : LGraphArena) (order : Array (Array LNodeId)) (nPorts : Nat) : CrossMinSnapshot :=
+  -- the node arrays get one entry per node of `order`, the port key arrays one per port of those nodes
+  -- (`nPorts` when the ids are `0..nPorts-1`, as after the initialisation): sized up front instead of
+  -- growing from the empty literal
+  let nn := countNodes order 0 0
   let b0 : FastBuilder := {
-    nodeRefs := #[], nodeGraphIds := #[], nodeLayers := #[], nodeTypes := #[], nodeNested := #[], nodePortIds := #[],
-    nodeKeys := #[], nodeValues := #[], portKeys := #[], portValues := #[]
+    nodeRefs := Array.emptyWithCapacity nn, nodeGraphIds := Array.emptyWithCapacity nn
+    nodeLayers := Array.emptyWithCapacity nn, nodeTypes := Array.emptyWithCapacity nn
+    nodeNested := Array.emptyWithCapacity nn, nodePortIds := Array.emptyWithCapacity nn
+    nodeKeys := Array.emptyWithCapacity nn, nodeValues := Array.emptyWithCapacity nn
+    portKeys := Array.emptyWithCapacity nPorts, portValues := Array.emptyWithCapacity nPorts
     portSides := Array.replicate nPorts .undefined, portOwners := Array.replicate nPorts 0,
     portRefs := Array.replicate nPorts none, portIns := Array.replicate nPorts #[], portOuts := Array.replicate nPorts #[] }
   let (flat, b) := buildNodesFast a nPorts order 0 0 0 b0
