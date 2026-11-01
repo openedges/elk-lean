@@ -53,6 +53,127 @@ namespace Elk.Alg.Layered.P3Order
 open Elk.Core.Options Elk.Core.Util Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
 open Elk.Alg.Layered.P3Order.Counting Elk.Alg.Layered.Intermediate.GreedySwitch LayeredM
 
+/-- Lean only: the concrete `ISweepPortDistributor` of a holder. The holder calls it directly (no
+closure record) and the fused initialisation reads its state. -/
+inductive PortDistributorImpl where
+  /-- `NodeRelativePortDistributor` or `LayerTotalPortDistributor` (their `inner` distributor). -/
+  | barycenter (d : AbstractBarycenterPortDistributor)
+  /-- `GreedyPortDistributor` (`TWO_SIDED_GREEDY_SWITCH`). -/
+  | greedy (d : GreedyPortDistributor)
+
+namespace PortDistributorImpl
+
+/-- `ISweepPortDistributor::create(cross_min_type, random, num_layers)` as the concrete object: the
+same draw as `SweepPortDistributor.createWithBarycenter` (one `nextBoolean()` unless the type is
+`TWO_SIDED_GREEDY_SWITCH`; node-relative for `true`). -/
+def create (crossMinType : CrossMinType) (random : IO.Ref Random) (numLayers : Nat) : BaseIO PortDistributorImpl := do
+  if crossMinType == .twoSidedGreedySwitch then return .greedy (← GreedyPortDistributor.new)
+  if ← random.modifyGet (·.nextBoolean) then return .barycenter (← NodeRelativePortDistributor.new numLayers).inner
+  else return .barycenter (← LayerTotalPortDistributor.new numLayers).inner
+
+/-- The `ISweepPortDistributor` view (`NodeRelativePortDistributor.toSweepPortDistributor` and
+`LayerTotalPortDistributor.toSweepPortDistributor` are those of `inner`). -/
+def toSweepPortDistributor : PortDistributorImpl → SweepPortDistributor
+  | .barycenter d => d.toSweepPortDistributor
+  | .greedy d => d.toSweepPortDistributor
+
+/-- `distributePortsWhileSweeping(order, freeLayerIndex, isForwardSweep)` (the `SweepPortDistributor`
+method, called directly). -/
+@[inline] def distributePortsWhileSweeping (d : PortDistributorImpl) (order : Array (Array LNodeId))
+    (freeLayerIndex : Nat) (isForwardSweep : Bool) : LayeredM Bool :=
+  match d with
+  | .barycenter d => d.distributePortsWhileSweeping order freeLayerIndex isForwardSweep
+  | .greedy d => d.distributePortsWhileSweeping order freeLayerIndex isForwardSweep
+
+/-- The distributor the barycenter heuristics use (`createWithBarycenter`'s barycenter view): only for
+`BARYCENTER`. -/
+def barycenterView (crossMinType : CrossMinType) : PortDistributorImpl → Option AbstractBarycenterPortDistributor
+  | .barycenter d => if crossMinType == .barycenter then some d else none
+  | .greedy _ => none
+
+end PortDistributorImpl
+
+/-- Lean only: the concrete `ICrossingMinimizationHeuristic` of a holder (see `PortDistributorImpl`);
+the methods take the holder's generator, which `toHeuristic random` captures in the record. -/
+inductive HeuristicImpl where
+  /-- `BarycenterHeuristic`. -/
+  | barycenter (h : BarycenterHeuristic)
+  /-- `ModelOrderBarycenterHeuristic` (its `IInitializable` part is the base one). -/
+  | modelOrder (h : ModelOrderBarycenterHeuristic)
+  /-- `MedianHeuristic` (its `IInitializable` part does nothing). -/
+  | median (h : MedianHeuristic)
+  /-- `GreedySwitchHeuristic`. -/
+  | greedySwitch (g : GreedySwitchHeuristic)
+
+namespace HeuristicImpl
+
+/-- The `ICrossingMinimizationHeuristic` record of the heuristic (`toHeuristic`). -/
+def toHeuristic (h : HeuristicImpl) (random : IO.Ref Random) : CrossingMinimizationHeuristic :=
+  match h with
+  | .barycenter h => h.toHeuristic random
+  | .modelOrder h => h.toHeuristic random
+  | .median h => h.toHeuristic random
+  | .greedySwitch g => g.toHeuristic
+
+/-- The barycenter heuristic whose `IInitializable` part runs (`none` for median and greedy switch). -/
+@[inline] def barycenterBase? : HeuristicImpl → Option BarycenterHeuristic
+  | .barycenter h => some h
+  | .modelOrder h => some h.base
+  | _ => none
+
+/-- The `GreedySwitchHeuristic` (Rust `downcast_mut`). -/
+@[inline] def greedySwitch? : HeuristicImpl → Option GreedySwitchHeuristic
+  | .greedySwitch g => some g
+  | _ => none
+
+/-- `isDeterministic()` (the records' constants). -/
+@[inline] def isDeterministic : HeuristicImpl → Bool
+  | .barycenter _ | .modelOrder _ => false
+  | .median _ | .greedySwitch _ => true
+
+/-- `alwaysImproves()`. -/
+@[inline] def alwaysImproves : HeuristicImpl → Bool
+  | .greedySwitch g => g.alwaysImproves
+  | _ => false
+
+/-- `setFirstLayerOrder(order, forwardSweep, random)`. -/
+def setFirstLayerOrder (h : HeuristicImpl) (random : IO.Ref Random) (order : Array (Array LNodeId))
+    (forwardSweep : Bool) : LayeredM (Array (Array LNodeId) × Bool) :=
+  match h with
+  | .barycenter h => h.setFirstLayerOrder order forwardSweep random
+  | .modelOrder h => h.setFirstLayerOrder order forwardSweep random
+  | .median h => h.setFirstLayerOrder order forwardSweep random
+  | .greedySwitch g => g.setFirstLayerOrder order forwardSweep
+
+/-- `minimizeCrossings(order, freeLayerIndex, forwardSweep, isFirstSweep, random)`. -/
+def minimizeCrossings (h : HeuristicImpl) (random : IO.Ref Random) (order : Array (Array LNodeId))
+    (freeLayerIndex : Nat) (forwardSweep isFirstSweep : Bool) : LayeredM (Array (Array LNodeId) × Bool) :=
+  match h with
+  | .barycenter h => h.minimizeCrossings order freeLayerIndex forwardSweep isFirstSweep random
+  | .modelOrder h => h.minimizeCrossings order freeLayerIndex forwardSweep isFirstSweep random
+  | .median h => h.minimizeCrossings order freeLayerIndex forwardSweep isFirstSweep
+  | .greedySwitch g => g.minimizeCrossings order freeLayerIndex forwardSweep isFirstSweep
+
+/-- elk-rs `reset_sweep_iteration()` (the barycenter heuristic's; a no-op for the others, whose records
+keep the default). -/
+def resetSweepIteration : HeuristicImpl → BaseIO Unit
+  | .barycenter h => h.sweepIteration.set 0
+  | _ => pure ()
+
+/-- elk-rs `increment_sweep_iteration()` (see `resetSweepIteration`). -/
+def incrementSweepIteration : HeuristicImpl → BaseIO Unit
+  | .barycenter h => h.sweepIteration.modify (· + 1)
+  | _ => pure ()
+
+/-- elk-rs `set_snapshot` (the barycenter heuristics; ignored by the others). -/
+def setSnapshot (h : HeuristicImpl) (s : CrossMinSnapshot) : BaseIO Unit :=
+  match h with
+  | .barycenter h => h.setSnapshot s
+  | .modelOrder h => h.setSnapshot s
+  | _ => pure ()
+
+end HeuristicImpl
+
 /-- `GraphInfoHolder`. -/
 structure GraphInfoHolder where
   /-- `l_graph`. -/
@@ -81,12 +202,10 @@ structure GraphInfoHolder where
   parentGraphIndex : Option Nat := none
   /-- `parent_node`. -/
   parentNode : Option LNodeId
-  /-- `cross_minimizer`. -/
-  crossMinimizer : CrossingMinimizationHeuristic
-  /-- The `GreedySwitchHeuristic` behind `crossMinimizer` (Rust `downcast_mut`). -/
-  greedySwitch : Option GreedySwitchHeuristic := none
-  /-- `port_distributor`. -/
-  portDistributor : SweepPortDistributor
+  /-- `cross_minimizer` (the concrete heuristic, called directly; `greedySwitch?` is Rust's `downcast_mut`). -/
+  crossMinimizer : HeuristicImpl
+  /-- `port_distributor` (the concrete distributor, called directly). -/
+  portDistributor : PortDistributorImpl
   /-- `crossings_counter`. -/
   crossingsCounter : AllCrossingsCounter
   /-- `n_ports`. -/
@@ -114,70 +233,24 @@ structure GraphInfoHolder where
 
 namespace GraphInfoHolder
 
-/-- Lean only: the concrete `ISweepPortDistributor` of a holder (what the fused initialisation calls
-directly instead of the `Initializable` closures). -/
-inductive PortDistributorImpl where
-  /-- `NodeRelativePortDistributor` or `LayerTotalPortDistributor` (their `inner` distributor). -/
-  | barycenter (d : AbstractBarycenterPortDistributor)
-  /-- `GreedyPortDistributor` (`TWO_SIDED_GREEDY_SWITCH`). -/
-  | greedy (d : GreedyPortDistributor)
-
-namespace PortDistributorImpl
-
-/-- `ISweepPortDistributor::create(cross_min_type, random, num_layers)` as the concrete object: the
-same draw as `SweepPortDistributor.createWithBarycenter` (one `nextBoolean()` unless the type is
-`TWO_SIDED_GREEDY_SWITCH`; node-relative for `true`). -/
-def create (crossMinType : CrossMinType) (random : IO.Ref Random) (numLayers : Nat) : BaseIO PortDistributorImpl := do
-  if crossMinType == .twoSidedGreedySwitch then return .greedy (← GreedyPortDistributor.new)
-  if ← random.modifyGet (·.nextBoolean) then return .barycenter (← NodeRelativePortDistributor.new numLayers).inner
-  else return .barycenter (← LayerTotalPortDistributor.new numLayers).inner
-
-/-- The `ISweepPortDistributor` view (`NodeRelativePortDistributor.toSweepPortDistributor` and
-`LayerTotalPortDistributor.toSweepPortDistributor` are those of `inner`). -/
-def toSweepPortDistributor : PortDistributorImpl → SweepPortDistributor
-  | .barycenter d => d.toSweepPortDistributor
-  | .greedy d => d.toSweepPortDistributor
-
-/-- The barycenter view of `createWithBarycenter`: only for `BARYCENTER`. -/
-def barycenterView (crossMinType : CrossMinType) : PortDistributorImpl → Option BarycenterPortDistributor
-  | .barycenter d => if crossMinType == .barycenter then some d.toBarycenterPortDistributor else none
-  | .greedy _ => none
-
-end PortDistributorImpl
-
-/-- Lean only: the concrete `ICrossingMinimizationHeuristic` of a holder (see `PortDistributorImpl`). -/
-inductive HeuristicImpl where
-  /-- `BarycenterHeuristic`, or the `base` of a `ModelOrderBarycenterHeuristic` (whose `IInitializable`
-  part is the base one). -/
-  | barycenter (h : BarycenterHeuristic)
-  /-- `MedianHeuristic` (its `IInitializable` part does nothing). -/
-  | median
-  /-- `GreedySwitchHeuristic`. -/
-  | greedySwitch (g : GreedySwitchHeuristic)
-
-/-- The heuristic of a `CrossMinType` (step 3 of `build`), its greedy switch object and the concrete
-heuristic. -/
+/-- The heuristic of a `CrossMinType` (step 3 of `build`). -/
 def createCrossMinimizer (graph : LGraphId) (crossMinType : CrossMinType) (order : Array (Array LNodeId))
-    (barycenterDistributor : Option BarycenterPortDistributor) (random : IO.Ref Random) (hasParent : Bool)
+    (barycenterDistributor : Option AbstractBarycenterPortDistributor) (hasParent : Bool)
     (forceModelOrder : Bool) (maxModelOrderNodes : Int) (constraintsBetweenNonDummies : Bool)
-    (groupOrderStrategy : GroupOrderStrategy) :
-    LayeredM (CrossingMinimizationHeuristic × Option GreedySwitchHeuristic × HeuristicImpl) := do
+    (groupOrderStrategy : GroupOrderStrategy) : LayeredM HeuristicImpl := do
   match crossMinType with
   | .barycenter =>
     let resolver ← ForsterConstraintResolver.new order constraintsBetweenNonDummies
     let some distributor := barycenterDistributor
       | throw (IO.userError "java.lang.IllegalStateException: barycenter distributor missing")
     if forceModelOrder then
-      let h ← ModelOrderBarycenterHeuristic.new resolver distributor forceModelOrder maxModelOrderNodes
-        groupOrderStrategy
-      return (h.toHeuristic random, none, .barycenter h.base)
+      return .modelOrder (← ModelOrderBarycenterHeuristic.new resolver distributor forceModelOrder maxModelOrderNodes
+        groupOrderStrategy)
     else
-      let h ← BarycenterHeuristic.new resolver distributor
-      return (h.toHeuristic random, none, .barycenter h)
-  | .median => return (MedianHeuristic.new.toHeuristic random, none, .median)
+      return .barycenter (← BarycenterHeuristic.new resolver distributor)
+  | .median => return .median MedianHeuristic.new
   | .oneSidedGreedySwitch | .twoSidedGreedySwitch =>
-    let g ← GreedySwitchHeuristic.create crossMinType hasParent graph
-    return (g.toHeuristic, some g, .greedySwitch g)
+    return .greedySwitch (← GreedySwitchHeuristic.create crossMinType hasParent graph)
 
 /-- The holder's own `IInitializable` pass (Rust `init_initializables(&mut [holder], order)`):
 `cachePortSides` and the nested graph of every node in order, one port count per port, and the
@@ -350,9 +423,7 @@ partial def positionRows (order : Array (Array LNodeId)) (l : Nat) (positions : 
 objects (see "Fused initialisation"): the child graphs and the port count. -/
 def run (order : Array (Array LNodeId)) (counter : AllCrossingsCounter) (decider : LayerSweepTypeDecider)
     (distributor : PortDistributorImpl) (heuristic : HeuristicImpl) : LayeredM (Array LGraphId × Nat) := do
-  let resolver := match heuristic with
-    | .barycenter h => some h.constraintResolver
-    | _ => none
+  let resolver := heuristic.barycenterBase?.map (·.constraintResolver)
   let f : Forster ← match resolver with
     | some r => pure ⟨← r.layoutUnits.swap {}, ← r.barycenterStates.swap #[], ← r.constraintGroups.swap #[],
         ← r.constraintGroupArena.swap #[]⟩
@@ -381,8 +452,8 @@ def run (order : Array (Array LNodeId)) (counter : AllCrossingsCounter) (decider
     d.nPorts.modify (· + k)
     d.crossingsCounter.set (some (← CrossingsCounter.ofPositions (Array.replicate (← d.nPorts.get) 0)))
   -- the heuristic
-  match heuristic with
-  | .barycenter h =>
+  match heuristic.barycenterBase?, heuristic.greedySwitch? with
+  | some h, _ =>
     match st.forster with
     | ⟨units, states, groups, garena⟩ =>
       h.constraintResolver.layoutUnits.set units
@@ -390,8 +461,8 @@ def run (order : Array (Array LNodeId)) (counter : AllCrossingsCounter) (decider
       h.constraintResolver.constraintGroups.set groups
       h.constraintResolver.constraintGroupArena.set garena
     h.portRanks.set (← h.portDistributor.portRanksF)
-  | .median => pure ()
-  | .greedySwitch g =>
+  | none, none => pure ()
+  | none, some g =>
     g.nPorts.modify (· + k)
     g.portPositions.set (Array.replicate (← g.nPorts.get) 0)
   return (st.childGraphs, k)
@@ -447,40 +518,38 @@ def buildParts (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrde
   let hasExternalPorts := s.graphProperties.contains .externalPorts
   -- the generator before the factory's draw, for its `CROSSMIN_RANDOM_TRACE` line only
   let randomBefore ← if RandomTrace.isEnabled then some <$> random.get else pure none
-  let distributorImpl ← PortDistributorImpl.create crossMinType random currentNodeOrder.size
-  let portDistributor := distributorImpl.toSweepPortDistributor
-  let barycenterDistributor := distributorImpl.barycenterView crossMinType
+  let portDistributor ← PortDistributorImpl.create crossMinType random currentNodeOrder.size
+  let barycenterDistributor := portDistributor.barycenterView crossMinType
   if let some r := randomBefore then
     if crossMinType != .twoSidedGreedySwitch then
       -- `random_trace::trace_next_boolean` of the factory's draw (replayed on the saved state)
       let _ ← RandomTrace.traceNextBoolean r.nextBoolean.1 "graph_info_holder::create_port_distributor"
   let crossingsCounter ← AllCrossingsCounter.new graph currentNodeOrder
-  let (crossMinimizer, greedySwitch, heuristicImpl) ← createCrossMinimizer graph crossMinType currentNodeOrder
-    barycenterDistributor random hasParent s.forceModelOrder s.maxModelOrderNodes s.constraintsBetweenNonDummies
-    s.groupOrderStrategy
-  let crossMinDeterministic ← crossMinimizer.isDeterministic
-  let decider ← LayerSweepTypeDecider.new graph s.parentNode hasParent crossMinDeterministic
+  let crossMinimizer ← createCrossMinimizer graph crossMinType currentNodeOrder barycenterDistributor hasParent
+    s.forceModelOrder s.maxModelOrderNodes s.constraintsBetweenNonDummies s.groupOrderStrategy
+  let decider ← LayerSweepTypeDecider.new graph s.parentNode hasParent crossMinimizer.isDeterministic
   let (childGraphs, nPorts) ← if fused then
-      FusedInit.run currentNodeOrder crossingsCounter decider distributorImpl heuristicImpl
+      FusedInit.run currentNodeOrder crossingsCounter decider portDistributor crossMinimizer
     else do
       let r ← initHolder currentNodeOrder
-      Initializable.init #[crossingsCounter.initializable, decider.initializable, portDistributor.initializable,
-        crossMinimizer.initializable] currentNodeOrder
+      Initializable.init #[crossingsCounter.initializable, decider.initializable,
+        portDistributor.toSweepPortDistributor.initializable, (crossMinimizer.toHeuristic random).initializable]
+        currentNodeOrder
       pure r
   let snapshot ← CrossMinSnapshot.build currentNodeOrder nPorts
   crossMinimizer.setSnapshot snapshot
   crossingsCounter.setSnapshot snapshot
   let useBottomUp ← decider.useBottomUpWithBoundary currentNodeOrder s.hierarchicalSweepiness
   -- `update_greedy_context(None)`
-  if let some g := greedySwitch then g.setDontSweepInto useBottomUp
+  if let some g := crossMinimizer.greedySwitch? then g.setDontSweepInto useBottomUp
   return ({
     lGraph := graph, currentNodeOrder, portPositions := ← IO.mkRef (Array.replicate nPorts 0), useBottomUp, childGraphs
-    hasExternalPorts, hasParent, parentGraphRef, parentNode := s.parentNode, crossMinimizer, greedySwitch
+    hasExternalPorts, hasParent, parentGraphRef, parentNode := s.parentNode, crossMinimizer
     portDistributor, crossingsCounter, nPorts
     considerModelOrderStrategy := s.considerModelOrderStrategy, groupOrderStrategy := s.groupOrderStrategy
     portModelOrder := s.portModelOrder, nodeInfluence := s.nodeInfluence, portInfluence := s.portInfluence
     thoroughness := s.thoroughness, random, snapshot, firstTryWithInitialOrder := s.firstTryWithInitialOrder },
-    distributorImpl, heuristicImpl, decider)
+    portDistributor, crossMinimizer, decider)
 
 /-- `GraphInfoHolder::build(..)` (see `buildParts`). -/
 @[inline] def build (graph : LGraphId) (crossMinType : CrossMinType) (currentNodeOrder : Array (Array LNodeId))
@@ -500,7 +569,7 @@ def new (graph : LGraphId) (crossMinType : CrossMinType) (random : IO.Ref Random
 
 /-- `best_sweep()`: the currently best order for deterministic heuristics, else the best one. -/
 def bestSweep (h : GraphInfoHolder) : LayeredM (Option SweepCopy) := do
-  if ← h.crossMinimizer.isDeterministic then return h.currentlyBestNodeAndPortOrder
+  if h.crossMinimizer.isDeterministic then return h.currentlyBestNodeAndPortOrder
   else return h.bestNodeAndPortOrder
 
 /-- `update_currently_best_from_current()`. -/
@@ -521,7 +590,7 @@ def countCurrentCrossings (h : GraphInfoHolder) : LayeredM Int :=
 switch heuristic (no-op for the other heuristics). -/
 def updateGreedyContext (h : GraphInfoHolder)
     (parentSnapshot : Option (Array (Array LNodeId) × IO.Ref (Array Int) × LNodeId)) : BaseIO Unit := do
-  let some greedy := h.greedySwitch | return
+  let some greedy := h.crossMinimizer.greedySwitch? | return
   greedy.setDontSweepInto h.useBottomUp
   if let some (parentNodeOrder, parentPortPositions, parentNode) := parentSnapshot then
     greedy.updateParentContext parentNodeOrder parentPortPositions parentNode

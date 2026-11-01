@@ -445,7 +445,7 @@ def takeOrder (index : Nat) : SweepM (Array (Array LNodeId)) := do
 def setFirstLayerOrder (index : Nat) (forwardSweep : Bool) : SweepM Bool := do
   let order ← takeOrder index
   let h ← holderAt index
-  let (order, improved) ← h.crossMinimizer.setFirstLayerOrder order forwardSweep
+  let (order, improved) ← h.crossMinimizer.setFirstLayerOrder h.random order forwardSweep
   putOrder index order
   return improved
 
@@ -453,7 +453,7 @@ def setFirstLayerOrder (index : Nat) (forwardSweep : Bool) : SweepM Bool := do
 def minimizeCrossingsOnLayer (index freeLayerIndex : Nat) (forwardSweep isFirstSweep : Bool) : SweepM Bool := do
   let order ← takeOrder index
   let h ← holderAt index
-  let (order, improved) ← h.crossMinimizer.minimizeCrossings order freeLayerIndex forwardSweep isFirstSweep
+  let (order, improved) ← h.crossMinimizer.minimizeCrossings h.random order freeLayerIndex forwardSweep isFirstSweep
   putOrder index order
   return improved
 
@@ -471,8 +471,8 @@ def distributePortsWhileSweeping (index currentIndex : Nat) (isForwardSweep : Bo
 /-- `choose_minimizing_method(root_index)`. -/
 def chooseMinimizingMethod (rootIndex : Nat) : SweepM MinimizingMethod := do
   let parent ← holderAt rootIndex
-  if !(← parent.crossMinimizer.isDeterministic) then return .compareRandomized
-  else if ← parent.crossMinimizer.alwaysImproves then return .noCounter
+  if !parent.crossMinimizer.isDeterministic then return .compareRandomized
+  else if parent.crossMinimizer.alwaysImproves then return .noCounter
   else return .withCounter
 
 /-- `reset_random_for_all_graphs()`: reseeds the shared generator only (Java likewise). -/

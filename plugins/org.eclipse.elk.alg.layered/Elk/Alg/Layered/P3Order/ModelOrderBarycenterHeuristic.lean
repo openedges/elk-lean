@@ -272,7 +272,7 @@ namespace ModelOrderBarycenterHeuristic
 
 /-- `ModelOrderBarycenterHeuristic::new(constraint_resolver, port_distributor, force_model_order,
 max_model_order_nodes, group_order_strategy)`. -/
-def new (constraintResolver : ForsterConstraintResolver) (portDistributor : BarycenterPortDistributor)
+def new (constraintResolver : ForsterConstraintResolver) (portDistributor : AbstractBarycenterPortDistributor)
     (forceModelOrder : Bool) (maxModelOrderNodes : Int) (groupOrderStrategy : GroupOrderStrategy) :
     BaseIO ModelOrderBarycenterHeuristic := do
   return {

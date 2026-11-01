@@ -101,8 +101,8 @@ def fingerprint (h : GraphInfoHolder) (dist : PortDistributorImpl) (heur : Heuri
         | some cc => pure (toString (← cc.portPositions.get))
         | none => pure "none"
       pure s!"greedy {← d.nPorts.get} {cc}"
-  let heurFp ← match heur with
-    | .barycenter b => do
+  let heurFp ← match heur.barycenterBase?, heur with
+    | some b, _ => do
       let r := b.constraintResolver
       let units ← r.layoutUnits.get
       let unitFp := (Array.range a.nodes.size).map fun i => (units.get? ⟨i⟩).map (·.map (·.idx))
@@ -111,8 +111,8 @@ def fingerprint (h : GraphInfoHolder) (dist : PortDistributorImpl) (heur : Heuri
       let garena ← r.constraintGroupArena.get
       pure (s!"bary {(← b.portRanks.get).data} {unitFp} {units.size} {states.map (·.map stateFp)} " ++
         s!"{groups} {garena.map groupFp}")
-    | .median => pure "median"
-    | .greedySwitch g => pure s!"greedy {← g.nPorts.get} {← g.portPositions.get} {← g.dontSweepInto.get}"
+    | none, .greedySwitch g => pure s!"greedy {← g.nPorts.get} {← g.portPositions.get} {← g.dontSweepInto.get}"
+    | none, _ => pure "median"
   return s!"{nodes}\n{ports}\n{layers}\n{h.childGraphs.map (·.idx)} {h.nPorts} {h.useBottomUp} " ++
     s!"{h.hasExternalPorts} {h.parentGraphIndex}\n{counter}\n{info}\n{distFp}\n{heurFp}\n{randomFp (← h.random.get)}"
 

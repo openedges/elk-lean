@@ -56,7 +56,7 @@ def createHeuristic (order : Array (Array LNodeId)) : LayeredM BarycenterHeurist
   let d ← NodeRelativePortDistributor.new order.size
   let r ← ForsterConstraintResolver.new order false
   Initializable.init #[d.initializable, r.initializable] order
-  let h ← BarycenterHeuristic.new r d.toBarycenterPortDistributor
+  let h ← BarycenterHeuristic.new r d.inner
   Initializable.init #[h.initializable] order
   return h
 
@@ -67,7 +67,7 @@ def createModelOrderHeuristic (order : Array (Array LNodeId)) (force : Bool := t
   let d ← NodeRelativePortDistributor.new order.size
   let r ← ForsterConstraintResolver.new order false
   Initializable.init #[d.initializable, r.initializable] order
-  let h ← ModelOrderBarycenterHeuristic.new r d.toBarycenterPortDistributor force maxNodes strategy
+  let h ← ModelOrderBarycenterHeuristic.new r d.inner force maxNodes strategy
   Initializable.init #[h.initializable] order
   return h
 
