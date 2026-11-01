@@ -624,12 +624,18 @@ partial def overlapSweepKeys (keys : Array Nat) (k : Nat) (open_ crossings : Int
 /-- `countOverlapCrossings` of one side (see `countOverlapCrossingsOfRef`). The sweep only reads the
 kind (upper/lower) of the corners in sorted order. Each corner's key `(position, opposite position,
 identity, kind)` is packed into one `Nat` whose numeric order is `cornerGreater`'s order (when the
-values fit, else the reference runs), so the packed keys are sorted directly: two corners with equal
+values fit, else the reference runs), so the packed keys are sorted directly (the keyed insertion and
+merge passes on the keys themselves, compared as `Nat`s): two corners with equal
 keys have the same kind, so every sort by the key gives the same kind sequence as the stable index sort
 of the reference. -/
 def countOverlapCrossingsOf (hyperedges : Array Hyperedge) (left : Bool) : Int :=
   match packCorners hyperedges left 0 (Array.emptyWithCapacity (2 * hyperedges.size)) with
-  | some keys => overlapSweepKeys (stableSort keys compare) 0 0 0
+  | some keys =>
+    let n := keys.size
+    let sorted := if n < 2 then keys else
+      let runs := keyedInsertRuns (fun x y => x > y) n 0 keys
+      keyedMergeAll (fun x y => x > y) n 16 runs runs
+    overlapSweepKeys sorted 0 0 0
   | none => countOverlapCrossingsOfRef hyperedges left
 
 /-- `countCrossingsPure` with the scratch arrays (see "Allocation-poor counting"); the scratch is
