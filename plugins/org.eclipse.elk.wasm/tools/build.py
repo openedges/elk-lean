@@ -341,7 +341,10 @@ def main():
     # the larger maximum costs nothing until the memory grows. -sINITIAL_HEAP=16MB: emscripten's
     # default, which it drops (falling back to a 16 MiB INITIAL_MEMORY, smaller than stack + data)
     # once MAXIMUM_MEMORY is given; the initial memory stays stack + data + 16 MiB = 42 MiB.
-    link_common = TARGET_FLAGS + ["-O3", "--no-entry", "-Wl,--stack-first", "-sMALLOC=mimalloc",
+    # -Oz at the link only (the objects stay -O3): wasm-opt's size pipeline; realworld 550/550 identical,
+    # WASM/native time 1.56x/1.54x vs 1.59x/1.83x for -O3 in interleaved runs, .wasm -6.1 % (gzip -2.0 %)
+    # (docs/build-optimization.md; -flto breaks the module with `unreachable` traps, --closure 1 fails)
+    link_common = TARGET_FLAGS + ["-Oz", "--no-entry", "-Wl,--stack-first", "-sMALLOC=mimalloc",
                                   "-sALLOW_MEMORY_GROWTH=1", "-sMAXIMUM_MEMORY=4GB", "-sINITIAL_HEAP=16MB",
                                   "-sSTACK_SIZE=%d" % STACK_SIZE,
                    "-sEXPORTED_FUNCTIONS=" + ",".join(EXPORTS),

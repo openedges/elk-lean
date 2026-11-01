@@ -68,11 +68,14 @@ const out = layout_json(JSON.stringify(graph), '{}');
   `libInit.a`/`libStd.a`의 객체와 비교한다: 793/793 바이트 일치(Mach-O 헤더 제외).
 - **Elk C**: `Elk.Ffi`의 import 폐포(생성 C의 `// Imports:` 헤더 기준, 744 모듈)만 링크한다.
   Lean C는 네이티브와 같은 `-O3 -DNDEBUG -ffp-contract=off`로 컴파일한다.
-- **링크**: `em++ -O3 --no-entry -Wl,--stack-first -sMALLOC=mimalloc -sALLOW_MEMORY_GROWTH=1
+- **링크**: `em++ -Oz --no-entry -Wl,--stack-first -sMALLOC=mimalloc -sALLOW_MEMORY_GROWTH=1
   -sMAXIMUM_MEMORY=4GB -sINITIAL_HEAP=16MB -sSTACK_SIZE=16MiB`. `--stack-first`로 선형 메모리 스택 넘침이
   정적 데이터를 덮지 않고 트랩이 된다. 최대 메모리는 wasm32 주소 공간 전체(4 GB, 아래 "메모리"),
   초기 메모리는 스택 + 정적 데이터 + 16 MiB = 42 MiB(emscripten은 `MAXIMUM_MEMORY`를 주면 기본
   `INITIAL_HEAP`을 버리고 스택보다 작은 16 MiB `INITIAL_MEMORY`로 링크에 실패하므로 명시한다).
+  링크의 `-Oz`(2026-11-01, BLD)는 wasm-opt 단계만 바꾼다(객체는 `-O3`): `.wasm` 21.4 → 20.1 MB(gzip −2%),
+  realworld 550/550 동일, 속도는 측정 잡음 안. `-flto`는 `unreachable` 트랩으로 깨지고 `--closure 1`은
+  `__filename` 때문에 링크에 실패한다(`docs/build-optimization.md` §6).
 - **JS**: `js/elk_lean_api.js`(`--post-js`)가 C API(`plugins/org.eclipse.elk.ffi/include/elk_lean.h`)를 감싸
   `Module.createBackend()`를 제공한다(문자열은 TextEncoder/TextDecoder, 엔진 오류 시 wasm 스택 포인터 복원,
   C `exit()` 시 `backend.failed`, 아래 "메모리").

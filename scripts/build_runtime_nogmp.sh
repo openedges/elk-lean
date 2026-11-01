@@ -24,7 +24,10 @@
 #   libuv headers  version of the toolchain's lib/libuv.a (uv_version_string, 1.52.1 for v4.35.0)
 #   openssl.cpp only needs OPENSSL_VERSION_NUMBER, taken from the toolchain's libcrypto.a
 #   (a generated stub <openssl/*.h>; no OpenSSL code is compiled or linked).
-# Overrides: LEAN_SRC_DIR, MIMALLOC_SRC_DIR, LIBUV_SRC_DIR, DEPS (clone cache), CXX, JOBS.
+# Overrides: LEAN_SRC_DIR, MIMALLOC_SRC_DIR, LIBUV_SRC_DIR, DEPS (clone cache), CXX, JOBS, AR,
+#   RT_OUT (output directory instead of .lake/build/runtime-nogmp), RT_EXTRA_CXXFLAGS (appended to
+#   the compile flags of every runtime object, e.g. -flto=thin for scripts/build_release.sh),
+#   RT_STAMP_EXTRA (extra text for the rebuild stamp, e.g. the hash of a PGO profile).
 #
 # usage: sh scripts/build_runtime_nogmp.sh [--relink EXE]...
 #   --relink EXE  also relink the Lake executable EXE (elk, elktest; `lake build EXE` first) from
@@ -60,7 +63,7 @@ LEAN_GITHASH=$(lean --githash)
 LEAN_SRC=${LEAN_SRC_DIR:-"$REF/lean4-v$LEAN_V"}
 DEPS=${DEPS:-"$HERE/.lake/runtime-nogmp-deps"}
 JOBS=${JOBS:-3}
-OUT="$HERE/.lake/build/runtime-nogmp"
+OUT=${RT_OUT:-"$HERE/.lake/build/runtime-nogmp"}
 if [ -z "${CXX:-}" ]; then
   if [ "$(uname -s)" = Darwin ]; then
     # the toolchain's own clang (as for the Lean C), with the SDK's libc++ headers and the
@@ -121,7 +124,7 @@ case "$(uname -s)" in
   *) PLAT_FLAGS="-pthread" ;;
 esac
 # CMAKE_CXX_FLAGS + CMAKE_CXX_FLAGS_RELEASE of src/CMakeLists.txt; `leanrt` adds local-exec TLS
-CXXFLAGS="-Wall -Wextra -std=c++20 -D LEAN_MULTI_THREAD -ffp-contract=off -DLEAN_BUILD_TYPE=\"Release\" -DLEAN_EXPORTING -D__CLANG__ -fPIC -fvisibility=hidden -fvisibility-inlines-hidden $PLAT_FLAGS -O3 -DNDEBUG -ftls-model=local-exec"
+CXXFLAGS="-Wall -Wextra -std=c++20 -D LEAN_MULTI_THREAD -ffp-contract=off -DLEAN_BUILD_TYPE=\"Release\" -DLEAN_EXPORTING -D__CLANG__ -fPIC -fvisibility=hidden -fvisibility-inlines-hidden $PLAT_FLAGS -O3 -DNDEBUG -ftls-model=local-exec ${RT_EXTRA_CXXFLAGS:-}"
 INCLUDES="-I $LEAN_SRC/src -I $GEN -I $LEAN_PREFIX/include -I $UV_SRC/include"
 # add_mimalloc_variant(mimalloc_local-exec OBJECT ${LEAN_MI_SECURE} ...)
 MI_FLAGS="-I $MI_SRC/include -I $MI_SRC/src -DMI_SHARED_LIB -DMI_SHARED_LIB_EXPORT -O3 -DNDEBUG -DMI_WIN_NOREDIRECT -DMI_MAX_ALIGN_SIZE=8 -Wno-unused-function -Wno-deprecated -DMI_SECURE=0 -ftls-model=local-exec"
@@ -130,7 +133,7 @@ MI_FLAGS="-I $MI_SRC/include -I $MI_SRC/src -DMI_SHARED_LIB -DMI_SHARED_LIB_EXPO
 # the generated headers (a change rebuilds everything), sources are compared by mtime
 SOURCES=$(awk '/set\(/{p=0} /^ *RUNTIME_OBJS *$/{p=1; next} p && /^\)/{p=0} p{print $1}' "$RT/CMakeLists.txt")
 [ -n "$SOURCES" ] || { echo "error: RUNTIME_OBJS not found in $RT/CMakeLists.txt" >&2; exit 1; }
-STAMP=$(printf '%s\n' "$CXX" "$($CXX --version | head -1)" "$(cat "$GEN/githash.h" "$GEN/openssl/opensslv.h")" "$CXXFLAGS" "$INCLUDES" "$MI_FLAGS" | shasum -a 256 | cut -c1-16)
+STAMP=$(printf '%s\n' "$CXX" "$($CXX --version | head -1)" "$(cat "$GEN/githash.h" "$GEN/openssl/opensslv.h")" "$CXXFLAGS" "$INCLUDES" "$MI_FLAGS" "${RT_STAMP_EXTRA:-}" | shasum -a 256 | cut -c1-16)
 if [ "$(cat "$OUT/obj/stamp" 2>/dev/null || true)" != "$STAMP" ]; then
   rm -rf "$OUT/obj"; mkdir -p "$OUT/obj"; echo "$STAMP" > "$OUT/obj/stamp"
 fi
@@ -154,7 +157,7 @@ mkdir -p "$OUT/lib"
 LIB="$OUT/lib/libleanrt_nogmp.a"
 rm -f "$LIB"
 # shellcheck disable=SC2086
-ar rcs "$LIB" $OBJS
+"${AR:-ar}" rcs "$LIB" $OBJS
 if nm "$LIB" 2>/dev/null | grep -q '__gmp'; then echo "error: $LIB references GMP" >&2; exit 1; fi
 cat > "$OUT/BUILD_INFO.txt" <<EOF
 lean: $(lean --version) ($LEAN_GITHASH)

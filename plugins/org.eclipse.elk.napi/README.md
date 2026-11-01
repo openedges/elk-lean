@@ -32,7 +32,13 @@ elk-lean Node.js 네이티브 애드온. elk-rs `plugins/org.eclipse.elk.napi/sr
 ```sh
 sh scripts/build_napi.sh            # build_ffi.sh 후 plugins/org.eclipse.elk.js/dist/elk-lean.<triple>.node
 ELK_NO_GMP=1 sh scripts/build_napi.sh --copy-to-npm   # GMP 없는 런타임으로 빌드해 npm/<triple>/에 애드온·LICENSE·NOTICE 복사(배포용)
+sh scripts/build_release.sh && sh scripts/build_napi.sh --release [--copy-to-npm]   # ThinLTO + PGO 애드온(macOS)
 ```
+
+- `--release`(macOS): `scripts/build_release.sh`의 릴리스 객체(Elk C·`elk_lean.c`를 ThinLTO 비트코드로, PGO
+  프로파일이 있으면 `-fprofile-use`)와 ThinLTO no-GMP 런타임을 툴체인 clang + ld64.lld로 링크한다
+  (`docs/build-optimization.md`). realworld 큰 모델 40개에서 애드온 시간 0.82배, 550/550 CLI와 바이트 동일,
+  npm 테스트 67/68(1 skip). `libelklean.a`(다른 호스트용 C 라이브러리)는 이 경로와 무관하게 일반 기계어로 남는다.
 
 - 배포용 애드온은 `ELK_NO_GMP=1`로 빌드한다: Lean 런타임을 v4.35.0 소스에서 GMP 없이 다시 컴파일한
   `libleanrt_nogmp.a`(`scripts/build_runtime_nogmp.sh`)를 링크하므로 GMP(LGPL v3) 코드가 들어가지 않는다
