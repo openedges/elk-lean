@@ -42,7 +42,7 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17151 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17157 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo and hierarchical model-order
@@ -72,7 +72,7 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   algorithms and stay at about 0.7x and 0.2 to 0.7x); JSON parse, import, transfer and print
   take about 40% of mrtree_xlarge and 20% of radial_xlarge after the overlay transfer and the
   importer's member masks (the output buffer is sized from the laid-out graph, not 4x the input);
-  over the 1,447 corpus models 0.97x in total and 0.93x per model (geometric mean; the slowest
+  over the 1,447 corpus models 0.95x in total and 0.91x per model (geometric mean; the slowest
   are small interactive models below 0.2 ms, ticket 213 and the model-order example, all below
   about 1.7x after the pure model-order comparators and the pure scanline compaction kernel). Repeated layouts keep RSS flat; the orthogonal router's dependency table is packed
   (24 B per dependency), so a node with 5,000 ports peaks at 648 MB instead of 1.2 GB. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
