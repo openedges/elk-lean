@@ -39,10 +39,21 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   memory): Node CJS and browser ESM builds, about 19 MB `.wasm`; realworld corpus 550/550, about
   1.4x the native runtime; an instance that ran out of memory reports a clear error and the npm
   loaders replace it on the next call.
+- **`.elkt` conversion API** `convertElkt` on every layer (Lean `Elk.Api.convertElkt`, C
+  `elk_lean_convert_elkt(_flags)`, NAPI `convert_elkt`, WASM `backend.convert_elkt`, npm
+  `elk.convertElkt(text, { defaults })` in all worker modes): byte-identical to `elk convert` on all
+  898 `.elkt` models of elk-models, with the parser's line/column error messages. `elk options
+  --choices` adds the enum literals to the option metadata.
+- **Browser demo** `plugins/org.eclipse.elk.live`: a server-less replacement for elk-live (ElkGraph
+  Web) on the elk-lean WASM Web Worker — Monaco editor with `.elkt` highlighting, parser error
+  markers, option/value completion and hovers, sprotty graph view following elk-live's visual
+  model, the elk-models examples, ELK JSON input, elk-live-compatible links, SVG/JSON export.
+  Static `dist/` (about 26 MB, the WASM compresses to about 2 MB); tested in Chrome 156 (Node smoke
+  test: 45/45 examples equal the CLI; 7 headless browser checks).
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17185 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17194 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo, hierarchical model-order and
@@ -113,7 +124,8 @@ modules no longer follow elk-rs where it deviated from Java (`docs/robustness-ra
   the five differently named elk-rs processors through an alias table.
 
 ### Not yet available
-- Packages are not published (all `package.json` carry `"private": true`).
+- Packages are not published (all `package.json` carry `"private": true`). The browser demo's
+  GitLab Pages job is a disabled draft (`.pages`); Firefox and Safari were not tested.
 - Only macOS arm64 builds have been exercised. Linux (glibc x64/arm64, musl), Windows and
   CI builds are drafted in `.gitlab-ci.yml` but untested, including the GMP-free runtime build on
   Linux. See `docs/release-dry-run-0.12.0.md`.

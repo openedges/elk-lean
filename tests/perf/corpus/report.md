@@ -5,57 +5,57 @@
 
 | engine | total ms | models |
 |---|---|---|
-| rust_api | 3562.6 | 1447 |
-| lean_api | 3272.6 | 1447 |
+| rust_api | 3531.5 | 1447 |
+| lean_api | 3245.6 | 1447 |
 
-- total lean/rust_api (paired models): 0.92x (3272.6 ms vs 3562.6 ms)
-- per-model ratio: geometric mean 0.87x, median 0.87x, min 0.57x, max 1.44x
+- total lean/rust_api (paired models): 0.92x (3245.6 ms vs 3531.5 ms)
+- per-model ratio: geometric mean 0.87x, median 0.87x, min 0.52x, max 1.32x
 
 | ratio | models |
 |---|---|
-| 0 – 0.8 | 346 |
-| 0.8 – 1.0 | 937 |
-| 1.0 – 1.2 | 162 |
-| 1.2 – 1.5 | 2 |
+| 0 – 0.8 | 367 |
+| 0.8 – 1.0 | 930 |
+| 1.0 – 1.2 | 147 |
+| 1.2 – 1.5 | 3 |
 | 1.5 – 2.0 | 0 |
 | 2.0 – 3.0 | 0 |
 | ≥ 3.0 | 0 |
 
 | slowest by ratio | lean ms | rust_api ms | ratio |
 |---|---|---|---|
-| tickets_layered_160_externalPortDummyNullPointer | 0.248 | 0.173 | 1.44x |
-| realworld_ptolemy_flattened_ptolemy_fuelsystem_FuelSystemErrorHandling.json | 4.765 | 3.912 | 1.22x |
-| tickets_layered_411_north_south_port_anchor_a | 0.213 | 0.186 | 1.15x |
-| tickets_layered_213_componentsCompaction | 1.365 | 1.203 | 1.13x |
-| realworld_ptolemy_flattened_ptides_multiplatformtdma_MultiPlatformTDMA.json | 3.623 | 3.212 | 1.13x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim.json | 4.935 | 4.386 | 1.12x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim | 4.964 | 4.419 | 1.12x |
-| tests_layered_splines_hyperedges_hyperedges_2 | 0.328 | 0.294 | 1.12x |
-| realworld_ptolemy_flattened_ptolemy_test_auto32_GeneratorRegulatorProtectorSimXFMU | 1.302 | 1.174 | 1.11x |
-| examples_user-hints_model-order_modelOrderCrossingMinimization | 4.003 | 3.628 | 1.10x |
-| tickets_layered_528_nodeEdgeOverlap | 0.695 | 0.630 | 1.10x |
-| realworld_ptolemy_flattened_sr_tokenring_TokenRing_complicated.json | 2.707 | 2.463 | 1.10x |
-| realworld_ptolemy_flattened_de_CommunicationAnomalyDetectionCQM | 3.410 | 3.111 | 1.10x |
-| realworld_ptolemy_flattened_ptides_multiplatformtdma_MultiPlatformTDMA | 3.524 | 3.217 | 1.10x |
-| realworld_ptolemy_flattened_continuous_continuousinsidede_ContinuousInsideDE | 1.579 | 1.443 | 1.09x |
+| tickets_layered_160_externalPortDummyNullPointer | 0.231 | 0.175 | 1.32x |
+| tests_layered_compaction_oned_labels_edgeLabelAndSplines | 0.344 | 0.264 | 1.30x |
+| tests_layered_edge_label_placement_edgeLabelSideSelection01 | 0.231 | 0.185 | 1.25x |
+| realworld_ptolemy_flattened_pn_blindcommunication_BlindCommunication | 3.645 | 3.122 | 1.17x |
+| tickets_layered_411_north_south_port_anchor_a | 0.212 | 0.185 | 1.14x |
+| realworld_ptolemy_flattened_ptolemy_execdemos_demos_SigmaDelta.json | 1.997 | 1.761 | 1.13x |
+| tests_layered_compaction_oned_labels_edgeLabelShouldBeCentered | 0.184 | 0.164 | 1.12x |
+| tickets_layered_213_componentsCompaction | 1.357 | 1.217 | 1.12x |
+| tickets_layered_528_nodeEdgeOverlap | 0.685 | 0.616 | 1.11x |
+| realworld_ptolemy_flattened_lib_decg_DECGPi | 2.408 | 2.174 | 1.11x |
+| examples_user-hints_model-order_modelOrderCrossingMinimization | 3.994 | 3.635 | 1.10x |
+| realworld_ptolemy_hierarchical_pn_stack_Stack | 4.371 | 3.988 | 1.10x |
+| realworld_ptolemy_flattened_pn_blindcommunication_BlindCommunication.json | 3.325 | 3.045 | 1.09x |
+| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics.json | 41.330 | 37.976 | 1.09x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim | 4.751 | 4.369 | 1.09x |
 
 | largest absolute gap | lean ms | rust_api ms | ratio |
 |---|---|---|---|
-| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics | 39.827 | 38.139 | 1.04x |
-| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics.json | 39.637 | 38.116 | 1.04x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException.json | 22.164 | 21.250 | 1.04x |
-| realworld_ptolemy_hierarchical_de_linefault_LineFault | 14.152 | 13.248 | 1.07x |
-| realworld_ptolemy_flattened_ptolemy_fuelsystem_FuelSystemErrorHandling.json | 4.765 | 3.912 | 1.22x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine | 18.355 | 17.560 | 1.05x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachine.json | 23.287 | 22.538 | 1.03x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim.json | 4.935 | 4.386 | 1.12x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim | 4.964 | 4.419 | 1.12x |
-| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException.json | 25.190 | 24.651 | 1.02x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachinePrelim.json | 7.263 | 6.752 | 1.08x |
-| realworld_ptolemy_flattened_ptides_cosimulation_CoSimulation.json | 8.968 | 8.480 | 1.06x |
-| realworld_ptolemy_flattened_ptides_printingpress_PrintingPress.json | 26.080 | 25.626 | 1.02x |
-| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException | 21.489 | 21.056 | 1.02x |
-| realworld_ptolemy_flattened_ptides_multiplatformtdma_MultiPlatformTDMA.json | 3.623 | 3.212 | 1.13x |
+| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics.json | 41.330 | 37.976 | 1.09x |
+| realworld_ptolemy_flattened_gr_inversekinematics_InverseKinematics | 39.601 | 37.982 | 1.04x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException.json | 21.691 | 20.666 | 1.05x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException.json | 24.856 | 23.879 | 1.04x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachineWithException | 21.344 | 20.539 | 1.04x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachineWithException | 24.511 | 23.740 | 1.03x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine.json | 18.190 | 17.501 | 1.04x |
+| realworld_ptolemy_flattened_ptides_cosimulation_CoSimulation | 9.061 | 8.456 | 1.07x |
+| realworld_ptolemy_hierarchical_pn_countermachine_CounterMachine | 18.189 | 17.614 | 1.03x |
+| realworld_ptolemy_flattened_pn_blindcommunication_BlindCommunication | 3.645 | 3.122 | 1.17x |
+| realworld_ptolemy_hierarchical_wireless_personalareanetwork_Bluetooth2devices.json | 5.681 | 5.247 | 1.08x |
+| realworld_ptolemy_hierarchical_pn_stack_Stack | 4.371 | 3.988 | 1.10x |
+| realworld_ptolemy_flattened_pn_countermachine_CounterMachinePrelim | 4.751 | 4.369 | 1.09x |
+| realworld_ptolemy_hierarchical_wireless_personalareanetwork_Bluetooth2devices | 5.604 | 5.238 | 1.07x |
+| examples_user-hints_model-order_modelOrderCrossingMinimization | 3.994 | 3.635 | 1.10x |
 
-- lean_api total vs baseline (1447 common models): +1.5%
+- lean_api total vs baseline (1447 common models): +0.7%
 - regression gate (5%): pass
