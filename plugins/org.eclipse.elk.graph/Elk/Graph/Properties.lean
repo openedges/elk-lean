@@ -321,8 +321,10 @@ def findIdx? (m : PropertyMap) (k : PropKey) : Option Nat :=
   let i := m.indexOf k
   if i < m.entries.size then some i else none
 
-/-- Raw stored value for a key (no default, no decoding). -/
-def getRaw? (m : PropertyMap) (k : PropKey) : Option PropValue :=
+/-- Raw stored value for a key (no default, no decoding). `@[inline]` so that the `some` of a hit
+melts into the caller's decoding match instead of being allocated (PLAN 7.1 item 52); the scan
+(`indexFrom`) stays out of line. -/
+@[inline] def getRaw? (m : PropertyMap) (k : PropKey) : Option PropValue :=
   let i := m.indexOf k
   if h : i < m.entries.size then some m.entries[i].2 else none
 

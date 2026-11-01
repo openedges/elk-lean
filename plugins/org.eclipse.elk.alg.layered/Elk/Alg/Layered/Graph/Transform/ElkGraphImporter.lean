@@ -88,6 +88,10 @@ structure ElkGraphImporterState where
   topLevelElkGraph : Option NodeId := none
   /-- Rust `top_level_lgraph`. -/
   topLevelLGraph : Option LGraphId := none
+  /-- The last `needsModelOrderBasedOnParent` result (parent node, value): the node loops ask it for
+  every child of the same parent. Cleared when a node loop starts; within a loop the importer writes
+  none of the options it reads (only `modelOrder`, port constraints and size options). -/
+  parentModelOrder : Option (NodeId × Bool) := none
 
 /-- `ElkGraphImporter`: the importer state plus the (possibly shared) `OriginStore`. -/
 structure ElkGraphImporter where
@@ -217,13 +221,25 @@ def needsModelOrderBasedOnParent (props : PropertyMap) : Bool :=
 
 /-- Rust `needs_model_order(child)`: the parent asks for model order and the child does not opt
 out (`CONSIDER_MODEL_ORDER_NO_MODEL_ORDER`). -/
-private def needsModelOrder (child : NodeId) : LImportM Bool := do
+private def needsModelOrder (imp : ElkGraphImporter) (child : NodeId) : LImportM Bool := do
   let nd ← elkNode child
   match nd.parent with
   | none => return false
   | some parent =>
-    let parentNeeds := needsModelOrderBasedOnParent (← elkNode parent).props
+    let parentNeeds ← match (← imp.state.get).parentModelOrder with
+      | some (p, v) => if p == parent then pure v else computeParent parent
+      | none => computeParent parent
     return parentNeeds && !nd.props.getD LayeredOptions.CONSIDER_MODEL_ORDER_NO_MODEL_ORDER false
+where
+  /-- `needsModelOrderBasedOnParent` of `parent`, remembered for the next child. -/
+  computeParent (parent : NodeId) : LImportM Bool := do
+    let v := needsModelOrderBasedOnParent (← elkNode parent).props
+    imp.state.modify fun s => { s with parentModelOrder := some (parent, v) }
+    return v
+
+/-- Forgets the remembered `needsModelOrderBasedOnParent` result (start of a node loop). -/
+private def clearParentModelOrder (imp : ElkGraphImporter) : LImportM Unit :=
+  imp.state.modify fun s => { s with parentModelOrder := none }
 
 /-- Rust `set_element_model_order_for_node`. -/
 private def setElementModelOrderForNode (n : NodeId) (modelOrder : Int) : LImportM Unit :=
@@ -545,7 +561,7 @@ def transformNode (imp : ElkGraphImporter) (elknode : NodeId) (lgraph : LGraphId
   let direction ← LGraphUtil.getDirection lgraph
   let (portConstraints, gp) ← normalizePortConstraints lnode (← graphProperties lgraph)
   let mut gp := gp
-  let assignPortModelOrder ← needsModelOrder elknode
+  let assignPortModelOrder ← needsModelOrder imp elknode
   for h : portIndex in [0:nd.ports.size] do
     let port := nd.ports[portIndex]
     if assignPortModelOrder then setElementModelOrderForPort port portIndex
@@ -781,9 +797,9 @@ private def shouldSkipNode (node : NodeId) : LImportM Bool := do
 /-- The model order step shared by the node loops of Rust `import_flat_graph_nodes` and
 `import_hierarchical_graph`: assigns the next index (and records the cycle breaking group id)
 when the child needs a model order. -/
-private def assignNodeModelOrder (child : NodeId) (index : Int) (groups : Std.HashSet Int) :
+private def assignNodeModelOrder (imp : ElkGraphImporter) (child : NodeId) (index : Int) (groups : Std.HashSet Int) :
     LImportM (Int × Std.HashSet Int) := do
-  if !(← needsModelOrder child) then return (index, groups)
+  if !(← needsModelOrder imp child) then return (index, groups)
   setElementModelOrderForNode child index
   let props := (← elkNode child).props
   let groups := if props.has LayeredOptions.GROUP_MODEL_ORDER_CYCLE_BREAKING_ID then
@@ -801,11 +817,12 @@ private def setModelOrderCounts (lgraph : LGraphId) (index : Int) (groups : Std.
 /-- Rust `import_flat_graph_nodes(elkgraph, lgraph)`: the children that are laid out, with model
 orders. -/
 def importFlatGraphNodes (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
+  clearParentModelOrder imp
   let mut index : Int := 0
   let mut groups : Std.HashSet Int := {}
   for child in (← elkNode elkgraph).children do
     if ← shouldSkipNode child then continue
-    (index, groups) ← assignNodeModelOrder child index groups
+    (index, groups) ← assignNodeModelOrder imp child index groups
     discard <| transformNode imp child lgraph
   setModelOrderCounts lgraph index groups
 
@@ -930,7 +947,9 @@ that gets a nested graph in the same run), assigned when a node is polled and be
 check (so excluded nodes use up an index; their children are not visited). Returns the count and the
 cycle breaking group ids, which Java stores as `MAX_MODEL_ORDER_NODES`/`CB_NUM_MODEL_ORDER_GROUPS`
 on the top-level graph only (elk-rs: per level from `0`, every level storing its own counts). -/
-private def assignHierarchicalNodeModelOrders (elkgraph : NodeId) : LImportM (Int × Std.HashSet Int) := do
+private def assignHierarchicalNodeModelOrders (imp : ElkGraphImporter) (elkgraph : NodeId) :
+    LImportM (Int × Std.HashSet Int) := do
+  clearParentModelOrder imp
   let mut index : Int := 0
   let mut groups : Std.HashSet Int := {}
   let mut queue : Array NodeId := (← elkNode elkgraph).children
@@ -938,7 +957,7 @@ private def assignHierarchicalNodeModelOrders (elkgraph : NodeId) : LImportM (In
   while h : head < queue.size do
     let node := queue[head]
     head := head + 1
-    (index, groups) ← assignNodeModelOrder node index groups
+    (index, groups) ← assignNodeModelOrder imp node index groups
     if ← shouldSkipNode node then continue
     if ← nestsInSameRun node then
       queue := queue ++ (← elkNode node).children
@@ -1014,6 +1033,7 @@ follow once all nodes exist (`importHierarchicalEdges`). elk-rs recurses depth f
 nested graph is imported right after its node), which creates the same nodes per graph in the same
 order but numbers the `LNode`s and `LGraph`s of the arena differently (agent HMO). -/
 def importHierarchicalGraph (imp : ElkGraphImporter) (elkgraph : NodeId) (lgraph : LGraphId) : LImportM Unit := do
+  clearParentModelOrder imp
   let parentGraphDirection ← LGraphUtil.getDirection lgraph
   let mut queue : Array NodeId := (← elkNode elkgraph).children
   let mut head := 0
@@ -1060,7 +1080,7 @@ def importGraph (imp : ElkGraphImporter) (elkgraph : NodeId) : LImportM LGraphId
     calculateMinimumGraphSize elkgraph lgraph
   let hierarchyHandling := (← elkNode elkgraph).props.getD LayeredOptions.HIERARCHY_HANDLING HierarchyHandling.inherit
   if hierarchyHandling == .includeChildren then
-    let (index, groups) ← assignHierarchicalNodeModelOrders elkgraph
+    let (index, groups) ← assignHierarchicalNodeModelOrders imp elkgraph
     assignHierarchicalEdgeModelOrders elkgraph
     importHierarchicalGraph imp elkgraph lgraph
     importHierarchicalEdges imp elkgraph lgraph

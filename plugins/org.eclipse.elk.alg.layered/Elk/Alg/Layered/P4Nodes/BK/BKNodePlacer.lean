@@ -186,25 +186,33 @@ node's bottom). -/
 def checkOrderConstraint (ctx : BKContext) (bal : BKAlignedLayout) (monitor : ProgressMonitor) : IO Bool := do
   let mut feasible := true
   for l in ctx.layers do
-    let mut pos := Float.negInf
-    let mut previous : Option LNodeId := none
-    for n in (ctx.arena.layer l).nodes do
-      let id := ctx.nodeId n
-      let top := bal.yOf id + bal.innerShiftOf id - ctx.marginTop n
-      let bottom := bal.yOf id + bal.innerShiftOf id + ctx.sizeY n + ctx.marginBottom n
-      if top > pos && bottom > pos then
-        pos := bal.yOf id + bal.innerShiftOf id + ctx.sizeY n + ctx.marginBottom n
-        previous := some n
-      else
-        feasible := false
-        if ← monitor.isLoggingEnabled then
-          let prevStr := (previous.map ctx.nodeToString).getD "<none>"
-          monitor.log s!"bk node placement breaks on {ctx.nodeToString n} which should have been after {prevStr}"
-        break
-    if !feasible then break
+    let nodes := (ctx.arena.layer l).nodes
+    let i := firstOrderViolation ctx bal nodes 0 Float.negInf
+    if h : i < nodes.size then
+      feasible := false
+      if ← monitor.isLoggingEnabled then
+        -- every node before the violating one passed, the last of them is Java's `previous`
+        let prevStr := if i == 0 then "<none>" else ctx.nodeToString nodes[i - 1]!
+        monitor.log s!"bk node placement breaks on {ctx.nodeToString nodes[i]} which should have been after {prevStr}"
+      break
   if ← monitor.isLoggingEnabled then
     monitor.log s!"{bal} is feasible: {feasible}"
   return feasible
+where
+  /-- The inner loop of `checkOrderConstraint` over the nodes of one layer from `i` on with the bottom
+  `pos` of the last node: the index of the first node that is not below `pos` (`nodes.size` if all
+  are). A pure tail loop, so that `pos` stays an unboxed `Float` and `previous` needs no `some`
+  per node (PLAN 7.1 items 3, 49); `pos` becomes `bottom`, the same sum Java assigns. -/
+  firstOrderViolation (ctx : BKContext) (bal : BKAlignedLayout) (nodes : Array LNodeId) (i : Nat)
+      (pos : Float) : Nat :=
+    if h : i < nodes.size then
+      let n := nodes[i]
+      let id := ctx.nodeId n
+      let top := bal.yOf id + bal.innerShiftOf id - ctx.marginTop n
+      let bottom := bal.yOf id + bal.innerShiftOf id + ctx.sizeY n + ctx.marginBottom n
+      if top > pos && bottom > pos then firstOrderViolation ctx bal nodes (i + 1) bottom else i
+    else nodes.size
+  termination_by nodes.size - i
 
 /-- `getClasses(bal)` (debug output): the block roots of each class, keyed by sink (ascending);
 the roots of a class in order of first appearance in `bal.root` (Java `LinkedHashSet`; Rust
