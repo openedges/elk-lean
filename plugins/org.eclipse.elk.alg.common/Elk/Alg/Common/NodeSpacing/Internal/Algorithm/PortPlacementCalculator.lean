@@ -105,19 +105,47 @@ private def freePortPlacementStart (ctx : NodeContext N P L) (portCount : Nat) (
       spaceBetweenPorts := spaceBetweenPorts + fmax fl0p0 additional
   return (currentPos, spaceBetweenPorts)
 
+/-- The port loop of `placeHorizontalFreePorts` from context `i` on, at `x`: the port goes to
+`x + left margin` (y by `calculateHorizontalPortYCoordinate`), the next one to
+`x + (left margin + width + right margin + gap)`. Updates the contexts in place
+(`withPortPosition`; the Java loop's arithmetic order). -/
+private partial def placeHorizontalFreeLoop (pcs : Array (PortContext P L)) (i : Nat) (x gap : Float) :
+    Array (PortContext P L) :=
+  if h : i < pcs.size then
+    let pc := pcs[i]
+    let left := pc.portMargin.left
+    let pos : KVector := { x := x + left, y := calculateHorizontalPortYCoordinate pc }
+    let next := x + (left + pc.portSize.x + pc.portMargin.right + gap)
+    placeHorizontalFreeLoop (pcs.modify i (·.withPortPosition pos)) (i + 1) next gap
+  else pcs
+
+/-- The port loop of `placeVerticalFreePorts` from context `i` on, at `y` (see
+`placeHorizontalFreeLoop`). -/
+private partial def placeVerticalFreeLoop (pcs : Array (PortContext P L)) (i : Nat) (nodeWidth y gap : Float) :
+    Array (PortContext P L) :=
+  if h : i < pcs.size then
+    let pc := pcs[i]
+    let top := pc.portMargin.top
+    let pos : KVector := { x := calculateVerticalPortXCoordinate pc nodeWidth, y := y + top }
+    let next := y + (top + pc.portSize.y + pc.portMargin.bottom + gap)
+    placeVerticalFreeLoop (pcs.modify i (·.withPortPosition pos)) (i + 1) nodeWidth next gap
+  else pcs
+
 /-! ### Horizontal port placement -/
 
 /-- `placeHorizontalFixedPosPorts(nodeContext, portSide)`: the x coordinate is fixed, only the y
 coordinate is adjusted to the border offset. -/
 private def placeHorizontalFixedPosPorts (ctx : NodeContext N P L) (portSide : PortSide) : NodeContext N P L :=
   ctx.modifyPortContextsOf portSide fun pcs => pcs.map fun pc =>
-    { pc with portPosition := { pc.portPosition with y := calculateHorizontalPortYCoordinate pc } }
+    let pos : KVector := { pc.portPosition with y := calculateHorizontalPortYCoordinate pc }
+    pc.withPortPosition pos
 
 /-- `placeHorizontalFixedRatioPorts(nodeContext, portSide)`: x = node width × position ratio. -/
 private def placeHorizontalFixedRatioPorts (ctx : NodeContext N P L) (portSide : PortSide) : NodeContext N P L :=
   let nodeWidth := ctx.nodeSize.x
   ctx.modifyPortContextsOf portSide fun pcs => pcs.map fun pc =>
-    { pc with portPosition := { x := nodeWidth * pc.portRatioOrPosition, y := calculateHorizontalPortYCoordinate pc } }
+    let pos : KVector := { x := nodeWidth * pc.portRatioOrPosition, y := calculateHorizontalPortYCoordinate pc }
+    pc.withPortPosition pos
 
 /-- `placeHorizontalFreePorts(nodeContext, portSide)`: places the ports inside the content area
 of the side's inside port label cell according to the side's port alignment. The port margins
@@ -135,15 +163,8 @@ private def placeHorizontalFreePorts (ctx : NodeContext N P L) (portSide : PortS
   let availableSpace := cellRect.width - cellPadding.left - cellPadding.right
   let (start, spaceBetweenPorts) := freePortPlacementStart ctx portCount (ctx.getPortAlignment portSide)
     availableSpace minContentX (cellRect.x + cellPadding.left)
-  -- Iterate over all ports and place them
-  let mut currentXPos := start
-  let mut placed : Array (PortContext P L) := Array.mkEmpty portCount
-  for pc in portContexts do
-    placed := placed.push
-      { pc with portPosition := { x := currentXPos + pc.portMargin.left, y := calculateHorizontalPortYCoordinate pc } }
-    currentXPos := currentXPos +
-      (pc.portMargin.left + pc.portSize.x + pc.portMargin.right + spaceBetweenPorts)
-  return ctx.setPortContextsOf portSide placed
+  -- Iterate over all ports and place them (on the contexts taken out of the node context)
+  return ctx.modifyPortContextsOf portSide fun pcs => placeHorizontalFreeLoop pcs 0 start spaceBetweenPorts
 
 /-- `placeHorizontalPorts(nodeContext)`: places the northern, then the southern ports according
 to the port constraints (`FIXED_POS`, `FIXED_RATIO`, anything else is free). -/
@@ -160,14 +181,16 @@ coordinate is adjusted to the node width and the border offset. -/
 private def placeVerticalFixedPosPorts (ctx : NodeContext N P L) (portSide : PortSide) : NodeContext N P L :=
   let nodeWidth := ctx.nodeSize.x
   ctx.modifyPortContextsOf portSide fun pcs => pcs.map fun pc =>
-    { pc with portPosition := { pc.portPosition with x := calculateVerticalPortXCoordinate pc nodeWidth } }
+    let pos : KVector := { pc.portPosition with x := calculateVerticalPortXCoordinate pc nodeWidth }
+    pc.withPortPosition pos
 
 /-- `placeVerticalFixedRatioPorts(nodeContext, portSide)`: y = node height × position ratio. -/
 private def placeVerticalFixedRatioPorts (ctx : NodeContext N P L) (portSide : PortSide) : NodeContext N P L :=
   let nodeWidth := ctx.nodeSize.x
   let nodeHeight := ctx.nodeSize.y
   ctx.modifyPortContextsOf portSide fun pcs => pcs.map fun pc =>
-    { pc with portPosition := { x := calculateVerticalPortXCoordinate pc nodeWidth, y := nodeHeight * pc.portRatioOrPosition } }
+    let pos : KVector := { x := calculateVerticalPortXCoordinate pc nodeWidth, y := nodeHeight * pc.portRatioOrPosition }
+    pc.withPortPosition pos
 
 /-- `placeVerticalFreePorts(nodeContext, portSide)`: places the ports inside the content area of
 the side's inside port label cell according to the side's port alignment. -/
@@ -185,15 +208,8 @@ private def placeVerticalFreePorts (ctx : NodeContext N P L) (portSide : PortSid
   let nodeWidth := ctx.nodeSize.x
   let (start, spaceBetweenPorts) := freePortPlacementStart ctx portCount (ctx.getPortAlignment portSide)
     availableSpace minContentY (cellRect.y + cellPadding.top)
-  -- Iterate over all ports and place them
-  let mut currentYPos := start
-  let mut placed : Array (PortContext P L) := Array.mkEmpty portCount
-  for pc in portContexts do
-    placed := placed.push
-      { pc with portPosition := { x := calculateVerticalPortXCoordinate pc nodeWidth, y := currentYPos + pc.portMargin.top } }
-    currentYPos := currentYPos +
-      (pc.portMargin.top + pc.portSize.y + pc.portMargin.bottom + spaceBetweenPorts)
-  return ctx.setPortContextsOf portSide placed
+  -- Iterate over all ports and place them (on the contexts taken out of the node context)
+  return ctx.modifyPortContextsOf portSide fun pcs => placeVerticalFreeLoop pcs 0 nodeWidth start spaceBetweenPorts
 
 /-- `placeVerticalPorts(nodeContext)`: places the eastern, then the western ports according to
 the port constraints (`FIXED_POS`, `FIXED_RATIO`, anything else is free). -/

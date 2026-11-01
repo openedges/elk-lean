@@ -69,6 +69,11 @@ else reads a `RANDOM` while the minimiser runs, so every shared state is written
   `crossmin: with_counter …` lines are reproduced (same format); `CROSSMIN_RANDOM_TRACE` lines are for the
   seed, the sweep directions and (in `GraphInfoHolder`) the distributor draw.
 -/
+/-! Float literals as global constants (FL): with `holderAt` inlined, the compiler shares a literal's
+`Nat`/`Bool` arguments with unrelated values (CSE) and parses it on every evaluation
+(`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
+private def fl0p0 : Float := 0.0
+
 namespace Elk.Alg.Layered.P3Order
 
 open Elk.Core.Alg Elk.Core.Options Elk.Core.Util Elk.Alg.Layered Elk.Alg.Layered.Graph Elk.Alg.Layered.Options
@@ -92,8 +97,8 @@ structure LayerSweepCrossingMinimizer where
   graphsWhoseNodeOrderChanged : Array Bool := #[]
   /-- `random`: the shared generator (see the module doc). -/
   random : IO.Ref Random
-  /-- `random_seed` (`u64` in Rust; `setSeed` wraps). -/
-  randomSeed : Int := 0
+  /-- `random_seed` (`u64` in Rust; `setSeed` wraps): the bit pattern of the `nextLong` draw. -/
+  randomSeed : UInt64 := 0
   /-- The shared generators to write back: the graph holding the `RANDOM` state and its ref. -/
   randomRefs : Array (LGraphId × IO.Ref Random) := #[]
 
@@ -412,20 +417,25 @@ def countModelOrderPortChanges (graph : ModelOrderGraphContext) (layers : Array 
 /-! ## Holder access -/
 
 /-- The holder of a graph index (`graph_info_holders[index]`). -/
-def holderAt (index : Nat) : SweepM GraphInfoHolder := do
+@[inline] def holderAt (index : Nat) : SweepM GraphInfoHolder := do
   match (← get).graphInfoHolders[index]? with
   | some h => return h
   | none => throw (IO.userError s!"java.lang.IndexOutOfBoundsException: graph info holder {index}")
 
-/-- Updates a holder in place. -/
-@[inline] def modifyHolder (index : Nat) (f : GraphInfoHolder → GraphInfoHolder) : SweepM Unit :=
+/-- Updates a holder in place. Not inlined: with the update lambda inlined into `Array.modify`, the
+compiler tests the holder's exclusivity before the slot is cleared and every update allocated a
+fresh 17-field holder (PLAN 7.1 item 16; `GraphInfoHolder` has no `Inhabited` instance for
+`modifyIn`). As a closure the update runs on the unshared holder. -/
+@[noinline] def modifyHolder (index : Nat) (f : GraphInfoHolder → GraphInfoHolder) : SweepM Unit :=
   modify fun s => { s with graphInfoHolders := s.graphInfoHolders.modify index f }
 
-/-- Takes the current node order out of a holder (so the heuristics own it uniquely). -/
+/-- Takes the current node order out of a holder (so the heuristics own it uniquely). The order is
+projected before the update, so the holder itself is no longer referenced and is updated in
+place. -/
 def takeOrder (index : Nat) : SweepM (Array (Array LNodeId)) := do
-  let h ← holderAt index
+  let order := (← holderAt index).currentNodeOrder
   modifyHolder index fun h => { h with currentNodeOrder := #[] }
-  return h.currentNodeOrder
+  return order
 
 /-- Puts a node order back. -/
 @[inline] def putOrder (index : Nat) (order : Array (Array LNodeId)) : SweepM Unit :=
@@ -468,7 +478,7 @@ def chooseMinimizingMethod (rootIndex : Nat) : SweepM MinimizingMethod := do
 /-- `reset_random_for_all_graphs()`: reseeds the shared generator only (Java likewise). -/
 def resetRandomForAllGraphs : SweepM Unit := do
   let s ← get
-  s.random.modify (·.setSeed s.randomSeed)
+  s.random.modify (·.setSeedBits s.randomSeed)
 
 /-- `next_boolean_for_graph(index)`: the sweep direction from the shared generator
 (`ELK_DEBUG_CROSSMIN_FORCE_SWEEP=forward|backward` forces it). -/
@@ -506,14 +516,20 @@ def collectChildGraphIndices (index : Nat) : SweepM (Array Nat) := do
 /-- `save_all_node_orders_of_changed_graphs()`. -/
 def saveAllNodeOrdersOfChangedGraphs : SweepM Unit := do
   for index in setMembers (← get).graphsWhoseNodeOrderChanged do
-    let h ← (← holderAt index).updateBestFromCurrentlyBestOrCurrent
-    modifyHolder index fun _ => h
+    -- `updateBestFromCurrentlyBestOrCurrent` with the copy made first and the holder updated in place
+    let h ← holderAt index
+    let best ← match h.currentlyBestNodeAndPortOrder with
+      | some src => pure src
+      | none => SweepCopy.new h.currentNodeOrder h.snapshot
+    modifyHolder index fun h => { h with bestNodeAndPortOrder := some best }
 
 /-- `set_currently_best_node_orders()`. -/
 def setCurrentlyBestNodeOrders : SweepM Unit := do
   for index in setMembers (← get).graphsWhoseNodeOrderChanged do
-    let h ← (← holderAt index).updateCurrentlyBestFromCurrent
-    modifyHolder index fun _ => h
+    -- `updateCurrentlyBestFromCurrent` with the copy made first and the holder updated in place
+    let h ← holderAt index
+    let copy ← SweepCopy.new h.currentNodeOrder h.snapshot
+    modifyHolder index fun h => { h with currentlyBestNodeAndPortOrder := some copy }
 
 /-! ## Crossing counts -/
 
@@ -534,8 +550,8 @@ weighted by its node and port influence (counted first), plus its crossings, plu
 crossings of the nested graphs swept into, summed in Java's `double` order. -/
 def countCurrentNumberOfCrossingsNodePortOrder (startIndex : Nat) : SweepM Float := do
   let h ← holderAt startIndex
-  let mut totalCrossings : Float := 0.0
-  let mut modelOrderInfluence : Float := 0.0
+  let mut totalCrossings : Float := fl0p0
+  let mut modelOrderInfluence : Float := fl0p0
   if h.considerModelOrderStrategy != .none then
     let order := h.currentNodeOrder
     let ctx ← graphContext h.lGraph
@@ -677,7 +693,7 @@ def minimizeCrossingsWithCounter (index : Nat) : SweepM Int := do
   let initialCrossingsCount ← countCurrentNumberOfCrossings index
   let initialCrossings := Float.ofInt initialCrossingsCount
   if ElkTrace.global.crossmin then IO.eprintln s!"crossmin: with_counter initial_crossings={initialCrossingsCount}"
-  if initialCrossings == 0.0 && (← holderAt index).firstTryWithInitialOrder then return 0
+  if initialCrossings == fl0p0 && (← holderAt index).firstTryWithInitialOrder then return 0
   isForwardSweep ← firstSweepWithCounter index isForwardSweep
   let mut crossingsInGraph ← countCurrentNumberOfCrossings index
   if ElkTrace.global.crossmin then IO.eprintln s!"crossmin: with_counter crossings_in_graph={crossingsInGraph}"
@@ -699,13 +715,13 @@ with the model-order-weighted count. -/
 def minimizeCrossingsNodePortOrderWithCounter (index : Nat) : SweepM Float := do
   let mut isForwardSweep ← nextBooleanForGraph index
   let initialCrossings ← countCurrentNumberOfCrossingsNodePortOrder index
-  if initialCrossings == 0.0 && (← holderAt index).firstTryWithInitialOrder then return 0.0
+  if initialCrossings == fl0p0 && (← holderAt index).firstTryWithInitialOrder then return fl0p0
   isForwardSweep ← firstSweepWithCounter index isForwardSweep
   let mut crossingsInGraph ← countCurrentNumberOfCrossingsNodePortOrder index
-  let mut oldNumberOfCrossings : Float := 0.0
+  let mut oldNumberOfCrossings : Float := fl0p0
   repeat
     setCurrentlyBestNodeOrders
-    if crossingsInGraph == 0.0 then return 0.0
+    if crossingsInGraph == fl0p0 then return fl0p0
     isForwardSweep := !isForwardSweep
     oldNumberOfCrossings := crossingsInGraph
     let _ ← sweepReducingCrossings index isForwardSweep false
@@ -723,7 +739,7 @@ def compareRandomizedNodePortOrder (index : Nat) (thoroughness : Int) : SweepM U
     if crossings < bestCrossings then
       bestCrossings := crossings
       saveAllNodeOrdersOfChangedGraphs
-      if bestCrossings == 0.0 then break
+      if bestCrossings == fl0p0 then break
 
 /-- The plain branch of `compare_different_randomized_layouts`. -/
 def compareRandomizedPlain (index : Nat) (thoroughness : Int) : SweepM Unit := do
@@ -744,7 +760,7 @@ def compareDifferentRandomizedLayouts (index : Nat) : SweepM Unit := do
   if h.considerModelOrderStrategy != .none then
     modifyHolder index fun h => { h with firstTryWithInitialOrder := true }
   h.crossMinimizer.resetSweepIteration
-  if h.nodeInfluence != 0.0 then
+  if h.nodeInfluence != fl0p0 then
     compareRandomizedNodePortOrder index h.thoroughness
   else
     compareRandomizedPlain index h.thoroughness
@@ -799,8 +815,9 @@ def initializeRandom (root : LGraphId) : SweepM Unit := do
     let holderGraph ← LayeredM.randomHolder root
     modify fun s => { s with randomRefs := s.randomRefs.push (holderGraph, s.random) }
   RandomTrace.resetCounter
-  let rawSeed ← s.random.modifyGet (·.nextLong)
-  let seed ← RandomTrace.traceNextLong rawSeed "graph_info_holder::initialize"
+  let seed ← s.random.modifyGet (·.nextLongBits)
+  if RandomTrace.isEnabled then
+    let _ ← RandomTrace.traceNextLong seed.toInt64.toInt "graph_info_holder::initialize"
   modify fun s => { s with randomSeed := seed }
 
 /-- `initialize(root_graph, root_graph_guard)`: one holder per graph in BFS order (`LGraph.id :=

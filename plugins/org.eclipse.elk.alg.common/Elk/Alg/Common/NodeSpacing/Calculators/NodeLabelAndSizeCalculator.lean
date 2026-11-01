@@ -1600,8 +1600,21 @@ def processNode (a : GraphAdapters m G N P L E) (node : N) (layoutDirection : Di
 the inside non-center node labels (`InsideNodeLabelGrid.computeInsidePadding`). Spacings are
 individual or inherited from the node's parent graph (elk-rs). Throws like the Java
 `new NodeContext(null, node)` for an invalid port or node label placement of the node
-(`NodeContext.validatePlacements`; elk-rs does not check). -/
+(`NodeContext.validatePlacements`; elk-rs does not check). A node without labels needs no padding:
+every grid cell keeps its zero minimum size, so `computeInsidePadding` returns the zero padding
+(`InsideNodeLabelGrid.new` only reads settings), and the grid is not built. -/
 def computeInsideNodeLabelPadding [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
+    (layoutDirection : Direction) : m ElkPadding := do
+  NodeContext.validatePlacements
+    (← a.node.getPropertyD node CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty)
+    (← a.node.getPropertyD node CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty)
+  if (← a.nodeLabels node).isEmpty then return {}
+  let grid ← InsideNodeLabelGrid.new a node layoutDirection
+  return grid.computeInsidePadding
+
+/-- `computeInsideNodeLabelPadding` without the no-label fast path (the grid is always built;
+reference of the differential test). -/
+def computeInsideNodeLabelPaddingRef [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
     (layoutDirection : Direction) : m ElkPadding := do
   NodeContext.validatePlacements
     (← a.node.getPropertyD node CoreOptions.PORT_LABELS_PLACEMENT EnumSet.empty)

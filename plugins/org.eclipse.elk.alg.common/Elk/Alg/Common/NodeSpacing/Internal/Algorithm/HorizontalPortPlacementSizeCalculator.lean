@@ -128,20 +128,21 @@ private def computeHorizontalPortMargins (ctx : NodeContext N P L) (portSide : P
   let portLabelSpacingH := ctx.portLabelSpacingHorizontal
   let cells := ctx.cells
   ctx.modifyPortContextsOf portSide fun pcs => pcs.map fun pc =>
-    { pc with portMargin := horizontalPortMargin cells isFixed portLabelSpacingH pc }
+    let m := horizontalPortMargin cells isFixed portLabelSpacingH pc
+    pc.withPortMargin m
 
 /-- `unifyPortMargins(portContexts)`: sets every left/right margin to the maximum one. -/
 private def unifyPortMargins (pcs : Array (PortContext P L)) : Array (PortContext P L) :=
   let maxLeft := pcs.foldl (fun m pc => fmax m pc.portMargin.left) 0.0
   let maxRight := pcs.foldl (fun m pc => fmax m pc.portMargin.right) 0.0
-  pcs.map fun pc => { pc with portMargin := { pc.portMargin with left := maxLeft, right := maxRight } }
+  pcs.map (·.withMarginLeftRight maxLeft maxRight)
 
 /-- Sets the left margin of the first and the right margin of the last context to `0`. -/
 private def clearOuterMargins (pcs : Array (PortContext P L)) : Array (PortContext P L) :=
   if pcs.isEmpty then pcs
   else
-    let pcs := pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with left := 0.0 } }
-    pcs.modify (pcs.size - 1) fun pc => { pc with portMargin := { pc.portMargin with right := 0.0 } }
+    let pcs := pcs.modify 0 (·.withMarginLeft fl0p0)
+    pcs.modify (pcs.size - 1) (·.withMarginRight fl0p0)
 
 /-- `setupPortMargins(nodeContext, portSide)`: port margins including the label space, subject to
 the outside / space-efficient / uniform port spacing options. -/
@@ -163,7 +164,7 @@ private def setupPortMargins (ctx : NodeContext N P L) (portSide : PortSide) : N
         match pcs[0]? with
         | some first =>
           if spaceEfficientPortLabels && !first.labelsNextToPort then
-            pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with right := fl0p0 } }
+            pcs.modify 0 (·.withMarginRight fl0p0)
           else pcs
         | none => pcs
     else ctx

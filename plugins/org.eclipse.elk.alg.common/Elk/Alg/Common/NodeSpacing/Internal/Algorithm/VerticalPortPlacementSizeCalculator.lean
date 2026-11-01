@@ -126,20 +126,21 @@ private def computeVerticalPortMargins (ctx : NodeContext N P L) (portSide : Por
   let portLabelsTreatAsGroup := ctx.portLabelsTreatAsGroup
   let cells := ctx.cells
   ctx.modifyPortContextsOf portSide fun pcs => pcs.map fun pc =>
-    { pc with portMargin := verticalPortMargin cells isFixed portLabelSpacingV portLabelsTreatAsGroup pc }
+    let m := verticalPortMargin cells isFixed portLabelSpacingV portLabelsTreatAsGroup pc
+    pc.withPortMargin m
 
 /-- `unifyPortMargins(portContexts)`: sets every top/bottom margin to the maximum one. -/
 private def unifyPortMargins (pcs : Array (PortContext P L)) : Array (PortContext P L) :=
   let maxTop := pcs.foldl (fun m pc => fmax m pc.portMargin.top) 0.0
   let maxBottom := pcs.foldl (fun m pc => fmax m pc.portMargin.bottom) 0.0
-  pcs.map fun pc => { pc with portMargin := { pc.portMargin with top := maxTop, bottom := maxBottom } }
+  pcs.map (·.withMarginTopBottom maxTop maxBottom)
 
 /-- Sets the top margin of the first and the bottom margin of the last context to `0`. -/
 private def clearOuterMargins (pcs : Array (PortContext P L)) : Array (PortContext P L) :=
   if pcs.isEmpty then pcs
   else
-    let pcs := pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with top := 0.0 } }
-    pcs.modify (pcs.size - 1) fun pc => { pc with portMargin := { pc.portMargin with bottom := 0.0 } }
+    let pcs := pcs.modify 0 (·.withMarginTop fl0p0)
+    pcs.modify (pcs.size - 1) (·.withMarginBottom fl0p0)
 
 /-- `setupPortMargins(nodeContext, portSide)`: port margins including the label space, subject to
 the outside / space-efficient / uniform port spacing options. -/
@@ -161,7 +162,7 @@ private def setupPortMargins (ctx : NodeContext N P L) (portSide : PortSide) : N
         match pcs[0]? with
         | some first =>
           if spaceEfficientPortLabels && !first.labelsNextToPort then
-            pcs.modify 0 fun pc => { pc with portMargin := { pc.portMargin with bottom := fl0p0 } }
+            pcs.modify 0 (·.withMarginBottom fl0p0)
           else pcs
         | none => pcs
     else ctx

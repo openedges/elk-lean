@@ -26,7 +26,30 @@ def nodePortsBySide (a : LGraphArena) (n : LNodeId) (side : PortSide) : Array LP
 
 /-- `LNode.findPortIndices()`: per `PortSide` ordinal the `[first, last)` range of the node's
 ports on that side (ports are assumed to be sorted by side). -/
-def findPortIndices (a : LGraphArena) (n : LNodeId) : Array (Option (Nat × Nat)) := Id.run do
+def findPortIndices (a : LGraphArena) (n : LNodeId) : Array (Option (Nat × Nat)) :=
+  let ports := (a.node n).ports
+  let indices : Array (Option (Nat × Nat)) := Array.replicate 5 none
+  if ports.isEmpty then indices else findPortIndicesLoop a ports 0 0 PortSide.north indices
+where
+  /-- The port loop from port `i` on (`i` is Java's `currentIndex`): the run of `currentSide`
+  started at `firstIndex`. A tail-recursive loop comparing side ordinals (the `for` loop with four
+  mutable variables built a loop state tuple per port and compared sides with the derived
+  `BEq`). -/
+  findPortIndicesLoop (a : LGraphArena) (ports : Array LPortId) (i firstIndex : Nat) (currentSide : PortSide)
+      (indices : Array (Option (Nat × Nat))) : Array (Option (Nat × Nat)) :=
+    if h : i < ports.size then
+      let side := (a.port ports[i]).side
+      if ElkEnum.ordinal side != ElkEnum.ordinal currentSide then
+        let indices := if firstIndex != i then
+            indices.set! (ElkEnum.ordinal currentSide) (some (firstIndex, i))
+          else indices
+        findPortIndicesLoop a ports (i + 1) i side indices
+      else findPortIndicesLoop a ports (i + 1) firstIndex currentSide indices
+    else indices.set! (ElkEnum.ordinal currentSide) (some (firstIndex, i))
+  termination_by ports.size - i
+
+/-- `findPortIndices` as the original `for` loop (reference of the differential test). -/
+def findPortIndicesRef (a : LGraphArena) (n : LNodeId) : Array (Option (Nat × Nat)) := Id.run do
   let ports := (a.node n).ports
   let mut indices : Array (Option (Nat × Nat)) := Array.replicate 5 none
   if ports.isEmpty then return indices
