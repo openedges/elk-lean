@@ -11,6 +11,9 @@ elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup
 elk algorithms | options [--choices] | categories
 elk --version
 ```
+Every command accepts `--threads N` (anywhere on the command line): the cap of the parallel sibling
+layout (`Elk.Core.Parallel`, `docs/parallel-layout.md`); `1` is sequential, the default is
+`ELK_LEAN_THREADS` or `min(hardware threads, 8)`. Outputs do not depend on it.
 `bench` is elk-rs `perf_benchmark --engine rust_api` (same graphs, same CSV; engine `lean_api`).
 `layout` and `convert` read ELK Text (`.elkt`) input through `Elk.Text.parseElkt`; `--defaults` applies the
 elk-live defaults (node size 30, port size 5) to shapes without a size.
@@ -21,7 +24,7 @@ and appends `rust_layout_json	rust_status	rust_error` columns (elk-lean fills th
 open Elk Elk.Json Elk.Api
 
 def usage : String :=
-  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV] [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]\n  elk algorithms | options [--choices] | categories\n  elk --version"
+  "usage:\n  elk layout [-o OUT] [--options JSON] [--pretty] [--sort-keys] [--lenient] [--defaults] [--force-algorithm ID] INPUT.(json|elkt)\n  elk convert [-o OUT.json] [--pretty] [--sort-keys] [--defaults] INPUT.elkt\n  elk batch --input-manifest IN.tsv --output-manifest OUT.tsv --layout-dir DIR [--trace-dir DIR] [--pretty] [--sort-keys]\n  elk bench [--mode synthetic|models] [--scenarios A,B] [--iterations N] [--warmup N] [--output CSV] [--manifest TSV | --input-dir DIR] [--limit N] [--dump-dir DIR]\n  elk algorithms | options [--choices] | categories\n  elk --version\n  (every command: --threads N, the parallel layout cap; 1 = sequential)"
 
 structure LayoutArgs where
   input : Option String := none
@@ -264,7 +267,24 @@ def runBench (args : List String) : IO UInt32 := do
   | none => IO.print csv
   return 0
 
-def main (args : List String) : IO UInt32 := do
+/-- Removes `--threads N` from the arguments: `some (rest, N)`, `none` when absent; an invalid `N` is
+an error. -/
+def extractThreads (args : List String) : Except String (List String × Option Nat) :=
+  go args []
+where
+  go : List String → List String → Except String (List String × Option Nat)
+    | [], acc => .ok (acc.reverse, none)
+    | "--threads" :: v :: rest, acc =>
+      match v.toNat? with
+      | some n => do
+        let (rest', _) ← go rest []
+        .ok (acc.reverse ++ rest', some n)
+      | none => .error s!"--threads expects a number, got '{v}'"
+    | ["--threads"], _ => .error "--threads expects a number"
+    | a :: rest, acc => go rest (a :: acc)
+
+/-- The commands (`main` without the `--threads` handling). -/
+def runCommand (args : List String) : IO UInt32 := do
   match args with
   | ["--version"] | ["-V"] =>
     IO.println s!"elk-lean {Elk.Api.version} (ELK {Elk.Api.elkVersion})"
@@ -280,3 +300,22 @@ def main (args : List String) : IO UInt32 := do
   | _ =>
     IO.eprintln usage
     return 2
+
+def main (args : List String) : IO UInt32 := do
+  let (args, threads) ← match extractThreads args with
+    | .ok r => pure r
+    | .error e => IO.eprintln e; return 2
+  -- the Lake-generated `main` has initialised the task manager (`lean_init_task_manager`)
+  Elk.Core.Parallel.configure (threads.getD 0)
+  let rc ← runCommand args
+  if (← IO.getEnv "ELK_LEAN_PAR_STATS").isSome then
+    let st ← Elk.Core.Parallel.stats
+    IO.eprintln s!"elk-lean parallel: threads={← Elk.Core.Parallel.threads} segments={st.parallelSegments} chunks={st.chunks} fallbacks={st.fallbacks} failures={st.failures}"
+  -- a helper task abandoned after an earlier sibling failed may still run (it may not even
+  -- terminate, the sequential run would not have started it): exit without joining the task
+  -- manager's workers (`lean_finalize_task_manager` in the generated `main`)
+  if (← Elk.Core.Parallel.helpersRunning) > 0 then
+    (← IO.getStdout).flush
+    (← IO.getStderr).flush
+    IO.Process.exit rc.toUInt8
+  return rc

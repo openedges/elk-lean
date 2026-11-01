@@ -202,6 +202,23 @@ def fromEnv : IO ElkTrace := do
     debugCycleRandomPrefetch := (← IO.getEnv "ELK_DEBUG_CYCLE_RANDOM_PREFETCH")
   }
 
+/-- Whether any flag is set (elk-lean, agent PAR): the parallel layout keeps the sequential path while
+debug output is enabled, so that the output keeps its order. Lists every field above. -/
+def anyEnabled (t : ElkTrace) : Bool :=
+  t.trace || t.phases || t.phaseTiming || t.processors || t.processorTiming || t.nodes ||
+  t.edgeWiring || t.resize || t.recursiveLayout || t.nodeSize || t.sizing || t.sizingLabels ||
+  t.crossmin || t.crossminTiming || t.crossminStats || t.crossminConstraints ||
+  t.crossingsBreakdown || t.greedySwitch || t.greedyPorts || t.portRanks || t.forsterGroups ||
+  t.cycleChoices || t.cycleReversals || t.bk || t.bkAlign || t.bkClasses || t.bkConflicts ||
+  t.bkGuard || t.bkInner || t.bkLayouts || t.bkPlaceBlock || t.bkNodeState || t.bkThresh ||
+  t.networkSimplex || t.ortho || t.compoundWidth || t.edgeApply || t.edgeOffsets ||
+  t.edgeOriginMap || t.insideYo || t.externalPorts || t.hn || t.hierPortOrtho || t.ilc || t.ns ||
+  t.longEdgeSplit || t.labelDummySwitcher || t.layerHeight || t.corePortSort ||
+  t.importEdgeSelection || t.importPortOrder || t.jsonEdgeAdjust || t.stress || t.debugEdges ||
+  t.nodesFilter.isSome || t.barycenterLayerPattern.isSome || t.bkNodeFilter.isSome ||
+  t.debugCrossminForceSweep.isSome || t.debugCycleForceReverseOrigins.isSome ||
+  t.debugCycleRandomPrefetch.isSome
+
 end ElkTrace
 
 /-- The process-wide flags (`ElkTrace::global()`), computed once at startup. -/

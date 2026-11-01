@@ -5,6 +5,7 @@ import Elk.Core.Validation
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
 import Elk.Core.Util.FloatConst
+import Elk.Core.Parallel
 open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.core.RecursiveGraphLayoutEngine`
@@ -13,6 +14,13 @@ Lays out a compound graph bottom-up: resolves the algorithm of every node
 (`LayoutAlgorithmResolver`; no option or graph validation, like ELK Java), then calls the
 registered `LayoutProvider` for every hierarchy level, honouring
 `elk.hierarchyHandling` (INCLUDE_CHILDREN), inside self loops and top-down layout.
+
+elk-lean addition (agent PAR): the loop over the children of a separately laid out node may run on
+Lean tasks (`Elk.Core.Parallel.layoutSiblings?`) when the children's sub-graphs are independent; the
+merged arena is the one of the sequential loop, element for element (`docs/parallel-layout.md`).
+Without a configured thread cap (library default), with a progress monitor, in trace mode or for
+fewer than two independent sub-graphs of `Elk.Core.Parallel.minWork` elements the loop below runs
+exactly as before.
 -/
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
@@ -265,11 +273,21 @@ partial def layoutRecursively (layoutNode : NodeId) (monitor : ProgressMonitor) 
     nodeCount := children.size
     if topdownLayout then
       applyTopdownLayout layoutNode children algorithmData nodeCount monitor
-    for child in children do
-      let subMonitor ← monitor.subTask fl1p0
-      let childLoops ← layoutRecursively child subMonitor
-      childrenInsideSelfLoops := childrenInsideSelfLoops ++ childLoops
+    -- the loop body for one child, as a unit of the parallel sibling layout (null monitor only:
+    -- `subTask` of the null monitor is the null monitor)
+    let unit (child : NodeId) : ElkM (Array EdgeId) := do
+      let childLoops ← layoutRecursively child ProgressMonitor.null
       ElkUtil.applyConfiguredNodeScaling child
+      return childLoops
+    match ← Elk.Core.Parallel.layoutSiblings? children monitor unit (fun r es => es.map r.edge) with
+    | some loops =>
+      for childLoops in loops do childrenInsideSelfLoops := childrenInsideSelfLoops ++ childLoops
+    | none =>
+      for child in children do
+        let subMonitor ← monitor.subTask fl1p0
+        let childLoops ← layoutRecursively child subMonitor
+        childrenInsideSelfLoops := childrenInsideSelfLoops ++ childLoops
+        ElkUtil.applyConfiguredNodeScaling child
   if ← monitor.isCanceled then return #[]
   for e in childrenInsideSelfLoops do
     ElkM.modifyEdge e fun x => { x with props := x.props.set CoreOptions.NO_LAYOUT true }
