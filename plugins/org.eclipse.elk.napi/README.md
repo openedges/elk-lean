@@ -10,6 +10,7 @@ elk-lean Node.js 네이티브 애드온. elk-rs `plugins/org.eclipse.elk.napi/sr
 |---|---|
 | `layout_json(graphJson, optionsJson)` | elk-rs `layout_api::layout_json`; 결과 JSON 문자열(키 정렬, compact). `optionsJson`은 생략/`""` 가능 |
 | `known_layout_algorithms()` / `known_layout_options()` / `known_layout_categories()` | 메타데이터 JSON 배열 문자열 |
+| `convert_elkt(elkt, flags = 0)` | elk-lean 추가: ELK Text → ELK JSON 문자열(`elk_lean_convert_elkt_flags`). `flags`는 `elk_lean.h`의 `ELK_LEAN_CONVERT_*` 비트(1 `--defaults`, 2 `--pretty`, 4 `--sort-keys`), 0이면 `elk convert X.elkt`와 바이트 동일. 구문 오류는 `Error('ELK Text parse error: <행>:<열>: …')` |
 | `version` | `"0.12.0"` |
 
 엔진 오류는 JavaScript `Error(message)`로 던지고(`napi::Error::from_reason`과 동일), 문자열이 아닌

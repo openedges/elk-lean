@@ -1,7 +1,8 @@
 /*
  * Native smoke test of the plain C API (include/elk_lean.h): initialises elk-lean, lays out
  * the graph given as argv[1] (a JSON file) with the options argv[2] (JSON text, optional) and
- * prints the result; `--algorithms`, `--options`, `--categories` print the metadata.
+ * prints the result; `--algorithms`, `--options`, `--categories` print the metadata;
+ * `--convert FILE.elkt [FLAGS]` converts ELK Text to ELK JSON (elk_lean_convert_elkt_flags).
  * Exit code 0 on success, 1 when the API reported an error, 2 on usage/init errors.
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
@@ -33,7 +34,7 @@ static char *read_file(const char *path) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "usage: smoke GRAPH.json [OPTIONS_JSON] | --algorithms | --options | --categories\n");
+        fprintf(stderr, "usage: smoke GRAPH.json [OPTIONS_JSON] | --convert FILE.elkt [FLAGS] | --algorithms | --options | --categories\n");
         return 2;
     }
     if (elk_lean_init() != 0) {
@@ -47,6 +48,15 @@ int main(int argc, char **argv) {
         out = elk_lean_known_layout_options(&is_error);
     } else if (strcmp(argv[1], "--categories") == 0) {
         out = elk_lean_known_layout_categories(&is_error);
+    } else if (strcmp(argv[1], "--convert") == 0 && argc > 2) {
+        char *text = read_file(argv[2]);
+        if (text == NULL) {
+            fprintf(stderr, "cannot read %s\n", argv[2]);
+            return 2;
+        }
+        out = argc > 3 ? elk_lean_convert_elkt_flags(text, atoi(argv[3]), &is_error)
+                       : elk_lean_convert_elkt(text, &is_error);
+        free(text);
     } else if (strcmp(argv[1], "--version") == 0) {
         printf("%s\n", elk_lean_version());
         return 0;

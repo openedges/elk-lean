@@ -155,14 +155,19 @@ def knownLayoutAlgorithmsValue : IO Value := do
     ("knownOptions", .arr (a.knownOptionIds.map Value.str)),
     ("supportedFeatures", .arr ((a.supportedFeatures.toArray).map fun f => Value.str (graphFeatureName f)))])
 
-/-- `known_layout_options`: JSON array of registered options. -/
-def knownLayoutOptionsValue : IO Value := do
+/-- `known_layout_options`: JSON array of registered options. With `choices` (elk-lean addition,
+`elk options --choices`; not part of the elkjs / elk-rs output) ENUM and ENUMSET options also carry
+their literal names (`"choices"`). -/
+def knownLayoutOptionsValue (choices : Bool := false) : IO Value := do
   ensureInitialized
   let opts ← LayoutMetaDataService.getOptionDataList
-  return .arr (opts.map fun o => .obj #[
-    ("id", .str o.id), ("name", .str o.name), ("description", .str o.description),
-    ("group", .str o.group), ("type", .str (optionTypeName o.type)),
-    ("targets", .arr ((o.targets.toArray).map fun t => Value.str (optionTargetName t)))])
+  return .arr (opts.map fun o =>
+    let fields : Array (String × Value) := #[
+      ("id", .str o.id), ("name", .str o.name), ("description", .str o.description),
+      ("group", .str o.group), ("type", .str (optionTypeName o.type)),
+      ("targets", .arr ((o.targets.toArray).map fun t => Value.str (optionTargetName t)))]
+    if choices && !o.choices.isEmpty then .obj (fields.push ("choices", .arr (o.choices.map Value.str)))
+    else .obj fields)
 
 /-- `known_layout_categories`. -/
 def knownLayoutCategoriesValue : IO Value := do

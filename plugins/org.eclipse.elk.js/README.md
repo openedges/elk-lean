@@ -33,8 +33,10 @@ ESM: `import ELK from 'elk-lean';`. Worker mode (Node.js `worker_threads` or a W
 ## Backends
 
 A backend is an object with `layout_json(graphJson, optionsJson)`, `known_layout_algorithms()`,
-`known_layout_options()`, `known_layout_categories()` returning JSON strings and throwing
-`Error(message)`.
+`known_layout_options()`, `known_layout_categories()` and `convert_elkt(elktText, flags)` returning
+JSON strings and throwing `Error(message)` (`convert_elkt` is needed by `convertElkt` only; `flags`
+are the `ELK_LEAN_CONVERT_*` bits of `elk_lean.h`, also `ELK.CONVERT_DEFAULTS` = 1,
+`ELK.CONVERT_PRETTY` = 2, `ELK.CONVERT_SORT_KEYS` = 4).
 
 `js/index.js` (Node.js) and the `worker_threads` branch of `js/elk-worker.js` load, in order:
 
@@ -68,6 +70,16 @@ every ported algorithm (including VertiFlex and DisCo, which elkjs 0.12.0 does n
 available.
 
 elk-lean additions and differences:
+
+- `elk.convertElkt(text, { defaults = false } = {}) → Promise<ElkNode>`: parses ELK Text (`.elkt`)
+  with the Lean parser (`Elk.Text.parseElkt`) and resolves to the ElkGraph JSON object, the same graph
+  as the CLI `elk convert` (the backends' `convert_elkt` string is byte-identical to it, checked for
+  the 898 `.elkt` files of `external/elk-models`). `defaults: true` is `elk convert --defaults`: shapes
+  without a size get the elk-live sizes (nodes 30 x 30, ports 5 x 5, labels 9 x length by 16). A syntax
+  or linking error rejects with the CLI's message `ELK Text parse error: <line>:<col>: <message>` (an
+  `Error` in direct mode, `{ message }` in worker mode like layout errors). Available on every backend
+  (addon, WASM, Worker; worker command `{ cmd: 'convertElkt', elkt, flags }`). The demo
+  `plugins/org.eclipse.elk.live` uses it to edit `.elkt` in the browser without a server.
 
 - `workerStackSizeMb` (Node.js only, default 64, `ELK.DEFAULT_WORKER_STACK_SIZE_MB`): stack size of
   the `worker_threads` Worker created for `workerUrl` (`resourceLimits.stackSizeMb`). Ignored with
@@ -150,6 +162,11 @@ sh scripts/build_wasm.sh                       # optional: WASM backend (tests s
 node --test plugins/org.eclipse.elk.js/test/   # node:test, no npm dependencies
 ```
 
+`test/testConvertElkt.test.mjs` converts every `.elkt` of `external/elk-models` (`ELK_MODELS_DIR`;
+in a worktree without submodules the main checkout's copy) with the addon and the WASM backend, plain
+and with flags 5, and compares the strings byte-for-byte with `elk convert` (and
+`--defaults --sort-keys`) of `.lake/build/bin/elk` (`ELK_LEAN_BIN`), plus syntax errors and
+`convertElkt` in direct, fake-worker and `worker_threads` modes.
 `test/testEntryPoints.test.mjs` runs the WASM fallback in direct, fake-worker and `worker_threads`
 modes in a copy of the package without native addon; `test/testDeepRecursion.test.mjs` checks the
 stack limits above (8,000-node mrtree chain: `RangeError` in WASM direct mode and with

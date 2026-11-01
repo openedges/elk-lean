@@ -7,7 +7,8 @@ The four functions of the elk-rs bindings (`plugins/org.eclipse.elk.napi/src/lib
 `Except String String` object: `Except.ok json` (constructor tag 1) or `Except.error message`
 (tag 0), each with the string in field 0. The C glue (`c/elk_lean.c`) turns them into
 `elk_lean_*` functions with plain `char *` results. Outputs are serialised like serde_json
-without `preserve_order` (elk-rs): compact, object keys sorted.
+without `preserve_order` (elk-rs): compact, object keys sorted. `elk_ffi_convert_elkt` (elk-lean
+addition, ELK Text → ELK JSON) renders like `elk convert` instead, as selected by its flag bits.
 
 C signatures (Lean ≥ 4.2x compiles `BaseIO` without a world token):
 ```c
@@ -15,6 +16,7 @@ lean_object *elk_ffi_layout_json(lean_obj_arg graph, lean_obj_arg options);   /*
 lean_object *elk_ffi_known_layout_algorithms(lean_obj_arg unit);
 lean_object *elk_ffi_known_layout_options(lean_obj_arg unit);
 lean_object *elk_ffi_known_layout_categories(lean_obj_arg unit);
+lean_object *elk_ffi_convert_elkt(lean_obj_arg elkt, uint32_t flags);       /* consumes elkt */
 lean_object *elk_version(void);   /* persistent string constant */
 ```
 -/
@@ -51,5 +53,13 @@ def knownLayoutOptions (_ : Unit) : BaseIO (Except String String) :=
 @[export elk_ffi_known_layout_categories]
 def knownLayoutCategories (_ : Unit) : BaseIO (Except String String) :=
   guard do return .ok ((← Elk.Api.knownLayoutCategoriesValue).render (sortKeys := true))
+
+/-- elk-lean addition: ELK Text → ELK JSON (`Elk.Api.convertElkt`, `elk convert`). `flags`:
+bit 0 `--defaults`, bit 1 `--pretty`, bit 2 `--sort-keys` (`Elk.Api.ConvertFlags.ofBits`); `0` is
+the output of `elk convert INPUT.elkt`. Errors are the CLI's message
+(`ELK Text parse error: <line>:<col>: <message>`). -/
+@[export elk_ffi_convert_elkt]
+def convertElkt (text : String) (flags : UInt32) : BaseIO (Except String String) :=
+  guard (Elk.Api.convertElktWith text (Elk.Api.ConvertFlags.ofBits flags))
 
 end Elk.Ffi

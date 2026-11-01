@@ -107,6 +107,13 @@ function handleCommand(backend, msg) {
       return JSON.parse(resultJson);
     }
 
+    case 'convertElkt':
+      // elk-lean addition: ELK Text -> ELK JSON string (parsed by elk-api.js)
+      if (typeof backend.convert_elkt !== 'function') {
+        throw new Error('elk-lean: the loaded backend has no convert_elkt (rebuild the addon / WASM)');
+      }
+      return backend.convert_elkt(String(msg.elkt), msg.flags | 0);
+
     case 'algorithms':
       return JSON.parse(backend.known_layout_algorithms());
 

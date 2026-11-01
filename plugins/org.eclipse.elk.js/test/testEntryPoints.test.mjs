@@ -167,6 +167,12 @@ describe('Entry point', () => {
           const reference = ${JSON.stringify(reference)};
           const built = ${built};
           const notBuilt = /WASM backend not built/;
+          // convertElkt through the WASM backend (elk-lean addition)
+          const elkt = 'node n1\\nnode n2\\nedge n1 -> n2\\n';
+          const checkConvert = (g) => {
+            assert.deepEqual(g.children.map(c => [c.id, c.width, c.height]), [['n1', 30, 30], ['n2', 30, 30]]);
+            assert.deepEqual(g.edges.map(e => [e.sources, e.targets]), [[['n1'], ['n2']]]);
+          };
           const checkResult = (out) => {
             assert.ok(Array.isArray(out.children) && out.children.length === graph.children.length);
             for (const c of out.children) { assert.equal(typeof c.x, 'number'); assert.equal(typeof c.y, 'number'); }
@@ -179,6 +185,8 @@ describe('Entry point', () => {
               const direct = new ELK();
               checkResult(await direct.layout(JSON.parse(JSON.stringify(graph))));
               assert.ok((await direct.knownLayoutAlgorithms()).some(a => a.id === 'org.eclipse.elk.layered'));
+              checkConvert(await direct.convertElkt(elkt, { defaults: true }));
+              await assert.rejects(direct.convertElkt('node a\\nedge a -> \\n'), err => /^ELK Text parse error: 3:1: /.test(err.message));
             }
             for (const elk of [new API({ workerFactory: () => new FakeWorker() }),
               new ELK({ workerUrl: path.resolve('./js/elk-worker.js') })]) {
@@ -187,6 +195,7 @@ describe('Entry point', () => {
                   await assert.rejects(elk.layout(graph), err => notBuilt.test(err.message));
                 } else {
                   checkResult(await elk.layout(JSON.parse(JSON.stringify(graph))));
+                  checkConvert(await elk.convertElkt(elkt, { defaults: true }));
                 }
               } finally { elk.terminateWorker(); }
             }

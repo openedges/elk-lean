@@ -41,12 +41,14 @@ PLUGIN = os.path.dirname(HERE)
 # Functions exported to JavaScript: the elk_lean.h C API plus malloc/free for the string buffers.
 EXPORTS = ["_elk_lean_init", "_elk_lean_layout_json", "_elk_lean_known_layout_algorithms",
            "_elk_lean_known_layout_options", "_elk_lean_known_layout_categories",
+           "_elk_lean_convert_elkt", "_elk_lean_convert_elkt_flags",
            "_elk_lean_version", "_elk_lean_free", "_malloc", "_free"]
 
 # Pointer arguments/results of the exports (only used by 64-bit-pointer builds, where emscripten
 # converts them between BigInt and Number): return type first, then the arguments.
 SIGNATURES = ["elk_lean_layout_json:pppp", "elk_lean_known_layout_algorithms:pp",
               "elk_lean_known_layout_options:pp", "elk_lean_known_layout_categories:pp",
+              "elk_lean_convert_elkt:ppp", "elk_lean_convert_elkt_flags:pp_p",
               "elk_lean_version:p", "elk_lean_free:_p"]
 
 # Wasm stack (linear memory) for the Lean code: the native CLI runs on an 8 MiB main-thread stack.

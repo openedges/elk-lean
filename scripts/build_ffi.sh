@@ -64,5 +64,18 @@ if [ "${1:-}" = "--check" ]; then
   python3 -c "import json,sys; a=json.load(open(sys.argv[1])); print('smoke: algorithms', len(a))" "$T/algs.json"
   if "$OUT/smoke" "$T/g.json" '{"elk.algorithm":"doesNotExist"}' 2> "$T/err.txt"; then echo "smoke: expected an error"; exit 1; fi
   echo "smoke: error path ok: $(head -c 100 "$T/err.txt")"
+  printf 'algorithm: layered\nnode a { label "A" }\nnode b { port p }\nedge a -> b.p\n' > "$T/g.elkt"
+  "$OUT/smoke" --convert "$T/g.elkt" > "$T/ffi_convert.json"
+  .lake/build/bin/elk convert "$T/g.elkt" > "$T/cli_convert.json"
+  "$OUT/smoke" --convert "$T/g.elkt" 5 > "$T/ffi_convert_ds.json"
+  .lake/build/bin/elk convert "$T/g.elkt" --defaults --sort-keys > "$T/cli_convert_ds.json"
+  if cmp -s "$T/ffi_convert.json" "$T/cli_convert.json" && cmp -s "$T/ffi_convert_ds.json" "$T/cli_convert_ds.json"; then
+    echo "smoke: convert identical to elk convert (plain, --defaults --sort-keys)"
+  else echo "smoke: convert MISMATCH"; diff "$T/ffi_convert.json" "$T/cli_convert.json" | head; exit 1; fi
+  printf 'node a\nedge a -> \n' > "$T/bad.elkt"
+  if "$OUT/smoke" --convert "$T/bad.elkt" 2> "$T/cerr.txt"; then echo "smoke: expected a convert error"; exit 1; fi
+  .lake/build/bin/elk convert "$T/bad.elkt" 2> "$T/cli_cerr.txt" || true
+  if cmp -s "$T/cerr.txt" "$T/cli_cerr.txt"; then echo "smoke: convert error ok: $(head -c 100 "$T/cerr.txt")"
+  else echo "smoke: convert error MISMATCH"; cat "$T/cerr.txt" "$T/cli_cerr.txt"; exit 1; fi
   rm -rf "$T"
 fi

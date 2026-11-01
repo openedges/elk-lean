@@ -10,9 +10,10 @@
  *    running js/elk-worker.js (the layout request carries the graph as a JSON string)
  *  - Direct mode: neither provided → calls the backend synchronously and wraps in a Promise
  *
- * A backend is an object with four functions returning JSON strings and throwing an Error
+ * A backend is an object with functions returning JSON strings and throwing an Error
  * on failure: layout_json(graphJson, optionsJson), known_layout_algorithms(),
- * known_layout_options(), known_layout_categories().
+ * known_layout_options(), known_layout_categories(), and (elk-lean addition, needed by
+ * convertElkt only) convert_elkt(elktText, flags).
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
@@ -119,6 +120,32 @@ class ELK {
     }).then((result) => typeof result === 'string' ? JSON.parse(result) : result);
   }
 
+  /**
+   * elk-lean addition: parses ELK Text (`.elkt`) and resolves to the ElkGraph JSON object, the
+   * same graph as `elk convert` (Lean `Elk.Text.parseElkt` + JSON exporter). `defaults: true`
+   * gives shapes without a size the elk-live default sizes (`elk convert --defaults`: nodes 30,
+   * ports 5, labels 9 x length by 16). A syntax or linking error rejects with
+   * `Error('ELK Text parse error: <line>:<col>: <message>')`.
+   */
+  convertElkt(elkt, { defaults = false } = {}) {
+    if (typeof elkt !== 'string') {
+      return Promise.reject(new TypeError("'elkt' must be a string"));
+    }
+    const flags = defaults ? ELK.CONVERT_DEFAULTS : 0;
+    if (this.backend) {
+      try {
+        if (typeof this.backend.convert_elkt !== 'function') {
+          throw new Error('elk-lean: the loaded backend has no convert_elkt (rebuild the addon / WASM)');
+        }
+        return Promise.resolve(this.backend.convert_elkt(elkt, flags)).then(JSON.parse);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+    return this.worker.postMessage({ cmd: 'convertElkt', elkt: elkt, flags: flags })
+      .then((result) => typeof result === 'string' ? JSON.parse(result) : result);
+  }
+
   knownLayoutAlgorithms() {
     if (this.backend) {
       try {
@@ -159,6 +186,11 @@ class ELK {
   }
 
 }
+
+/** `elk_lean.h` ELK_LEAN_CONVERT_* flag bits of the backends' convert_elkt(elktText, flags). */
+ELK.CONVERT_DEFAULTS = 1;
+ELK.CONVERT_PRETTY = 2;
+ELK.CONVERT_SORT_KEYS = 4;
 
 class PromisedWorker {
 

@@ -24,6 +24,7 @@ extern lean_object *elk_ffi_layout_json(lean_obj_arg graph, lean_obj_arg options
 extern lean_object *elk_ffi_known_layout_algorithms(lean_obj_arg unit);
 extern lean_object *elk_ffi_known_layout_options(lean_obj_arg unit);
 extern lean_object *elk_ffi_known_layout_categories(lean_obj_arg unit);
+extern lean_object *elk_ffi_convert_elkt(lean_obj_arg elkt, uint32_t flags);
 
 static int g_state = 0; /* 0: not initialised, 1: ready, -1: initialisation failed */
 
@@ -119,6 +120,19 @@ char *elk_lean_known_layout_categories(int *is_error) {
         return not_initialised(is_error);
     }
     return take_result(elk_ffi_known_layout_categories(lean_box(0)), is_error);
+}
+
+char *elk_lean_convert_elkt_flags(const char *elkt, int flags, int *is_error) {
+    if (g_state != 1) {
+        return not_initialised(is_error);
+    }
+    lean_object *t = lean_mk_string_from_bytes(elkt, strlen(elkt));
+    lean_object *r = elk_ffi_convert_elkt(t, (uint32_t)flags); /* consumes t */
+    return take_result(r, is_error);
+}
+
+char *elk_lean_convert_elkt(const char *elkt, int *is_error) {
+    return elk_lean_convert_elkt_flags(elkt, 0, is_error);
 }
 
 const char *elk_lean_version(void) { return "0.12.0"; }
