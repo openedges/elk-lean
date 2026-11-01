@@ -18,15 +18,13 @@ points are chained (`BPInfo.prev`/`next`). Two new layers hold the start and end
 
 Slots: after phase 2; must run before `LongEdgeSplitter`.
 
-Rust deviations from Java (followed):
-* `applyCuts` walks the layer list by index, so the two inserted breaking point layers are visited
-  as well and the comparison `idx + 1 == cut` counts them: every cut after the first one is
-  applied two layers earlier per preceding cut than in Java (whose `ListIterator.add` skips the
-  new layers and compares original layer indexes). The open-edge bookkeeping over the visited
-  breaking point layers leaves the open set unchanged (start markers add their `startEndEdge`s,
-  end markers remove them again).
-* `improveCuts` ignores a best cut of `null` (Java would throw) and returns no cuts for no cuts.
-* an empty layering returns immediately.
+Follows Java (agent COV): `applyCuts` walks the layers like Java's `ListIterator` — the two
+inserted breaking point layers are skipped and `idx + 1 == cut` compares original layer indexes
+(elk-rs walked the list by index, visited the new layers and applied every cut after the first two
+layers earlier per preceding cut). `improveCuts` checks `bestCut != null` like Java (a `null` hit
+cannot occur: `lCut` is `null` only while `rCut` is not); without cuts it returns no cuts like
+Java's empty loop. The early return for an empty layering is unreachable from the layered pipeline
+(a graph without nodes is never laid out by the phases; Java would fail in `GraphStats`).
 
 This module also holds the `BPInfo` accessors (`BPInfo` is an inner class of the Java
 `BreakingPointInserter`, `isStart`/`isEnd` are its static methods).
@@ -259,17 +257,22 @@ private def splitEdge (graph : LGraphId) (bpLayer1 bpLayer2 : LayerId) (original
         BreakingPointInfo.write { bpInfo with prev := some prevInfo.start }
 
 /-- `applyCuts(graph, cuts)`: inserts two layers after each cut position and splits the open
-edges; returns the number of distinct split edges. Iteration follows Rust (see the module doc). -/
+edges; returns the number of distinct split edges. As in Java, the layers are walked with a list
+iterator: `idx` counts the original layers only, and the two layers inserted at a cut
+(`ListIterator.add`) are skipped, so every cut refers to the original layer indexes. -/
 def applyCuts (graph : LGraphId) (cuts : Array Int) : LayeredM Nat := do
   if cuts.isEmpty then return 0
+  -- `idx`: Java's counter of visited original layers; `pos`: the list iterator's cursor
   let mut idx : Nat := 0
+  let mut pos : Nat := 0
   let mut cutIndex : Nat := 0
   let mut nextCut : Int := cuts[0]!
   let mut noSplitEdges : Nat := 0
   let mut alreadySplit : Array LEdgeId := #[]
   let mut openEdges : Array LEdgeId := #[]
-  while idx < (← getGraph graph).layers.size do
-    let layer := (← getGraph graph).layers[idx]!
+  while pos < (← getGraph graph).layers.size do
+    let layer := (← getGraph graph).layers[pos]!
+    pos := pos + 1
     let nodes := (← getLayer layer).nodes
     for node in nodes do
       for edge in (← withArena (·.nodeOutgoingEdges node)) do
@@ -278,9 +281,10 @@ def applyCuts (graph : LGraphId) (cuts : Array Int) : LayeredM Nat := do
         openEdges := removeEdge openEdges edge
     if ((idx + 1 : Nat) : Int) == nextCut then
       let bpLayer1 ← createLayer graph
-      modifyGraph graph fun g => { g with layers := g.layers.insertIdxIfInBounds (idx + 1) bpLayer1 }
+      modifyGraph graph fun g => { g with layers := g.layers.insertIdxIfInBounds pos bpLayer1 }
       let bpLayer2 ← createLayer graph
-      modifyGraph graph fun g => { g with layers := g.layers.insertIdxIfInBounds (idx + 2) bpLayer2 }
+      modifyGraph graph fun g => { g with layers := g.layers.insertIdxIfInBounds (pos + 1) bpLayer2 }
+      pos := pos + 2
       for originalEdge in openEdges do
         if !alreadySplit.contains originalEdge then
           noSplitEdges := noSplitEdges + 1

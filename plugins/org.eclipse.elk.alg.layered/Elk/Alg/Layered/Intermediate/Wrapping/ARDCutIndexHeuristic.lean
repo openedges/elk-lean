@@ -6,39 +6,36 @@ Port of the elk-rs `ARDCutIndexHeuristic` (private struct in `breaking_point_ins
 `single_edge_graph_wrapper.rs`, identical in both). From the desired aspect ratio the number of
 chunks is derived, then equidistant cut indexes are chosen.
 
-Rust deviations from Java (followed): `getChunkCount` returns `longestPath` when
-`dar * maxHeight == 0` (Java divides by zero); `as i32` saturates (`NaN` → `0`).
+Follows Java (agent COV): `getChunkCount` is `(int) Math.round(Math.sqrt(sumWidth / (dar *
+maxHeight)))` with Java's semantics — `x / 0` is `±Infinity` (or `NaN`), `Math.round` maps `NaN` to
+`0` and saturates to `long`, and the `(int)` cast keeps the low 32 bits, so a zero denominator
+yields `-1` rows (`Long.MAX_VALUE` → `-1`) and no cuts; elk-rs returned `longestPath` there and
+saturated the cast to `i32`.
 -/
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
-open Elk.Graph Elk.Alg.Layered.Graph LayeredM
+open Elk.Graph Elk.Core.Util Elk.Alg.Layered.Graph LayeredM
 
-/-- Rust `f64 as i32`: saturating, `NaN` → `0`. -/
-def floatToI32Sat (x : Float) : Int :=
-  if x != x then 0
-  else if x >= (2147483647 : Float) then 2147483647
-  else if x <= -(2147483648 : Float) then -2147483648
-  else x.toInt64.toInt
+/-- Java `(int) Math.round(x)`: `Math.round` (`floor(x + 0.5)`, `NaN` → `0`, saturating to `long`)
+followed by the narrowing `long → int` cast (low 32 bits). -/
+def javaRoundToInt (x : Float) : Int := Int.wrap32 x.javaRound
 
 namespace ARDCutIndexHeuristic
 
-/-- `getChunkCount(graphStats)`: `round(sqrt(sumWidth / (dar * maxHeight)))`, at most
+/-- `getChunkCount(graphStats)`: `(int) Math.round(Math.sqrt(sumWidth / (dar * maxHeight)))`, at most
 `longestPath`. -/
 def getChunkCount (gs : GraphStats) : Int :=
-  let denominator := gs.dar * gs.maxHeight
-  if denominator == 0.0 then (gs.longestPath : Int)
-  else
-    let rows := floatToI32Sat (Float.sqrt (gs.sumWidth / denominator)).round
-    min rows (gs.longestPath : Int)
+  let rows := javaRoundToInt (Float.sqrt (gs.sumWidth / (gs.dar * gs.maxHeight)))
+  min rows (gs.longestPath : Int)
 
-/-- `getCutIndexes(graph, graphStats)`: `round(i * longestPath / rows)` for `i ∈ [1, rows)`. -/
+/-- `getCutIndexes(graph, graphStats)`: `(int) Math.round(idx * step)` with
+`step = longestPath / (double) rows` for `idx ∈ [1, rows)`. -/
 def cutIndexes (gs : GraphStats) : Array Int := Id.run do
   let rows := getChunkCount gs
-  if rows <= 1 then return #[]
   let mut cuts : Array Int := #[]
   let step := gs.longestPath.toFloat / Float.ofInt rows
   for idx in [1:rows.toNat] do
-    cuts := cuts.push (floatToI32Sat (idx.toFloat * step).round)
+    cuts := cuts.push (javaRoundToInt (idx.toFloat * step))
   return cuts
 
 /-- The `ARDCutIndexHeuristic` calculator (not guaranteed to be valid). -/

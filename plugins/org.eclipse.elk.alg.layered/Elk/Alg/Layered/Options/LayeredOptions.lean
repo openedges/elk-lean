@@ -407,6 +407,11 @@ def ALIGNMENT : Property Alignment := CoreOptions.ALIGNMENT
 /-- `LayeredOptions.ASPECT_RATIO` (re-export of `CoreOptions.ASPECT_RATIO`). -/
 def ASPECT_RATIO : Property Float := CoreOptions.ASPECT_RATIO
 
+/-- The default of `LayeredOptions.ASPECT_RATIO` in ELK Java: the `float` literal `1.6f` of
+`Layered.melk` widened to `double` (`1.600000023841858`, not `1.6`), returned by
+`graph.getProperty(LayeredOptions.ASPECT_RATIO)` whenever the graph does not set the option. -/
+def ASPECT_RATIO_DEFAULT : Float := 1.600000023841858
+
 /-- `LayeredOptions.COMMENT_BOX` (re-export of `CoreOptions.COMMENT_BOX`). -/
 def COMMENT_BOX : Property Bool := CoreOptions.COMMENT_BOX
 

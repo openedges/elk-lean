@@ -88,14 +88,16 @@ def nodeLayerId (node : LNodeId) : LayeredM (Option Nat) := do
 /-- Rust `previous_long_edge_node(node)`: source node of the node's first incoming edge. -/
 def previousLongEdgeNode (node : LNodeId) : LayeredM (Option LNodeId) := do
   let incoming ← withArena (·.nodeIncomingEdges node)
-  let some edge := incoming[0]? | return none
+  -- Java `getIncomingEdges().iterator().next()` on a node without incoming edges
+  let some edge := incoming[0]? | throw (IO.userError "java.util.NoSuchElementException")
   let some source := (← getEdge edge).source | return none
   return (← getPort source).owner
 
 /-- Rust `next` in `gather_right_long_edge_dummies`: target node of the node's first outgoing edge. -/
 def nextLongEdgeNode (node : LNodeId) : LayeredM (Option LNodeId) := do
   let outgoing ← withArena (·.nodeOutgoingEdges node)
-  let some edge := outgoing[0]? | return none
+  -- Java `getOutgoingEdges().iterator().next()` on a node without outgoing edges
+  let some edge := outgoing[0]? | throw (IO.userError "java.util.NoSuchElementException")
   let some target := (← getEdge edge).target | return none
   return (← getPort target).owner
 

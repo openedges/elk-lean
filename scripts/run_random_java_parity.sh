@@ -13,7 +13,9 @@
 #    with random crossing minimisation / layering options; "c" sets (`--sets c`, `gen_disco_graphs.py`)
 #    are DisCo layout nodes with random components and DisCo options; "h" sets (`--sets h`,
 #    `gen_hierarchical_mo_graphs.py`) are INCLUDE_CHILDREN layered graphs with model order options and
-#    NO_LAYOUT nodes. Default `s,v` (fast); the full tracked run is `--sets s,v,d,o,p,c,h` (TESTING.md 2B);
+#    NO_LAYOUT nodes; "w" sets (`--sets w`, `gen_wrapping_graphs.py`) are layered graphs with graph
+#    wrapping, comment boxes, hypernodes, edge labels, splines, BK alignments and merged edges.
+#    Default `s,v` (fast); the full tracked run is `--sets s,v,d,o,p,c,h,w` (TESTING.md 2B);
 # 2. ELK Java (`ElkJavaBaseline`, unmodified Maven Central 0.12.0) one JVM per set with a watchdog;
 # 3. elk-lean `elk layout` one process per input with a time limit; optionally elk-rs (`--with-oracle`);
 # 4. compare (tol 0 and 1e-6, error class and text) -> <out_dir>/report.md, <out_dir>/details.tsv,
@@ -30,7 +32,7 @@ if [ ! -d "$REF" ]; then
   COMMON=$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
   if [ -n "$COMMON" ]; then REF="$(dirname "$COMMON")/.reference"; fi
 fi
-[ $# -ge 1 ] || { sed -n '2,24p' "$0"; exit 2; }
+[ $# -ge 1 ] || { sed -n '2,26p' "$0"; exit 2; }
 OUT=$1
 shift
 PUBLISH=1

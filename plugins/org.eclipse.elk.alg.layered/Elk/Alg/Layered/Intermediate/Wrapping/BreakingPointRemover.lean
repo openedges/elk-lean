@@ -14,7 +14,9 @@ node --nodeStartEdge--> startMarker --startEndEdge--> endMarker --e--> node
 * `SPLINES`: the spline segments (`SPLINE_ROUTE_START`) and edge chains (`SPLINE_EDGE_CHAIN`) are
   joined (`s1 ++ reverse(s2) ++ s3`; the segments of `s2` get `inverseOrder` in the graph's segment
   table) and stored on the original edge, which becomes its own `SPLINE_SURVIVING_EDGE`; both are
-  removed from the two dummy edges; the bend points are left untouched (Rust; Java clears them).
+  removed from the two dummy edges; the original edge loses its bend points (Java; elk-rs left them).
+  A `null` route on one of the three edges throws Java's `NullPointerException` of the first
+  `addAll`/`forEach` that dereferences it.
 * `POLYLINE`: `nodeStartEdge` bends, the start dummy position, the reversed `startEndEdge` bends,
   the end dummy position, the original bends.
 * otherwise (orthogonal): as polyline without the two dummy positions.
@@ -27,8 +29,8 @@ always true, so the joined chain is always stored. The original edge gets the so
 Slots: after phase 5; after `LongEdgeJoiner`, before `HorizontalGraphCompactor`.
 
 `SPLINE_ROUTE_START` is `LEdgeInternals.splineRouteStart` (ids into the processed graph's
-`LGraphInternals.splineSegments`, Rust `SplineSegmentRef`s); a missing list counts as empty (Rust
-`unwrap_or_default`) and the original edge always gets `some` joined list.
+`LGraphInternals.splineSegments`, Rust `SplineSegmentRef`s); the original edge always gets `some`
+joined list.
 -/
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 
@@ -39,9 +41,16 @@ namespace BreakingPointRemover
 
 /-- The `SPLINES` branch of `remove` (see the module doc): `graph` owns the segment table. -/
 private def joinSplineRoutes (graph : LGraphId) (bp : BreakingPointInfo) : LayeredM Unit := do
-  let s1 := ((← getEdge bp.nodeStartEdge).internal.splineRouteStart).getD #[]
-  let s2 := ((← getEdge bp.startEndEdge).internal.splineRouteStart).getD #[]
-  let s3 := ((← getEdge bp.originalEdge).internal.splineRouteStart).getD #[]
+  -- Java: `joinedSegments.addAll(s1)`, `s2.forEach(..)`, `joinedSegments.addAll(s3)` on a `null`
+  -- route (an edge that is not the start edge of a spline chain); the edge chains are set together
+  -- with the routes (`SplineEdgeRouter`), so they are `null` exactly when the routes are
+  let some s1 := (← getEdge bp.nodeStartEdge).internal.splineRouteStart
+    | throwNullPointer "Cannot invoke \"java.util.Collection.toArray()\" because \"c\" is null"
+  let some s2 := (← getEdge bp.startEndEdge).internal.splineRouteStart
+    | throwNullPointer
+        "Cannot invoke \"java.util.List.forEach(java.util.function.Consumer)\" because \"s2\" is null"
+  let some s3 := (← getEdge bp.originalEdge).internal.splineRouteStart
+    | throwNullPointer "Cannot invoke \"java.util.Collection.toArray()\" because \"c\" is null"
   let e1 := (← getEdge bp.nodeStartEdge).internal.splineEdgeChain
   let e2 := (← getEdge bp.startEndEdge).internal.splineEdgeChain
   let e3 := (← getEdge bp.originalEdge).internal.splineEdgeChain
@@ -74,9 +83,9 @@ partial def remove (graph : LGraphId) (bp : BreakingPointInfo) (edgeRouting : Ed
     newBends := newBends ++ (← getEdge bp.nodeStartEdge).bendPoints
     newBends := newBends ++ (← getEdge bp.startEndEdge).bendPoints.reverse
     newBends := newBends ++ (← getEdge bp.originalEdge).bendPoints
-  if edgeRouting != .splines then
-    let bends := newBends
-    modifyEdge bp.originalEdge fun e => { e with bendPoints := bends }
+  -- Java clears the original edge's bend points for every routing style (`SPLINES`: no new bends)
+  let bends := newBends
+  modifyEdge bp.originalEdge fun e => { e with bendPoints := bends }
   let restoredSource := (← getEdge bp.nodeStartEdge).source
   setEdgeSource bp.originalEdge restoredSource
   let junctionPointsOne := (← getEdge bp.nodeStartEdge).props.get LayeredOptions.JUNCTION_POINTS
