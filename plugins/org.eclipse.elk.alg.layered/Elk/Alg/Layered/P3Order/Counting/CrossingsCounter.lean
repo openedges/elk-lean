@@ -1046,6 +1046,47 @@ def javaTreeIndexError (a : LGraphArena) (positions : Array Int) (maxNum : Nat) 
     if addFails then return some (oob m maxNum)
   return none
 
+/-- The text of the `ArrayIndexOutOfBoundsException` Java throws in `countNorthSouthCrossingsOnPorts`
+over `ports` with a tree of `maxNum` buckets, if any. Per port: `positionOf(port)` and
+`removeAll(cur)`, then per target `positionOf(target)` (`portPositions[target.id]`, length
+`positions.size`) and, above the port, `rank(end)` (length `maxNum + 1`), then the `add(end)`s
+(length `maxNum`). The targets of a `NORMAL` port are the ports of its `PORT_DUMMY`, which for a
+compound node of a hierarchical layout is the external port dummy of its nested graph: those ports
+carry the ids (and so the positions) of the nested graph's numbering. -/
+def javaNorthSouthIndexError (a : LGraphArena) (positions : Array Int) (maxNum : Nat) (ports : Array LPortId) :
+    Option String := Id.run do
+  let oob (i : Int) (len : Nat) : String :=
+    s!"java.lang.ArrayIndexOutOfBoundsException: Index {i} out of bounds for length {len}"
+  let m : Int := maxNum
+  let pos (p : LPortId) : Except String Int :=
+    let id := (a.port p).id
+    if id < 0 || id >= positions.size then .error (oob id positions.size)
+    else .ok positions[id.toNat]!
+  for port in ports do
+    let cur ← match pos port with
+      | .ok v => pure v
+      | .error e => return some e
+    if cur < 0 || cur >= m then return some (oob cur maxNum)
+    let mut addFails : Option Int := none
+    for (target, _) in northSouthTargetsAndDegrees a port do
+      let e ← match pos target with
+        | .ok v => pure v
+        | .error msg => return some msg
+      if e > cur then
+        if e > m then return some (oob e (maxNum + 1))
+        if e >= m && addFails.isNone then addFails := some e
+    if let some e := addFails then return some (oob e maxNum)
+  return none
+
+/-- Whether a north/south count may access indices outside Java's arrays: a `NORMAL` port whose
+`PORT_DUMMY` belongs to another graph (see `javaNorthSouthIndexError`). -/
+def northSouthCountNeedsCheck (a : LGraphArena) (ports : Array LPortId) : Bool :=
+  ports.any fun port =>
+    let pt := a.port port
+    match pt.internal.portDummy, pt.owner with
+    | some dummy, some owner => (a.node dummy).graph != (a.node owner).graph
+    | _, _ => false
+
 /-- A both-orders count with Java's index checks: the unchecked loop, then (only when the tree saw
 an index outside its range) Java's exception text for the first failing access. -/
 private def withTreeChecked (c : CrossingsCounter) (ports : Array LPortId) (inLayer : Bool) : LayeredM Int := do
@@ -1166,6 +1207,10 @@ def countNorthSouthPortCrossingsInLayer (c : CrossingsCounter) (layer : Array LN
   let (positions, ports) := initPositionsForNorthSouthCountingFast a positions layer
   c.portPositions.set positions
   c.renewTree ports.size
+  -- Java's array bounds (`javaNorthSouthIndexError`), checked when an index can be stale
+  if northSouthCountNeedsCheck a ports then
+    if let some msg := javaNorthSouthIndexError a positions ports.size ports then
+      throw (IO.userError msg)
   c.withTree countNorthSouthCrossingsOnPortsFast ports
 
 /-- `countNorthSouthPortCrossingsInLayer(layer)` with the line-by-line port loops (reference of the

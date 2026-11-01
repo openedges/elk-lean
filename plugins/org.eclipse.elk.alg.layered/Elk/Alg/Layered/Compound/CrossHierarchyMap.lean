@@ -59,12 +59,29 @@ def actualSourceIn (a : LGraphArena) (che : CrossHierarchyEdge) : Option LPortId
 def actualTargetIn (a : LGraphArena) (che : CrossHierarchyEdge) : Option LPortId :=
   (a.edge che.edge).target.bind (actualEnd a)
 
-/-- `getActualSource()`. -/
-def actualSource (che : CrossHierarchyEdge) : LayeredM (Option LPortId) :=
+/-- Java's `(LPort) node.getProperty(ORIGIN)` of `getActualSource()`/`getActualTarget()` fails with a
+`ClassCastException` when the end is an external port dummy of the top-level graph of the layout run
+(created by `ElkGraphImporter.transformExternalPort`, whose `ORIGIN` is the `ElkPort`): a
+hierarchy-crossing edge of an `INCLUDE_CHILDREN` compound node laid out on its own that reaches
+one of that node's ports (elk-rs and elk-lean before EXT used the dummy's port). -/
+private def checkActualEnd (port : Option LPortId) : LayeredM Unit := do
+  let some port := port | return
+  let some node := (← LayeredM.getPort port).owner | return
+  let nd ← LayeredM.getNode node
+  if nd.type == .externalPort then
+    if let some (.elkPort _) := nd.internal.origin then
+      throw (IO.userError ("java.lang.ClassCastException: class org.eclipse.elk.graph.impl.ElkPortImpl cannot " ++
+        "be cast to class org.eclipse.elk.alg.layered.graph.LPort (org.eclipse.elk.graph.impl.ElkPortImpl and " ++
+        "org.eclipse.elk.alg.layered.graph.LPort are in unnamed module of loader 'app')"))
+
+/-- `getActualSource()` (with Java's `ClassCastException`, see `checkActualEnd`). -/
+def actualSource (che : CrossHierarchyEdge) : LayeredM (Option LPortId) := do
+  checkActualEnd (← LayeredM.getEdge che.edge).source
   LayeredM.withArena (actualSourceIn · che)
 
-/-- `getActualTarget()`. -/
-def actualTarget (che : CrossHierarchyEdge) : LayeredM (Option LPortId) :=
+/-- `getActualTarget()` (with Java's `ClassCastException`, see `checkActualEnd`). -/
+def actualTarget (che : CrossHierarchyEdge) : LayeredM (Option LPortId) := do
+  checkActualEnd (← LayeredM.getEdge che.edge).target
   LayeredM.withArena (actualTargetIn · che)
 
 /-- Rust `has_junction_points()`: the segment has a non-empty `JUNCTION_POINTS` chain. -/
