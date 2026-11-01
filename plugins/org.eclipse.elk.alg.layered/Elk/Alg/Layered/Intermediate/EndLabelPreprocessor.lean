@@ -2,6 +2,8 @@ import Elk.Alg.Layered.LayeredPhases
 import Elk.Core.Util.Java
 import Elk.Alg.Common.NodeSpacing.CellSystem.LabelCell
 import Elk.Alg.Common.Overlaps.RectangleStripOverlapRemover
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.EndLabelPreprocessor`
 
@@ -32,10 +34,6 @@ updated rectangles are written back into the cells in insertion order.
 Rust deviation from Java (followed here): Java writes the port index into `port.id`; elk-rs does not.
 `gatherLabels`/`gatherLabelsFromPort` are public (Rust `pub(crate)`): `LabelSideSelector` uses them.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.Intermediate
 

@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Core.Util.Java
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.LayerSizeAndGraphHeightCalculator`
 
@@ -15,11 +17,6 @@ elk-rs runs the computation on an `ArenaSync` copy (`all_layer_ids` = the graph'
 arena directly in the same order (`PORTING.md` §15.1). `f64::max`/`f64::min` are `fmax`/`fmin`.
 The `ELK_TRACE_LAYER_HEIGHT` debug output of elk-rs is omitted.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.Intermediate
 

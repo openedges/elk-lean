@@ -1,5 +1,7 @@
 import Std.Data.HashSet
 import Elk.Json.ImporterState
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # JSON export (`org.eclipse.elk.graph.json.JsonExporter`)
 
@@ -7,10 +9,6 @@ Serialises an `ElkGraph` arena to the ELK JSON format (`ElkGraphJson.forGraph(..
 Layout option values are written as strings in their Java `toString` form;
 enum constants are resolved through the metadata registry.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Json
 

@@ -2,19 +2,14 @@ import Elk.Alg.Layered.Graph.Monad
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.Options.Spacings
 import Elk.Core.Util.Java
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.graph.LGraphUtil` (+ `LEdge.reverse`, `LNode.getInteractiveReferencePoint`)
 
 Ported from elk-rs `l_graph_util.rs`; the Java `float` intermediates of `resizeNode` are
 reproduced with `Float.toF32`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl0p5 : Float := 0.5
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.Graph
 

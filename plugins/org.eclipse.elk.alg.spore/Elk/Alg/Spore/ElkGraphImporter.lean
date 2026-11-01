@@ -5,6 +5,8 @@ import Elk.Core.Util.Adapters
 import Elk.Alg.Common.NodeSpacing.NodeDimensionCalculation
 import Elk.Alg.Spore.IGraphImporter
 import Elk.Alg.Spore.Options.SporeCompactionOptions
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.spore.ElkGraphImporter`
 
@@ -28,12 +30,6 @@ keeps the **last** section (`retain_last`) of an edge with several sections and 
 first section (which then is detached); the vertex wiggle adds `(r * amount - amount / 2)` as one
 term (the `KVector.wiggle` of the core adds in a different order, which rounds differently).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl0p001 : Float := 0.001
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Spore
 

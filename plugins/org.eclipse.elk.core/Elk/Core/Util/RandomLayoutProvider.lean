@@ -2,6 +2,8 @@ import Elk.Core.Util.ElkUtil
 import Elk.Graph.Impl.EMapPropertyHolderImpl
 import Elk.Core.LayoutProvider
 import Elk.Core.Options
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.core.util.RandomLayoutProvider`
 
@@ -9,12 +11,6 @@ Ported 1:1 from elk-rs (which mirrors Java), including its quirks: the target
 shape of an edge is looked up in the edge's sources and a port's centre adds
 the parent's x twice. They are kept for oracle parity.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Core.Util
 

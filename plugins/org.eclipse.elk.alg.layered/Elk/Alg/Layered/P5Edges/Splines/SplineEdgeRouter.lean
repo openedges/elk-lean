@@ -6,6 +6,8 @@ import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Layered.P5Edges.Splines.SplineSegment
 import Elk.Alg.Layered.P5Edges.Splines.SplinesMath
 import Elk.Graph.ArrayModify
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p5edges.splines.SplineEdgeRouter`
 
@@ -54,12 +56,6 @@ throws a `NullPointerException`); the Rust behaviour is kept. The only Lean devi
 successor walks of `getEdgeChain`/`getSplinePath` stop at a repeated edge where Rust and Java
 never terminate.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Layered.P5Edges.Splines
 

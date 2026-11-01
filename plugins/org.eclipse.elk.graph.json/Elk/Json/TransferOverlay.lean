@@ -1,4 +1,6 @@
 import Elk.Json.TransferLayout
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # Layout transfer as an overlay (`org.eclipse.elk.graph.json.JsonImporter`, part 4)
 
@@ -21,7 +23,6 @@ rewritten document) apply, when two nodes share an id, or when a section's path 
 edge's `sections` array.
 -/
 /-! Float literals as global constants (FL, PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 private def EPS9 : Float := 1e-9
 private def FOUR : Float := 4.0
 

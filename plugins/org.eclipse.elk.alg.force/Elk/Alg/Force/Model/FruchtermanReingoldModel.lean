@@ -1,4 +1,6 @@
 import Elk.Alg.Force.Model.AbstractForceModel
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.force.model.FruchtermanReingoldModel`
 
@@ -32,14 +34,6 @@ Java forms cost about 10% of the force layout in the inner loop): a pair whose d
 and the scan's same-position test is `==` (equal infinite coordinates are tested again with Java's
 `pu.x - pv.x == 0` before they are wiggled).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl0p001 : Float := 0.001
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
-private def fl80p0 : Float := 80.0
 
 namespace Elk.Alg.Force.Model
 

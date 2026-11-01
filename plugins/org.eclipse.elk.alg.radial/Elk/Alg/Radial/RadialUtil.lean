@@ -5,6 +5,8 @@ import Elk.Core.Math
 import Elk.Core.Options
 import Elk.Core.Util.Java
 import Elk.Alg.Radial.InternalProperties
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.radial.RadialUtil`
 
@@ -18,11 +20,6 @@ hot loops) and as `ElkM` wrappers. Edge order everywhere is `ElkGraphUtil.allOut
 Deliberate difference to Rust: `get_number_of_leaves` and the tree caches are plain recursions
 over `Std.HashMap` caches keyed by `NodeId` instead of node addresses; the values are identical.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Radial
 

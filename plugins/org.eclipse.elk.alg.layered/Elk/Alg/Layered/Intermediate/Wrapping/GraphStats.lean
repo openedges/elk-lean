@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.Graph.LGraphUtil
 import Elk.Core.Util.Java
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.wrapping.GraphStats`
 
@@ -11,11 +13,6 @@ The Java `getApproximate*` methods were not ported by elk-rs and are omitted.
 Option reads follow Rust `get_property(..).unwrap_or(..)`: the stored value, else the property
 default, else the Rust fallback (`ASPECT_RATIO` has no default, fallback `1.0`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.Intermediate.Wrapping
 

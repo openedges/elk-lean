@@ -3,6 +3,8 @@ import Elk.Core.Util.Adapters.GraphAdapters
 import Elk.Alg.Common.NodeSpacing.CellSystem
 import Elk.Alg.Common.NodeSpacing.Internal.NodeLabelLocation
 import Elk.Alg.Common.NodeSpacing.Internal.PortContext
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.common.nodespacing.internal.NodeContext`
 
@@ -31,11 +33,6 @@ Like Java, the constructor throws `UnsupportedConfigurationException("Invalid po
 such check and lays the node out). Deviation from Java (following elk-rs): `portAlignment*` /
 `nodeSizeMinimum` are read once at construction.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Common.NodeSpacing.Internal
 

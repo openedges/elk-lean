@@ -1,6 +1,8 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Core.Util.Java
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p2layers.InteractiveLayerer` (elk-rs `interactive_layerer.rs`)
 
@@ -15,10 +17,6 @@ the earlier span. The correction queue is a FIFO without duplicates (Java `Linke
 `LNode.id` is used as visited flag (`0` = not yet checked, `1` = checked) and `Layer.id` as layer
 index. A target without layer counts as layer `-1` (Rust; Java would throw).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.P2Layers
 

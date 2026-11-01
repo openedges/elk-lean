@@ -12,6 +12,8 @@ import Elk.Alg.VertiFlex.P1YPlacement.NodeYPlacerStrategy
 import Elk.Alg.VertiFlex.P2Relative.RelativeXPlacerStrategy
 import Elk.Alg.VertiFlex.P3Absolute.AbsoluteXPlacerStrategy
 import Elk.Alg.VertiFlex.P4EdgeRouting.EdgerouterStrategy
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.vertiflex.VertiFlexLayoutProvider`
 
@@ -22,11 +24,6 @@ vertical constraints are consistent, runs the phases and sets the graph size.
 Rust reports the three failures with `panic!("{}", UnsupportedConfigurationException::new(..))`;
 they are thrown as `org.eclipse.elk.core.UnsupportedConfigurationException` here.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.VertiFlex
 

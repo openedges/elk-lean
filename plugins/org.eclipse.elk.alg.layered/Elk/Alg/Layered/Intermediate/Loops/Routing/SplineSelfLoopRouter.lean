@@ -1,6 +1,8 @@
 import Elk.Alg.Layered.Intermediate.Loops.Routing.OrthogonalSelfLoopRouter
 import Elk.Alg.Layered.P5Edges.Splines.NubSpline
 import Elk.Alg.Layered.P5Edges.Splines.SplinesMath
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.loops.routing.SplineSelfLoopRouter`
 
@@ -13,10 +15,6 @@ NUB spline through that polygon (`NubSpline::new(true, 3, points).get_bezier_cp_
 `Elk.Alg.Layered.P5Edges.Splines.NubSpline`; the Rust panic of `NubSpline::new` is the modifier's
 error). The directions are `SplinesMath.portSideToDirection`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p5 : Float := 0.5
 
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 

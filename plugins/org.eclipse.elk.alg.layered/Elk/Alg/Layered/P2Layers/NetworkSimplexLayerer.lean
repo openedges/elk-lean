@@ -2,6 +2,8 @@ import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options.LayeredOptions
 import Elk.Alg.Common.NetworkSimplex
 import Elk.Core.Util.Java
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p2layers.NetworkSimplexLayerer` (elk-rs `network_simplex_layerer.rs`)
 
@@ -25,10 +27,6 @@ Deviations: the `NEdge` origin (the `LEdge` in Rust/Java) is not stored because 
 `NGraph LNodeId` payload type is the node id; nothing reads it. The sub monitor gets
 `1 / |components|` work like Rust (Java: `1`).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.P2Layers
 

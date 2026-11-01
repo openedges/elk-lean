@@ -1,6 +1,8 @@
 import Elk.Alg.Layered.Intermediate.Loops.Routing.AbstractSelfLoopRouter
 import Elk.Alg.Layered.Intermediate.Loops.Routing.LabelPlacer
 import Elk.Core.Util.ElkTrace
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.intermediate.loops.routing.OrthogonalSelfLoopRouter`
 
@@ -31,11 +33,6 @@ node; the label lanes and positions differ accordingly.
 Deviation: the `ELK_TRACE_INSIDE_YO` line prints the arena edge index instead of the Rust edge
 pointer.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.Layered.Intermediate.Loops.Routing
 

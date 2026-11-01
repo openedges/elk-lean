@@ -1,6 +1,8 @@
 import Std.Data.HashMap
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.LinearSegmentsNodePlacer` (elk-rs `p4nodes/linear_segments_node_placer.rs`)
 
@@ -34,14 +36,6 @@ Port notes (Rust is the oracle):
   throws `NoSuchElementException` on an empty layer and merges two weightless regions (a NaN
   deflection; Java only asserts a positive weight sum).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl20p0 : Float := 20.0
-/-- `Integer.MAX_VALUE` as a `double` (Java's initial "infinite" deflection, room and displacement;
-elk-rs uses `f64::MAX`). -/
-private def flIntMax : Float := 2147483647.0
 
 namespace Elk.Alg.Layered.P4Nodes
 

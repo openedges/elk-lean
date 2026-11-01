@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.InteractiveNodePlacer` (elk-rs `p4nodes/interactive_node_placer.rs`)
 
@@ -10,10 +12,6 @@ removed top-down using the vertical spacing between the node types.
 Arena access instead of the Rust `ArenaSync` snapshot (`PORTING.md` §15.1): layers in
 `graph.layers` order, nodes in `layer.nodes` order.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.P4Nodes
 

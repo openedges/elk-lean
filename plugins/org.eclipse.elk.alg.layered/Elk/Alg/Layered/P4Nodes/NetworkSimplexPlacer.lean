@@ -3,6 +3,8 @@ import Std.Data.HashSet
 import Elk.Alg.Common.NetworkSimplex
 import Elk.Alg.Layered.LayeredPhases
 import Elk.Alg.Layered.Options
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.NetworkSimplexPlacer` (elk-rs `p4nodes/network_simplex_placer.rs`)
 
@@ -28,13 +30,6 @@ Port notes (Rust is the oracle):
 * `f64 as i32` conversions saturate (`f64AsI32`), `i32` products wrap (`Int.wrap32`);
 * the `debug_assert!` on integral port offsets in `transformEdge` is not ported.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
-private def fl2p0 : Float := 2.0
-private def fl8p0 : Float := 8.0
 
 namespace Elk.Alg.Layered.P4Nodes
 

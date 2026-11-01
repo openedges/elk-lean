@@ -9,6 +9,8 @@ import Elk.Alg.Radial.Sorting.IRadialSorter
 import Elk.Alg.Radial.Sorting.PolarCoordinateSorter
 import Elk.Alg.Radial.Intermediate.Compaction.AbstractRadiusExtensionCompaction
 import Elk.Alg.Radial.Intermediate.Compaction.IRadialCompactor
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.radial.intermediate.compaction.AnnulusWedgeCompaction`
 
@@ -20,10 +22,6 @@ The Rust struct fields `left_contour` / `right_contour` (`HashMap` from wedge pa
 outermost node of every level) are `IO.Ref` tables in the `Context`; `sorter` is shared by all
 sorting calls like the Rust `Option<Box<dyn IRadialSorter>>`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Radial.Intermediate.Compaction
 

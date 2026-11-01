@@ -1,4 +1,6 @@
 import Elk.Graph
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.radial.intermediate.compaction.AbstractRadiusExtensionCompaction`
 
@@ -15,11 +17,6 @@ Java semantics (agent OPT; elk-rs differs in all three points, which elk-lean fo
 * `overlap` is Java's four corner cases with strict inequalities on both sides, so two bounds with
   the same left (or top) coordinate never overlap (Rust tests interval intersection).
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl2p0 : Float := 2.0
 
 namespace Elk.Alg.Radial.Intermediate.Compaction
 

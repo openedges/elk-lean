@@ -3,6 +3,8 @@ import Elk.Alg.RectPacking.RectPackingLayoutPhases
 import Elk.Alg.RectPacking.Options.RectPackingOptions
 import Elk.Alg.RectPacking.Options.InternalProperties
 import Elk.Alg.RectPacking.P1WidthApproximation.AreaApproximation
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.rectpacking.p1widthapproximation.GreedyWidthApproximator`
 
@@ -18,8 +20,6 @@ the other two on the graph (followed before agent OPT).
 /-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
 shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
 evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl1p0 : Float := 1.0
 private def fl1p3 : Float := 1.3
 
 namespace Elk.Alg.RectPacking.P1WidthApproximation

@@ -4,6 +4,8 @@ import Elk.Alg.MrTree.P1Treeify.DFSTreeifyer
 import Elk.Alg.MrTree.P2Order.NodeOrderer
 import Elk.Alg.MrTree.P3Place.NodePlacer
 import Elk.Alg.MrTree.P4Route.EdgeRouter
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.mrtree.MrTree`
 
@@ -23,10 +25,6 @@ order: `DFSTreeifyer`, `ROOT_PROC` (+ `FAN_PROC` unless the weighting is `MODEL_
 each with a sub monitor of work 1, stopping when the monitor is cancelled. With `DEBUG_MODE` the
 Rust log lines are written to the monitor.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl1p0 : Float := 1.0
 
 namespace Elk.Alg.MrTree
 

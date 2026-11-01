@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.Components.ModelOrderComponentGroup
 import Elk.Alg.Layered.Components.ComponentGroupGraphPlacer
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.components.ComponentGroupModelOrderGraphPlacer`
 
@@ -10,11 +12,6 @@ the **last** group) and the groups are placed in rows along the layout direction
 space blocked by components with southern (horizontal layouts) / eastern (vertical layouts)
 connections.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
-private def fl20p0 : Float := 20.0
 
 namespace Elk.Alg.Layered.Components
 

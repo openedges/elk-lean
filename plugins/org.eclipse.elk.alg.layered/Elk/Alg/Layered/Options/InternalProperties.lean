@@ -11,6 +11,8 @@ import Elk.Alg.Layered.Intermediate.Loops.SelfLoopHolder
 import Elk.Alg.Common.NodeSpacing.CellSystem.Cell
 import Elk.Alg.Layered.Intermediate.Wrapping.BreakingPointInfo
 import Elk.Alg.Layered.P5Edges.Splines.SplineSegment
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.options.InternalProperties`
 
@@ -26,10 +28,6 @@ with later packages (`SELF_LOOP_HOLDER`, `BREAKING_POINT_INFO`, `END_LABELS`,
 `SPACINGS`) are added to these structures when those packages are
 ported. `PROCESSORS` is not stored on the graph: `ElkLayered` keeps the processor lists.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.Options
 

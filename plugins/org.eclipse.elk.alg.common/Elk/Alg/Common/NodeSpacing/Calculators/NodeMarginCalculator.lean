@@ -1,5 +1,7 @@
 import Elk.Core.Util.Adapters.GraphAdapters
 import Elk.Graph.Monad
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.common.nodespacing.NodeMarginCalculator`
 
@@ -20,10 +22,6 @@ of `allIncomingEdges`/`allOutgoingEdges`. Every read is an adapter read without 
 only write is the margin of each node in the same order, so the result is the same; a differential
 test compares both on random graphs (`alg.common.nodespacing.marginFastPath`).
 -/
-/-! Float literals as global constants (FL): inside branches and folds the compiler can share a
-literal's `Nat`/`Bool` arguments with unrelated variables and parse it on every evaluation
-(`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Common.NodeSpacing
 

@@ -1,5 +1,7 @@
 import Elk.Alg.Layered.P4Nodes.BK.NeighborhoodInformation
 import Elk.Core.Util.ElkTrace
+import Elk.Core.Util.FloatConst
+open Elk.Core.Util.FloatConst
 /-!
 # `org.eclipse.elk.alg.layered.p4nodes.bk.BKAlignedLayout` (elk-rs `aligned_layout.rs`)
 
@@ -15,10 +17,6 @@ flags (`y[i].unwrap_or(0.0)` = `yOf i`). The read-only parts of the Rust struct 
 The algorithms that update a layout incrementally (aligner, compactor, threshold strategies)
 run in `BalM := StateRefT BKAlignedLayout IO`.
 -/
-/-! Float literals as global constants (FL): inside branches, loops and specialised code the compiler
-shares a literal's `Nat`/`Bool` arguments with unrelated variables (CSE) and then parses it on every
-evaluation (`FastFloat.ofScientificImpl`); a top-level constant is a load (PLAN §7.1 items 17, 22). -/
-private def fl0p0 : Float := 0.0
 
 namespace Elk.Alg.Layered.P4Nodes.BK
 
