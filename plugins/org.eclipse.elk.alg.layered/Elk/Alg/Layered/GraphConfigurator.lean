@@ -373,18 +373,26 @@ def configureGraphProperties (graph : LGraphId) : LayeredM Unit := do
   let spacings := Spacings.new (← getGraph graph).props
   modifyGraph graph fun g => { g with internal := { g.internal with spacings := some spacings } }
 
-/-- The generic assembly of `prepareGraphForLayout` through the configurator's `AlgorithmAssembler`
-(`reset`, `setPhase` ×5, `addProcessorConfiguration`, `build`): the reference of `assembleFast` and
-its fallback. -/
-def assembleGeneric (c : GraphConfigurator) (graph : LGraphId) (cycleBreaking : CycleBreakingStrategy)
-    (layering : LayeringStrategy) (crossingMinimization : CrossingMinimizationStrategy)
-    (nodePlacement : NodePlacementStrategy) (edgeRouting : EdgeRouting) : LayeredM (Array LayeredProcessor) := do
+/-- `algorithmAssembler.reset()` and `setPhase` for the five phases (Java `prepareGraphForLayout`).
+Both assembly paths record the phases: besides matching Java's assembler state, the phase
+factories stay alive in the assembler for the whole layout, and the fast path relies on that heap
+shape (without them, the P3 allocation pattern of some models empties and refills a mimalloc page
+on every sweep: `GravitationWithCollisionDetection.json` +11% instructions, 68.6K page allocations
+per 100 layouts instead of 29, PLAN 7.1). -/
+def configurePhases (c : GraphConfigurator) (cycleBreaking : CycleBreakingStrategy) (layering : LayeringStrategy)
+    (crossingMinimization : CrossingMinimizationStrategy) (nodePlacement : NodePlacementStrategy)
+    (edgeRouting : EdgeRouting) : IO Unit := do
   c.assembler.reset
   c.assembler.setPhase .p1CycleBreaking (LayeredPhases.strategyFactory .p1CycleBreaking "CycleBreakingStrategy" (ElkEnum.ordinal cycleBreaking) (ElkEnum.javaName cycleBreaking))
   c.assembler.setPhase .p2Layering (LayeredPhases.strategyFactory .p2Layering "LayeringStrategy" (ElkEnum.ordinal layering) (ElkEnum.javaName layering))
   c.assembler.setPhase .p3NodeOrdering (LayeredPhases.strategyFactory .p3NodeOrdering "CrossingMinimizationStrategy" (ElkEnum.ordinal crossingMinimization) (ElkEnum.javaName crossingMinimization))
   c.assembler.setPhase .p4NodePlacement (LayeredPhases.strategyFactory .p4NodePlacement "NodePlacementStrategy" (ElkEnum.ordinal nodePlacement) (ElkEnum.javaName nodePlacement))
   c.assembler.setPhase .p5EdgeRouting (EdgeRouterFactory.factoryFor edgeRouting)
+
+/-- The generic assembly of `prepareGraphForLayout` through the configurator's `AlgorithmAssembler`
+(after `configurePhases`: `addProcessorConfiguration`, `build`): the reference of `assembleFast`
+and its fallback. -/
+def assembleGeneric (c : GraphConfigurator) (graph : LGraphId) : LayeredM (Array LayeredProcessor) := do
   let processorConfig ← getPhaseIndependentLayoutProcessorConfiguration graph
   c.assembler.addProcessorConfiguration processorConfig
   c.assembler.build graph
@@ -401,12 +409,13 @@ def prepareGraphForLayout (c : GraphConfigurator) (graph : LGraphId) (fast : Boo
   let crossingMinimization := gr.props.getD LayeredOptions.CROSSING_MINIMIZATION_STRATEGY CrossingMinimizationStrategy.layerSweep
   let nodePlacement := gr.props.getD LayeredOptions.NODE_PLACEMENT_STRATEGY NodePlacementStrategy.brandesKoepf
   let edgeRouting := gr.props.getD CoreOptions.EDGE_ROUTING EdgeRouting.undefined
+  configurePhases c cycleBreaking layering crossingMinimization nodePlacement edgeRouting
   if fast then
     let additional ← phaseIndependentSlotBits graph
     if let some processors ←
         assembleFast graph cycleBreaking layering crossingMinimization nodePlacement edgeRouting additional then
       return processors
-  assembleGeneric c graph cycleBreaking layering crossingMinimization nodePlacement edgeRouting
+  assembleGeneric c graph
 
 end GraphConfigurator
 
