@@ -306,14 +306,23 @@ def empty : PropertyMap := {}
 @[inline] def size (m : PropertyMap) : Nat := m.entries.size
 @[inline] def isEmpty (m : PropertyMap) : Bool := m.entries.isEmpty
 
+/-- An index below `a.usize` is in bounds. -/
+private theorem usize_lt_size {α : Type} {a : Array α} {i : USize} (h : i < a.usize) : i.toNat < a.size := by
+  have h1 : i.toNat < a.usize.toNat := (USize.lt_iff_toNat_lt).mp h
+  have h2 : a.usize.toNat ≤ a.size := by
+    simp only [Array.usize, Nat.toUSize]
+    exact Nat.mod_le _ _
+  omega
+
 /-- Index of the entry with key `id`/`hash` from `i` on (`es.size` if absent). A plain loop:
-`Array.find?`/`findIdx?` go through `forIn` and allocate their loop state on a hit. -/
-private def indexFrom (es : Array (PropKey × PropValue)) (id : String) (hash : UInt64) (i : Nat) : Nat :=
-  if h : i < es.size then
-    let k := es[i].1
-    if k.hash == hash && k.id == id then i else indexFrom es id hash (i + 1)
+`Array.find?`/`findIdx?` go through `forIn` and allocate their loop state on a hit. The index is a
+`USize` with a proved bound (`uget`), so an iteration is a compare, a load and the hash test without
+the `Nat` boxing checks (PLAN 7.1 item 15); the result is the same `Nat`. -/
+private partial def indexFrom (es : Array (PropKey × PropValue)) (id : String) (hash : UInt64) (i : USize) : Nat :=
+  if h : i < es.usize then
+    let k := (es.uget i (usize_lt_size h)).1
+    if k.hash == hash && k.id == id then i.toNat else indexFrom es id hash (i + 1)
   else es.size
-termination_by es.size - i
 
 @[inline] private def indexOf (m : PropertyMap) (k : PropKey) : Nat := indexFrom m.entries k.id k.hash 0
 
