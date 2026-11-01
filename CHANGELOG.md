@@ -42,7 +42,7 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17122 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17141 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo and hierarchical model-order
@@ -65,15 +65,15 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - **Parity against elk-rs** (secondary): model parity 1447/1447 (tolerance 1e-6), strict phase
   trace 1447/1447. Byte identity with elk-rs is 1060/1447; the rest differ only in `-0.0`,
   snapping or values below 4e-12 and are no longer a gate.
-- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.75x
+- **Performance** vs elk-rs `rust_api` over the 26 synthetic scenarios: geometric mean 0.72x
   (layered 0.82 to 0.99x, force 0.80 to 0.87x, stress 0.96 to 1.03x, mrtree 0.64 to 0.70x,
   rectpacking 0.57 to 0.65x, radial 0.15 to 0.69x, edge routing 0.84 to 0.96x, crossing
   minimisation 0.91 to 0.95x, hierarchy 0.86 to 0.96x; mrtree and radial follow Java's full
   algorithms and stay at about 0.7x and 0.2 to 0.7x); JSON parse, import, transfer and print
   take about 40% of mrtree_xlarge and 20% of radial_xlarge after the overlay transfer;
-  over the 1,447 corpus models 0.98x in total and 0.95x per model (geometric mean; the slowest
-  are a 0.16 ms interactive model at 1.71x, ticket 213 at 1.64x and the model-order example at
-  1.49x). Repeated layouts keep RSS flat; the orthogonal router's dependency table is packed
+  over the 1,447 corpus models 0.97x in total and 0.93x per model (geometric mean; the slowest
+  are small interactive models below 0.2 ms, ticket 213 and the model-order example, all below
+  about 1.7x after the pure model-order comparators and the pure scanline compaction kernel). Repeated layouts keep RSS flat; the orthogonal router's dependency table is packed
   (24 B per dependency), so a node with 5,000 ports peaks at 648 MB instead of 1.2 GB. 5% regression gate baseline: `tests/perf/baseline_lean_api.csv`.
 
 ### Known differences
