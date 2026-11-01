@@ -89,6 +89,49 @@ def getLabelsBounds (pc : PortContext P L) : ElkRectangle := Id.run do
       bounds := { x := x, y := y, width := right - x, height := bottom - y }
   return bounds
 
+/-! ### Field updaters (not inlined)
+
+Used as the update of `Array.modify`/`Array.map` on port context arrays: with the record update
+lambda inlined into `modify`/`map`, the compiler tests the context's exclusivity before the slot is
+cleared and every update allocated a fresh context (PLAN 7.1 item 16; `modifyIn` would need
+`Inhabited P`). Called out of line, the update reuses the unshared context. -/
+
+/-- `portMargin := m`. -/
+@[noinline] def withPortMargin (pc : PortContext P L) (m : ElkMargin) : PortContext P L :=
+  { pc with portMargin := m }
+
+/-- `portMargin.left := v`. -/
+@[noinline] def withMarginLeft (pc : PortContext P L) (v : Float) : PortContext P L :=
+  { pc with portMargin := { pc.portMargin with left := v } }
+
+/-- `portMargin.right := v`. -/
+@[noinline] def withMarginRight (pc : PortContext P L) (v : Float) : PortContext P L :=
+  { pc with portMargin := { pc.portMargin with right := v } }
+
+/-- `portMargin.top := v`. -/
+@[noinline] def withMarginTop (pc : PortContext P L) (v : Float) : PortContext P L :=
+  { pc with portMargin := { pc.portMargin with top := v } }
+
+/-- `portMargin.bottom := v`. -/
+@[noinline] def withMarginBottom (pc : PortContext P L) (v : Float) : PortContext P L :=
+  { pc with portMargin := { pc.portMargin with bottom := v } }
+
+/-- `portMargin.left := l`, `portMargin.right := r`. -/
+@[noinline] def withMarginLeftRight (pc : PortContext P L) (l r : Float) : PortContext P L :=
+  { pc with portMargin := { pc.portMargin with left := l, right := r } }
+
+/-- `portMargin.top := t`, `portMargin.bottom := b`. -/
+@[noinline] def withMarginTopBottom (pc : PortContext P L) (t b : Float) : PortContext P L :=
+  { pc with portMargin := { pc.portMargin with top := t, bottom := b } }
+
+/-- `portPosition := pos`. -/
+@[noinline] def withPortPosition (pc : PortContext P L) (pos : KVector) : PortContext P L :=
+  { pc with portPosition := pos }
+
+/-- `portPosition.y += dy`. -/
+@[noinline] def offsetPositionY (pc : PortContext P L) (dy : Float) : PortContext P L :=
+  { pc with portPosition := { pc.portPosition with y := pc.portPosition.y + dy } }
+
 /-- `PortContext.applyPortPosition()`: writes `portPosition` to the port. -/
 def applyPortPosition {m : Type → Type} [Monad m] {G N E : Type} (a : GraphAdapters m G N P L E)
     (pc : PortContext P L) : m Unit :=

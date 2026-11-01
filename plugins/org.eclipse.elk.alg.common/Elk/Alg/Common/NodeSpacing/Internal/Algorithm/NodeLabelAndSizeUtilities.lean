@@ -138,7 +138,7 @@ y = 0) down by the node height. -/
 def offsetSouthernPortsByNodeSize (ctx : NodeContext N P L) : NodeContext N P L :=
   let nodeHeight := ctx.nodeSize.y
   ctx.modifyPortContextsOf .south fun pcs =>
-    pcs.map fun pc => { pc with portPosition := { pc.portPosition with y := pc.portPosition.y + nodeHeight } }
+    pcs.map (·.offsetPositionY nodeHeight)
 
 /-- elk-rs `set_node_padding(nodeContext)`: the node padding implied by the client area (center
 cell rectangle of the inside node label container) if `COMPUTE_PADDING` is set, else `none`. -/
