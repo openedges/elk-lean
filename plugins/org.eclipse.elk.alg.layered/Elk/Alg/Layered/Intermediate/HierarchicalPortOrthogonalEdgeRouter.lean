@@ -47,8 +47,11 @@ Differences from Java reproduced from elk-rs:
   twice like Java (elk-rs once) and returns for a graph without layers (Java throws).
 * Missing properties fall back to defaults (`PORT_ANCHOR` → `(0, 0)`, unset spacings → `0`) and
   missing ports/edges skip the element (Java throws `NullPointerException`).
-* `Math.max` → Rust `f64::max` (`fmax`); sorts use the stable Rust `sort_by` with `partial_cmp`
-  (`Float.comparePartial`), Java `Arrays.sort` with `Double.compare`.
+
+ELK Java followed (agent EXT): `Math.max` (`javaMax`) and the stable sorts of `ensureUniquePositions` /
+`restoreProperOrder` with `Double.compare` (`Float.compareJava`; `-0.0` — the
+`PORT_RATIO_OR_POSITION` of a southern or western port with index `0` — sorts before `0.0`, where
+elk-rs' `partial_cmp` kept the list order).
 
 Trace output (`ELK_TRACE_HIER_PORT_ORTHO`) prints the Rust `{:.1}` values with
 `Float.toRustDisplay` (approximation; stderr only). Like Rust, the `route_edges prep` line is printed
@@ -208,7 +211,7 @@ def assignAscendingCoordinates (dummies : Array LNodeId) (graph : LGraphId) : La
       modifyNode dummy fun n => { n with position := { n.position with x := n.position.x - delta } }
     let currentPos := (← getNode dummy).position.x
     let sizeX := nd.size.x
-    modifyGraph graph fun g => { g with size := { g.size with x := fmax g.size.x (currentPos + sizeX) } }
+    modifyGraph graph fun g => { g with size := { g.size with x := javaMax g.size.x (currentPos + sizeX) } }
     nextValid := currentPos + sizeX + nd.margin.right + spacing
 
 /-- `ensureUniquePositions(dummies, graph)` (Rust `ensure_unique_positions`): sorted by `x`
@@ -216,7 +219,7 @@ def assignAscendingCoordinates (dummies : Array LNodeId) (graph : LGraphId) : La
 def ensureUniquePositions (dummies : Array LNodeId) (graph : LGraphId) : LayeredM Unit := do
   if dummies.isEmpty then return
   let keyed ← dummies.mapM fun d => do return (d, (← getNode d).position.x)
-  let sorted := (stableSort keyed fun p q => Float.comparePartial p.2 q.2).map (·.1)
+  let sorted := (stableSort keyed fun p q => Float.compareJava p.2 q.2).map (·.1)
   assignAscendingCoordinates sorted graph
 
 /-- `restoreProperOrder(dummies, graph)` (Rust `restore_proper_order`): sorted by
@@ -224,7 +227,7 @@ def ensureUniquePositions (dummies : Array LNodeId) (graph : LGraphId) : Layered
 def restoreProperOrder (dummies : Array LNodeId) (graph : LGraphId) : LayeredM Unit := do
   if dummies.isEmpty then return
   let keyed ← dummies.mapM fun d => do return (d, (← getNode d).internal.portRatioOrPosition)
-  let sorted := (stableSort keyed fun p q => Float.comparePartial p.2 q.2).map (·.1)
+  let sorted := (stableSort keyed fun p q => Float.compareJava p.2 q.2).map (·.1)
   assignAscendingCoordinates sorted graph
 
 /-- The `x` coordinate step of `setNorthSouthDummyCoordinates` for one dummy. -/
@@ -240,7 +243,7 @@ private def setDummyX (graph : LGraphId) (constraints : PortConstraints) (graphW
     borderToContentAreaX graph dummy
     let nd ← getNode dummy
     let requiredX := nd.position.x + nd.size.x / 2.0
-    modifyGraph graph fun g => { g with size := { g.size with x := fmax g.size.x requiredX } }
+    modifyGraph graph fun g => { g with size := { g.size with x := javaMax g.size.x requiredX } }
   | .undefined => pure ()
 
 /-- `setNorthSouthDummyCoordinates(layeredGraph, northSouthDummies)` (Rust
@@ -444,7 +447,7 @@ def fixCoordinatesForLayer (layer : LayerId) (constraints : PortConstraints) (gr
         -- `borderToContentAreaCoordinates(false, true)`: `y - padding.top - offset.y`
         let y := y - padding.top - offset.y
         modifyNode node fun n => { n with position := { n.position with y := y } }
-    newActualHeight := fmax newActualHeight requiredHeight
+    newActualHeight := javaMax newActualHeight requiredHeight
   let dy := newActualHeight - graphActualSize.y
   modifyGraph graph fun g => { g with size := { g.size with y := g.size.y + dy } }
   for node in nodes do

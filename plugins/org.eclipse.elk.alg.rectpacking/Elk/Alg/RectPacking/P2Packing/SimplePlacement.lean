@@ -41,8 +41,8 @@ def run (graph : NodeId) (monitor : ProgressMonitor) : RectPackingM Unit := do
   let props := (← ElkM.getNode graph).props
   let minWidth := props.getD InternalProperties.MIN_WIDTH 0.0
   let minHeight := props.getD InternalProperties.MIN_HEIGHT 0.0
-  let width := fmax size.x (minWidth - (padding.left + padding.right))
-  let height := fmax size.y (minHeight - (padding.top + padding.bottom))
+  let width := javaMax size.x (minWidth - (padding.left + padding.right))
+  let height := javaMax size.y (minHeight - (padding.top + padding.bottom))
   let additionalHeight := height - size.y
   ElkM.setNodeProp graph InternalProperties.ADDITIONAL_HEIGHT additionalHeight
   ElkM.setNodeProp graph InternalProperties.DRAWING_WIDTH width
