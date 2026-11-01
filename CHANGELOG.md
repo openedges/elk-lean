@@ -31,6 +31,12 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   `worker_threads` Worker for deeply nested or deeply recursive graphs (`workerStackSizeMb`, default
   64 MB). JS tests: 56/56 (including the three WASM modes and the deep-recursion cases). Addon vs
   CLI output: 1447/1448 byte identical.
+- **Release build** (`scripts/build_release.sh`): the native CLI and the addon (`build_napi.sh
+  --release`) are linked with ThinLTO across the generated C and the GMP-free Lean runtime, with
+  profile-guided optimisation from `scripts/build_pgo.sh` (profile under `.reference/pgo/`,
+  regenerated, not in git): about 14% less wall time and 17% fewer instructions than the plain
+  build on the 26 synthetic scenarios, 20% on the corpus, byte-identical output
+  (`docs/build-optimization.md`). The WASM is linked with `-Oz` (6% smaller).
 - **GMP-free native runtime**: distributed native artefacts (release CLI, C library bundle, addon)
   link a Lean runtime rebuilt without GMP (`ELK_NO_GMP=1`, `scripts/build_runtime_nogmp.sh`), so
   they contain no LGPL code; output is byte-identical to the toolchain runtime
@@ -53,7 +59,7 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17194 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17200 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo, hierarchical model-order and

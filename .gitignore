@@ -35,3 +35,8 @@ node_modules/
 /tests/perf/corpus/*.log
 /tests/tmp/*
 !/tests/tmp/.gitkeep
+/tests/perf/release/*.csv
+!/tests/perf/release/baseline_*.csv
+/tests/perf/release/corpus/*.csv
+!/tests/perf/release/corpus/baseline_*.csv
+/tests/perf/release/corpus/*.log
