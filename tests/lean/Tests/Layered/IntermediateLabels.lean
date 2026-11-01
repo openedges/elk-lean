@@ -390,8 +390,9 @@ def removerTests : Suite := suite "layered.intermediate.labelDummyRemover" do
   checkVec "hand: polyline unnecessary bend point" (a4.edge edges4[0]!).bendPoints[0]! ⟨10.0, 24.0⟩
   checkVec "hand: dropped bend point appended" (a4.edge edges4[0]!).bendPoints[1]! ⟨1.0, 2.0⟩
   let _ := (ports4, nodes4)
-  -- post compaction LEFT/RIGHT with spacings: source right 30 + 20, target left 200 - 20 - 60
-  for (strategy, expectedX) in #[(GraphCompactionStrategy.left, 70.0), (GraphCompactionStrategy.right, 140.0), (GraphCompactionStrategy.none, 120.0)] do
+  -- post compaction LEFT/RIGHT: like Java the labels stay at the dummy position (the compactor has
+  -- moved the dummy; elk-rs moved them again to the source/target bounds: 70 resp. 140)
+  for (strategy, expectedX) in #[(GraphCompactionStrategy.left, 120.0), (GraphCompactionStrategy.right, 120.0), (GraphCompactionStrategy.none, 120.0)] do
     let (ls5, a5) ← LayeredM.run (do
       let props := (removerProps .right).set LayeredOptions.COMPACTION_POST_COMPACTION_STRATEGY strategy
       let (g, _, _, _, _, ls) ← removerGraph props ⟨100.0, 20.0⟩ ⟨60.0, 30.0⟩ #[("x", 20.0, 6.0, {})] .above

@@ -309,13 +309,23 @@ def insertStraighteningControlPoints (allCPs : KVectorChain) (srcSide tgtSide : 
   cps := cps.insertIdxIfInBounds (cps.size - 1) straightenEnding
   return cps
 
-/-- The extra control point of a north/south port (`SPLINE_NS_PORT_Y_COORD`, Rust falls back to the
-anchor's y), `none` for other sides. -/
-def northSouthControlPoint (a : LGraphArena) (port : LPortId) (anchor : KVector) : Option KVector :=
+/-- The extra control point of a north/south port (`SPLINE_NS_PORT_Y_COORD`), `none` for other
+sides. Java unboxes the property (`double y = port.getProperty(...)`), so a north/south port without
+it (e.g. the port of a northern external port dummy, which is a `SOUTH` port) is a
+`NullPointerException` (elk-rs and elk-lean before EXT fell back to the anchor's y). -/
+def northSouthControlPoint (a : LGraphArena) (port : LPortId) (anchor : KVector) : Except String (Option KVector) :=
   let pt := a.port port
   if pt.side == .north || pt.side == .south then
-    some ⟨anchor.x, (splineNsPortYCoordOf pt).getD anchor.y⟩
-  else none
+    match splineNsPortYCoordOf pt with
+    | some y => .ok (some ⟨anchor.x, y⟩)
+    | none => .error SplineSegment.anchorYNullPointer
+  else .ok none
+
+/-- Rethrows a Java exception text as the `IO.userError` of the layout. -/
+private def liftExcept {α : Type} (r : Except String α) : LayeredM α :=
+  match r with
+  | .ok v => pure v
+  | .error e => throw (IO.userError e)
 
 /-- `calculateBezierBendPoints(edgeChain, survivingEdge)`: collects the NUB control points of the
 chain (see the module doc), clears the chain edges' bend points and appends the Bezier control
@@ -333,7 +343,7 @@ def calculateBezierBendPoints (cfg : Config) (edgeChain : Array LEdgeId) (surviv
       "java.lang.IllegalArgumentException: The target node of the edge must be a normal node or a northSouthPort.")
   let sourceAnchor ← withArena fun a => (a.portAbsoluteAnchor sourcePort).getD KVector.zero
   let mut allCP : KVectorChain := #[sourceAnchor]
-  if let some cp ← withArena fun a => northSouthControlPoint a sourcePort sourceAnchor then
+  if let some cp ← liftExcept (← withArena fun a => northSouthControlPoint a sourcePort sourceAnchor) then
     allCP := allCP.push cp
   let mut lastCP : Option KVector := none
   let mut addMidPoint := false
@@ -351,7 +361,7 @@ def calculateBezierBendPoints (cfg : Config) (edgeChain : Array LEdgeId) (surviv
     modifyEdge currentEdge fun e => { e with bendPoints := #[] }
   let some targetPort := (← getEdge edge).target | return
   let targetAnchor ← withArena fun a => (a.portAbsoluteAnchor targetPort).getD KVector.zero
-  if let some cp ← withArena fun a => northSouthControlPoint a targetPort targetAnchor then
+  if let some cp ← liftExcept (← withArena fun a => northSouthControlPoint a targetPort targetAnchor) then
     allCP := allCP.push cp
   allCP := allCP.push targetAnchor
   if cfg.splineRoutingMode == .conservative then

@@ -1,0 +1,193 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+  "elk.layered.considerModelOrder.strategy": "PREFER_NODES"
+ },
+ "children": [
+  {
+   "id": "g398_n1",
+   "width": 0,
+   "height": 20,
+   "ports": [
+    {
+     "id": "g398_n1_p0",
+     "width": 8,
+     "height": 8,
+     "layoutOptions": {
+      "elk.port.side": "SOUTH"
+     }
+    },
+    {
+     "id": "g398_n1_p1",
+     "width": 4,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "WEST"
+     }
+    },
+    {
+     "id": "g398_n1_p3",
+     "width": 12,
+     "height": 0,
+     "layoutOptions": {
+      "elk.port.side": "NORTH"
+     }
+    },
+    {
+     "id": "g398_n1_p4",
+     "width": 4,
+     "height": 6,
+     "layoutOptions": {}
+    },
+    {
+     "id": "g398_n1_p5",
+     "width": 4,
+     "height": 8,
+     "layoutOptions": {}
+    }
+   ],
+   "children": [
+    {
+     "id": "g398_n3",
+     "width": 10,
+     "height": 30,
+     "ports": [
+      {
+       "id": "g398_n3_p1",
+       "width": 6,
+       "height": 8,
+       "x": 7.0,
+       "y": 21.9,
+       "layoutOptions": {}
+      },
+      {
+       "id": "g398_n3_p3",
+       "width": 6,
+       "height": 8,
+       "x": -3.0,
+       "y": 10.1,
+       "layoutOptions": {}
+      }
+     ],
+     "children": [],
+     "layoutOptions": {
+      "elk.portConstraints": "FIXED_POS"
+     },
+     "edges": []
+    }
+   ],
+   "layoutOptions": {
+    "elk.portConstraints": "FIXED_ORDER"
+   },
+   "edges": [
+    {
+     "id": "g398_e25",
+     "sources": [
+      "g398_n3_p3"
+     ],
+     "targets": [
+      "g398_n1_p0"
+     ]
+    },
+    {
+     "id": "g398_e26",
+     "sources": [
+      "g398_n3_p1"
+     ],
+     "targets": [
+      "g398_n1_p1"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "g398_n14",
+   "width": 60,
+   "height": 20,
+   "ports": [
+    {
+     "id": "g398_n14_p1",
+     "width": 12,
+     "height": 8,
+     "layoutOptions": {}
+    },
+    {
+     "id": "g398_n14_p2",
+     "width": 0,
+     "height": 4,
+     "layoutOptions": {}
+    }
+   ],
+   "children": [],
+   "layoutOptions": {},
+   "edges": []
+  }
+ ],
+ "edges": [
+  {
+   "id": "g398_e1",
+   "sources": [
+    "g398_n1_p1"
+   ],
+   "targets": [
+    "g398_n1_p3"
+   ]
+  },
+  {
+   "id": "g398_e2",
+   "sources": [
+    "g398_n1_p4"
+   ],
+   "targets": [
+    "g398_n1_p0"
+   ]
+  },
+  {
+   "id": "g398_e4",
+   "sources": [
+    "g398_n1_p0"
+   ],
+   "targets": [
+    "g398_n1_p3"
+   ]
+  },
+  {
+   "id": "g398_e9",
+   "sources": [
+    "g398_n14_p2"
+   ],
+   "targets": [
+    "g398_n1_p4"
+   ]
+  },
+  {
+   "id": "g398_e12",
+   "sources": [
+    "g398_n1_p1"
+   ],
+   "targets": [
+    "g398_n1_p5"
+   ]
+  },
+  {
+   "id": "g398_e78",
+   "sources": [
+    "g398_n1"
+   ],
+   "targets": [
+    "g398_n14_p1"
+   ]
+  },
+  {
+   "id": "g398_e79",
+   "sources": [
+    "g398_n1_p1"
+   ],
+   "targets": [
+    "g398_n14_p2"
+   ]
+  }
+ ]
+}

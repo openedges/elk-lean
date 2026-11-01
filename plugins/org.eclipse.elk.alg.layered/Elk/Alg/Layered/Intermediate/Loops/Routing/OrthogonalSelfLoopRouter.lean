@@ -291,6 +291,51 @@ def routeEdge (h : SelfLoopHolder) (loop : SelfHyperLoop) (e : SelfLoopEdgeId) (
   modifyEdge lEdge fun x => { x with bendPoints := path }
   return path.foldl (LabelPlacer.updateMarginsWithPoint nodeSize) margins
 
+/-- Java's routing slot arrays have exactly `routingSlotCount[side]` entries per side, and every
+`routingSlotPositions[side][slot]` read fails with an `ArrayIndexOutOfBoundsException` for a slot
+outside them (elk-rs and the lookups above take `0`). The reads in Java's order:
+`initializeWithMaxLabelHeight` (north, then south: every loop with labels on that side), then per
+hyper loop the edges (`addOuterBendPoint` of the source, the side pairs of `addCornerBendPoints`,
+`addOuterBendPoint` of the target) and the labels (`placeLabels`). Returns the first failure. -/
+def javaSlotIndexError (a : LGraphArena) (h : SelfLoopHolder) (nodeSize : KVector) : Option String := Id.run do
+  let check (side : PortSide) (slot : Int) : Option String :=
+    let len := (max (h.routingSlotCount.getD (ElkEnum.ordinal side) 0) 0).toNat
+    if slot < 0 || slot >= len then
+      some s!"java.lang.ArrayIndexOutOfBoundsException: Index {slot} out of bounds for length {len}"
+    else none
+  for side in #[PortSide.north, .south] do
+    for l in h.slHyperLoops do
+      if let some lb := l.slLabels then
+        if lb.side == side then
+          if let some e := check side (l.getRoutingSlot side) then return some e
+  let sideOf (p : LPortId) : PortSide :=
+    let port := a.port p
+    if port.side == .undefined then
+      inferSideFromPosition ⟨port.position.x + port.anchor.x, port.position.y + port.anchor.y⟩ nodeSize
+    else port.side
+  for l in h.slHyperLoops do
+    for e in l.slEdges do
+      let slEdge := h.slEdge e
+      let sourcePort := h.lPortOf slEdge.slSource
+      let targetPort := h.lPortOf slEdge.slTarget
+      let sourceSide := sideOf sourcePort
+      let targetSide := sideOf targetPort
+      if let some err := check sourceSide (l.getRoutingSlot sourceSide) then return some err
+      if sourceSide != targetSide then
+        let clockwise := computeEdgeRoutingDirection a l sourcePort targetPort sourceSide targetSide
+        let mut curr := sourceSide
+        for _ in [0:4] do
+          if curr == targetSide then break
+          let next := if clockwise then curr.right else curr.left
+          if let some err := check curr (l.getRoutingSlot curr) then return some err
+          if let some err := check next (l.getRoutingSlot next) then return some err
+          curr := next
+      if let some err := check targetSide (l.getRoutingSlot targetSide) then return some err
+    if let some lb := l.slLabels then
+      if lb.side != .undefined then
+        if let some err := check lb.side (l.getRoutingSlot lb.side) then return some err
+  return none
+
 /-- `route_node(holder, spacings, edgeRouting)` with the router's bend point modifier (Java
 `OrthogonalSelfLoopRouter.routeSelfLoops`) for the holder stored on `n` (no-op without holder). -/
 def routeSelfLoopsWith (modify : BendPointModifier) (n : LNodeId) (sp : SelfLoopRoutingSpacings) : LayeredM Unit := do
@@ -298,6 +343,8 @@ def routeSelfLoopsWith (modify : BendPointModifier) (n : LNodeId) (sp : SelfLoop
   let nd ← getNode n
   let nodeSize := nd.size
   let mut newMargins := nd.margin
+  if let some msg ← withArena (javaSlotIndexError · h nodeSize) then
+    throw (IO.userError msg)
   let positions := computeRoutingSlotPositions h.routingSlotCount h.slHyperLoops nodeSize newMargins sp
   for l in h.hyperLoopIds do
     let loop := h.slHyperLoop l

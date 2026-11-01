@@ -23,10 +23,12 @@ for `LABEL_SIDE = BELOW`) inside the label space `(width, height - thickness - e
 (full height for inline labels): stacked and centred horizontally, or side by side in vertical
 layouts (inline-centred, top-aligned below the edge, else bottom-aligned; reverse order for `UP`).
 
-Rust additions over Java (ported): in horizontal layouts without spline routing the dummy x position
-is first adjusted to the post-compaction bounds (`LEFT`/`RIGHT` compaction with known `SPACINGS`,
-`adjust_horizontal_dummy_position_for_post_compaction`); a dummy whose `ORIGIN` is not an `LEdge` or
-that represents no labels is only joined and removed (Java would fail).
+Like Java the labels are placed at the dummy's own position: the post compaction
+(`HorizontalGraphCompactor`) has already moved the dummy. elk-rs (and elk-lean before EXT) moved the
+labels of horizontal layouts once more to the source/target bounds for `LEFT`/`RIGHT` post compaction
+(`adjust_horizontal_dummy_position_for_post_compaction`), which Java does not. A dummy whose `ORIGIN`
+is not an `LEdge` or that represents no labels is only joined and removed (cannot happen: the label
+dummies are created by `LabelDummyInserter` for edges with center labels).
 
 Dummies are joined with `LongEdgeJoiner.joinAt` (elk-rs `LongEdgeJoiner::join_at`).
 -/
@@ -57,41 +59,6 @@ def allInline (labels : Array LLabelId) : LayeredM Bool := do
   for l in labels do
     if !(← labelInlineProperty l) then return false
   return true
-
-/-- Rust `adjacent_source_and_target_nodes(node)`: the source of the first incoming edge of the first
-`WEST` port and the target of the first outgoing edge of the first `EAST` port. -/
-def adjacentSourceAndTargetNodes (node : LNodeId) : LayeredM (Option (LNodeId × LNodeId)) := do
-  let westPort := (← withArena (·.nodePortsBySide node .west))[0]?
-  let eastPort := (← withArena (·.nodePortsBySide node .east))[0]?
-  let some westPort := westPort | return none
-  let some incomingEdge := (← getPort westPort).incomingEdges[0]? | return none
-  let some eastPort := eastPort | return none
-  let some outgoingEdge := (← getPort eastPort).outgoingEdges[0]? | return none
-  let some sourcePort := (← getEdge incomingEdge).source | return none
-  let some sourceNode := (← getPort sourcePort).owner | return none
-  let some targetPort := (← getEdge outgoingEdge).target | return none
-  let some targetNode := (← getPort targetPort).owner | return none
-  return some (sourceNode, targetNode)
-
-/-- Rust `adjust_horizontal_dummy_position_for_post_compaction`: with `LEFT`/`RIGHT` post-compaction
-and known spacings, the label x position becomes the left bound (right of the source node plus the
-horizontal spacing) or the right bound (left of the target node minus spacing and dummy width); the
-left bound wins when the bounds cross; nothing happens for non-finite bounds. -/
-def adjustHorizontalDummyPositionForPostCompaction (node : LNodeId) (currLabelPos : KVector) (nodeWidth : Float)
-    (compactionStrategy : GraphCompactionStrategy) (spacings : Option Spacings) : LayeredM KVector := do
-  if compactionStrategy != .left && compactionStrategy != .right then return currLabelPos
-  let some spacings := spacings | return currLabelPos
-  let some (sourceNode, targetNode) ← adjacentSourceAndTargetNodes node | return currLabelPos
-  let src ← getNode sourceNode
-  let sourceRight := src.position.x + src.size.x
-  let targetLeft := (← getNode targetNode).position.x
-  let leftSpacing ← LGraphUtil.horizontalSpacing spacings sourceNode node
-  let rightSpacing ← LGraphUtil.horizontalSpacing spacings node targetNode
-  let leftBound := sourceRight + leftSpacing
-  let rightBound := targetLeft - rightSpacing - nodeWidth
-  if !leftBound.isFinite || !rightBound.isFinite then return currLabelPos
-  if leftBound > rightBound then return { currLabelPos with x := leftBound }
-  return { currLabelPos with x := if compactionStrategy == .left then leftBound else rightBound }
 
 /-- Rust `place_labels_for_horizontal_layout`: labels centred in the label space, stacked downwards
 with `labelSpacing` between them. Returns the advanced position. -/
@@ -132,8 +99,7 @@ def placeLabelsForVerticalLayout (labels : Array LLabelId) (labelPos : KVector) 
 /-- Rust `place_labels_and_restore_edge`: places the represented labels of a label dummy (`ORIGIN`
 must be an `LEdge` and the list non-empty) and appends them to the origin edge's labels. -/
 def placeLabelsAndRestoreEdge (node : LNodeId) (edgeLabelSpacing labelLabelSpacing : Float)
-    (layoutDirection : Direction) (edgeRouting : EdgeRouting) (compactionStrategy : GraphCompactionStrategy)
-    (spacings : Option Spacings) : LayeredM Unit := do
+    (layoutDirection : Direction) : LayeredM Unit := do
   let nd ← getNode node
   let some (.lEdge originEdge) := nd.internal.origin | return
   let representedLabels := nd.internal.representedLabels
@@ -145,9 +111,6 @@ def placeLabelsAndRestoreEdge (node : LNodeId) (edgeLabelSpacing labelLabelSpaci
     currLabelPos := { currLabelPos with y := currLabelPos.y + (thickness + edgeLabelSpacing) }
   let nodeSize := nd.size
   let inlineLabels ← allInline representedLabels
-  if !layoutDirection.isVertical && edgeRouting != .splines then
-    currLabelPos ← adjustHorizontalDummyPositionForPostCompaction node currLabelPos nodeSize.x
-      compactionStrategy spacings
   let spaceAdjust ← if inlineLabels then pure 0.0 else do
     let t ← edgeThickness originEdge
     pure (-t - edgeLabelSpacing)
@@ -167,15 +130,12 @@ def process (layeredGraph : LGraphId) (monitor : ProgressMonitor) : LayeredM Uni
   let labelLabelSpacing := gr.props.getD LayeredOptions.SPACING_LABEL_LABEL 1.0
   let layoutDirection := gr.props.getD LayeredOptions.DIRECTION Direction.right
   let edgeRouting := gr.props.getD LayeredOptions.EDGE_ROUTING EdgeRouting.orthogonal
-  let compactionStrategy := gr.props.getD LayeredOptions.COMPACTION_POST_COMPACTION_STRATEGY GraphCompactionStrategy.none
-  let spacings := gr.internal.spacings
   let layers := gr.layers
   for layer in layers do
     let nodes := (← getLayer layer).nodes
     for node in nodes do
       if (← getNode node).type != .label then continue
-      placeLabelsAndRestoreEdge node edgeLabelSpacing labelLabelSpacing layoutDirection edgeRouting
-        compactionStrategy spacings
+      placeLabelsAndRestoreEdge node edgeLabelSpacing labelLabelSpacing layoutDirection
       LongEdgeJoiner.joinAt node (edgeRouting == .polyline)
       setNodeLayer node none
   monitor.done

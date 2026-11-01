@@ -1,0 +1,88 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g302_n1",
+   "width": 60,
+   "height": 30,
+   "ports": [],
+   "children": [
+    {
+     "id": "g302_n2",
+     "width": 60,
+     "height": 10,
+     "ports": [
+      {
+       "id": "g302_n2_p1",
+       "width": 8,
+       "height": 4,
+       "x": -4.0,
+       "y": 0.0,
+       "layoutOptions": {}
+      },
+      {
+       "id": "g302_n2_p2",
+       "width": 12,
+       "height": 12,
+       "layoutOptions": {
+        "elk.port.side": "NORTH"
+       }
+      }
+     ],
+     "children": [
+      {
+       "id": "g302_n3",
+       "width": 10,
+       "height": 20,
+       "ports": [
+        {
+         "id": "g302_n3_p0",
+         "width": 8,
+         "height": 8
+        },
+        {
+         "id": "g302_n3_p1",
+         "width": 6,
+         "height": 6,
+         "layoutOptions": {}
+        },
+        {
+         "id": "g302_n3_p2",
+         "width": 0,
+         "height": 6,
+         "layoutOptions": {}
+        }
+       ],
+       "layoutOptions": {}
+      }
+     ],
+     "layoutOptions": {
+      "elk.portConstraints": "FIXED_SIDE",
+      "elk.spacing.portsSurrounding": "[top=8,left=-2,bottom=-2,right=-2]",
+      "elk.hierarchyHandling": "INCLUDE_CHILDREN"
+     },
+     "edges": [
+      {
+       "id": "g302_e12",
+       "sources": [
+        "g302_n2_p2"
+       ],
+       "targets": [
+        "g302_n3"
+       ]
+      }
+     ]
+    }
+   ],
+   "layoutOptions": {
+    "elk.padding": "[top=12,left=0,bottom=-5,right=0]",
+    "elk.algorithm": "rectpacking"
+   },
+   "edges": []
+  }
+ ],
+ "edges": []
+}

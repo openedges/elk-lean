@@ -144,8 +144,8 @@ private def layoutM (layoutGraph : NodeId) (monitor : ProgressMonitor) : RectPac
   ElkUtil.translateNodeWithSizes layoutGraph ⟨drawingWidth, drawingHeight⟩ ⟨realWidth, realHeight⟩
   applyPadding rectangles padding
   if !fixedGraphSize then
-    let _ ← ElkUtil.resizeNodeWith layoutGraph (drawingWidth + padding.left + padding.right)
-      (drawingHeight + padding.top + padding.bottom) false true
+    let _ ← ElkUtil.resizeNodeWith layoutGraph (drawingWidth + (padding.left + padding.right))
+      (drawingHeight + (padding.top + padding.bottom)) false true
   if !((← ElkM.getNode layoutGraph).props.getD RectPackingOptions.OMIT_NODE_MICRO_LAYOUT false) then
     (← NodeMicroLayout.forGraph layoutGraph).execute
   monitor.done

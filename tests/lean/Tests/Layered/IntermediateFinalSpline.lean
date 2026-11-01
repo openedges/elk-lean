@@ -193,14 +193,18 @@ def northSouthTests : Suite := suite "layered.intermediate.FinalSplineBendpoints
   checkChain "north/south: NubSpline of (10,20) (10,25) (10,35) (20,10) (30,10) (30,110) (40,110)×3"
     (ar.edge e).bendPoints
     (bezierOf #[⟨10, 20⟩, ⟨10, 25⟩, ⟨10, 35⟩, ⟨20, 10⟩, ⟨30, 10⟩, ⟨30, 110⟩, ⟨40, 110⟩, ⟨40, 110⟩, ⟨40, 110⟩])
-  -- without SPLINE_NS_PORT_Y_COORD the NS point falls back to the anchor's y (Rust)
+  -- without SPLINE_NS_PORT_Y_COORD Java unboxes `null`: NullPointerException (elk-rs fell back to the
+  -- anchor's y)
   let ((_, a2), ar2) ← LayeredM.run (do
       let g ← LayeredM.createGraph
       let n ← LayeredM.createNode g { position := ⟨5, 5⟩, size := ⟨20, 20⟩ }
       let p ← addPort n .north ⟨10, 0⟩
       return (g, p))
-  checkEq "hand: NS control point falls back to the anchor (15,5)"
-    (FinalSplineBendpointsCalculator.northSouthControlPoint ar2 a2 ⟨15, 5⟩) (some ⟨15, 5⟩)
+  let r := FinalSplineBendpointsCalculator.northSouthControlPoint ar2 a2 ⟨15, 5⟩
+  check "hand: NS control point without SPLINE_NS_PORT_Y_COORD is Java's NullPointerException"
+    (match r with
+     | .error msg => msg.startsWith "java.lang.NullPointerException"
+     | .ok _ => false)
 
 -- direct tests of the variants ---------------------------------------------------------------------
 

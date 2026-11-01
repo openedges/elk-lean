@@ -43,8 +43,11 @@ def resizeNode (node : LNodeId) (newSize : KVector) (movePorts moveLabels : Bool
           | .west => if !fixedPorts then { pos with y := pos.y * heightRatio } else pos
           | .undefined => pos
         { pt with position := pos }
-  -- relative label placement is undefined on a collapsed rectangle
-  if moveLabels && oldSize.x != fl0p0 && oldSize.y != fl0p0 then
+  -- like Java the label percentages divide by the old size even when it is `0` (`±Infinity`/`NaN`
+  -- percentages; the moved coordinates stay finite: a label of a node of height `0` moves to the
+  -- bottom). elk-rs and elk-lean before EXT skipped the labels of a collapsed node; the port
+  -- coordinates keep the guarded ratios (Java's `x * Infinity` would be non-finite).
+  if moveLabels then
     for l in nd.labels do
       modifyLabel l fun lb =>
         let midx := lb.position.x + lb.size.x / fl2p0
@@ -341,9 +344,14 @@ def createPort (node : LNodeId) (endPoint : Option KVector) (portType : PortType
 
 /-- `createExternalPortDummy(propertyHolder, portConstraints, portSide, netFlow, portNodeSize,
 portPosition, portSize, layoutDirection, layeredGraph)`: the dummy node representing an external
-port; returns it with the (possibly updated: `PORT_SIDE`) property holder. -/
+port; returns it with the (possibly updated: `PORT_SIDE`) property holder. `portNodeSize = none` is
+Java's `null` (the `CompoundGraphPreprocessor` calls): like Java, `FIXED_RATIO` constraints then fail
+with the `NullPointerException` of `portNodeSize.x`/`.y` (unless `FIXED_ORDER` with an index decides).
+A size of `0` keeps the position (Java divides: a non-finite ratio and port coordinates, which are
+deliberately not reproduced, see `docs/robustness-random-graphs.md` §22). -/
 def createExternalPortDummy (propertyHolder : PropertyMap) (portConstraints : PortConstraints) (portSide : PortSide)
-    (netFlow : Int) (portNodeSize portPosition portSize : KVector) (layoutDirection : Direction) (graph : LGraphId) :
+    (netFlow : Int) (portNodeSize : Option KVector) (portPosition portSize : KVector) (layoutDirection : Direction)
+    (graph : LGraphId) :
     LayeredM (LNodeId × PropertyMap) := do
   let mut holder := propertyHolder
   let mut finalExternalPortSide := portSide
@@ -405,10 +413,16 @@ def createExternalPortDummy (propertyHolder : PropertyMap) (portConstraints : Po
       match finalExternalPortSide with
       | .west | .east =>
         infoValue := portPosition.y
-        if portConstraints.isRatioFixed && portNodeSize.y > 0.0 then infoValue := infoValue / portNodeSize.y
+        if portConstraints.isRatioFixed then
+          let some size := portNodeSize
+            | throwNullPointer "Cannot read field \"y\" because \"portNodeSize\" is null"
+          if size.y > fl0p0 then infoValue := infoValue / size.y
       | .north | .south =>
         infoValue := portPosition.x
-        if portConstraints.isRatioFixed && portNodeSize.x > 0.0 then infoValue := infoValue / portNodeSize.x
+        if portConstraints.isRatioFixed then
+          let some size := portNodeSize
+            | throwNullPointer "Cannot read field \"x\" because \"portNodeSize\" is null"
+          if size.x > fl0p0 then infoValue := infoValue / size.x
       | .undefined => pure ()
     let v := infoValue
     modifyNode dummy fun nd => { nd with internal := { nd.internal with portRatioOrPosition := v } }

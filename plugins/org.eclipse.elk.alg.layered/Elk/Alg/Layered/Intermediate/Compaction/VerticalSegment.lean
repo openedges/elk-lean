@@ -25,7 +25,12 @@ The Rust struct is ported field by field (Java fields in parentheses):
   `representedEdgeKeys` are only used for lookups; `constraintTargetIds` is iterated when the
   predefined constraints are created, where Rust's iteration order is the unspecified
   `RandomState` order — insertion order is used here;
-* Java's `junctionPoints` are not ported: elk-rs does not move junction points.
+* `junctionPoints` (Java `junctionPoints`, the `KVector` objects of the edge's `JUNCTION_POINTS`) are
+  `(edge, junction point index)` pairs: the junction points whose x equals the first bend point's x
+  (fuzzy), moved with the segment like Java (elk-rs does not move junction points). Like Java's lists,
+  `affectedBends`, `affectedSplineSegments` and `junctionPoints` keep duplicates when segments are
+  joined (a north/south segment and the regular segment starting at the same bend point both hold
+  it), and every occurrence is moved.
 -/
 namespace Elk.Alg.Layered.Intermediate.Compaction
 
@@ -65,16 +70,27 @@ structure VerticalSegment where
   affectedBends : Array (LEdgeId × Nat) := #[]
   /-- Rust `affected_spline_segments` (Java `affectedBoundingBoxes`): spline segment handles. -/
   affectedSplineSegments : Array Nat := #[]
+  /-- `junctionPoints`: `(edge, junction point index)` of the junction points to move. -/
+  junctionPoints : Array (LEdgeId × Nat) := #[]
   /-- `potentialGroupParents`: node `CNode`s whose group may receive this segment. -/
   potentialGroupParents : Array CNodeId := #[]
   deriving Inhabited
 
 namespace VerticalSegment
 
+/-- The junction points of `edge` (its `JUNCTION_POINTS` `jps`) whose x equals `x` (`CompareFuzzy.eq`),
+as `(edge, index)` in list order (Java constructor of `VerticalSegment`). -/
+def junctionPointsAt (edge : LEdgeId) (jps : KVectorChain) (x : Float) : Array (LEdgeId × Nat) := Id.run do
+  let mut out : Array (LEdgeId × Nat) := #[]
+  for h : i in [0:jps.size] do
+    if CompareFuzzy.eq jps[i].x x then out := out.push (edge, i)
+  return out
+
 /-- Rust `CompactionContext::new_vertical_segment` (Java `new VerticalSegment(bend1, bend2, cNode,
-lEdge)`) for an already allocated `segmentId`: the hitbox spans both bend points. -/
+lEdge)`) for an already allocated `segmentId`: the hitbox spans both bend points; `jps` are the
+edge's `JUNCTION_POINTS` (those at `bend1.x`, fuzzy, are recorded). -/
 def new (segmentId : Nat) (bend1 bend2 : KVector) (edge : LEdgeId) (bendIndices : Array Nat)
-    (potentialParent : Option CNodeId) : VerticalSegment :=
+    (potentialParent : Option CNodeId) (jps : KVectorChain := #[]) : VerticalSegment :=
   { segmentId
     joinedSegmentIds := #[segmentId]
     hitbox := ElkRectangle.ofValues (fmin bend1.x bend2.x) (fmin bend1.y bend2.y)
@@ -82,6 +98,7 @@ def new (segmentId : Nat) (bend1 bend2 : KVector) (edge : LEdgeId) (bendIndices 
     representedEdges := #[edge]
     representedEdgeKeys := #[edge]
     affectedBends := bendIndices.map (edge, ·)
+    junctionPoints := junctionPointsAt edge jps bend1.x
     potentialGroupParents := match potentialParent with
       | some p => #[p]
       | none => #[] }
@@ -89,10 +106,11 @@ def new (segmentId : Nat) (bend1 bend2 : KVector) (edge : LEdgeId) (bendIndices 
 /-- Rust `CompactionContext::new_spline_vertical_segment` (Java `collectVerticalSegmentsSplines`)
 for a non-straight spline segment with handle `splineSegment`, its bounding box and its first
 edge. -/
-def newSpline (segmentId : Nat) (hitbox : ElkRectangle) (edge : LEdgeId) (splineSegment : Nat) :
-    VerticalSegment :=
+def newSpline (segmentId : Nat) (hitbox : ElkRectangle) (edge : LEdgeId) (splineSegment : Nat)
+    (jps : KVectorChain := #[]) : VerticalSegment :=
   { segmentId
     joinedSegmentIds := #[segmentId]
+    junctionPoints := junctionPointsAt edge jps hitbox.x
     hitbox
     representedEdges := #[edge]
     representedEdgeKeys := #[edge]
@@ -122,6 +140,7 @@ def joinWith (left right : VerticalSegment) : VerticalSegment :=
     port := if left.port.isNone then right.port else left.port
     affectedBends := left.affectedBends ++ right.affectedBends
     affectedSplineSegments := left.affectedSplineSegments ++ right.affectedSplineSegments
+    junctionPoints := left.junctionPoints ++ right.junctionPoints
     potentialGroupParents := left.potentialGroupParents ++ right.potentialGroupParents
     hitbox := ElkRectangle.ofValues x y (maxX - x) (maxY - y) }
 

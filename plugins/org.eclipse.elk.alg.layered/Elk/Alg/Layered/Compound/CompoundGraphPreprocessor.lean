@@ -212,7 +212,7 @@ def createExternalPortDummyFor (graph : LGraphId) (parentNode : LNodeId) (portTy
       let op ← getPort outsidePort
       let props ← portPropertyHolder outsidePort
       let (dummy, _) ← LGraphUtil.createExternalPortDummy props portConstraints portSide netFlow
-        ⟨0.0, 0.0⟩ op.position op.size layoutDirection graph
+        none op.position op.size layoutDirection graph
       modifyNode dummy fun nd => { nd with internal := { nd.internal with origin := some (.lPort outsidePort) } }
       putDummy outsidePort dummy
       pure dummy
@@ -220,7 +220,7 @@ def createExternalPortDummyFor (graph : LGraphId) (parentNode : LNodeId) (portTy
       let netFlow : Int := if portType == .input then -1 else 1
       let props ← createExternalPortProperties graph
       let (dummy, _) ← LGraphUtil.createExternalPortDummy props portConstraints portSide netFlow
-        ⟨0.0, 0.0⟩ ⟨0.0, 0.0⟩ ⟨0.0, 0.0⟩ layoutDirection graph
+        none ⟨fl0p0, fl0p0⟩ ⟨fl0p0, fl0p0⟩ layoutDirection graph
       let dummyPort ← createPortForDummy dummy parentNode portType
       modifyNode dummy fun nd => { nd with internal := { nd.internal with origin := some (.lPort dummyPort) } }
       putDummy dummyPort dummy
@@ -405,7 +405,7 @@ def ensureExternalPortDummy (graph : LGraphId) (port : LPortId) (fallbackConstra
   let props ← portPropertyHolder port
   -- Java inside-self-loop path uses PortConstraints.FREE with null position/node-size context.
   let (dummy, _) ← LGraphUtil.createExternalPortDummy props fallbackConstraints pt.side netFlow
-    ⟨0.0, 0.0⟩ ⟨0.0, 0.0⟩ pt.size direction graph
+    none ⟨fl0p0, fl0p0⟩ pt.size direction graph
   modifyNode dummy fun nd => { nd with internal := { nd.internal with origin := some (.lPort port) } }
   putDummy port dummy
   modifyGraph graph fun g => { g with layerlessNodes := g.layerlessNodes.push dummy }
@@ -449,7 +449,7 @@ private def createPortDummiesOfCompoundNode (nestedGraph : LGraphId) (node : LNo
       let pt ← getPort port
       let props ← portPropertyHolder port
       let (dummy, _) ← LGraphUtil.createExternalPortDummy props portConstraints pt.side (-pt.netFlow)
-        ⟨fl0p0, fl0p0⟩ ⟨fl0p0, fl0p0⟩ pt.size direction nestedGraph
+        none ⟨fl0p0, fl0p0⟩ pt.size direction nestedGraph
       modifyNode dummy fun x => { x with internal := { x.internal with origin := some (.lPort port) } }
       putDummy port dummy
       modifyGraph nestedGraph fun g => { g with layerlessNodes := g.layerlessNodes.push dummy }

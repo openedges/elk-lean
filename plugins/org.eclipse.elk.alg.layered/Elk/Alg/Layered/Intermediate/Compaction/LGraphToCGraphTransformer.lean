@@ -48,10 +48,15 @@ of a `CGraph`, and the application of the compacted positions back to the `LGrap
   `HorizontalGraphCompactor.splineRouteAccess` is the real access used by the processor,
   `SplineRouteAccess.unavailable` reports no routes.
 
+## ELK Java followed where elk-rs differs (agent EXT)
+* the last regular segment of an outgoing edge compares the *second to last* bend point with the
+  target hitbox (`bend1` is not advanced in the last iteration; elk-rs: the last one);
+* `applyLayout` moves the junction points of the segments and moves every listed bend point, spline
+  bounding box and junction point once per occurrence and for any movement
+  (`applySegmentPositions`).
+
 ## Differences to Java (Rust followed)
-* the last regular segment of an outgoing edge compares the *last* bend point with the target
-  hitbox (Java: the second to last one);
-* junction points are not moved; comment offsets are kept in node order (Java `HashMap`);
+* comment offsets are kept in node order (Java `HashMap`);
 * predefined constraints are deduplicated and never connect a `CNode` to itself;
 * `adjustSplineControlPoints` advances past straight segments (the Java loop does not);
 * the node groups have no `master` (Rust `CGroup::create`); `EdgeAwareScanlineConstraintCalculation`
@@ -175,7 +180,8 @@ def allocateSegmentId : TransformM Nat :=
 def newVerticalSegment (bend1 bend2 : KVector) (edge : LEdgeId) (bendIndices : Array Nat)
     (potentialParent : Option CNodeId) : TransformM VerticalSegment := do
   let segmentId ← allocateSegmentId
-  return VerticalSegment.new segmentId bend1 bend2 edge bendIndices potentialParent
+  let jps := (← getEdge edge).props.getD LayeredOptions.JUNCTION_POINTS #[]
+  return VerticalSegment.new segmentId bend1 bend2 edge bendIndices potentialParent jps
 
 /-- Rust `capture_comment_offset_if_needed(node)`: a comment box with edges is not compacted but
 remembered with its offset to the other end of its first connected edge. -/
@@ -272,7 +278,9 @@ private def outgoingEdgeSegments (cNode : CNodeId) (nodeHitbox : ElkRectangle) (
         s := ignoreFlags s bend2.y nodeHitbox
       segments := segments.push s
       lastRegularSegmentIndex := some (segments.size - 1)
-    bend1 := bend2
+    -- Java `if (bends.hasNext()) bend1 = bend2;`: after the loop `bend1` is the second to last bend
+    -- point, which decides the spacing flags of the last segment below (elk-rs: the last one)
+    if i + 1 < bendPoints.size then bend1 := bend2
   if let some index := lastRegularSegmentIndex then
     if let some box ← targetHitbox ed.target then
       let y := bend1.y
@@ -332,7 +340,8 @@ def collectVerticalSegmentsSplines : TransformM (Array VerticalSegment) := do
         let some representative := view.edges[0]? | continue
         if view.isStraight then continue
         let segmentId ← allocateSegmentId
-        let segment := VerticalSegment.newSpline segmentId view.boundingBox representative splineSegment
+        let jps := (← getEdge representative).props.getD LayeredOptions.JUNCTION_POINTS #[]
+        let segment := VerticalSegment.newSpline segmentId view.boundingBox representative splineSegment jps
         if let some lastId := lastNonStraightSegmentId then
           if let some index := segmentIdToIndex.get? lastId then
             segments := segments.modifyIn index fun s =>
@@ -462,34 +471,39 @@ def applyCommentPositions (ctx : CompactionContext) : LayeredM Unit := do
     modifyNode item.comment fun nd =>
       { nd with position := ⟨anchor.x + item.offset.x, anchor.y + item.offset.y⟩ }
 
-/-- Rust `apply_segment_positions`: moves the affected bend points and spline segments of every
-moved segment by its x movement (each bend point / spline segment once per segment). -/
+/-- Java `applyLayout`'s segment step: every moved segment moves its affected bend points, spline
+bounding boxes and junction points by its x movement — every occurrence in the lists, like Java's
+`forEach` over the joined lists (a bend point shared by a north/south segment and the regular
+segment it was joined with moves twice), and also for a movement within the fuzzy tolerance
+(elk-rs: each element once per segment, nothing below the tolerance, no junction points). -/
 def applySegmentPositions (ctx : CompactionContext) : LayeredM Unit := do
   for i in [0:ctx.cGraph.cNodes.size] do
     let .segment segmentIndex := ctx.cnodeOrigin[i]?.getD (.node ⟨0⟩) | continue
     let some delta := ctx.deltaX ⟨i⟩ | continue
-    if CompareFuzzy.eq delta fl0p0 then continue
     let some segment := ctx.segments[segmentIndex]? | continue
-    let mut adjusted : Std.HashSet (LEdgeId × Nat) := {}
     for (edge, bendIndex) in segment.affectedBends do
-      if adjusted.contains (edge, bendIndex) then continue
-      adjusted := adjusted.insert (edge, bendIndex)
       modifyEdge edge fun ed =>
         if bendIndex < ed.bendPoints.size then
           { ed with bendPoints := ed.bendPoints.modifyIn bendIndex fun p => { p with x := p.x + delta } }
         else ed
-    let mut adjustedSplineSegments : Std.HashSet Nat := {}
     for splineSegment in segment.affectedSplineSegments do
-      if adjustedSplineSegments.contains splineSegment then continue
-      adjustedSplineSegments := adjustedSplineSegments.insert splineSegment
       ctx.splines.modifyBoundingBox splineSegment fun bb => { bb with x := bb.x + delta }
+    for (edge, jpIndex) in segment.junctionPoints do
+      modifyEdge edge fun ed =>
+        match ed.props.get LayeredOptions.JUNCTION_POINTS with
+        | some jps =>
+          if jpIndex < jps.size then
+            let moved := jps.modifyIn jpIndex fun p => { p with x := p.x + delta }
+            { ed with props := ed.props.set LayeredOptions.JUNCTION_POINTS moved }
+          else ed
+        | none => ed
 
-/-- Rust `apply_spline_self_loop_offsets`: the bend points of self loops of moved nodes move along. -/
+/-- Java's spline self loop step: the bend points of self loops of the nodes move along (by any
+movement, like Java; elk-rs skipped movements within the fuzzy tolerance). -/
 def applySplineSelfLoopOffsets (ctx : CompactionContext) : LayeredM Unit := do
   for i in [0:ctx.cGraph.cNodes.size] do
     let .node node := ctx.cnodeOrigin[i]?.getD (.segment 0) | continue
     let some delta := ctx.deltaX ⟨i⟩ | continue
-    if CompareFuzzy.eq delta fl0p0 then continue
     for edge in (← withArena (·.nodeOutgoingEdges node)) do
       if !(← withArena (·.edgeIsSelfLoop edge)) then continue
       modifyEdge edge fun ed => { ed with bendPoints := ed.bendPoints.offsetValues delta fl0p0 }
@@ -564,12 +578,11 @@ def adjustStraightSplineSegments (ctx : CompactionContext) : LayeredM Unit := do
       if let some spline ← ctx.splines.routeStart edge then
         ctx.adjustSplineControlPoints spline
 
-/-- Rust `apply_self_loop_label_offsets`: the labels of self loops of moved nodes move along. -/
+/-- Java's self loop label step: the labels of self loops of the nodes move along (any movement). -/
 def applySelfLoopLabelOffsets (ctx : CompactionContext) : LayeredM Unit := do
   for i in [0:ctx.cGraph.cNodes.size] do
     let .node node := ctx.cnodeOrigin[i]?.getD (.segment 0) | continue
     let some delta := ctx.deltaX ⟨i⟩ | continue
-    if CompareFuzzy.eq delta fl0p0 then continue
     for edge in (← withArena (·.nodeOutgoingEdges node)) do
       if !(← withArena (·.edgeIsSelfLoop edge)) then continue
       for label in (← getEdge edge).labels do

@@ -24,8 +24,8 @@ dummy as *hierarchical* influence; the graph is laid out bottom up when the norm
 Nodes are visited layer by layer in the order given; within a layer north/south port dummies are
 collected and visited after the other nodes of that layer. The outgoing edges of a node are taken
 port by port (`LNode.getOutgoingEdges()`), the north/south ports with `getPortSideView(NORTH)` then
-`getPortSideView(SOUTH)`. The node infos are indexed by `[Layer.id][LNode.id]` and grown on demand
-(Rust `node_info_for`); all counters are `i32` (`Int`), the final ratio is `f64` (`INFINITY` when
+`getPortSideView(SOUTH)`. The node infos are indexed by `[Layer.id][LNode.id]` in the table sized by
+the initialisation, with Java's exceptions for a node outside it (`slotOf`); all counters are `i32` (`Int`), the final ratio is `f64` (`INFINITY` when
 there are no paths at all).
 -/
 namespace Elk.Alg.Layered.P3Order
@@ -72,54 +72,50 @@ def new (lGraph : LGraphId) (parent : Option LNodeId) (hasParent crossMinDetermi
 /-! ## Node info table -/
 
 
-/-- `layer_id(node)`/`node_id(node)`: `Layer.id as usize` (`0` without a layer) and `LNode.id as usize`. -/
-def nodeKey (a : LGraphArena) (n : LNodeId) : Nat × Nat :=
+/-- Java `nodeInfoFor(n)` = `nodeInfo[n.getLayer().id][n.id]`: the slot of a node in the table that
+`initAtLayerLevel` sized (one row per layer of the node order, one slot per node). Like Java, a node
+without layer fails with the `NullPointerException` of `getLayer().id`, and a stale `Layer.id` or
+`LNode.id` outside the table (the north/south `PORT_DUMMY` of a port can be a node of another graph:
+the external port dummy of a compound node's nested graph, removed from its layer by
+`HierarchicalPortConstraintProcessor` or numbered by that graph) with an
+`ArrayIndexOutOfBoundsException`; an id inside the table addresses whatever slot it names (elk-rs and
+elk-lean before EXT grew the table instead and took layer `0` for a node without layer). -/
+def slotOf (info : Array (Array NodeInfo)) (a : LGraphArena) (n : LNodeId) : Except String (Nat × Nat) := do
   let nd := a.node n
-  let li := match nd.layer with
-    | some l => asUsize (a.layer l).id
-    | none => 0
-  (li, asUsize nd.id)
+  let some l := nd.layer
+    | throw ("java.lang.NullPointerException: Cannot read field \"id\" because the return value of " ++
+        "\"org.eclipse.elk.alg.layered.graph.LNode.getLayer()\" is null")
+  let li := (a.layer l).id
+  if li < 0 || li >= info.size then
+    throw s!"java.lang.ArrayIndexOutOfBoundsException: Index {li} out of bounds for length {info.size}"
+  let row := info[li.toNat]!
+  let ni := nd.id
+  if ni < 0 || ni >= row.size then
+    throw s!"java.lang.ArrayIndexOutOfBoundsException: Index {ni} out of bounds for length {row.size}"
+  return (li.toNat, ni.toNat)
 
-/-- The growth part of `node_info_for(node)`: the table has a slot `[li][ni]` afterwards. -/
-def ensureSlot (info : Array (Array NodeInfo)) (li ni : Nat) : Array (Array NodeInfo) :=
-  -- indices from `2^32` on (negative ids cast to `usize`, which Rust's `resize` could not allocate)
-  -- are ignored instead of growing the table; tested by a shift because a `Nat` constant above
-  -- `2^32` is parsed from a string with GMP on every evaluation
-  if li >>> 32 != 0 || ni >>> 32 != 0 then info
-  else
-    let info := if info.size <= li then info ++ Array.replicate (li + 1 - info.size) #[] else info
-    info.modify li fun row => if row.size <= ni then row ++ Array.replicate (ni + 1 - row.size) (default : NodeInfo) else row
-
-/-- The info of slot `[li][ni]` (default when missing). -/
+/-- The info in slot `[li][ni]` (a slot returned by `slotOf`). -/
 @[inline] def infoAt (info : Array (Array NodeInfo)) (li ni : Nat) : NodeInfo :=
   ((info[li]?).bind (·[ni]?)).getD default
 
-/-- `node_info_for(node)` followed by an update of the info. -/
-def updateInfo (info : Array (Array NodeInfo)) (a : LGraphArena) (n : LNodeId) (f : NodeInfo → NodeInfo) :
-    Array (Array NodeInfo) :=
-  let (li, ni) := nodeKey a n
-  (ensureSlot info li ni).modify li (·.modifyIn ni f)
+/-- Replaces the info in slot `[li][ni]`. -/
+@[inline] def setInfo (info : Array (Array NodeInfo)) (li ni : Nat) (v : NodeInfo) : Array (Array NodeInfo) :=
+  info.modify li (·.set! ni v)
 
-/-- `node_info_for(node)` as a value (the table grows like in Rust). -/
-def infoFor (info : Array (Array NodeInfo)) (a : LGraphArena) (n : LNodeId) : Array (Array NodeInfo) × NodeInfo :=
-  let (li, ni) := nodeKey a n
-  let info := ensureSlot info li ni
-  (info, infoAt info li ni)
-
-/-- `transfer_info_to(current_info, target)`: the target's info absorbs `current` and counts one more
+/-- `transferInfoTo(currentNode, target)`: the target's info absorbs `current` and counts one more
 connected edge. -/
 def transferInfoTo (info : Array (Array NodeInfo)) (a : LGraphArena) (current : NodeInfo) (target : LNodeId) :
-    Array (Array NodeInfo) :=
-  updateInfo info a target fun t =>
-    let t := t.transfer current
-    { t with connectedEdges := t.connectedEdges + 1 }
+    Except String (Array (Array NodeInfo)) := do
+  let (li, ni) ← slotOf info a target
+  let t := (infoAt info li ni).transfer current
+  return setInfo info li ni { t with connectedEdges := t.connectedEdges + 1 }
 
-/-- `transfer_info_to_target(current_info, edge)`: the target node of the edge, if any. -/
+/-- `transferInfoToTarget(currentNode, edge)`: the target node of the edge, if any. -/
 def transferInfoToTarget (info : Array (Array NodeInfo)) (a : LGraphArena) (current : NodeInfo) (edge : LEdgeId) :
-    Array (Array NodeInfo) :=
+    Except String (Array (Array NodeInfo)) :=
   match (a.edge edge).target.bind fun p => (a.port p).owner with
   | some target => transferInfoTo info a current target
-  | none => info
+  | none => pure info
 
 /-! ## Predicates -/
 
@@ -150,64 +146,60 @@ def isEasternDummy (a : LGraphArena) (n : LNodeId) : Bool :=
 
 /-! ## The decision -/
 
-/-- The accumulator of `use_bottom_up_with_boundary`. -/
+/-- The accumulator of `useBottomUp`. -/
 structure Acc where
   info : Array (Array NodeInfo)
   pathsToRandom : Int := 0
   pathsToHierarchical : Int := 0
 
 /-- The edge loop of a node: every outgoing edge adds the node's influences to the path counts and
-transfers the info to the edge's target. -/
-def propagateAlongEdges (a : LGraphArena) (acc : Acc) (node : LNodeId) (current : NodeInfo) : Acc := Id.run do
+transfers the info to the edge's target. Java's `currentNode` is the table entry itself, so it is
+read again for every edge (a stale target slot can be the node's own). -/
+def propagateAlongEdges (a : LGraphArena) (acc : Acc) (node : LNodeId) (li ni : Nat) : Except String Acc := do
   let mut acc := acc
   for edge in a.nodeOutgoingEdges node do
+    let current := infoAt acc.info li ni
     acc := { acc with
       pathsToRandom := acc.pathsToRandom + current.randomInfluence
       pathsToHierarchical := acc.pathsToHierarchical + current.hierarchicalInfluence
-      info := transferInfoToTarget acc.info a current edge }
+      info := ← transferInfoToTarget acc.info a current edge }
   return acc
 
-/-- One node of a layer that is no north/south port dummy (the body of the inner Rust loop). -/
-def visitNode (a : LGraphArena) (acc : Acc) (node : LNodeId) : Acc := Id.run do
-  let isExternal := (a.node node).type == .externalPort
-  let isEastern := isEasternDummy a node
-  let hasNoWestern := hasNoPortsWithEdgesOn a node .west
-  let hasNoEastern := hasNoPortsWithEdgesOn a node .east
-  let (info, info0) := infoFor acc.info a node
-  let mut acc := { acc with info }
-  let mut current := info0
-  if isExternal then
-    current := { current with hierarchicalInfluence := 1 }
-    if isEastern then
-      acc := { acc with pathsToHierarchical := acc.pathsToHierarchical + current.connectedEdges }
-  else if hasNoWestern then
-    current := { current with randomInfluence := 1 }
-  else if hasNoEastern then
-    acc := { acc with pathsToRandom := acc.pathsToRandom + current.connectedEdges }
-  let cur := current
-  acc := { acc with info := updateInfo acc.info a node fun _ => cur }
-  acc := propagateAlongEdges a acc node current
+/-- One node of a layer that is no north/south port dummy (the body of Java's inner loop). -/
+def visitNode (a : LGraphArena) (acc : Acc) (node : LNodeId) : Except String Acc := do
+  let (li, ni) ← slotOf acc.info a node
+  let mut acc := acc
+  if (a.node node).type == .externalPort then
+    acc := { acc with info := setInfo acc.info li ni { infoAt acc.info li ni with hierarchicalInfluence := 1 } }
+    if isEasternDummy a node then
+      acc := { acc with pathsToHierarchical := acc.pathsToHierarchical + (infoAt acc.info li ni).connectedEdges }
+  else if hasNoPortsWithEdgesOn a node .west then
+    acc := { acc with info := setInfo acc.info li ni { infoAt acc.info li ni with randomInfluence := 1 } }
+  else if hasNoPortsWithEdgesOn a node .east then
+    acc := { acc with pathsToRandom := acc.pathsToRandom + (infoAt acc.info li ni).connectedEdges }
+  acc ← propagateAlongEdges a acc node li ni
   let northSouthPorts := a.nodePortSideView node .north ++ a.nodePortSideView node .south
   for port in northSouthPorts do
     if let some nsDummy := (a.port port).internal.portDummy then
+      let current := infoAt acc.info li ni
       acc := { acc with
         pathsToRandom := acc.pathsToRandom + current.randomInfluence
         pathsToHierarchical := acc.pathsToHierarchical + current.hierarchicalInfluence
-        info := transferInfoTo acc.info a current nsDummy }
+        info := ← transferInfoTo acc.info a current nsDummy }
   return acc
 
 /-- One layer: the regular nodes, then the collected north/south port dummies. -/
-def visitLayer (a : LGraphArena) (acc : Acc) (layer : Array LNodeId) : Acc := Id.run do
+def visitLayer (a : LGraphArena) (acc : Acc) (layer : Array LNodeId) : Except String Acc := do
   let mut acc := acc
   let mut nsPortDummies : Array LNodeId := #[]
   for node in layer do
     if (a.node node).type == .northSouthPort then
       nsPortDummies := nsPortDummies.push node
     else
-      acc := visitNode a acc node
+      acc ← visitNode a acc node
   for node in nsPortDummies do
-    let (info, current) := infoFor acc.info a node
-    acc := propagateAlongEdges a { acc with info } node current
+    let (li, ni) ← slotOf acc.info a node
+    acc ← propagateAlongEdges a acc node li ni
   return acc
 
 /-- `use_bottom_up_with_boundary(node_order, boundary)`. -/
@@ -219,7 +211,9 @@ def useBottomUpWithBoundary (d : LayerSweepTypeDecider) (nodeOrder : Array (Arra
   if d.crossMinDeterministic then
     return false
   let info ← d.nodeInfo.swap #[]
-  let acc := nodeOrder.foldl (visitLayer a) { info }
+  let acc ← match nodeOrder.foldlM (visitLayer a) { info } with
+    | .ok acc => pure acc
+    | .error msg => throw (IO.userError msg)
   d.nodeInfo.set acc.info
   let allPaths := Float.ofInt (acc.pathsToRandom + acc.pathsToHierarchical)
   let normalized := if allPaths == 0.0 then Elk.Core.Util.Float.posInf
@@ -248,7 +242,7 @@ def initAtLayerLevel (d : LayerSweepTypeDecider) (l : Nat) (order : Array (Array
 def initAtNodeLevel (d : LayerSweepTypeDecider) (l n : Nat) (order : Array (Array LNodeId)) : LayeredM Unit := do
   let some node := (order[l]?).bind (·[n]?) | return
   modifyNode node fun x => { x with id := n }
-  d.nodeInfo.modify fun info => (ensureSlot info l n).modify l (·.set! n default)
+  d.nodeInfo.modify fun info => info.modify l (·.set! n default)
 
 /-- The `IInitializable` implementation (layer and node level). -/
 def initializable (d : LayerSweepTypeDecider) : Initializable where

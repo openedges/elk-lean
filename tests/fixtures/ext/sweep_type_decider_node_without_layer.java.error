@@ -1,0 +1,1 @@
+java.lang.NullPointerException: Cannot read field "id" because the return value of "org.eclipse.elk.alg.layered.graph.LNode.getLayer()" is null

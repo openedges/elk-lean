@@ -14,8 +14,10 @@
 #    are DisCo layout nodes with random components and DisCo options; "h" sets (`--sets h`,
 #    `gen_hierarchical_mo_graphs.py`) are INCLUDE_CHILDREN layered graphs with model order options and
 #    NO_LAYOUT nodes; "w" sets (`--sets w`, `gen_wrapping_graphs.py`) are layered graphs with graph
-#    wrapping, comment boxes, hypernodes, edge labels, splines, BK alignments and merged edges.
-#    Default `s,v` (fast); the full tracked run is `--sets s,v,d,o,p,c,h,w` (TESTING.md 2B);
+#    wrapping, comment boxes, hypernodes, edge labels, splines, BK alignments and merged edges; "x" sets
+#    (`--sets x`, `gen_external_port_graphs.py`) are compound nodes with external ports, port constraints,
+#    labels and alignment, mixed hierarchy handling and cross-hierarchy edges.
+#    Default `s,v` (fast); the full tracked run is `--sets s,v,d,o,p,c,h,w,x` (TESTING.md 2B);
 # 2. ELK Java (`ElkJavaBaseline`, unmodified Maven Central 0.12.0) one JVM per set with a watchdog;
 # 3. elk-lean `elk layout` one process per input with a time limit; optionally elk-rs (`--with-oracle`);
 # 4. compare (tol 0 and 1e-6, error class and text) -> <out_dir>/report.md, <out_dir>/details.tsv,
@@ -32,7 +34,7 @@ if [ ! -d "$REF" ]; then
   COMMON=$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
   if [ -n "$COMMON" ]; then REF="$(dirname "$COMMON")/.reference"; fi
 fi
-[ $# -ge 1 ] || { sed -n '2,26p' "$0"; exit 2; }
+[ $# -ge 1 ] || { sed -n '2,28p' "$0"; exit 2; }
 OUT=$1
 shift
 PUBLISH=1

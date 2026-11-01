@@ -1,0 +1,77 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g259_n1",
+   "width": 20,
+   "height": 20,
+   "ports": [
+    {
+     "id": "g259_n1_p0",
+     "width": 12,
+     "height": 4,
+     "layoutOptions": {},
+     "labels": [
+      {
+       "text": "g259_n1_p0_l0",
+       "width": 6,
+       "height": 5
+      }
+     ]
+    },
+    {
+     "id": "g259_n1_p1",
+     "width": 8,
+     "height": 6,
+     "x": 16.0,
+     "y": 12.7,
+     "layoutOptions": {}
+    }
+   ],
+   "children": [
+    {
+     "id": "g259_n3",
+     "width": 80,
+     "height": 120,
+     "ports": [],
+     "children": [
+      {
+       "id": "g259_n5",
+       "width": 30,
+       "height": 20,
+       "ports": [
+        {
+         "id": "g259_n5_p1",
+         "width": 6,
+         "height": 6
+        }
+       ],
+       "layoutOptions": {}
+      }
+     ],
+     "layoutOptions": {},
+     "edges": []
+    }
+   ],
+   "layoutOptions": {
+    "elk.portLabels.placement": "[INSIDE, ALWAYS_OTHER_SAME_SIDE]",
+    "elk.hierarchyHandling": "INCLUDE_CHILDREN"
+   },
+   "edges": []
+  }
+ ],
+ "edges": [
+  {
+   "id": "g259_e55",
+   "sources": [
+    "g259_n5_p1"
+   ],
+   "targets": [
+    "g259_n1_p1"
+   ]
+  }
+ ]
+}

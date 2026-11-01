@@ -1,0 +1,60 @@
+{
+ "id": "root",
+ "layoutOptions": {
+  "elk.algorithm": "layered"
+ },
+ "children": [
+  {
+   "id": "g452_n1",
+   "width": 40,
+   "height": 0,
+   "ports": [
+    {
+     "id": "g452_n1_p2",
+     "width": 0,
+     "height": 8,
+     "layoutOptions": {}
+    },
+    {
+     "id": "g452_n1_p3",
+     "width": 0,
+     "height": 12,
+     "layoutOptions": {
+      "elk.port.index": 0
+     }
+    }
+   ],
+   "children": [
+    {
+     "id": "g452_n5",
+     "width": 40,
+     "height": 0,
+     "ports": [
+      {
+       "id": "g452_n5_p0",
+       "width": 4,
+       "height": 6,
+       "layoutOptions": {}
+      }
+     ],
+     "layoutOptions": {}
+    }
+   ],
+   "layoutOptions": {
+    "elk.portConstraints": "FIXED_ORDER"
+   },
+   "edges": [
+    {
+     "id": "g452_e21",
+     "sources": [
+      "g452_n5_p0"
+     ],
+     "targets": [
+      "g452_n1_p3"
+     ]
+    }
+   ]
+  }
+ ],
+ "edges": []
+}

@@ -117,8 +117,22 @@ def modifySplineSegment (graph : LGraphId) (id : SplineSegmentId) (f : SplineSeg
 
 namespace SplineSegment
 
+/-- Java's `NullPointerException` of `anchorY(p)` (and of `FinalSplineBendpointsCalculator`) when a
+northern or southern port has no `SPLINE_NS_PORT_Y_COORD` to unbox. -/
+def anchorYNullPointer : String :=
+  "java.lang.NullPointerException: Cannot invoke \"java.lang.Double.doubleValue()\" because the return value of " ++
+    "\"org.eclipse.elk.alg.layered.graph.LPort.getProperty(org.eclipse.elk.graph.properties.IProperty)\" is null"
+
+/-- Whether Java's `anchorY(port)` fails: a northern/southern port without `SPLINE_NS_PORT_Y_COORD`
+(only `NorthSouthPortPostprocessor` sets it, on the origin ports of north/south dummies; the port of a
+northern/southern external port dummy is a `SOUTH`/`NORTH` port without it). -/
+def anchorYFails (a : LGraphArena) (port : LPortId) : Bool :=
+  let pt := a.port port
+  (pt.side == .north || pt.side == .south) && (splineNsPortYCoordOf pt).isNone
+
 /-- `anchorY(port)`: for northern/southern ports the y of the removed north/south dummy
-(`SPLINE_NS_PORT_Y_COORD`, falling back to the absolute anchor like Rust), else the absolute anchor y. -/
+(`SPLINE_NS_PORT_Y_COORD`; the callers check `anchorYFails` first, the fallback to the absolute anchor
+is never taken), else the absolute anchor y. -/
 def anchorY (a : LGraphArena) (port : LPortId) : Float :=
   let pt := a.port port
   let absY := absoluteAnchorY a port
@@ -490,7 +504,7 @@ def add (b : SegmentBuild) (segment : SplineSegment) (edges : Array LEdgeId) (hy
 /-- `createSplineSegmentsForHyperEdges` for one `singlePort`: the remaining (`REVERSED == reversed`),
 non-straight edges of the port going up resp. down form a hyperedge if there are at least two of them. -/
 def addHyperEdgesOf (a : LGraphArena) (leftSet : Std.HashSet LPortId) (sideToProcess : SideToProcess)
-    (reversed : Bool) (b : SegmentBuild) (singlePort : LPortId) : SegmentBuild := Id.run do
+    (reversed : Bool) (b : SegmentBuild) (singlePort : LPortId) : Except String SegmentBuild := Id.run do
   let singlePortPosition := absoluteAnchorY a singlePort
   let mut upEdges : Array (SideToProcess × LEdgeId) := #[]
   let mut downEdges : Array (SideToProcess × LEdgeId) := #[]
@@ -507,21 +521,29 @@ def addHyperEdgesOf (a : LGraphArena) (leftSet : Std.HashSet LPortId) (sideToPro
       upEdges := upEdges.push (side, edge)
     else
       downEdges := downEdges.push (side, edge)
+  -- Java's `anchorY` of the hyperedge's ports (`NullPointerException`, see `anchorYFails`)
+  let fails (es : Array (SideToProcess × LEdgeId)) : Bool :=
+    SplineSegment.anchorYFails a singlePort || es.any fun (_, e) =>
+      let ed := a.edge e
+      (ed.source.map (SplineSegment.anchorYFails a)).getD false ||
+        (ed.target.map (SplineSegment.anchorYFails a)).getD false
   let mut b := b
   if upEdges.size > 1 then
+    if fails upEdges then return .error SplineSegment.anchorYNullPointer
     b := b.add (SplineSegment.newHyperEdge a singlePort upEdges sideToProcess) (upEdges.map (·.2)) true
   if downEdges.size > 1 then
+    if fails downEdges then return .error SplineSegment.anchorYNullPointer
     b := b.add (SplineSegment.newHyperEdge a singlePort downEdges sideToProcess) (downEdges.map (·.2)) true
-  return b
+  return .ok b
 
 /-- `createSplineSegmentsForHyperEdges(leftPorts, rightPorts, sideToProcess, reversed, …)`: the
 hyperedges of every port of the processed side (`addHyperEdgesOf`). -/
 def addHyperEdges (a : LGraphArena) (leftPorts rightPorts : Array LPortId) (leftSet : Std.HashSet LPortId)
-    (sideToProcess : SideToProcess) (reversed : Bool) (b : SegmentBuild) : SegmentBuild :=
+    (sideToProcess : SideToProcess) (reversed : Bool) (b : SegmentBuild) : Except String SegmentBuild :=
   let portsToProcess := match sideToProcess with
     | .left => leftPorts
     | .right => rightPorts
-  portsToProcess.foldl (addHyperEdgesOf a leftSet sideToProcess reversed) b
+  portsToProcess.foldlM (addHyperEdgesOf a leftSet sideToProcess reversed) b
 
 /-- `createSplineSegments(edges, leftPorts, rightPorts, hyperEdges)`: a single-edge segment for every
 remaining edge; an error message if an edge's port is in neither port set. -/
@@ -539,6 +561,8 @@ def addSingleEdges (a : LGraphArena) (leftSet rightSet : Std.HashSet LPortId) (b
       if leftSet.contains targetPort then pure SideToProcess.left
       else if rightSet.contains targetPort then pure SideToProcess.right
       else return .error "java.lang.IllegalArgumentException: Target port must be in one of the port sets."
+    if SplineSegment.anchorYFails a sourcePort || SplineSegment.anchorYFails a targetPort then
+      return .error SplineSegment.anchorYNullPointer
     b := b.add (SplineSegment.newSingleEdge a edge sourceSide targetSide) #[edge] false
   return .ok b
 
@@ -1009,11 +1033,13 @@ def createSegmentsAndComputeRanking (graph : LGraphId) : RouterM Unit := do
       { s with segments := #[], edgeToSegmentMap := {}, splineSegmentsLayer := #[], edgesRemainingLayer := #[],
                edgesRemainingSet := {} })
   let built ← withArena fun a =>
-    let b := b.addHyperEdges a leftPorts rightPorts leftSet .left true
-      |>.addHyperEdges a leftPorts rightPorts leftSet .left false
-      |>.addHyperEdges a leftPorts rightPorts leftSet .right true
-      |>.addHyperEdges a leftPorts rightPorts leftSet .right false
-    (b.addSingleEdges a leftSet rightSet).map fun b => (b, GapSegments.read a b.segments b.layerSegments)
+    (do
+      let b ← b.addHyperEdges a leftPorts rightPorts leftSet .left true
+      let b ← b.addHyperEdges a leftPorts rightPorts leftSet .left false
+      let b ← b.addHyperEdges a leftPorts rightPorts leftSet .right true
+      let b ← b.addHyperEdges a leftPorts rightPorts leftSet .right false
+      b.addSingleEdges a leftSet rightSet : Except String SegmentBuild).map fun b =>
+        (b, GapSegments.read a b.segments b.layerSegments)
   let (layerSegments, gs) ← match built with
     | .error msg => throw (IO.userError msg)
     | .ok (⟨segments, map, layerSegments, remaining, remainingSet⟩, gs) =>

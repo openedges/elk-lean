@@ -23,8 +23,9 @@ overlapping labels on the same side do not share a slot.
    by raw slot, each take the lowest slot above the slots already used at the ports they are
    active at (within the side's port id range) and not used by a crossing label; without ports on
    the side the slot is the loop's rank;
-7. `routingSlotCount`: per side the maximum slot plus one over all loops (unoccupied sides count
-   slot `0`), written to the holder after the shift (Rust comment: Java updates the counts inline).
+7. `routingSlotCount`: like Java's inline update in `setRoutingSlot`, per side the maximum of
+   `slot + 1` over the raw and the shifted slots of the loops occupying it (`0` for a side no loop
+   occupies; elk-rs: final slots of every side of every loop).
 
 The Rust maps keyed by loop pointer (`HashMap<LoopKey, _>`) are arrays indexed by the hyper loop
 index; they are only looked up by key, and the slot count is a maximum over all values. The
@@ -277,15 +278,19 @@ def shiftTowardsNode (loops : Array SelfHyperLoop) (states : Array LoopRoutingSt
     s := shiftTowardsNodeOnSide s side ranges[ElkEnum.ordinal side]! matrix labelIdByLoop activity
   return (s.loops, s.states)
 
-/-- `update_holder_routing_slot_count(holder, states)`: per side `max(slot, 0) + 1`, maximised
-over all loops (index 0 = `UNDEFINED` stays 0). -/
-def routingSlotCount (states : Array LoopRoutingState) : Array Int := Id.run do
+/-- Java's `routingSlotCount`, which `SelfHyperLoop.setRoutingSlot(side, slot)` keeps at
+`max(count, slot + 1)` on every call: the raw slot (`assignRawRoutingSlotsToLoops`) and the shifted
+slot (`shiftTowardsNode`) of every loop on each of its occupied sides. A side no loop occupies keeps
+`0` slots (elk-rs counted every side of every loop with at least one slot, and only the final
+slots). -/
+def routingSlotCount (raw final : Array LoopRoutingState) : Array Int := Id.run do
   let mut counts : Array Int := Array.replicate PORT_SIDE_COUNT 0
-  for state in states do
-    for side in #[PortSide.north, .east, .south, .west] do
-      let sideIdx := ElkEnum.ordinal side
-      let slot := max state.routingSlots[sideIdx]! 0
-      counts := counts.set! sideIdx (max counts[sideIdx]! (slot + 1))
+  for states in #[raw, final] do
+    for state in states do
+      for side in #[PortSide.north, .east, .south, .west] do
+        let sideIdx := ElkEnum.ordinal side
+        if state.occupiedSides[sideIdx]! then
+          counts := counts.set! sideIdx (max counts[sideIdx]! (state.routingSlots[sideIdx]! + 1))
   return counts
 
 /-- `assign_routing_slots(holder, random)` (Java `assignRoutingSlots`), pure: the holder with the
@@ -298,9 +303,9 @@ def assignRoutingSlots (a : LGraphArena) (h : SelfLoopHolder) (random : Random) 
   let (g, activity) := createCrossingGraph loops portCount matrix labelIdByLoop idOf
   let (g, random) := OrthogonalRoutingGenerator.breakNonCriticalCycles g random
   let g := assignRawRoutingSlotsToSegments g
-  let (loops, states) := assignRawRoutingSlotsToLoops loops g
-  let (loops, states) := shiftTowardsNode loops states ranges portCount matrix labelIdByLoop activity
-  ({ h with slHyperLoops := loops, routingSlotCount := routingSlotCount states }, random)
+  let (loops, rawStates) := assignRawRoutingSlotsToLoops loops g
+  let (loops, states) := shiftTowardsNode loops rawStates ranges portCount matrix labelIdByLoop activity
+  ({ h with slHyperLoops := loops, routingSlotCount := routingSlotCount rawStates states }, random)
 
 /-- Monadic wrapper: assigns the routing slots of the holder stored on `n` (no-op without holder)
 and returns the advanced generator. -/

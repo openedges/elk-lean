@@ -45,8 +45,8 @@ def configureSecondIteration (layoutGraph clone : NodeId) (drawing : DrawingData
   let minRowDecrease := props.getD InternalProperties.MIN_ROW_DECREASE Float.posInf
   let targetWidth := props.getD InternalProperties.TARGET_WIDTH fl0p0
   let minWidth := props.getD InternalProperties.MIN_WIDTH fl0p0
-  let drawingRatio := (drawing.drawingWidth + padding.left + padding.right) /
-    (drawing.drawingHeight + padding.top + padding.bottom)
+  let drawingRatio := (drawing.drawingWidth + (padding.left + padding.right)) /
+    (drawing.drawingHeight + (padding.top + padding.bottom))
   let childrenLen := n.children.size
   if childrenLen > 1 && minRowIncrease != Float.posInf && drawingRatio < aspectRatio then
     ElkM.setNodeProp clone InternalProperties.TARGET_WIDTH (targetWidth + minRowIncrease)
