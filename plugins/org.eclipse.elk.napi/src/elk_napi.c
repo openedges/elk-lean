@@ -4,7 +4,9 @@
  * (include/elk_lean.h). Written against the Node-API C interface only (no C++ wrapper).
  *
  * Exports (all synchronous, elk-rs names and semantics):
- *   layout_json(graphJson: string, optionsJson: string) -> string
+ *   layout_json(graphJson: string, optionsJson: string, threads?: number) -> string
+ *       (threads: elk-lean addition, the cap of the parallel sibling layout for this call; omitted
+ *       = the process default, 1 = sequential; the result does not depend on it)
  *   known_layout_algorithms() -> string
  *   known_layout_options() -> string
  *   known_layout_categories() -> string
@@ -16,7 +18,10 @@
  * once per process, on the thread that loads the addon first. Any other thread registers
  * itself with the Lean runtime (elk_lean_thread_init) before its first call and unregisters
  * when its Node environment is torn down. Every engine call holds one process-wide mutex
- * because the layout engine keeps process-global registries.
+ * because the layout engine keeps process-global registries. The engine is initialised with
+ * elk_lean_init_threads(0): the Lean task manager runs and one call may lay out independent
+ * sibling sub-graphs on Lean worker threads (ELK_LEAN_THREADS or min(hardware threads, 8)); those
+ * are Lean's own threads, the JS thread that made the call waits for them inside the call.
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
@@ -65,7 +70,7 @@ static int ensure_engine_locked(void) {
     if (g_init_state == 0) {
         saved_signals saved;
         save_signals(&saved);
-        int rc = elk_lean_init();
+        int rc = elk_lean_init_threads(0);
         restore_signals(&saved);
         g_init_state = rc == 0 ? 1 : -1;
         if (rc == 0) {
@@ -172,16 +177,37 @@ static napi_value call_metadata(napi_env env, metadata_fn fn) {
     return finish(env, out, is_error);
 }
 
-/* layout_json(graphJson, optionsJson): elk-rs layout_api::layout_json. */
+/* layout_json(graphJson, optionsJson, threads?): elk-rs layout_api::layout_json; `threads`
+ * (elk-lean) is the per-call cap of the parallel sibling layout (a positive integer). */
 static napi_value js_layout_json(napi_env env, napi_callback_info info) {
-    size_t argc = 2;
-    napi_value argv[2];
+    size_t argc = 3;
+    napi_value argv[3];
     if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok) {
         napi_throw_error(env, NULL, "elk-lean: cannot read arguments");
         return NULL;
     }
     napi_value undef;
     napi_get_undefined(env, &undef);
+    int32_t threads = 0;
+    if (argc > 2) {
+        napi_valuetype type;
+        if (napi_typeof(env, argv[2], &type) != napi_ok) {
+            napi_throw_error(env, NULL, "elk-lean: cannot inspect argument");
+            return NULL;
+        }
+        if (type == napi_number) {
+            double v = 0;
+            napi_get_value_double(env, argv[2], &v);
+            if (!(v >= 1 && v <= 4096) || v != (double)(int32_t)v) {
+                napi_throw_type_error(env, NULL, "elk-lean: argument 'threads' must be a positive integer");
+                return NULL;
+            }
+            threads = (int32_t)v;
+        } else if (type != napi_undefined && type != napi_null) {
+            napi_throw_type_error(env, NULL, "elk-lean: argument 'threads' must be a positive integer");
+            return NULL;
+        }
+    }
     char *graph = get_string_arg(env, argc > 0 ? argv[0] : undef, "graphJson", 0);
     if (graph == NULL) {
         return NULL;
@@ -202,7 +228,8 @@ static napi_value js_layout_json(napi_env env, napi_callback_info info) {
         return NULL;
     }
     ensure_thread_locked();
-    out = elk_lean_layout_json(graph, options, &is_error);
+    out = threads > 0 ? elk_lean_layout_json_threads(graph, options, threads, &is_error)
+                      : elk_lean_layout_json(graph, options, &is_error);
     pthread_mutex_unlock(&g_lock);
     free(graph);
     free(options);

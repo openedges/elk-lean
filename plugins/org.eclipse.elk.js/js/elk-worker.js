@@ -98,8 +98,11 @@ function handleCommand(backend, msg) {
       // elk-api.js sends JSON strings (graphJson/optionsJson) and gets the result string back;
       // an elkjs-style request with graph/layoutOptions objects is answered with an object.
       if (typeof msg.graphJson === 'string') {
-        return backend.layout_json(msg.graphJson,
-          typeof msg.optionsJson === 'string' ? msg.optionsJson : '{}');
+        var opts = typeof msg.optionsJson === 'string' ? msg.optionsJson : '{}';
+        // elk-lean: per-call thread cap of the parallel layout (native addon only)
+        return typeof msg.threads === 'number'
+          ? backend.layout_json(msg.graphJson, opts, msg.threads)
+          : backend.layout_json(msg.graphJson, opts);
       }
       var graphJson = JSON.stringify(msg.graph);
       var optionsJson = JSON.stringify(msg.layoutOptions || {});

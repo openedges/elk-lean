@@ -1,4 +1,5 @@
 import Elk.Graph
+import Elk.Core.Options.CoreOptions
 import Elk.Core.Parallel.Settings
 /-!
 # Sub-tree forks of the `ElkGraph` arena (elk-lean addition, agent PAR)
@@ -23,6 +24,14 @@ A unit is *closed* (eligible) when every edge contained in `sub(Cᵤ)` or with a
 inside `Cᵤ` (a descendant or a descendant's port) has all its end points in `sub(Cᵤ)`: no
 hierarchy-crossing edge leaves the sub-tree. Edges at `Cᵤ` itself or its own ports may lead anywhere
 (they belong to the parent's layout). Domains of distinct units are disjoint (see the doc).
+
+The algorithms laying out the sub-tree matter as well (`algorithmClass`, from the audit in
+`docs/parallel-layout.md`): the tree walks of radial and vertiflex follow every outgoing edge and map
+ports to their node without a hierarchy check, so an edge between a descendant of `Cᵤ` and `Cᵤ` (or
+one of its ports) lets them walk out of the sub-tree through `Cᵤ` (to siblings and the parent); disco
+and spore delegate to such algorithms. A sub-tree with one of them is eligible only without such an
+edge (`rootLinked`). A sub-tree with an algorithm that is not in either list (e.g. one registered by a
+test) is never eligible.
 
 ## Check and merge
 `checkChunk` / `mergeChunk` compare the chunk's result arena with the original element by element:
@@ -67,6 +76,8 @@ private structure EndPointScan where
   same : Bool := true
   count : Nat := 0
   inside : Array Nat := #[]
+  /-- Owners with an end point at their unit root (the root node or one of its ports). -/
+  atRoot : Array Nat := #[]
 
 private def scanEndPoints (g : ElkGraph) (units : Array NodeId) (nodes ports : Array Nat)
     (eps : Array ConnectableId) (s : EndPointScan) : EndPointScan := Id.run do
@@ -81,7 +92,26 @@ private def scanEndPoints (g : ElkGraph) (units : Array NodeId) (nodes ports : A
         | some n => some n != units[o - 1]?
         | none => false
       if strictlyInside && !s.inside.contains o then s := { s with inside := s.inside.push o }
+      if !strictlyInside && !s.atRoot.contains o then s := { s with atRoot := s.atRoot.push o }
   return s
+
+/-- Algorithms whose layout of a node stays inside the node's sub-tree for every eligible unit (audit). -/
+def subtreeLocalAlgorithms : Array String :=
+  #["org.eclipse.elk.layered", "org.eclipse.elk.force", "org.eclipse.elk.stress", "org.eclipse.elk.mrtree",
+    "org.eclipse.elk.rectpacking", "org.eclipse.elk.topdownpacking", "org.eclipse.elk.box",
+    "org.eclipse.elk.fixed", "org.eclipse.elk.random"]
+
+/-- Algorithms whose tree walks leave the sub-tree through an edge between a descendant and the
+unit root (radial, vertiflex) or that delegate to any algorithm (disco, spore). -/
+def rootWalkingAlgorithms : Array String :=
+  #["org.eclipse.elk.radial", "org.eclipse.elk.vertiflex", "org.eclipse.elk.disco",
+    "org.eclipse.elk.sporeOverlap", "org.eclipse.elk.sporeCompaction"]
+
+/-- `0` = only sub-tree local algorithms, `1` = also root-walking ones, `2` = an unknown one. -/
+def algorithmClass (id : String) : Nat :=
+  if subtreeLocalAlgorithms.contains id then 0
+  else if rootWalkingAlgorithms.contains id then 1
+  else 2
 
 /-- Assigns `owner` to the labels in `todo` and, recursively, to their labels. -/
 private def ownLabels (g : ElkGraph) (labels : Array Nat) (owner : Nat) (todo : Array LabelId) : Array Nat := Id.run do
@@ -117,9 +147,18 @@ def computeOwnership (g : ElkGraph) (units : Array NodeId) : Ownership := Id.run
     if o != 0 then
       for p in g.nodes[i].ports do
         if p.idx < ports.size then ports := ports.set! p.idx o
+  -- algorithms of the sub-trees (resolved algorithm of every owned node)
+  let mut algClass : Array Nat := Array.replicate units.size 0
+  for h : i in [0:g.nodes.size] do
+    let o := nodes[i]?.getD 0
+    if o != 0 then
+      if let some id := g.nodes[i].props.get Elk.Core.Options.CoreOptions.RESOLVED_ALGORITHM then
+        let c := algorithmClass id
+        if c > (algClass[o - 1]?.getD 0) then algClass := algClass.set! (o - 1) c
   -- edges and the eligibility test
   let mut edges : Array Nat := Array.replicate g.edges.size 0
-  let mut closed : Array Bool := Array.replicate units.size true
+  let mut closed : Array Bool := algClass.map (· < 2)
+  let mut rootLinked : Array Bool := Array.replicate units.size false
   for h : e in [0:g.edges.size] do
     let ed := g.edges[e]
     let cont := match ed.containingNode with
@@ -130,6 +169,7 @@ def computeOwnership (g : ElkGraph) (units : Array NodeId) : Ownership := Id.run
     if cont != 0 && !allIn cont then closed := closed.set! (cont - 1) false
     for u in s.inside do
       if !allIn u then closed := closed.set! (u - 1) false
+      if s.atRoot.contains u then rootLinked := rootLinked.set! (u - 1) true
     let owner :=
       if cont != 0 then cont
       else if s.count > 0 && s.same then s.first
@@ -151,7 +191,9 @@ def computeOwnership (g : ElkGraph) (units : Array NodeId) : Ownership := Id.run
       labels := ownLabels g labels o g.edges[i].labels
       for s in g.edges[i].sections do
         if s.idx < sections.size then sections := sections.set! s.idx o
-  return { nodes, ports, edges, labels, sections, closed }
+  let eligible := (List.range units.size).toArray.map fun u =>
+    (closed[u]?.getD false) && !((algClass[u]?.getD 0) == 1 && (rootLinked[u]?.getD false))
+  return { nodes, ports, edges, labels, sections, closed := eligible }
 
 /-- Work estimate of a sibling sub-tree: its nodes, their ports and their contained edges. -/
 def subtreeWork (g : ElkGraph) (root : NodeId) : Nat := Id.run do

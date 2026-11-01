@@ -63,10 +63,13 @@ def defaultThreads : IO Nat := do
   | some n => return max n 1
   | none => return min hardwareThreads defaultMaxThreads
 
-/-- Sets the thread cap (`0` = `defaultThreads`) and reads `ELK_LEAN_PAR_MIN_WORK`. -/
+/-- Sets the thread cap (`0` = `defaultThreads`), reads `ELK_LEAN_PAR_MIN_WORK` and forgets the
+task manager probe. -/
 def configure (threads : Nat) : IO Unit := do
   let n ← if threads == 0 then defaultThreads else pure threads
   threadsRef.set n
+  -- probe again: the C API may start the task manager after an earlier call
+  taskManagerRef.set none
   if let some w := (← IO.getEnv "ELK_LEAN_PAR_MIN_WORK").bind (·.trimAscii.toString.toNat?) then
     minWorkRef.set w
 
