@@ -18,7 +18,8 @@ Java semantics (agent HMO; elk-rs differs):
 - in the preferred-target branch the filter tests the edge's *source* node (always the maximum
   node itself), so all its outgoing edges are reversed (same as elk-rs).
 
-The phase name is the Rust `type_name` `SccNodeTypeCycleBreaker`.
+The phase name is the Java class name `SCCNodeTypeCycleBreaker` (the elk-rs `type_name` is
+`SccNodeTypeCycleBreaker`).
 -/
 namespace Elk.Alg.Layered.P1Cycles
 
@@ -69,7 +70,7 @@ def findNodes : FindNodes := fun graph components offset bigOffset => do
 
 /-- The `SCCNodeTypeCycleBreaker` phase (`CycleBreakingStrategy.SCC_NODE_TYPE`). -/
 def phase : LayeredPhase :=
-  { name := "SccNodeTypeCycleBreaker"
+  { name := "SCCNodeTypeCycleBreaker"
     process := fun graph monitor => do
       let _ ← monitor.begin "Model order cycle breaking" 1.0
       processSccModelOrderCycleBreaking graph findNodes

@@ -10,8 +10,8 @@ visits the outgoing edge groups of a node in ascending target model order (see
 reversed unless the current node is a source or the target is a sink; otherwise the target is queued.
 
 The Rust `BTreeSet<NodeRefKey>` source/sink sets are only used for membership tests (`Std.HashSet`).
-Node indices are written to `LNode.id` and read back from there. The phase name is the Rust
-`type_name` `BfsNodeOrderCycleBreaker`.
+Node indices are written to `LNode.id` and read back from there. The phase name is the Java class
+name `BFSNodeOrderCycleBreaker` (the elk-rs `type_name` is `BfsNodeOrderCycleBreaker`).
 -/
 namespace Elk.Alg.Layered.P1Cycles
 
@@ -110,7 +110,7 @@ def run (graph : LGraphId) : BfsM Unit := do
 
 /-- The `BFSNodeOrderCycleBreaker` phase (`CycleBreakingStrategy.BFS_NODE_ORDER`). -/
 def phase : LayeredPhase :=
-  { name := "BfsNodeOrderCycleBreaker"
+  { name := "BFSNodeOrderCycleBreaker"
     process := fun graph monitor => do
       let _ ← monitor.begin "Breadth-first cycle removal" 1.0
       let _ ← (run graph).run {}

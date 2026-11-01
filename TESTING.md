@@ -75,6 +75,9 @@ sh scripts/oracle_layout.sh input.json out/oracle.json out/oracle_trace
 ELK_TRACE_DIR=out/lean_trace .lake/build/bin/elk layout input.json -o out/lean.json
 python3 scripts/compare_model_parity_layouts.py out/oracle.json out/lean.json
 python3 scripts/compare_phase_traces.py out/oracle_trace out/lean_trace
+# Trace step files are named after the Java processor class (`step_NNN_<Class>.json`). The five processors whose
+# elk-rs name differs (Bfs/Dfs/Scc…CycleBreaker, ScConnectivityCycleBreaker, HypernodeProcessor) are matched through
+# `_PROCESSOR_ALIASES` in scripts/compare_phase_traces.py.
 
 # ELK Java (result reference)
 sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity   # report_exact.md (tol 0), report.md (1e-6)

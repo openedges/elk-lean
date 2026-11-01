@@ -9,8 +9,8 @@ model order; if the minimum node has more incoming edges (node-level, all edges)
 node has outgoing edges, the minimum node's incoming edges from the component are reversed,
 otherwise the maximum node's outgoing edges into the component.
 
-The phase name is the Rust `type_name` `ScConnectivityCycleBreaker` (trace file name of the oracle),
-not the Java class name `SCConnectivity`.
+The phase name is the Java class name `SCConnectivity` (the elk-rs `type_name` is
+`ScConnectivityCycleBreaker`).
 -/
 namespace Elk.Alg.Layered.P1Cycles
 
@@ -35,7 +35,7 @@ def findNodes : FindNodes := fun graph components offset bigOffset => do
 
 /-- The `SCConnectivity` phase (`CycleBreakingStrategy.SCC_CONNECTIVITY`). -/
 def phase : LayeredPhase :=
-  { name := "ScConnectivityCycleBreaker"
+  { name := "SCConnectivity"
     process := fun graph monitor => do
       let _ ← monitor.begin "Model order cycle breaking" 1.0
       processSccModelOrderCycleBreaking graph findNodes
