@@ -89,12 +89,18 @@ namespace CompactM
 /-- `spacingsHandler.getHorizontalSpacing(n1, n2)` on the current graph. -/
 @[inline] def horizontalSpacing (n1 n2 : CNodeId) : CompactM Float := do
   let s ← get
-  return s.spacingsHandler.horizontal s.cGraph n1 n2
+  -- one `return` per handler form: a closure's (boxed) result is passed on without unboxing and
+  -- boxing it again after a join
+  match s.spacingsHandler with
+  | .mk h _ => return h s.cGraph n1 n2
+  | .individualMin sp d => return Elk.Core.Util.fmin (SpacingsHandler.individualOf sp d n1) (SpacingsHandler.individualOf sp d n2)
 
 /-- `spacingsHandler.getVerticalSpacing(n1, n2)` on the current graph. -/
 @[inline] def verticalSpacing (n1 n2 : CNodeId) : CompactM Float := do
   let s ← get
-  return s.spacingsHandler.vertical s.cGraph n1 n2
+  match s.spacingsHandler with
+  | .mk _ v => return v s.cGraph n1 n2
+  | .individualMin sp d => return Elk.Core.Util.fmin (SpacingsHandler.individualOf sp d n1) (SpacingsHandler.individualOf sp d n2)
 
 end CompactM
 
