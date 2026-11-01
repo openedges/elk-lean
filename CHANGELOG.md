@@ -59,13 +59,16 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17200 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17218 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo, hierarchical model-order and
   feature-coverage variant sets): where both succeed, 5,711 of 5,761 layouts (99.1%) are exact (DisCo set: 5,067 to
   5,073 of 5,104, varying with Java's own run; hierarchical model-order set: 2,175 of 2,271; the
   wrapping / comment box / hypernode / edge-label / spline / BK-alignment set: 5,481/5,652; the
+  external-port set (compound-node ports, constraints, labels, cross-hierarchy edges, inside self
+  loops): 3,577/3,885, with every Java exception text reproduced except hot-path NPEs whose message HotSpot omits
+  (fast throw) and 6 context-dependent ones; the
   rest depend on Java's run context); every input Java rejects fails in elk-lean with Java's
   exception class and message (hot-path exceptions whose message HotSpot omits excepted). Like ELK Java's JSON path, the engine
   does not validate option ranges (out-of-range values reach the algorithm and behave as in Java),
