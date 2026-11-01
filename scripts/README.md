@@ -20,7 +20,9 @@
 | `gen_hashset_ops.py` + `java/HashSetOrder.java` | Random `HashSet` operation sequences (tree bins included) replayed on `java.util.HashSet`, printing every iteration order: the differential check of `Elk.Core.Util.JavaHashSet` (fixture `tests/fixtures/spv/hashset_ops*.txt`, suite `spv.javaHashSet`) |
 | `java/AsinDump.java` | `Math.asin` bit patterns of the reference JVM for `Elk.Core.Util.javaAsin` (`ELK_ASIN_CASES=<dump> lake test -- --suite spv.javaAsin`) |
 | `build_wasm.sh` | WebAssembly build (emscripten) into `plugins/org.eclipse.elk.wasm/dist/`; see that plugin's README |
-| `build_runtime_nogmp.sh` | Native Lean runtime rebuilt without GMP (`libleanrt_nogmp.a`), `--check` big-number differential test, `--relink elk` GMP-free CLI; used by `build_ffi.sh`/`build_napi.sh` with `ELK_NO_GMP=1` (see `docs/gmp-licensing.md`) |
+| `build_runtime_nogmp.sh` | Native Lean runtime rebuilt without GMP (`libleanrt_nogmp.a`), `--check` big-number differential test, `--relink elk` GMP-free CLI; used by `build_ffi.sh`/`build_napi.sh` with `ELK_NO_GMP=1` (see `docs/gmp-licensing.md`); env `RT_OUT`, `RT_EXTRA_CXXFLAGS`, `RT_STAMP_EXTRA`, `AR` for the LTO/PGO runtime of `build_release.sh` |
+| `build_release.sh` | Release CLI `.lake/build/release/bin/elk`: Lake's generated C recompiled with Lake's flags + ThinLTO (+ PGO when `.reference/pgo/*.profdata` exists), linked with the no-GMP runtime built as ThinLTO bitcode; also the objects of `build_napi.sh --release`; `--check` byte comparison with the Lake build (see `docs/build-optimization.md`) |
+| `build_pgo.sh` | Regenerates the PGO profile under the main checkout's `.reference/pgo/`: LLVM profile runtime of the toolchain clang's commit (sparse fetch of `compiler-rt/lib/profile`), instrumented `build_release.sh --pgo-generate`, training (synthetic bench, Java corpus batch, random s1/v1/w1 × 200), `llvm-profdata merge` (emsdk's, `LLVM_PROFDATA`) |
 
 Environment knobs: `ELK_RS_DIR` (default `../elk-rs`), `ORACLE_TARGET_DIR`,
 `ORACLE_RUNNER`.
