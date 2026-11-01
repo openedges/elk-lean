@@ -342,7 +342,7 @@ def importGraph (graph : NodeId) : TransformM DCGraph := do
       let setParentCoords (e : DCElement) : DCElement :=
         { e with parentCoords := some (KVector.mk' nodeX nodeY) }
       modifyThe ElkGraphTransformer fun st =>
-        { st with elements := st.elements.modify componentNode.idx setParentCoords }
+        { st with elements := st.elements.modifyIn componentNode.idx setParentCoords }
       for label in nd.labels do
         subResult := subResult.push (← importElkShape (.label label) false nodeX nodeY)
       for port in nd.ports do

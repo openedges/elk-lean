@@ -1085,21 +1085,13 @@ def trivialNodeSize? [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (n
     (ops.getPropertyDFrom props CoreOptions.NODE_LABELS_PLACEMENT EnumSet.empty)
   return some (← a.node.getSize node)
 
-/-- Java `NodeLabelAndSizeCalculator.process(graph, node, applyStuff, ignoreInsidePortLabels)`
-(elk-rs `process_with_options(node, layout_direction, apply_stuff, ignore_inside_port_labels)`):
-the full 7-phase cell system pipeline. Returns the node size that was (`applyStuff`) or would be
-applied. With `applyStuff`, the node padding (`COMPUTE_PADDING`), the node size, the port positions
-and the node and port label positions are written through the adapters (Java `setNodePadding`,
-`applyStuff`).
-`applyStuff := false, ignoreInsidePortLabels := true` is the importer path that computes a lower
-bound for a hierarchical node's size. Throws `IllegalArgumentException` for ports without side. -/
-def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
-    (layoutDirection : Direction) (applyStuff ignoreInsidePortLabels : Bool) : m KVector := do
-  -- nothing to lay out: same result as the pipeline below (see `trivialNodeSize?`)
-  if let some size ← trivialNodeSize? a node then return size
-  -- PREPARATORY PREPARATIONS: Create context objects
-  let ctx ← NodeContext.new a node
-  let ctx ← PortContextCreator.createPortContexts a ctx ignoreInsidePortLabels
+/-- Phases 1–7 of `processWithOptions` on a context whose port contexts exist (`NodeContext.new` +
+`PortContextCreator.createPortContexts`): the cell setup, sizes, port and label placement and Java's
+`setNodePadding`. Without `applyStuff` it stops after the node height (the context then holds the
+size that would be applied). Shared by the generic pipeline and the LGraph fast path
+(`LabelAndNodeSize.ArenaNodeSize`). -/
+def runPhases [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (ctx : NodeContext N P L)
+    (layoutDirection : Direction) (applyStuff : Bool) : m (NodeContext N P L) := do
   -- PHASE 1 (WONDEROUS WATERFOWL): Setup All Cells
   let horizontalLayoutMode := !layoutDirection.isVertical
   let ctx ← NodeLabelCellCreator.createNodeLabelCells a ctx false horizontalLayoutMode
@@ -1120,7 +1112,7 @@ def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) 
   let ctx := CellSystemConfigurator.updateVerticalInsidePortLabelCellPadding ctx
   let ctx := NodeSizeCalculator.setNodeHeight ctx
   if !applyStuff then
-    return ctx.nodeSize
+    return ctx
   let ctx := NodeLabelAndSizeUtilities.offsetSouthernPortsByNodeSize ctx
   let ctx := PortPlacementCalculator.placeVerticalPorts ctx
   let ctx := PortLabelPlacementCalculator.placeVerticalPortLabels ctx
@@ -1131,6 +1123,27 @@ def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) 
   -- Java `setNodePadding` (elk-rs `set_node_padding` only returns the padding and
   -- `process_with_options` discards it)
   NodeLabelAndSizeUtilities.setNodePadding a ctx
+  return ctx
+
+/-- Java `NodeLabelAndSizeCalculator.process(graph, node, applyStuff, ignoreInsidePortLabels)`
+(elk-rs `process_with_options(node, layout_direction, apply_stuff, ignore_inside_port_labels)`):
+the full 7-phase cell system pipeline. Returns the node size that was (`applyStuff`) or would be
+applied. With `applyStuff`, the node padding (`COMPUTE_PADDING`), the node size, the port positions
+and the node and port label positions are written through the adapters (Java `setNodePadding`,
+`applyStuff`).
+`applyStuff := false, ignoreInsidePortLabels := true` is the importer path that computes a lower
+bound for a hierarchical node's size. Throws `IllegalArgumentException` for ports without side. -/
+def processWithOptions [MonadExcept IO.Error m] (a : GraphAdapters m G N P L E) (node : N)
+    (layoutDirection : Direction) (applyStuff ignoreInsidePortLabels : Bool) : m KVector := do
+  -- nothing to lay out: same result as the pipeline below (see `trivialNodeSize?`)
+  if let some size ← trivialNodeSize? a node then return size
+  -- PREPARATORY PREPARATIONS: Create context objects
+  let ctx ← NodeContext.new a node
+  let ctx ← PortContextCreator.createPortContexts a ctx ignoreInsidePortLabels
+  -- PHASES 1–7
+  let ctx ← runPhases a ctx layoutDirection applyStuff
+  if !applyStuff then
+    return ctx.nodeSize
   -- applyStuff: write computed sizes/positions back to the adapter
   a.node.setSize node ctx.nodeSize
   applyPortPositions a ctx

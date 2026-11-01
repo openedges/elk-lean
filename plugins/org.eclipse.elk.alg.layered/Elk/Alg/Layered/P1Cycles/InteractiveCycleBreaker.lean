@@ -49,14 +49,23 @@ def findCycles (start : LNodeId) (revEdges : Array LEdgeId) : LayeredM (Array LE
   let mut revEdges := revEdges
   let startEdges ← getOutgoing start
   modifyNode start fun n => { n with id := -1 }
-  let mut stack : Array (LNodeId × Array (LEdgeId × LNodeId) × Nat) := #[(start, startEdges, 0)]
+  -- the DFS stack as parallel arrays: advancing the edge index of the top entry is an in-place
+  -- `set!` of a scalar (a tuple stack re-allocates the top tuple on every step, PLAN 7.1 item 65)
+  let mut stackNodes : Array LNodeId := #[start]
+  let mut stackEdges : Array (Array (LEdgeId × LNodeId)) := #[startEdges]
+  let mut stackIdx : Array Nat := #[0]
   while true do
-    let some (node, edges, idx) := stack.back? | break
+    let top := stackNodes.size - 1
+    let some node := stackNodes.back? | break
+    let edges := stackEdges[top]!
+    let idx := stackIdx[top]!
     if idx >= edges.size then
       modifyNode node fun n => { n with id := 0 }
-      stack := stack.pop
+      stackNodes := stackNodes.pop
+      stackEdges := stackEdges.pop
+      stackIdx := stackIdx.pop
       continue
-    stack := stack.modifyIn (stack.size - 1) fun (n, es, i) => (n, es, i + 1)
+    stackIdx := stackIdx.set! top (idx + 1)
     let (edge, target) := edges[idx]!
     let targetId := (← getNode target).id
     if targetId < 0 then
@@ -64,7 +73,9 @@ def findCycles (start : LNodeId) (revEdges : Array LEdgeId) : LayeredM (Array LE
     else if targetId > 0 then
       let targetEdges ← getOutgoing target
       modifyNode target fun n => { n with id := -1 }
-      stack := stack.push (target, targetEdges, 0)
+      stackNodes := stackNodes.push target
+      stackEdges := stackEdges.push targetEdges
+      stackIdx := stackIdx.push 0
   return revEdges
 
 /-- `process(layeredGraph, monitor)` body. -/

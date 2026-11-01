@@ -1,4 +1,5 @@
 import Elk.Graph.Properties
+import Elk.Graph.ArrayModify
 import Elk.Alg.Disco.Graph.DCComponent
 /-!
 # `org.eclipse.elk.alg.disco.graph.DCGraph`
@@ -42,7 +43,7 @@ def new (elements : Array DCElement) (components : Array (Array DCElementId)) (i
     let cid : DCComponentId := ⟨comps.size⟩
     let mut comp : DCComponent := {}
     for e in ids do
-      elems := elems.modify e.idx fun el => { el with component := some cid }
+      elems := elems.modifyIn e.idx fun el => { el with component := some cid }
       comp := comp.addElement e
     comps := comps.push comp
   return { elements := elems, components := comps, inset }

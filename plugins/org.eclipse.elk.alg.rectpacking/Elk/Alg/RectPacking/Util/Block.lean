@@ -141,16 +141,26 @@ def removeChild (b : BlockId) (rect : NodeId) : RectPackingM Unit := do
   setBlock b { blk with children := blk.children.filter (· != rect), rows }
   adjustSizeAfterRemove b
 
+/-- The row update of `set_location`: Java `row.getX() + xCoord - this.x` (left to right; elk-rs
+`row.x + (x - self.x)`). Out of line so that `Array.map` reuses the exclusive rows in place (an
+inlined record update allocates every row anew, PLAN 7.1 item 59). -/
+@[noinline] private def moveRow (x y oldX oldY : Float) (row : BlockRow) : BlockRow :=
+  { row with x := row.x + x - oldX, y := row.y + y - oldY }
+
 /-- `set_location(x, y)`: moves the rectangles and the block rows by the position change. -/
 def setLocation (b : BlockId) (x y : Float) : RectPackingM Unit := do
   let blk ← getBlock b
-  let xChange := x - blk.x
-  let yChange := y - blk.y
+  let oldX := blk.x
+  let oldY := blk.y
+  let xChange := x - oldX
+  let yChange := y - oldY
   for rect in blk.children do
     ElkM.modifyNode rect fun n => { n with x := n.x + xChange, y := n.y + yChange }
-  -- Java `row.getX() + xCoord - this.x` (left to right; elk-rs `row.x + (x - self.x)`)
-  let rows := blk.rows.map fun row => { row with x := row.x + x - blk.x, y := row.y + y - blk.y }
-  setBlock b { blk with rows, x, y }
+  -- the rows are taken out of the (exclusive) block so that they are updated in place
+  modifyBlock b fun blk =>
+    let rows := blk.rows
+    let blk := { blk with rows := #[] }
+    { blk with rows := rows.map (moveRow x y oldX oldY), x, y }
 
 /-- The size loop of `place_rects_in_internal` without placing (tail recursive, unboxed state):
 the final `(current_width, current_height)`. -/

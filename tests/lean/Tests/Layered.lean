@@ -30,11 +30,12 @@ import Tests.Layered.CompactionFast
 import Tests.Layered.Compound
 import Tests.Layered.P3LayerSweep
 import Tests.Layered.SmallFastPaths
+import Tests.Layered.FixedCostFastPaths
 import Tests.Layered.InPlaceUpdates
 import Tests.Layered.P3HolderInit
 /-! Tests of the layered plugin: one file per package. -/
 namespace Tests.Layered
 
-def suites : Array Tests.Suite := Options.suites ++ Graph.suites ++ Transform.suites ++ P1Cycles.suites ++ P2Layers.suites ++ P4NodesPlacers.suites ++ IntermediateHierarchicalPorts.suites ++ P3Counting.suites ++ IntermediateTransform.suites ++ IntermediateEdgePorts.suites ++ P4NodesBK.suites ++ IntermediateConstraints.suites ++ IntermediatePreserveOrder.suites ++ IntermediateWrapping.suites ++ Import.suites ++ IntermediateCompaction.suites ++ P5Splines.suites ++ IntermediateSelfLoopRouting.suites ++ IntermediateHierarchicalPortRouting.suites ++ IntermediateNodeSize.suites ++ P3SimpleMinimizers.suites ++ IntermediateFinalSpline.suites ++ P3Heuristics.suites ++ P3PortDistributors.suites ++ IntermediateLabels.suites ++ IntermediateSelfLoops.suites ++ P5Orthogonal.suites ++ Components.suites ++ CompactionFast.suites ++ Compound.suites ++ P3LayerSweep.suites ++ SmallFastPaths.suites ++ InPlaceUpdates.suites ++ P3HolderInit.suites
+def suites : Array Tests.Suite := Options.suites ++ Graph.suites ++ Transform.suites ++ P1Cycles.suites ++ P2Layers.suites ++ P4NodesPlacers.suites ++ IntermediateHierarchicalPorts.suites ++ P3Counting.suites ++ IntermediateTransform.suites ++ IntermediateEdgePorts.suites ++ P4NodesBK.suites ++ IntermediateConstraints.suites ++ IntermediatePreserveOrder.suites ++ IntermediateWrapping.suites ++ Import.suites ++ IntermediateCompaction.suites ++ P5Splines.suites ++ IntermediateSelfLoopRouting.suites ++ IntermediateHierarchicalPortRouting.suites ++ IntermediateNodeSize.suites ++ P3SimpleMinimizers.suites ++ IntermediateFinalSpline.suites ++ P3Heuristics.suites ++ P3PortDistributors.suites ++ IntermediateLabels.suites ++ IntermediateSelfLoops.suites ++ P5Orthogonal.suites ++ Components.suites ++ CompactionFast.suites ++ Compound.suites ++ P3LayerSweep.suites ++ SmallFastPaths.suites ++ InPlaceUpdates.suites ++ P3HolderInit.suites ++ FixedCostFastPaths.suites
 
 end Tests.Layered
