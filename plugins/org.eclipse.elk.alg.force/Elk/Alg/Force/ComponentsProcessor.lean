@@ -184,6 +184,18 @@ private def buildComponent (graph : FGraph) (compNodes : Array FNodeId) (compEdg
         edgeMap := edgeMap.insert oldEid.idx newEid
     return component
 
+/-- Renumbers the node ids of a component `0, 1, …` in node order (the component loop of `split`).
+Out of line with the id column taken out of the component, so that `Array.map` updates the
+exclusive component and its column in place (PLAN 7.1 items 59, 27). -/
+@[noinline] private def renumberComponent (comp : FGraph) : FGraph := Id.run do
+  let arena := comp.arena
+  let comp := { comp with arena := {} }
+  let mut nodeIds := arena.nodeId
+  let arena := { arena with nodeId := #[] }
+  for id in [0:comp.nodes.size] do
+    nodeIds := nodeIds.set! (comp.nodes[id]!).idx id
+  return { comp with arena := { arena with nodeId := nodeIds } }
+
 /-- `ComponentsProcessor::split(graph)`. -/
 def split (graph : FGraph) : Array FGraph := Id.run do
   let separate := graph.props.getD ForceOptions.SEPARATE_CONNECTED_COMPONENTS true
@@ -200,11 +212,7 @@ def split (graph : FGraph) : Array FGraph := Id.run do
     st := dfs graph incidence nid none st
     components := components.push (buildComponent graph st.compNodes st.compEdges)
   if components.size > 1 then
-    components := components.map fun comp => Id.run do
-      let mut nodeIds := comp.arena.nodeId
-      for id in [0:comp.nodes.size] do
-        nodeIds := nodeIds.set! (comp.nodes[id]!).idx id
-      return { comp with arena := { comp.arena with nodeId := nodeIds } }
+    components := components.map renumberComponent
   return components
 
 /-- `bounding_size`: size of the bounding box stored by `recombine`. -/
@@ -241,14 +249,14 @@ private def moveGraph (dest source : FGraph) (offsetX offsetY : Float) : FGraph 
     let some newEid := edgeMap[oldEid.idx]? | continue
     let mut bendPosition := dest.arena.bendPosition
     for bid in dest.arena.edgeBendpoints[newEid.idx]! do
-      bendPosition := bendPosition.modify bid.idx (· + offset)
+      bendPosition := bendPosition.modifyIn bid.idx (· + offset)
     dest := { dest with arena := { dest.arena with bendPosition }, edges := dest.edges.push newEid }
   let mut labelMap : Std.HashMap Nat FLabelId := {}
   for oldLid in source.labels do
     match labelMap[oldLid.idx]? with
     | some lid =>
       dest := { dest with
-        arena := { dest.arena with labelPosition := dest.arena.labelPosition.modify lid.idx (· + offset) }
+        arena := { dest.arena with labelPosition := dest.arena.labelPosition.modifyIn lid.idx (· + offset) }
         labels := dest.labels.push lid }
     | none =>
       let some oldE := source.arena.labelEdge[oldLid.idx]! | continue
