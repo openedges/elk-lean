@@ -89,7 +89,8 @@ elk-lean additions and differences:
   `elk_lean_init_threads(0)`). A value that is not a positive integer throws `TypeError` (rejects in
   `layout`). The WASM backend is single-threaded and ignores it (sequential); in worker mode it is
   passed to the worker's backend (`{ cmd: 'layout', graphJson, optionsJson, threads }`). Lean worker
-  threads have the Lean thread stack (1 GB reserved, `LEAN_STACK_SIZE_KB`), not the calling
+  threads have the Lean runtime's thread stack (1 GB reserved; `LEAN_STACK_SIZE_KB` does not apply
+  to the addon), not the calling
   thread's: a sub-graph that is too deep for the calling thread's stack can lay out there (see
   "Limits").
 - `workerStackSizeMb` (Node.js only, default 64, `ELK.DEFAULT_WORKER_STACK_SIZE_MB`): stack size of

@@ -36,8 +36,9 @@ int elk_lean_init(void);
 /* elk_lean_init, then (first call only; later calls change nothing) starts the Lean task
  * manager and sets the thread cap of the parallel sibling layout: 0 = ELK_LEAN_THREADS or
  * min(hardware threads, 8), 1 = sequential, n = at most n threads per call (the calling thread
- * plus n - 1 Lean workers). Lean workers have the Lean thread stack (1 GB reserved by default,
- * LEAN_STACK_SIZE_KB), not the stack of the calling thread. 0 on success, -1 as elk_lean_init. */
+ * plus n - 1 Lean workers). Lean workers have the Lean runtime's thread stack (1 GB reserved; only
+ * Lean executables apply LEAN_STACK_SIZE_KB), not the stack of the calling thread. 0 on success, -1 as
+ * elk_lean_init. */
 int elk_lean_init_threads(int threads);
 
 /* Registers / unregisters the calling thread with the Lean runtime. */

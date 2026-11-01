@@ -26,7 +26,8 @@ elk-lean Node.js 네이티브 애드온. elk-rs `plugins/org.eclipse.elk.napi/sr
   스레드가 나눠 맡고, 호출한 JS 스레드는 첫 청크를 직접 처리한 뒤 나머지를 기다린다(호출은 여전히 동기). Lean 작업자는
   Node `worker_threads`와 별개의 스레드이며 보통 호출(전역 mutex) 안에서 끝난다. 앞선 형제의 예외로 버려진 작업만 호출이
   끝난 뒤에도(mutex 밖에서) 끝날 때까지 돌 수 있는데, 자기 그래프 사본만 고치고 전역 레지스트리는 읽기만 하므로 다음 호출의
-  결과에 영향이 없다(작업자 자리를 차지해 병렬도만 줄어든다). 작업자 스택은 Lean 스레드 스택(1 GB 예약, `LEAN_STACK_SIZE_KB`)이다.
+  결과에 영향이 없다(작업자 자리를 차지해 병렬도만 줄어든다). 작업자 스택은 Lean 런타임의 스레드 스택(1 GB 예약; `LEAN_STACK_SIZE_KB`는 Lean 실행 파일의 `lean_run_main`만 읽으므로
+  애드온에는 적용되지 않는다)이다.
 - 다른 스레드는 첫 호출 전에 `elk_lean_thread_init()`으로 Lean 런타임에 등록하고(thread-local 플래그),
   Node 환경 종료 시(`napi_add_env_cleanup_hook`) `elk_lean_thread_finalize()`로 해제한다.
 - 엔진이 프로세스 전역 레지스트리를 가지므로 모든 호출은 프로세스 전역 mutex로 직렬화된다
