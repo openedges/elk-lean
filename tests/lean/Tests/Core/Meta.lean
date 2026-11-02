@@ -70,7 +70,7 @@ def counts : Suite := suite "core.meta.counts" do
   checkEq "category count" s.categoryDataList.size 8
   checkEq "algorithm count" s.algorithmDataList.size 14
   checkEq "dependency count" (countDependencies s.optionDataList) 10
-  checkEq "legacy options (layered Java ids)" s.legacyOptions.size 89
+  checkEq "legacy options (layered Java ids)" s.legacyOptions.size 90  -- 89 `org.eclipse.elk.layered.*` + `northOrSouthPort` (the one explicit legacy id of ELK Java)
   -- elk-rs order (`layout_api.rs`): core, layered, disco, force, (mrtree, radial, rectpacking,)
   -- spore, stress, (vertiflex); topdownpacking (not registered by elk-rs) last
   checkEqR "algorithm order" s.algorithmOrder

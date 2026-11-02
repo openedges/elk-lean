@@ -104,7 +104,8 @@ public final class ElkJavaBaseline {
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("usage: ElkJavaBaseline <models_dir> <out_dir> [--include a,b] [--exclude a,b]"
-                    + " [--limit N] [--seed S] [--force-algorithm ID]");
+                    + " [--limit N] [--seed S] [--force-algorithm ID] [--trace true] [--reverse true]"
+                    + " [--shuffle SEED] [--live-defaults true]");
             System.exit(2);
         }
         final Path modelsRoot = Paths.get(args[0]).toAbsolutePath().normalize();
@@ -116,6 +117,7 @@ public final class ElkJavaBaseline {
         String forceAlgorithm = null;
         boolean trace = false;
         boolean reverse = false;
+        boolean liveDefaults = false;
         Long shuffleSeed = null;
         for (int i = 2; i + 1 < args.length; i += 2) {
             switch (args[i]) {
@@ -136,6 +138,9 @@ public final class ElkJavaBaseline {
                 break;
             case "--trace":
                 trace = Boolean.parseBoolean(args[i + 1]);
+                break;
+            case "--live-defaults":
+                liveDefaults = Boolean.parseBoolean(args[i + 1]);
                 break;
             case "--reverse":
                 reverse = Boolean.parseBoolean(args[i + 1]);
@@ -182,6 +187,9 @@ public final class ElkJavaBaseline {
                         input = Files.readString(model, StandardCharsets.UTF_8);
                     } else {
                         ElkNode loaded = load(model);
+                        if (liveDefaults) {
+                            applyLiveDefaults(loaded);
+                        }
                         loaded.setProperty(CoreOptions.RANDOM_SEED, seed);
                         input = ElkGraphJson.forGraph(loaded)
                                 .prettyPrint(false)
@@ -193,6 +201,42 @@ public final class ElkJavaBaseline {
                                 .toJson();
                     }
                     Files.writeString(inputJson, input, StandardCharsets.UTF_8);
+                    if (liveDefaults && !isJson) {
+                        // the elk-live server lays out the graph as the text loader built it (no JSON
+                        // round trip: the derived edge lists keep the document order), then the layout
+                        // is exported like the input
+                        ElkNode loaded = load(model);
+                        applyLiveDefaults(loaded);
+                        // the elk-live server sets no seed: a seed written in the model stays in effect
+                        if (!loaded.hasProperty(CoreOptions.RANDOM_SEED)) {
+                            loaded.setProperty(CoreOptions.RANDOM_SEED, seed);
+                        }
+                        if (forceAlgorithm != null) {
+                            loaded.setProperty(CoreOptions.ALGORITHM, forceAlgorithm);
+                        }
+                        if (trace) {
+                            // phase-step traces of the EMF-loaded graph (the elk-live path)
+                            loaded.setProperty(CoreOptions.ALGORITHM, "org.eclipse.elk.layered");
+                            Path traceDir = outputDir.resolve("trace").resolve(rel);
+                            Files.createDirectories(traceDir);
+                            ElkPhaseTraceExporter.traceWithRecursiveEngine(loaded, traceDir, false);
+                        } else {
+                            new RecursiveGraphLayoutEngine().layout(loaded, new BasicProgressMonitor());
+                        }
+                        Files.writeString(layoutJson, ElkGraphJson.forGraph(loaded)
+                                .prettyPrint(false)
+                                .shortLayoutOptionKeys(false)
+                                .omitZeroPositions(false)
+                                .omitZeroDimension(false)
+                                .omitLayout(false)
+                                .omitUnknownLayoutOptions(false)
+                                .toJson(), StandardCharsets.UTF_8);
+                        ok++;
+                        manifest.write(rel + "\t" + inputJson + "\t" + layoutJson + "\t" + status + "\t" + error);
+                        manifest.newLine();
+                        manifest.flush();
+                        continue;
+                    }
                     JsonObject json = JsonParser.parseString(input).getAsJsonObject();
                     Maybe<JsonImporter> importer = new Maybe<>();
                     ElkNode graph = ElkGraphJson.forGraph(json).rememberImporter(importer).lenient(false).toElk();
@@ -225,6 +269,49 @@ public final class ElkJavaBaseline {
         }
         System.out.printf(Locale.ROOT, "ELK Java baseline: total=%d ok=%d failed=%d out=%s%n",
                 models.size(), ok, failed, outputDir);
+    }
+
+    /** elk-live {@code ElkGraphDiagramGenerator.applyDefaults}: ports and nodes without a positive size
+     *  get 5 / 30, labels with text get {@code 9 * length} x 16. With {@code --live-defaults true} a text
+     *  model is laid out exactly as the elk-live server does it: loaded through EMF, defaults applied,
+     *  the loaded graph itself laid out (no JSON round trip), then exported; the counterpart of
+     *  {@code elk layout --defaults}. */
+    private static void applyLiveDefaults(final ElkNode parent) {
+        for (org.eclipse.elk.graph.ElkPort port : parent.getPorts()) {
+            if (port.getWidth() <= 0) {
+                port.setWidth(5);
+            }
+            if (port.getHeight() <= 0) {
+                port.setHeight(5);
+            }
+            computeLiveLabelSizes(port);
+        }
+        for (ElkNode node : parent.getChildren()) {
+            if (node.getWidth() <= 0) {
+                node.setWidth(30);
+            }
+            if (node.getHeight() <= 0) {
+                node.setHeight(30);
+            }
+            computeLiveLabelSizes(node);
+            applyLiveDefaults(node);
+        }
+        for (org.eclipse.elk.graph.ElkEdge edge : parent.getContainedEdges()) {
+            computeLiveLabelSizes(edge);
+        }
+    }
+
+    private static void computeLiveLabelSizes(final org.eclipse.elk.graph.ElkGraphElement element) {
+        for (org.eclipse.elk.graph.ElkLabel label : element.getLabels()) {
+            if (label.getText() != null && !label.getText().isEmpty()) {
+                if (label.getWidth() <= 0) {
+                    label.setWidth(label.getText().length() * 9);
+                }
+                if (label.getHeight() <= 0) {
+                    label.setHeight(16);
+                }
+            }
+        }
     }
 
     private static ElkNode load(final Path model) throws IOException {

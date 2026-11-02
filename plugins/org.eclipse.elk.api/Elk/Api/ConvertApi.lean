@@ -31,7 +31,10 @@ def ConvertFlags.ofBits (bits : UInt32) : ConvertFlags :=
 A parse or linking error is `.error "ELK Text parse error: <line>:<col>: <message>"`. -/
 def convertElkt (text : String) (defaults : Bool := false) (pretty : Bool := false)
     (sortKeys : Bool := false) : IO (Except String String) := do
-  match ← Elk.Text.parseElkt text with
+  -- Java's text loader keeps unknown options and unparsable values as `LayoutOptionProxy`
+  -- (`PropertyKeyValueConverter` / `PropertyValueValueConverter`), and ELK's JSON export writes
+  -- them under the raw key; `elk convert` / `convertElkt` do the same
+  match ← Elk.Text.parseElkt text { keepUnknownOptions := true } with
   | .error e => return .error s!"ELK Text parse error: {e}"
   | .ok (root, g) =>
     let g := if defaults then Elk.Text.applyDefaults g root else g

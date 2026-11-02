@@ -144,10 +144,10 @@
  ],
  "org.eclipse.elk.alg.layered.nodePlacement.bk.fixedAlignment": [
   "NONE",
-  "LEFT_UP",
-  "RIGHT_UP",
-  "LEFT_DOWN",
-  "RIGHT_DOWN",
+  "LEFTUP",
+  "RIGHTUP",
+  "LEFTDOWN",
+  "RIGHTDOWN",
   "BALANCED"
  ],
  "org.eclipse.elk.alg.layered.nodePlacement.networkSimplex.nodeFlexibility": [

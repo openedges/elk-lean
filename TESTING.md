@@ -92,6 +92,14 @@ sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_par
 sh scripts/run_java_trace_parity.sh external/elk-models tests/tmp/java_trace          # generates Java traces, compares every step
 sh scripts/run_random_java_parity.sh tests/tmp/random_parity --seeds 1-10 --sets s,v,d,o,p,c,h,w,x   # random graphs (all tracked set kinds), regenerates tests/random_parity/report.md
 
+# ELK Text loader parity: `elk convert` vs ELK Java's JSON export of the same .elkt (898 models; exit 1 on a difference)
+sh scripts/run_elkt_loader_parity.sh external/elk-models .reference/java-baseline/corpus tests/tmp/elkt_loader
+# ELK Text end to end: `elk layout --defaults X.elkt` vs ELK Java loading the .elkt with elk-live's default sizes
+# (`--live-defaults true`; what the elk-live server lays out). The corpus parity above cannot see the Lean text
+# loader: there, both sides lay out Java's JSON export.
+sh scripts/run_elkt_layout_parity.sh external/elk-models tests/tmp/elkt_layout            # all .elkt
+sh scripts/run_elkt_layout_parity.sh external/elk-models tests/tmp/elkt_layout_examples --include examples/
+
 # elk-rs (secondary), whole corpus
 sh scripts/run_model_parity.sh external/elk-models tests/model_parity   # .json + .elkt (converted with `elk convert`; PARITY_INCLUDE_ELKT=0 to skip)
 sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus   # every model: oracle vs elk-lean step traces (strict order)

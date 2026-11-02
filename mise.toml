@@ -53,6 +53,13 @@ run = "sh scripts/setup_dev.sh --only wasm-toolchain"
 description = "Result parity against the ELK Java baseline (tests/tmp/java_parity)"
 run = "sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity"
 
+[tasks."parity:elkt"]
+description = "ELK Text loader parity (elk convert vs ELK Java's export) and end-to-end .elkt layout parity with elk-live defaults"
+run = [
+  "sh scripts/run_elkt_loader_parity.sh external/elk-models .reference/java-baseline/corpus tests/tmp/elkt_loader",
+  "sh scripts/run_elkt_layout_parity.sh external/elk-models tests/tmp/elkt_layout",
+]
+
 [tasks."parity:rs"]
 description = "Secondary model parity against the elk-rs oracle (tests/model_parity)"
 run = [

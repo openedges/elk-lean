@@ -211,6 +211,7 @@ ELK Java에는 없는 elk-lean 확장이다. 출력·단계별 trace·예외 문
 1. **코드 품질**: `lake build`(오류/경고 0), `lake test`(실패 0). Lean에는 clippy가 없으므로 린터 옵션(`linter.unusedVariables` 등 기본 린터)을 경고 0으로 유지한다.
 2. **Model parity**: `scripts/run_model_parity.sh <models> <out>` — (a) `.json` 모델은 그대로, `.elkt`는 Phase 6까지 oracle 측 변환 결과로 입력 생성, (b) oracle(`model_parity_layout_runner`)로 기준 출력, (c) `elk layout`으로 Lean 출력, (d) `compare_model_parity_layouts.py`(semantic, abs-tol 1e-6)로 비교, `report.md`/`diff_details.tsv` 생성.
 3. **Phase-step trace**: `ELK_TRACE_DIR`로 양측 trace 생성 후 `compare_phase_traces.py --batch`. 첫 불일치 단계를 보고한다.
+3b. **ELK Text 경로 parity**(2026-11-02): 코퍼스 parity는 Java의 EMF→JSON export를 양쪽 입력으로 쓰므로 Lean 텍스트 로더를 검사하지 못한다. `scripts/run_elkt_loader_parity.sh`(`elk convert` vs Java export, 898개 의미 비교, 허용오차 0)와 `scripts/run_elkt_layout_parity.sh`(`elk layout --defaults X.elkt` vs `ElkJavaBaseline --live-defaults true` = elk-live 서버와 같은 EMF 직접 레이아웃, 기하 비교)가 이를 메운다(`mise run parity:elkt`).
 4. **메타데이터 parity**: `elk algorithms|options|categories` 출력과 oracle `perf_benchmark`/elk-rs API 출력의 JSON 비교(ID, 이름, 설명, 타입, 대상, 기본값, 의존성, 지원 기능).
 5. **JS parity**(Phase 8): elk-rs `test/parity/run.mjs`를 이식해 NAPI/WASM/elkjs 3자 비교.
 6. **성능**: elk-rs `perf_benchmark --engine rust_native|rust_api --mode synthetic` 시나리오 26개를 Lean CLI/API로 재현(동일 LCG 그래프 생성기), 머신 정보와 함께 기록.

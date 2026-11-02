@@ -22,8 +22,8 @@ Rust semantics kept on purpose (they differ from the generated Java provider):
 * No option dependencies are registered (the Rust provider registers none).
 * Only a lower bound is ever set (inclusive); upper bounds are not registered.
 * Every option gets the legacy id `org.eclipse.elk.layered.<suffix>` (`layered_legacy_ids`).
-* Enum choices are the elk-rs `enum_choices` names; they equal the Java constant names except
-  for `FixedAlignment` (`FixedAlignment.rustChoiceNames`). OBJECT options (`Vec<i32>`) have no
+* Enum choices are the Java constant names (elk-rs `enum_choices` equals them except for
+  `FixedAlignment`, where `FixedAlignment.javaChoiceNames` keeps the Java spelling). OBJECT options (`Vec<i32>`) have no
   parser.
 * `property_default_any` yields the property default for every option type used here (all of
   them are registered with `ElkReflect` in elk-rs), so `propertyDefault` is simply
@@ -62,10 +62,18 @@ def targetNodesEdgesPorts : Array LayoutOptionTarget := #[.nodes, .edges, .ports
 /-! ### Registration helpers -/
 
 /-- `layered_legacy_ids`: `org.eclipse.elk.alg.layered.<suffix>` has the legacy id
-`org.eclipse.elk.layered.<suffix>`; other ids have none. -/
+`org.eclipse.elk.layered.<suffix>` (the Java id); other ids have none. The one explicit legacy id
+of ELK Java's `.melk` files is kept too: `allowNonFlowPortsToSwitchSides` was
+`org.eclipse.elk.layered.northOrSouthPort` (`getOptionDataBySuffix` resolves `northOrSouthPort`
+through it, as in Java). -/
 def layeredLegacyIds (id : String) : Array String :=
   let pfx := "org.eclipse.elk.alg.layered."
-  if id.startsWith pfx then #["org.eclipse.elk.layered." ++ (id.drop pfx.length).toString] else #[]
+  if id.startsWith pfx then
+    let javaId := "org.eclipse.elk.layered." ++ (id.drop pfx.length).toString
+    if javaId == "org.eclipse.elk.layered.allowNonFlowPortsToSwitchSides" then
+      #[javaId, "org.eclipse.elk.layered.northOrSouthPort"]
+    else #[javaId]
+  else #[]
 
 /-- `property_default_any`: the default value of a property as a `PropValue`. -/
 def propertyDefault {α : Type} [PropCodec α] (property : Property α) : Option PropValue :=
@@ -314,7 +322,7 @@ def registerNodePlacementOptions (r : Registry) : Registry :=
   let r := registerEnumOption r LayeredOptions.NODE_PLACEMENT_BK_FIXED_ALIGNMENT
     "BK Fixed Alignment"
     "Tells the BK node placer to use a certain alignment."
-    targetParents .advanced (some "nodePlacement.bk") none (choices := FixedAlignment.rustChoiceNames)
+    targetParents .advanced (some "nodePlacement.bk") none (choices := FixedAlignment.javaChoiceNames)
   let r := registerOption r LayeredOptions.NODE_PLACEMENT_LINEAR_SEGMENTS_DEFLECTION_DAMPENING .double
     "Linear Segments Deflection Dampening"
     "Dampens the movement of nodes to keep the diagram from getting too large."

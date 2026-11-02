@@ -162,8 +162,9 @@ def options : Suite := suite "layered.options.meta" do
   checkEqR "wrapping.strategy choices" ws.choices #["OFF", "SINGLE_EDGE", "MULTI_EDGE"]
   check "wrapping.strategy parser" ((ws.parseValue "multiEdge").bind PropCodec.dec == some WrappingStrategy.multiEdge)
   let fa ← optIn s (pfx ++ "nodePlacement.bk.fixedAlignment")
-  checkEqR "fixedAlignment choices (elk-rs names)" fa.choices
-    #["NONE", "LEFT_UP", "RIGHT_UP", "LEFT_DOWN", "RIGHT_DOWN", "BALANCED"]
+  -- Java constant names (ELK Java's export and `elk options`); elk-rs reports LEFT_UP etc.
+  checkEqR "fixedAlignment choices (Java names)" fa.choices
+    #["NONE", "LEFTUP", "RIGHTUP", "LEFTDOWN", "RIGHTDOWN", "BALANCED"]
   check "fixedAlignment parses LEFTUP" ((fa.parseValue "LEFTUP").bind PropCodec.dec == some FixedAlignment.leftUp)
   let cb ← optIn s (pfx ++ "cycleBreaking.strategy")
   checkEq "cycleBreaking choices" cb.choices.size 9
