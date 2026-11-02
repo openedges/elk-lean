@@ -107,6 +107,12 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-02.
 - **Layered phase-step traces against ELK Java** (tolerance 0, strict order): 1,817/1,997 match in
   every step. The remaining 180 are caused on the Java side: 170 non-finite intermediate port
   coordinates, 7 self-loop edge orders, 3 partition port orders (details in `HISTORY.md`).
+- **ELK Text path against ELK Java** (the elk-live server's path, added 2026-11-02): `elk convert`
+  equals ELK Java's own JSON export of the same `.elkt` for 897/897 models (loader parity, tolerance 0),
+  and `elk layout --defaults X.elkt` equals ELK Java loading the model through EMF with elk-live's
+  default sizes for 893/897 (geometry, tolerance 0); the 3 others are one self-loop identity-hash
+  case and two models where ELK Java's EMF path differs from its own JSON path after an identical
+  layered run (`701_portLabels`, `724_includeChildrenModelOrder`). All 45 elk-models examples match.
 - **Parity against elk-rs** (secondary): model parity 1447/1447 (tolerance 1e-6), strict phase
   trace 1447/1447. Byte identity with elk-rs is 1060/1447; the rest differ only in `-0.0`,
   snapping or values below 4e-12 and are no longer a gate.
@@ -154,6 +160,8 @@ modules no longer follow elk-rs where it deviated from Java (`docs/robustness-ra
   layered algorithm (closed as intended behaviour, see `HISTORY.md`).
 - Phase-trace step files are named after the Java processor classes; the elk-rs comparison maps
   the five differently named elk-rs processors through an alias table.
+- `FixedAlignment` literals are the Java constant names (`LEFTUP`, `RIGHTUP`, `LEFTDOWN`, `RIGHTDOWN`);
+  elk-rs reports `LEFT_UP` etc. Both spellings are accepted on input.
 
 ### Not yet available
 - Packages are not published (all `package.json` carry `"private": true`). The browser demo's
