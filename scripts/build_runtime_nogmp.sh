@@ -96,9 +96,10 @@ cmp -s "$LEAN_SRC/src/include/lean/lean.h" "$LEAN_PREFIX/include/lean/lean.h" \
 # --- pinned dependency sources -------------------------------------------------------------
 MI_TAG=$(awk '/FetchContent_Declare\(/{getline n; if (n ~ /^ *mimalloc *$/) p=1; next} p && /GIT_TAG/{print $2; exit}' "$LEAN_SRC/CMakeLists.txt")
 [ -n "$MI_TAG" ] || { echo "error: no mimalloc GIT_TAG in $LEAN_SRC/CMakeLists.txt" >&2; exit 1; }
-UV_VER=$(strings -a "$LEAN_PREFIX/lib/libuv.a" | grep -E '^1\.[0-9]+\.[0-9]+$' | head -1)
+# LC_ALL=C: `strings` output is not UTF-8 (a UTF-8 locale makes sed/grep fail on it, as on macOS runners)
+UV_VER=$(LC_ALL=C strings -a "$LEAN_PREFIX/lib/libuv.a" | LC_ALL=C grep -E '^1\.[0-9]+\.[0-9]+$' | head -1)
 [ -n "$UV_VER" ] || { echo "error: cannot read the libuv version of $LEAN_PREFIX/lib/libuv.a" >&2; exit 1; }
-SSL_VER=$(strings -a "$LEAN_PREFIX/lib/libcrypto.a" | sed -n 's/^OpenSSL \([0-9]*\)\.\([0-9]*\)\.\([0-9]*\) .*/\1 \2 \3/p' | head -1)
+SSL_VER=$(LC_ALL=C strings -a "$LEAN_PREFIX/lib/libcrypto.a" | LC_ALL=C sed -n 's/^OpenSSL \([0-9]*\)\.\([0-9]*\)\.\([0-9]*\) .*/\1 \2 \3/p' | head -1)
 [ -n "$SSL_VER" ] || { echo "error: cannot read the OpenSSL version of $LEAN_PREFIX/lib/libcrypto.a" >&2; exit 1; }
 MI_SRC=${MIMALLOC_SRC_DIR:-"$DEPS/mimalloc-$MI_TAG"}
 UV_SRC=${LIBUV_SRC_DIR:-"$DEPS/libuv-v$UV_VER"}
