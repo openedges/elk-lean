@@ -8,8 +8,11 @@
 # src/CMakeLists.txt of the toolchain tag): LEAN_MULTI_THREAD, Lean's mimalloc small-object
 # allocator (LEAN_MIMALLOC from the toolchain's lean/config.h, mimalloc.cpp built with the
 # MIMALLOC_OPTS of add_mimalloc_variant, MI_SECURE=0), -O3 -DNDEBUG -DLEAN_EXPORTING,
-# -ffp-contract=off, hidden visibility, -ftls-model=local-exec; additionally -fPIC, so the archive
-# also links into the NAPI addon (shared object).
+# -ffp-contract=off, hidden visibility, the TLS model of the platform (macOS local-exec like
+# leanrt, Linux initial-exec like Lean's own Linux build: the archive also links into the NAPI
+# addon, a shared object); additionally -fPIC. On Linux the runtime is built with the system C++
+# compiler (g++, libstdc++ linked statically by scripts/build_ffi.sh and --relink), not the
+# toolchain's libc++, whose headers the toolchain does not ship.
 #
 # libInit.a / libStd.a / libuv.a of the toolchain are reused unchanged: lean.h (shared by the Lean C
 # and the runtime) has no LEAN_USE_GMP-dependent code, compiled Lean code only reaches big numbers
@@ -120,14 +123,18 @@ for f in err.h ssl.h; do [ -f "$GEN/openssl/$f" ] || printf '#pragma once\n' > "
 
 # --- flags (release `leanrt`, minus -D LEAN_USE_GMP) ------------------------------------------
 case "$(uname -s)" in
-  Darwin) PLAT_FLAGS="" ;;
-  *) PLAT_FLAGS="-pthread" ;;
+  # macOS: local-exec like the toolchain's leanrt (a bundle may still use it: Mach-O TLV)
+  Darwin) PLAT_FLAGS=""; TLS_MODEL="-ftls-model=local-exec" ;;
+  # Linux: local-exec cannot enter a shared object (the Node.js addon: ld rejects R_X86_64_TPOFF32
+  # with -shared); initial-exec is what src/CMakeLists.txt sets for Lean's own Linux build, and the
+  # linker relaxes it to local-exec inside an executable (the CLI)
+  *) PLAT_FLAGS="-pthread"; TLS_MODEL="-ftls-model=initial-exec" ;;
 esac
-# CMAKE_CXX_FLAGS + CMAKE_CXX_FLAGS_RELEASE of src/CMakeLists.txt; `leanrt` adds local-exec TLS
-CXXFLAGS="-Wall -Wextra -std=c++20 -D LEAN_MULTI_THREAD -ffp-contract=off -DLEAN_BUILD_TYPE=\"Release\" -DLEAN_EXPORTING -D__CLANG__ -fPIC -fvisibility=hidden -fvisibility-inlines-hidden $PLAT_FLAGS -O3 -DNDEBUG -ftls-model=local-exec ${RT_EXTRA_CXXFLAGS:-}"
+# CMAKE_CXX_FLAGS + CMAKE_CXX_FLAGS_RELEASE of src/CMakeLists.txt; `leanrt` adds the TLS model
+CXXFLAGS="-Wall -Wextra -std=c++20 -D LEAN_MULTI_THREAD -ffp-contract=off -DLEAN_BUILD_TYPE=\"Release\" -DLEAN_EXPORTING -D__CLANG__ -fPIC -fvisibility=hidden -fvisibility-inlines-hidden $PLAT_FLAGS -O3 -DNDEBUG $TLS_MODEL ${RT_EXTRA_CXXFLAGS:-}"
 INCLUDES="-I $LEAN_SRC/src -I $GEN -I $LEAN_PREFIX/include -I $UV_SRC/include"
 # add_mimalloc_variant(mimalloc_local-exec OBJECT ${LEAN_MI_SECURE} ...)
-MI_FLAGS="-I $MI_SRC/include -I $MI_SRC/src -DMI_SHARED_LIB -DMI_SHARED_LIB_EXPORT -O3 -DNDEBUG -DMI_WIN_NOREDIRECT -DMI_MAX_ALIGN_SIZE=8 -Wno-unused-function -Wno-deprecated -DMI_SECURE=0 -ftls-model=local-exec"
+MI_FLAGS="-I $MI_SRC/include -I $MI_SRC/src -DMI_SHARED_LIB -DMI_SHARED_LIB_EXPORT -O3 -DNDEBUG -DMI_WIN_NOREDIRECT -DMI_MAX_ALIGN_SIZE=8 -Wno-unused-function -Wno-deprecated -DMI_SECURE=0 $TLS_MODEL"
 
 # RUNTIME_OBJS of src/runtime/CMakeLists.txt, plus mimalloc.cpp; the stamp covers compiler, flags and
 # the generated headers (a change rebuilds everything), sources are compared by mtime
@@ -184,13 +191,26 @@ for exe in $RELINK; do
   grep -qx '"-lleanrt"' "$RSP" && grep -qx '"-lgmp"' "$RSP" \
     || { echo "error: $RSP does not link -lleanrt -lgmp" >&2; exit 1; }
   mkdir -p "$OUT/bin"
-  sed -e "s|^\"-lleanrt\"\$|\"$LIB\"|" -e '/^"-lgmp"$/d' "$RSP" > "$OUT/bin/$exe.rsp"
-  cp "$RSP" "$OUT/bin/$exe-gmp.rsp"
-  for v in "$exe" "$exe-gmp"; do
-    MACOSX_DEPLOYMENT_TARGET=99.0 "$LEAN_PREFIX/bin/clang" -o "$OUT/bin/$v" "@$OUT/bin/$v.rsp"
-  done
+  if [ "$(uname -s)" = Darwin ]; then
+    sed -e "s|^\"-lleanrt\"\$|\"$LIB\"|" -e '/^"-lgmp"$/d' "$RSP" > "$OUT/bin/$exe.rsp"
+    cp "$RSP" "$OUT/bin/$exe-gmp.rsp"
+    for v in "$exe" "$exe-gmp"; do
+      MACOSX_DEPLOYMENT_TARGET=99.0 "$LEAN_PREFIX/bin/clang" -o "$OUT/bin/$v" "@$OUT/bin/$v.rsp"
+    done
+    echo "relinked $OUT/bin/$exe (no GMP) and $OUT/bin/$exe-gmp (toolchain runtime, same link)"
+  else
+    # Linux: Lake's response file is the toolchain's sysroot/lld link of its libc++-built leanrt; the
+    # runtime here comes from the system C++ compiler, so the same objects (Lake's Lean C and the C
+    # shim archive) are linked with it, libstdc++ and libgcc static (scripts/build_ffi.sh links the
+    # C API the same way); the toolchain's static libuv is reused
+    grep -E '\.(o|o\.export|a)"$' "$RSP" | tr -d '"' > "$OUT/bin/$exe.objects"
+    # shellcheck disable=SC2086
+    "${CXX_LD:-c++}" -o "$OUT/bin/$exe" "@$OUT/bin/$exe.objects" \
+      -L"$LEAN_PREFIX/lib/lean" -L"$LEAN_PREFIX/lib" -Wl,--start-group -lInit -lStd "$LIB" -Wl,--end-group \
+      -luv -lm -lpthread -ldl -static-libstdc++ -static-libgcc -Wl,--gc-sections
+    echo "relinked $OUT/bin/$exe (no GMP; system C++ link, libstdc++ static)"
+  fi
   if nm "$OUT/bin/$exe" 2>/dev/null | grep -q '__gmp'; then echo "error: $OUT/bin/$exe contains GMP" >&2; exit 1; fi
-  echo "relinked $OUT/bin/$exe (no GMP) and $OUT/bin/$exe-gmp (toolchain runtime, same link)"
 done
 
 # --- big-number differential test -------------------------------------------------------------

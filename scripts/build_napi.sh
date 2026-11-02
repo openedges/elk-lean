@@ -143,8 +143,11 @@ case "$OS" in
     ;;
   Linux)
     printf '{ global: napi_register_module_v1; node_api_module_get_api_version_v1; local: *; };\n' > "$OBJ_DIR/exports.map"
+    # the link driver scripts/build_ffi.sh recorded for its ldflags (`c++` for the no-GMP runtime:
+    # libstdc++ and libgcc static, so the addon depends on glibc only)
+    LD=$(cat "$FFI/ld" 2>/dev/null || echo "$CC")
     # shellcheck disable=SC2086
-    $CC -shared -fPIC -Wl,-Bsymbolic -Wl,--exclude-libs,ALL -Wl,--version-script="$OBJ_DIR/exports.map" \
+    $LD -shared -fPIC -Wl,-Bsymbolic -Wl,--exclude-libs,ALL -Wl,--version-script="$OBJ_DIR/exports.map" \
       "$OBJ_DIR/elk_napi.o" $LDFLAGS -o "$OUT"
     check_no_gmp
     strip --strip-unneeded "$OUT"

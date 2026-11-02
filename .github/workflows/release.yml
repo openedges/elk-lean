@@ -126,7 +126,7 @@ jobs:
         run: |
           sh scripts/build_runtime_nogmp.sh --relink elk
           sh scripts/build_napi.sh --skip-ffi --copy-to-npm
-          cp .lake/build/bin/elk elk-release
+          cp .lake/build/runtime-nogmp/bin/elk elk-release
       - name: "Gate: no GMP symbol in the distributed binaries, CLI runs"
         shell: bash
         run: |
