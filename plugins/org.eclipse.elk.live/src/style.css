@@ -242,45 +242,56 @@ body.examples-page { height: auto; min-height: 100%; }
   display: flex;
 }
 
-/* elk-live: col-md-2 sidebar, bg-light, border-right; no own scrollbar (the page scrolls) */
+/* elk-live: col-md-2 sidebar, Bootstrap `bg-light`; its Bootstrap 4 `border-right` class draws nothing
+   under Bootstrap 5, so no border; no own scrollbar (the page scrolls) */
 .sidebar {
   flex: 0 0 16.6667%;
   max-width: 16.6667%;
-  padding: 0 12px 16px;
-  background: var(--panel);
-  border-right: 1px solid var(--border);
+  padding: 0 12px;
+  background: #f8f9fa;
 }
+body.elk-dark-mode .sidebar { background: var(--panel); }
 
+/* elk-live: ul.nav.flex-column (a flex column: the headings' margins do not collapse) */
 .toc {
+  display: flex;
+  flex-direction: column;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-/* elk-live: h6.sidebar-heading.text-muted.mt-2.mb-1 (.75rem) */
+/* elk-live: h6.sidebar-heading.text-muted.mt-2.mb-1 (.75rem); the `pl-N` classes are no-ops there */
 .sidebar-heading {
   margin: 0.5rem 0 0.25rem;
+  padding: 0;
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.2;
   color: var(--muted);
 }
+.toc > li { display: block; }
 
-/* elk-live: button.sidebar-link.btn.btn-link.text-left.py-0 (.9rem, underlined) */
+/* elk-live: button.sidebar-link.btn.btn-link.py-0 (.9rem, underlined): Bootstrap's inline-block
+   `.btn` with a 1px transparent border and centred text (`text-left` is a Bootstrap 4 class and
+   does nothing there, so a wrapped label centres its second line) */
 .sidebar-link {
-  display: block;
-  width: 100%;
-  border: none;
-  border-radius: 0;
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
   background: none;
   padding: 0 0.75rem;
   color: var(--link);
   font-size: 0.9rem;
   line-height: 1.5;
-  text-align: left;
+  text-align: center;
   text-decoration: underline;
+  vertical-align: middle;
 }
-.sidebar-link:hover { color: var(--accent); }
+.sidebar-link:hover { color: #0a58ca; }
+body.elk-dark-mode .sidebar-link:hover { color: var(--accent); }
 
 .examples-main {
   flex: 1;
