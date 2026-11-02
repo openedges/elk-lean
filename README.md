@@ -5,8 +5,13 @@ Pure Lean 4 port of the [Eclipse Layout Kernel (ELK)](https://www.eclipse.org/el
 same intermediate phase results) while compiling to native code, a Node.js
 addon and WebAssembly.
 
+[![CI](https://github.com/openedges/elk-lean/actions/workflows/ci.yml/badge.svg)](https://github.com/openedges/elk-lean/actions/workflows/ci.yml)
+[![release](https://github.com/openedges/elk-lean/actions/workflows/release.yml/badge.svg)](https://github.com/openedges/elk-lean/actions/workflows/release.yml)
+[![demo](https://github.com/openedges/elk-lean/actions/workflows/pages.yml/badge.svg)](https://openedges.github.io/elk-lean/)
+
 Status: **port complete (Phases 0–6), packaging (Phase 8) and the browser demo (Phase 10)
-done, Java parity and optimisation rounds closed; release (Phase 9) pending** — see
+done, Java parity and optimisation rounds closed; CI and releases on GitHub Actions (Phase 9),
+first npm publish pending** — see
 [`PLAN.md`](PLAN.md) for the porting plan, [`AGENTS.md`](AGENTS.md) for the current snapshot
 and [`HISTORY.md`](HISTORY.md) for progress.
 
@@ -105,6 +110,24 @@ the current numbers in the snapshot section of [`AGENTS.md`](AGENTS.md).
 | `PORTING.md` | Rust/Java to Lean porting conventions (types, monads, properties, enums, numeric semantics, sorting) |
 | `docs/` | Design and analysis notes |
 | `scripts/README.md`, `tests/README.md` | What each script and test directory is for |
+
+## Install and use
+
+- npm (Node.js addon with a WASM fallback, elkjs-compatible API): `npm install @openedges/elk-lean`
+  (`plugins/org.eclipse.elk.js/README.md`).
+- Lean: `require «elk-lean» from git "https://github.com/openedges/elk-lean" @ "v0.12.0"` in a
+  lakefile (the package is indexed by [Reservoir](https://reservoir.lean-lang.org/)).
+- Native CLI and C API: the `elk-lean-<version>-<platform>.tar.gz` bundles of the GitHub Releases
+  (`bin/elk`, `lib/libelklean.a` + the GMP-free Lean runtime, `include/elk_lean.h`, `ldflags`).
+- Browser demo (elk-live without a server): https://openedges.github.io/elk-lean/
+
+## CI and releases
+
+GitHub Actions (`.github/workflows/`): `ci.yml` on every push (Lean build and tests, GMP-free C API,
+Node addon, npm tests on Linux x64 and macOS arm64; WASM; browser demo), `release.yml` on `v*` tags
+(native bundles for four platforms, WASM, npm publish, GitHub Release), `pages.yml` for the demo,
+`parity.yml` (manual, weekly) for the ELK Java / elk-rs parity and `perf.yml` (manual) for the
+benchmark. Release steps: `VERSIONING.md` and `TESTING.md` § 3.
 
 ## License
 

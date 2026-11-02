@@ -4,6 +4,8 @@
 |--------|---------|
 | `setup_dev.sh` | Explicit, idempotent development bootstrap (`mise run setup`): mise tools (`mise.toml`), elan + the Lean toolchain of `lean-toolchain`, submodules (shallow, pinned), `lake build` with the 0-warning gate, `lake test`; `--check` reports the state of every requirement; `--only oracle\|java-baseline\|wasm-toolchain` prepare the references under `.reference/` and `../elk-rs`; `--no-mise` uses the tools on PATH |
 | `build_oracle.sh` | Release build of the elk-rs oracle into `.reference/elk-rs-target` |
+| `bump_version.py` | `--check`: the package version agrees between `lakefile.lean`, `Elk/Api.lean` and the npm manifests; `<version>`: sets it everywhere (`VERSIONING.md`) |
+| `publish_npm.sh` | Publishes the `@openedges/elk-lean-<triple>` platform packages, then `@openedges/elk-lean`, skipping versions already on npm (`--dry-run`, `--expect-version`; used by `.github/workflows/release.yml` through Trusted Publishing) |
 | `oracle_layout.sh` | Lay out one JSON model with the oracle (optional phase trace dir) |
 | `compare_model_parity_layouts.py` | Semantic layout JSON comparison (copied from elk-rs) |
 | `compare_phase_traces.py` | Per-processor trace comparison (copied from elk-rs) |

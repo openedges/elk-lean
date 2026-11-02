@@ -12,11 +12,57 @@ elk-lean 0.12.1 = ELK 0.12.0 + elk-lean fixes
 ```
 
 The package version lives in `lakefile.lean` (`version := v!"0.12.0"`),
-`plugins/org.eclipse.elk.api/Elk/Api.lean` (`Elk.Api.version`) and, from
-Phase 8, in the npm manifests. They must always agree.
+`plugins/org.eclipse.elk.api/Elk/Api.lean` (`Elk.Api.version`) and in the npm
+manifests (`plugins/org.eclipse.elk.js/package.json` with its
+`optionalDependencies`, `npm/*/package.json`, the demo's `package.json` and lock).
+They must always agree: `python3 scripts/bump_version.py --check` verifies it
+and `python3 scripts/bump_version.py <version>` sets a new one everywhere.
 
 Git tags: the first release of a base version is `vX.Y.Z`; later build-only
-revisions of the same version use `vX.Y.Z+lean.N`.
+revisions of the same version use `vX.Y.Z+lean.N` (npm strips build metadata,
+so the registry only ever sees `X.Y.Z`; `release.yml` skips versions that exist).
+
+## Releases (GitHub, `openedges/elk-lean`)
+
+The repository lives at https://github.com/openedges/elk-lean; CI, releases and
+the demo site run on GitHub Actions (`.github/workflows/`):
+
+| workflow | trigger | does |
+|---|---|---|
+| `ci.yml` | every push and pull request | Lean build/test, GMP-free C API, Node addon, npm tests (Linux x64, macOS arm64); WASM build and tests; browser demo build and headless Chrome tests |
+| `release.yml` | tag `v*`, or manual | native bundles (release CLI, C API, addon) for darwin-arm64, darwin-x64, linux-x64-gnu, linux-arm64-gnu and the WASM bundle; on a release tag also `npm publish` through Trusted Publishing and a GitHub Release with the bundles |
+| `pages.yml` | push to `main` | the browser demo at https://openedges.github.io/elk-lean/ |
+| `parity.yml` | manual, weekly | ELK Java result / ELK Text parity, elk-rs model parity (and traces on request) |
+| `perf.yml` | manual | `elk bench` vs the elk-rs oracle (informational on shared runners) |
+
+Release steps (TESTING.md § 3): bump the version, update `CHANGELOG.md`, commit,
+`git tag -a vX.Y.Z -m "elk-lean X.Y.Z" && git push github main vX.Y.Z`. The tag
+must name the version the manifests carry (`release.yml` checks it); a
+prerelease version (`X.Y.Z-rc.1`) only builds.
+
+npm packages: `@openedges/elk-lean` and `@openedges/elk-lean-<triple>` for the
+four platforms the release builds (`linux-x64-musl` and `win32-x64-msvc` keep
+their templates in `npm/` until a toolchain exists). Publishing uses npm Trusted
+Publishing: on npmjs.com each package trusts the repository `openedges/elk-lean`,
+the workflow file `release.yml` and the GitHub environment `npm`; no token is
+stored in the repository. A package that is not on the registry yet cannot be
+trusted before its first version exists, so the maintainer publishes the first
+version from a machine (`npm login`, then `sh scripts/publish_npm.sh` with the
+built artefacts in place, platform packages first) and registers the trusted
+publisher afterwards; every later version comes from the workflow.
+
+Lean: the package needs no upload. [Reservoir](https://reservoir.lean-lang.org/)
+indexes public GitHub Lake packages that have a root `lake-manifest.json`, a
+GitHub-recognised OSI licence (`LICENSE` is the plain EPL-2.0 text for that
+reason; the dual licensing is declared in `NOTICE` and the SPDX headers) and at
+least two stars; the `description`, `keywords`, `homepage`, `license`,
+`licenseFiles` and `readmeFile` fields of `lakefile.lean` feed its listing and
+it builds the `v*` tags with new toolchain releases. Lean users depend on the
+repository directly:
+
+```
+require «elk-lean» from git "https://github.com/openedges/elk-lean" @ "v0.12.0"
+```
 
 ## Pinned references
 
@@ -50,7 +96,8 @@ pinned reference on a fresh machine and `--check` reports which ones are present
 
 ## Upgrading to a new ELK release
 1. Update the four submodule pins and the oracle commit (here, `scripts/build_oracle.sh`,
-   `scripts/setup_dev.sh`, `.gitlab-ci.yml`), and `mise.toml` when a tool version changes.
+   `scripts/setup_dev.sh`), and `mise.toml` when a tool version changes (the workflows read
+   every pin from `lean-toolchain`, `mise.toml` and `scripts/build_wasm.sh`).
 2. Diff `external/elk` between the releases; port the changes plugin by plugin.
 3. Rerun the full parity gates (`TESTING.md` § 2) and record the numbers.
 4. Bump the version, update `CHANGELOG.md`, tag.

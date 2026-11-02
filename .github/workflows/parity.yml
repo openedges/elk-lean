@@ -1,0 +1,126 @@
+# Layout parity against the two references (TESTING.md § 2.B), on demand and weekly: these runs
+# take far longer than the CI workflow (the ELK Java baseline lays out the whole elk-models corpus
+# with Java first; the elk-rs oracle is a Rust build).
+#
+#   java    ELK Java 0.12.0 (the result reference, Maven Central artefacts): result parity of the
+#           corpus (exact values), the ELK Text loader parity (`elk convert` vs Java's export) and the
+#           end-to-end `.elkt` parity with elk-live's defaults
+#   elk-rs  the elk-rs oracle (secondary reference): model parity, byte identity and, on request,
+#           the phase-step traces of the layered algorithm
+#
+# Gates: the elk-rs model parity and the ELK Text loader parity are exact. The ELK Java result
+# parity has models whose Java output depends on the JVM's execution context (identity hash
+# order; HISTORY.md), so the gate is a floor under the exact-match count, not equality; the floor
+# is the lowest count observed on a fresh machine. The reports are uploaded as artifacts.
+name: parity
+
+on:
+  workflow_dispatch:
+    inputs:
+      traces:
+        description: also compare the layered phase-step traces against elk-rs (slow)
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 3 * * 1'   # Mondays 03:17 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  java:
+    name: ELK Java (result reference)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      # the lowest exact-match count seen on a fresh machine (AGENTS.md snapshot: 1,878 and 1,945
+      # of 1,997 compared models; the rest is Java's execution-context dependence)
+      JAVA_EXACT_MIN: "1870"
+      # end-to-end .elkt parity: 893 of 897 (one self-loop identity-hash model, two Java EMF/JSON
+      # path differences, one exception on both sides)
+      ELKT_LAYOUT_MIN: "890"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: lake build
+        run: lake build && .lake/build/bin/elk --version
+      # scripts/run_java_baseline.sh runs Java and Maven through `mise exec`, as on a developer machine
+      - uses: jdx/mise-action@v5
+        with:
+          install: true
+          install_args: java maven
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: .reference/m2
+          key: m2-${{ hashFiles('scripts/java/pom.xml') }}
+      - name: ELK Java baseline of the corpus (layouts + exports, scripts/run_java_baseline.sh)
+        run: sh scripts/run_java_baseline.sh external/elk-models .reference/java-baseline/corpus
+      - name: Result parity, exact values (scripts/run_java_parity.sh)
+        run: |
+          sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity
+          sh .github/scripts/parity_gate.sh tests/tmp/java_parity/report_exact.md "$JAVA_EXACT_MIN" "ELK Java result parity (exact)"
+      - name: ELK Text loader parity (exact, scripts/run_elkt_loader_parity.sh)
+        run: sh scripts/run_elkt_loader_parity.sh external/elk-models .reference/java-baseline/corpus tests/tmp/elkt_loader
+      - name: ELK Text end to end with elk-live defaults (scripts/run_elkt_layout_parity.sh)
+        run: |
+          sh scripts/run_elkt_layout_parity.sh external/elk-models tests/tmp/elkt_layout || true
+          sh .github/scripts/parity_gate.sh tests/tmp/elkt_layout/report.md "$ELKT_LAYOUT_MIN" "ELK Text end-to-end parity"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: parity-java
+          path: |
+            tests/tmp/java_parity/report*.md
+            tests/tmp/java_parity/details*.tsv
+            tests/tmp/elkt_loader/report.md
+            tests/tmp/elkt_layout/report.md
+          if-no-files-found: warn
+
+  elk-rs:
+    name: elk-rs oracle (secondary reference)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: lake build
+        run: lake build && .lake/build/bin/elk --version
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.pins.outputs.rust }}
+      - uses: actions/cache@v4
+        with:
+          path: .reference/elk-rs-target
+          key: oracle-${{ runner.os }}-${{ steps.pins.outputs.rust }}-${{ hashFiles('scripts/build_oracle.sh', 'scripts/setup_dev.sh') }}
+      - name: elk-rs oracle at the pinned commit (scripts/setup_dev.sh --only oracle)
+        run: sh scripts/setup_dev.sh --no-mise --only oracle
+      - name: Model parity and byte identity (scripts/run_model_parity.sh, compare_bytes.sh)
+        run: |
+          sh scripts/run_model_parity.sh external/elk-models tests/model_parity
+          sh .github/scripts/parity_gate.sh tests/model_parity/report.md 1447 "elk-rs model parity"
+          sh scripts/compare_bytes.sh tests/model_parity || true
+      - name: Phase-step traces (scripts/run_trace_parity.sh)
+        if: inputs.traces
+        run: sh scripts/run_trace_parity.sh external/elk-models tests/tmp/trace_corpus
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: parity-elk-rs
+          path: |
+            tests/model_parity/report*.md
+            tests/model_parity/*.md
+            tests/tmp/trace_corpus/*.md
+          if-no-files-found: warn

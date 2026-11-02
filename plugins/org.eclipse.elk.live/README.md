@@ -236,9 +236,10 @@ browsers.
   `CHROME_PATH`, no browser download).
 ## CI
 
-`.gitlab-ci.yml` at the repository root has a **draft** `.pages` job (hidden: a job name starting
-with `.` never runs). It is not enabled because the runner/image decisions for CI and releases are
-on hold; renaming it to `pages` publishes `dist/` to GitLab Pages after `build:wasm`.
+`pages.yml` (`.github/workflows/`) builds the WASM and this app on every push to `main` and
+deploys `dist/` to GitHub Pages: https://openedges.github.io/elk-lean/ (the Pages source of the
+repository is GitHub Actions). `ci.yml` builds and tests the app (Node tests and the headless
+Chrome tests with the runner's Chrome) on every push.
 
 ## License and provenance
 

@@ -6,7 +6,9 @@ as fallback (Node.js) and as the browser backend.
 The package layout and loaders are ported from [elk-rs](https://github.com/openedges/elk-rs)
 `plugins/org.eclipse.elk.js`; the API and typings come from elkjs.
 
-Status: not published (`"private": true`). Requires Node.js 18 or later.
+Published as `@openedges/elk-lean` (`npm install @openedges/elk-lean`; the native addon comes from
+the `@openedges/elk-lean-<platform>` optional dependency of your platform, WASM otherwise).
+Requires Node.js 18 or later.
 
 ## Usage
 
@@ -28,7 +30,7 @@ elk.layout(graph).then(console.log);
 ```
 
 ESM: `import ELK from '@openedges/elk-lean';`. Worker mode (Node.js `worker_threads` or a Web Worker):
-`new ELK({ workerUrl: require.resolve('elk-lean/js/elk-worker.js') })`.
+`new ELK({ workerUrl: require.resolve('@openedges/elk-lean/js/elk-worker.js') })`.
 
 ## Backends
 

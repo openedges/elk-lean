@@ -135,3 +135,5 @@ for d in plugins/org.eclipse.elk.js/npm/*/; do (cd "$d" && npm pack --dry-run); 
 5. 컨텍스트 의존 119개 모델 목록을 릴리스 노트에 첨부할지 결정.
 6. 메타데이터 parity 최신 수치를 스냅샷에 명시.
 7. CI 러너 태그, Docker 이미지 레지스트리 결정(`.gitlab-ci.yml`의 `RUNNER_TAG_*`, `CI_IMAGE_*`).
+
+→ 2026-11-02: 1·4·7은 GitHub Actions로 해소됐다(`PLAN.md` 8.2, `VERSIONING.md` "Releases"): `.gitlab-ci.yml`은 제거, 러너는 GitHub 호스트(Linux x64·arm64, macOS arm64·Intel), npm 이름은 `@openedges/elk-lean`(+ 플랫폼 4개, `private` 제거), 게시는 `release.yml`의 trusted publishing(첫 버전만 수동). 남은 것: musl·Windows 빌드(툴체인·스크립트 없음), 5·6.

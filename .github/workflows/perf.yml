@@ -1,0 +1,58 @@
+# Performance against elk-rs (TESTING.md § 2.D), on demand: `elk bench` vs the oracle's
+# `perf_benchmark` on the 26 synthetic scenarios. GitHub-hosted runners are shared machines, so
+# the numbers are informational (the 5% regression gate of AGENTS.md is measured on an idle
+# developer machine against tests/perf/baseline_lean_api.csv); the report is uploaded and the
+# lean/elk-rs ratio is written to the job summary.
+name: perf
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: iterations per scenario
+        type: number
+        default: 10
+      warmup:
+        description: warm-up iterations per scenario
+        type: number
+        default: 2
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: elk bench vs elk-rs
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: lake build
+        run: lake build && .lake/build/bin/elk --version
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.pins.outputs.rust }}
+      - uses: actions/cache@v4
+        with:
+          path: .reference/elk-rs-target
+          key: oracle-${{ runner.os }}-${{ steps.pins.outputs.rust }}-${{ hashFiles('scripts/build_oracle.sh', 'scripts/setup_dev.sh') }}
+      - name: elk-rs oracle at the pinned commit
+        run: sh scripts/setup_dev.sh --no-mise --only oracle
+      - name: Benchmark (no baseline in this directory, so no regression gate)
+        run: sh scripts/run_perf_benchmark.sh "${{ inputs.iterations }}" "${{ inputs.warmup }}" tests/tmp/perf_ci
+      - name: Summary
+        run: |
+          { echo '## elk bench vs elk-rs perf_benchmark'; echo; cat tests/tmp/perf_ci/report.md; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: perf
+          path: tests/tmp/perf_ci/
+          if-no-files-found: warn

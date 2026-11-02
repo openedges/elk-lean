@@ -233,6 +233,8 @@ cd plugins/org.eclipse.elk.live && npm ci && npm run build && npm test
 ```
 
 ## 3. Release checklist
+0. CI green on `main` (`ci.yml`); the latest `parity.yml` run green (ELK Java result parity above its
+   floor, ELK Text loader parity exact, elk-rs model parity 1447/1447).
 1. `lake build` and `lake test` clean.
 2. ELK Java result parity (exact) and Java phase-step trace parity regenerated, the models whose
    Java result is context-dependent listed, elk-rs parity/byte identity regenerated; all recorded
@@ -241,5 +243,11 @@ cd plugins/org.eclipse.elk.live && npm ci && npm run build && npm test
 4. Performance within 5% of the recorded baseline (`scripts/run_perf_benchmark.sh`), memory check
    clean, FFI smoke test (`scripts/build_ffi.sh --check`) passing in both runtime modes, release
    artefacts built with `ELK_NO_GMP=1` and free of `__gmp` symbols (section 2.E).
-5. Browser demo rebuilt and tested (section 2.F), `dist/` up to date.
-6. `CHANGELOG.md` updated, tag `vX.Y.Z` (see `VERSIONING.md`).
+5. Browser demo rebuilt and tested (section 2.F); the Pages deployment of `main` works.
+6. Version bumped everywhere (`python3 scripts/bump_version.py X.Y.Z`, `--check` clean),
+   `CHANGELOG.md` updated, committed.
+7. Tag `vX.Y.Z` pushed to `github` (`openedges/elk-lean`): `release.yml` builds the bundles, publishes
+   the npm packages missing on the registry (Trusted Publishing) and creates the GitHub Release
+   (`VERSIONING.md` "Releases"). A first-ever package version is published by hand first.
+8. Afterwards: the GitHub Release assets and the npm versions exist, Reservoir lists the tag within
+   a few days.

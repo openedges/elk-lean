@@ -171,10 +171,15 @@ modules no longer follow elk-rs where it deviated from Java (`docs/robustness-ra
   elk-rs reports `LEFT_UP` etc. Both spellings are accepted on input.
 
 ### Not yet available
-- Packages are not published (all `package.json` carry `"private": true`). The browser demo's
-  GitLab Pages job is a disabled draft (`.pages`); Firefox and Safari were not tested.
+- npm packages: `@openedges/elk-lean` and `@openedges/elk-lean-<triple>` (darwin-arm64, darwin-x64,
+  linux-x64-gnu, linux-arm64-gnu); `release.yml` publishes them through npm Trusted Publishing on
+  a `v*` tag after the maintainer's first manual publish; `linux-x64-musl` and `win32-x64-msvc`
+  are templates until a toolchain exists. The browser demo's
+  site is deployed by `pages.yml` to https://openedges.github.io/elk-lean/; Firefox and Safari
+  were not tested.
 - Only macOS arm64 builds have been exercised. Linux (glibc x64/arm64, musl), Windows and
-  CI builds are drafted in `.gitlab-ci.yml` but untested, including the GMP-free runtime build on
+  CI runs on GitHub Actions (`ci.yml`: Linux x64 and macOS arm64; `release.yml` adds darwin-x64
+  and linux-arm64), including the GMP-free runtime build on
   Linux and the parallel layout's task manager in the addon. See `docs/release-dry-run-0.12.0.md`.
 
 ## Project scaffold (pre-release history)
