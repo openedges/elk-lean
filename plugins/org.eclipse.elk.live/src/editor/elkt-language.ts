@@ -9,9 +9,10 @@
  *******************************************************************************/
 /*
  * Ported from elk-live client/src/elkgraph/elkt-language.ts (language registration, language
- * configuration and Monarch tokenizer of `.elkt`) to the ESM API of current Monaco. Changed for
- * elk-lean: strings and numbers are tokenized (the original never entered its `string` state),
- * option keys (`a.b.c:`) get their own token, `null` is a keyword, auto-closing quotes.
+ * configuration and Monarch tokenizer of `.elkt`) to the ESM API of current Monaco, tokenising
+ * exactly as elk-live does: keywords, identifiers, brackets and comments; strings, numbers and
+ * option keys stay plain text (the original's `string` state is never entered, and it has no
+ * number rule). Only the Monarch regexes were rewritten for the strict TypeScript build.
  */
 import type * as Monaco from 'monaco-editor/editor/editor.api';
 
@@ -26,40 +27,27 @@ export function registerElkt(monaco: typeof Monaco): void {
     autoClosingPairs: [
       { open: '{', close: '}' },
       { open: '[', close: ']' },
-      { open: '"', close: '"', notIn: ['string'] },
     ],
-    surroundingPairs: [
-      { open: '{', close: '}' },
-      { open: '[', close: ']' },
-      { open: '"', close: '"' },
-    ],
-    wordPattern: /[A-Za-z_$][\w$.]*|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/,
-    indentationRules: {
-      increaseIndentPattern: /\{[^}"']*$/,
-      decreaseIndentPattern: /^\s*\}/,
-    },
   });
 
   monaco.languages.setMonarchTokensProvider(ELKT, {
     keywords: [
       'graph', 'node', 'label', 'port', 'edge', 'layout', 'position', 'size', 'incoming', 'outgoing',
-      'start', 'end', 'bends', 'section', 'true', 'false', 'null',
+      'start', 'end', 'bends', 'section', 'true', 'false',
     ],
+    typeKeywords: [],
+    operators: [],
     symbols: /[=><!~?:&|+\-*/^%]+/,
     escapes: /\\(?:[btnfru\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
     tokenizer: {
       root: [
-        // option keys: identifiers (with dots) directly followed by ':'
-        [/[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*(?=\s*:)/, 'type.identifier'],
-        [/[a-zA-Z_$][\w$]*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+        // identifiers and keywords
+        [/[a-z_$][\w$]*/, { cases: { '@typeKeywords': 'keyword', '@keywords': 'keyword', '@default': 'identifier' } }],
         { include: '@whitespace' },
+        // delimiters and operators
         [/[{}()[\]]/, '@brackets'],
-        [/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, 'number'],
-        [/"/, 'string', '@string'],
-        [/'/, 'string', '@sstring'],
-        [/->/, 'operator'],
-        [/@symbols/, 'delimiter'],
-        [/[,.]/, 'delimiter'],
+        [/[<>](?!@symbols)/, '@brackets'],
+        [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }],
       ],
       whitespace: [
         [/[ \t\r\n]+/, 'white'],
@@ -68,20 +56,16 @@ export function registerElkt(monaco: typeof Monaco): void {
       ],
       comment: [
         [/[^/*]+/, 'comment'],
+        [/\/\*/, 'comment.invalid'],
         [/\*\//, 'comment', '@pop'],
         [/[/*]/, 'comment'],
       ],
+      // never entered (as in elk-live): kept for fidelity with the original grammar
       string: [
         [/[^\\"]+/, 'string'],
         [/@escapes/, 'string.escape'],
         [/\\./, 'string.escape.invalid'],
         [/"/, 'string', '@pop'],
-      ],
-      sstring: [
-        [/[^\\']+/, 'string'],
-        [/@escapes/, 'string.escape'],
-        [/\\./, 'string.escape.invalid'],
-        [/'/, 'string', '@pop'],
       ],
     },
   } as Monaco.languages.IMonarchLanguage);

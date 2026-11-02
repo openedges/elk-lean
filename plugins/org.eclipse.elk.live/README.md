@@ -78,7 +78,7 @@ page load on an M-series Mac (WASM compile in the worker).
 | `src/core/elk-to-sprotty.ts` | laid-out ELK JSON → sprotty model (elk-live's visual model) |
 | `src/core/options.ts` | completion metadata (`knownLayoutOptions()`, `knownLayoutAlgorithms()`, enum literals), `.elkt` context scan |
 | `src/core/elkex.ts`, `src/core/markdown.ts` | example files (`// elkex:` sections), category tree and table of contents; descriptions rendered with showdown (GitHub flavour, `simpleLineBreaks: false`) exactly as elk-live does |
-| `src/editor/` | Monaco setup (ESM, selected contributions), `.elkt` and `elkj` Monarch grammars, completion and hover providers |
+| `src/editor/` | Monaco setup (ESM, selected contributions), `.elkt` and `elkj` Monarch grammars, completion provider |
 | `src/diagram/` | sprotty container, model classes, views, diagram CSS, SVG export |
 | `src/generated/option-choices.json` | enum literals of the ENUM/ENUMSET options (`npm run gen:choices`) |
 | `scripts/copy-assets.mjs` | build-time copies into `public/` (gitignored): `examples/**.elkt` + `examples/index.json`, `elk-lean/js/elk-worker.js`, `elk-lean/js/load-wasm.browser.mjs`, `elk-lean/dist/wasm/elk_lean_core.{mjs,wasm}` |
@@ -101,8 +101,9 @@ Implemented:
   elk-live's navbar (brand linking to the landing page, centered title, dark-mode toggle) and
   footer ("Link to this model" on the editors). Where elk-live has its ELK version menu, the navbar
   shows an engine badge `elk-lean 0.12.0 · ELK 0.12.0` (tooltip: one engine, nothing to choose).
-- `.elkt` editor (Monaco 0.57) with syntax highlighting (elk-live's Monarch grammar, extended with
-  strings, numbers and option keys), bracket matching, folding, comments, find.
+- `.elkt` editor (Monaco 0.57) with syntax highlighting (elk-live's Monarch grammar as it is:
+  keywords and comments; strings, numbers and option keys stay plain), bracket matching, folding,
+  comments, find.
 - Parser errors as editor markers and in the status line, with the Lean parser's line and column
   (`ELK Text parse error: L:C: …`); layout errors (Java exception text) in the status line. The
   Xtext messages of elk-live are not reproduced (PLAN 8.1).
@@ -110,7 +111,9 @@ Implemented:
   cursor is in (option targets: root/parents, nodes, edges, ports, labels), options known to the
   algorithm in scope listed first, insertion as `elk.<id>: `; values for ENUM/ENUMSET options, for
   booleans and for `algorithm:` (algorithm ids); keyword snippets (`node`, `edge`, `port`, `label`,
-  `layout`). Hovers on option keys show name, type, targets, literals and description.
+  `layout`); the option documentation is in the completion details (no hovers, as in elk-live).
+  Editor behaviour follows elk-live's Monaco 0.14: no occurrence highlighting of the word at the
+  cursor, no bracket pair colours, no sticky scroll, no whitespace dots inside selections.
 - ELK JSON editor (elk-live's json page): the text is parsed with JSON5 like elk-live (comments,
   unquoted keys, single quotes, trailing commas), highlighted with elk-live's `elkj` Monarch grammar
   (extended with strings, numbers and keys), JSON5 syntax errors become markers with line and

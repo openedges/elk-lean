@@ -2,7 +2,7 @@
  * Completion and hover providers for `.elkt` (replacing the Xtext language server of elk-live):
  * option keys filtered by the element they apply to (targets of `knownLayoutOptions()`), options
  * of the algorithm in scope first; values of ENUM / ENUMSET / BOOLEAN options and of `algorithm:`;
- * element keywords; hovers with an option's name, type, targets, literals and description.
+ * element keywords (documentation in the completion details; elk-live shows no hovers).
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
@@ -110,26 +110,7 @@ export function registerCompletion(monaco: typeof Monaco, getMeta: () => Metadat
     },
   });
 
-  const hover = monaco.languages.registerHoverProvider(ELKT, {
-    provideHover(model, position) {
-      const meta = getMeta();
-      if (!meta) return null;
-      const line = model.getLineContent(position.lineNumber);
-      const re = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*:/g;
-      for (let m = re.exec(line); m; m = re.exec(line)) {
-        const start = m.index + 1;
-        const end = start + m[1].length;
-        if (position.column >= start && position.column <= end) {
-          const o = resolveOption(meta, m[1]);
-          if (!o) return null;
-          return {
-            range: new monaco.Range(position.lineNumber, start, position.lineNumber, end),
-            contents: [{ value: optionDoc(o) }],
-          };
-        }
-      }
-      return null;
-    },
-  });
-  return [completion, hover];
+  // no hover provider: elk-live's Xtext language server shows no hovers on option keys, so the
+  // option documentation is only offered in the completion items
+  return [completion];
 }

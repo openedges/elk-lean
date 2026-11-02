@@ -296,7 +296,7 @@ body.elk-dark-mode .sidebar-link:hover { color: var(--accent); }
 .examples-main {
   flex: 1;
   min-width: 0;
-  padding: 24px 12px 8px; /* elk-live: col pt-4 */
+  padding: 24px 0 8px; /* elk-live: col pt-4; the inner row's negative margins cancel the col gutter */
 }
 
 /* elk-live: two cols p-1, each 50vh, no frame */

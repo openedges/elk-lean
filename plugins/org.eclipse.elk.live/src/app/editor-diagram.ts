@@ -116,6 +116,14 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
     automaticLayout: true,
     quickSuggestions: { other: true, comments: false, strings: false },
     suggestOnTriggerCharacters: true,
+    // features Monaco 0.57 enables by default that elk-live's Monaco 0.14 did not have: textual
+    // occurrence highlighting of the word at the cursor, bracket pair colours, sticky scroll,
+    // whitespace dots inside selections, ambiguous-unicode warnings
+    occurrencesHighlight: 'off',
+    bracketPairColorization: { enabled: false },
+    stickyScroll: { enabled: false },
+    renderWhitespace: 'none',
+    unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: false },
     ...opts.editorOptions,
   });
   onDarkModeChange((dark) => monaco.editor.setTheme(dark ? 'vs-dark' : 'vs'));

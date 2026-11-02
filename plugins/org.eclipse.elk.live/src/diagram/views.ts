@@ -61,9 +61,7 @@ export class ElkEdgeView implements IView {
     if (pts.length >= 2) {
       let d = `M ${pts[0].x},${pts[0].y}`;
       for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x},${pts[i].y}`;
-      children.push(svg('path', {
-        'class-elkedge': true, 'class-mouseover': edge.hoverFeedback, 'class-selected': edge.selected, d,
-      }));
+      children.push(svg('path', { 'class-elkedge': true, d }));
       if (edge.arrow !== false) {
         const p1 = pts[pts.length - 2];
         const p2 = pts[pts.length - 1];
@@ -74,7 +72,10 @@ export class ElkEdgeView implements IView {
         }));
       }
     }
-    return svg('g', { 'class-sprotty-edge': true }, ...children, ...context.renderChildren(edge));
+    // hover / selection classes on the group as sprotty's PolylineEdgeView (elk-live) puts them: the
+    // path's own `.elkedge` stroke wins, so edges show no feedback there either
+    return svg('g', { 'class-sprotty-edge': true, 'class-mouseover': edge.hoverFeedback, 'class-selected': edge.selected },
+      ...children, ...context.renderChildren(edge));
   }
 }
 
