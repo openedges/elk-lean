@@ -1,10 +1,12 @@
 /*
  * The edit -> diagram pipeline of the app, without DOM: ELK Text (or ELK JSON) -> ElkGraph JSON
- * (`elk.convertElkt`, Lean parser) -> layout (`elk.layout`) -> sprotty model. Errors are classified
- * so that the editor can place a marker (parse errors carry line and column).
+ * (`elk.convertElkt`, Lean parser; JSON5 for ELK JSON like elk-live's json page) -> layout
+ * (`elk.layout`) -> sprotty model. Errors are classified so that the editor can place a marker
+ * (parse errors carry line and column).
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
+import JSON5 from 'json5';
 import type { ElkNode } from 'elk-lean';
 import { elkToSprotty, type SGraph } from './elk-to-sprotty.ts';
 
@@ -116,6 +118,43 @@ export function parseJsonError(message: string, text: string): Diagnostic {
   return { kind: 'parse', message };
 }
 
+const JSON5_LOCATION = / at \d+:\d+$/;
+
+/**
+ * Parses ELK JSON like elk-live's json editor: JSON5 (comments, unquoted keys, single quotes,
+ * trailing commas), so plain JSON works too. JSON5 syntax errors carry `lineNumber` and
+ * `columnNumber`; other errors are located with `parseJsonError`.
+ */
+export function parseJsonInput(text: string): { graph: ElkNode; diagnostic?: undefined } | { graph?: undefined; diagnostic: Diagnostic } {
+  try {
+    return { graph: JSON5.parse(text) as ElkNode };
+  } catch (e) {
+    const err = e as { message?: unknown; lineNumber?: unknown; columnNumber?: unknown };
+    const message = messageOf(e);
+    if (typeof err.lineNumber === 'number' && typeof err.columnNumber === 'number') {
+      // "JSON5: invalid character '}' at 1:29" -> "invalid character '}'" (the location is kept separately)
+      const short = message.replace(/^JSON5: /, '').replace(JSON5_LOCATION, '');
+      return { diagnostic: { kind: 'parse', message: short, line: err.lineNumber, column: err.columnNumber } };
+    }
+    return { diagnostic: parseJsonError(message, text) };
+  }
+}
+
+/** `N nodes, M edges` of a laid-out graph (all levels; the root is not counted). */
+export function countElements(g: ElkNode): string {
+  let nodes = 0;
+  let edges = 0;
+  const visit = (n: ElkNode) => {
+    for (const c of n.children ?? []) {
+      nodes++;
+      visit(c);
+    }
+    edges += (n.edges ?? []).length;
+  };
+  visit(g);
+  return `${nodes} node${nodes === 1 ? '' : 's'}, ${edges} edge${edges === 1 ? '' : 's'}`;
+}
+
 function messageOf(err: unknown): string {
   if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
   return String(err);
@@ -125,7 +164,10 @@ const now = (): number => (typeof performance !== 'undefined' ? performance.now(
 
 /**
  * Runs the pipeline once. ELK Text gets the elk-live default sizes (`defaults: true`: nodes 30,
- * ports 5, labels 9 x length by 16), like the elk-live language server.
+ * ports 5, labels 9 x length by 16), like the elk-live language server. ELK JSON is laid out as
+ * parsed: unlike elk-live, `org.eclipse.elk.json.edgeCoords` is not forced to `PARENT`
+ * (`elkToSprotty` honours `shapeCoords`/`edgeCoords`), so the laid-out JSON is the engine's result
+ * for the user's input.
  */
 export async function runPipeline(elk: ElkLike, text: string, format: InputFormat = 'elkt'): Promise<PipelineResult> {
   const t0 = now();
@@ -134,11 +176,9 @@ export async function runPipeline(elk: ElkLike, text: string, format: InputForma
     if (format === 'elkt') {
       graph = await elk.convertElkt(text, { defaults: true });
     } else {
-      try {
-        graph = JSON.parse(text) as ElkNode;
-      } catch (e) {
-        return { ok: false, diagnostic: parseJsonError(messageOf(e), text), parseMs: now() - t0, layoutMs: 0 };
-      }
+      const parsed = parseJsonInput(text);
+      if (parsed.diagnostic) return { ok: false, diagnostic: parsed.diagnostic, parseMs: now() - t0, layoutMs: 0 };
+      graph = parsed.graph;
     }
   } catch (e) {
     return { ok: false, diagnostic: parseElktError(messageOf(e)), parseMs: now() - t0, layoutMs: 0 };

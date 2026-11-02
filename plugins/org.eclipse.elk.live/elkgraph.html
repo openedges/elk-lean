@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later -->
+<!-- ELKT Editor, after elk-live client/src/elkgraph/elkgraph_template.html (EPL-2.0). Navbar and
+     footer are inserted by src/app/chrome.ts. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ELK Editor (elkt)</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+</head>
+<body class="editor-page">
+  <main class="panes">
+    <div class="pane editor-pane">
+      <div id="monaco-editor"></div>
+    </div>
+    <div class="pane diagram-pane">
+      <div id="sprotty" class="sprotty"></div>
+    </div>
+  </main>
+  <script type="module" src="./src/pages/elkgraph.ts"></script>
+</body>
+</html>

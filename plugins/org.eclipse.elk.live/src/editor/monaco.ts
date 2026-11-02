@@ -1,6 +1,6 @@
 /*
  * Monaco Editor, ESM API with the editor contributions this app uses (no bundled language
- * services: `.elkt` and JSON are tokenized by Monarch grammars, completion is local).
+ * services: `.elkt` and ELK JSON are tokenized by Monarch grammars, completion is local).
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
@@ -30,27 +30,5 @@ import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
 };
-
-/** Minimal JSON tokenizer (the app does not ship Monaco's JSON language service). */
-export function registerJson(m: typeof monaco): void {
-  m.languages.register({ id: 'json', extensions: ['.json'] });
-  m.languages.setLanguageConfiguration('json', {
-    brackets: [['{', '}'], ['[', ']']],
-    autoClosingPairs: [{ open: '{', close: '}' }, { open: '[', close: ']' }, { open: '"', close: '"', notIn: ['string'] }],
-  });
-  m.languages.setMonarchTokensProvider('json', {
-    tokenizer: {
-      root: [
-        [/"(?:[^"\\]|\\.)*"(?=\s*:)/, 'type.identifier'],
-        [/"(?:[^"\\]|\\.)*"/, 'string'],
-        [/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, 'number'],
-        [/\b(?:true|false|null)\b/, 'keyword'],
-        [/[{}[\]]/, '@brackets'],
-        [/[,:]/, 'delimiter'],
-        [/\s+/, 'white'],
-      ],
-    },
-  });
-}
 
 export { monaco };

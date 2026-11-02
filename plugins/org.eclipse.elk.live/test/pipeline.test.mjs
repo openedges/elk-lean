@@ -10,10 +10,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runPipeline, parseElktError, parseJsonError } from '../src/core/pipeline.ts';
+import { runPipeline, parseElktError, parseJsonError, parseJsonInput, countElements } from '../src/core/pipeline.ts';
 import { collectIds, elkToSprotty } from '../src/core/elk-to-sprotty.ts';
 import { buildMetadata, contextAt, resolveOption } from '../src/core/options.ts';
-import { parseElkex } from '../src/core/elkex.ts';
+import { createExampleCategoryTree, navigationItems, parseElkex } from '../src/core/elkex.ts';
+import { initialContent, legacyRedirect, modelLink } from '../src/core/urls.ts';
 import { renderMarkdown } from '../src/core/markdown.ts';
 
 const require = createRequire(import.meta.url);
@@ -82,6 +83,31 @@ describe('pipeline (browser WASM build in Node)', { skip: !haveAssets ? 'run `np
     assert.equal(ok.ok, true);
   });
 
+  it('lays out the JSON editor\'s JSON5 sample as given (no forced edgeCoords)', async () => {
+    const sample = `{
+  id: "root",
+  layoutOptions: { 'algorithm': 'layered' },
+  // JSON5: comments, unquoted keys, single quotes, trailing commas
+  children: [
+    { id: "n1", width: 30, height: 30 },
+    { id: "n2", width: 30, height: 30 },
+    { id: "n3", width: 30, height: 30 },
+  ],
+  edges: [
+    { id: "e1", sources: [ "n1" ], targets: [ "n2" ] },
+    { id: "e2", sources: [ "n1" ], targets: [ "n3" ] }
+  ]
+}`;
+    const r = await runPipeline(elk, sample, 'json');
+    assert.equal(r.ok, true, r.diagnostic?.message);
+    assert.equal(countElements(r.laidOut), '3 nodes, 2 edges');
+    assert.equal(r.graph.properties, undefined);
+    assert.ok(r.laidOut.edges.every((e) => e.sections?.length === 1));
+    // the same graph as plain JSON gives the same layout
+    const plain = await runPipeline(elk, JSON.stringify(parseJsonInput(sample).graph), 'json');
+    assert.deepEqual(plain.laidOut, r.laidOut);
+  });
+
   it('knownLayoutOptions + the enum snapshot give completion metadata', async () => {
     const choices = JSON.parse(readFileSync(path.join(app, 'src/generated/option-choices.json'), 'utf8'));
     const meta = buildMetadata(await elk.knownLayoutOptions(), await elk.knownLayoutAlgorithms(), choices);
@@ -108,6 +134,45 @@ describe('core helpers', () => {
     assert.deepEqual(parseElktError('weird'), { kind: 'parse', message: 'weird' });
     const d = parseJsonError('Unexpected token } in JSON at position 12', '{\n  "a": 1,\n}');
     assert.deepEqual([d.line, d.column], [3, 1]);
+  });
+
+  it('parseJsonInput: JSON5 syntax and located errors', () => {
+    const ok = parseJsonInput("{ id: 'r', // comment\n children: [ { id: \"a\", width: 1, }, ], }");
+    assert.deepEqual(ok.graph, { id: 'r', children: [{ id: 'a', width: 1 }] });
+    assert.deepEqual(parseJsonInput('{"id": "root", "children": [}').diagnostic,
+      { kind: 'parse', message: "invalid character '}'", line: 1, column: 29 });
+    const bad = parseJsonInput('{\n  id: "root",\n  children: [ { id: n1 } ]\n}').diagnostic;
+    assert.deepEqual([bad.kind, bad.line, bad.column], ['parse', 3, 22]);
+    const eof = parseJsonInput('{ id: "root",\n');
+    assert.deepEqual([eof.diagnostic.line, eof.diagnostic.column, eof.diagnostic.message], [2, 1, 'invalid end of input']);
+  });
+
+  it('legacy single-page links and model links', () => {
+    assert.equal(legacyRedirect(''), null);
+    assert.equal(legacyRedirect('?foo=1'), null);
+    assert.equal(legacyRedirect('?compressedContent=abc'), 'elkgraph.html?compressedContent=abc');
+    assert.equal(legacyRedirect('?compressedContent=abc&format=json'), 'json.html?compressedContent=abc&format=json');
+    assert.equal(legacyRedirect('?initialContent=node%20a'), 'elkgraph.html?initialContent=node%20a');
+    assert.equal(legacyRedirect('?e=general%2Fdirection'), 'examples.html?e=general%2Fdirection');
+    const link = modelLink('http://h/demo/elkgraph.html?x=1#y', 'json.html', 'node a\nnode b');
+    assert.match(link, /^http:\/\/h\/demo\/json\.html\?compressedContent=[\w+\-$]+$/);
+    assert.equal(initialContent(new URL(link).search, 'fallback'), 'node a\nnode b');
+    assert.equal(initialContent('?initialContent=node%20x', 'fallback'), 'node x');
+    assert.equal(initialContent('?compressedContent=', 'fallback'), 'fallback');
+    assert.equal(initialContent('', 'fallback'), 'fallback');
+  });
+
+  it('example category tree and navigation (depth-first, alphabetical)', () => {
+    const ex = (path, label, category) => ({ path, label, category, doc: '' });
+    const list = [ex('h/b', 'Beta', ['Hierarchy']), ex('g/d2', 'Zeta', ['General', 'Direction']), ex('top', 'Top', []),
+      ex('g/d1', 'Alpha', ['General', 'Direction']), ex('h/e', 'Edges', ['Hierarchy', 'Edges']), ex('g/x', 'Gen', ['General']),
+      ex('g/s', 'Sp', ['General', 'Spacing', 'Deep'])];
+    const tree = createExampleCategoryTree(list);
+    assert.deepEqual([tree.name, tree.elements.map((e) => e.path), tree.subCategories.map((c) => c.name)],
+      ['root', ['top'], ['Hierarchy', 'General']]);
+    const nav = navigationItems(tree).map((i) => i.kind === 'heading' ? `${i.indent}#${i.text}` : `${i.indent}:${i.example.label}`);
+    assert.deepEqual(nav, ['0:Top', '1#General', '1:Gen', '2#General > Direction', '2:Alpha', '2:Zeta',
+      '2#General > Spacing', '3#General > Spacing > Deep', '3:Sp', '1#Hierarchy', '1:Beta', '2#Hierarchy > Edges', '2:Edges']);
   });
 
   it('contextAt finds the enclosing element and algorithm', () => {
@@ -155,9 +220,14 @@ describe('core helpers', () => {
 });
 
 describe('static build', { skip: !existsSync(path.join(app, 'dist/index.html')) ? 'run `npm run build` first' : false }, () => {
-  it('dist/ holds the page, the bundle, the worker, the WASM and the examples', () => {
-    const html = readFileSync(path.join(app, 'dist/index.html'), 'utf8');
-    assert.match(html, /<script type="module" crossorigin src="\.\/assets\/index-[\w-]+\.js">/);
+  it('dist/ holds the four pages, their bundles, the worker, the WASM and the examples', () => {
+    for (const page of ['index', 'elkgraph', 'json', 'examples']) {
+      const html = readFileSync(path.join(app, `dist/${page}.html`), 'utf8');
+      assert.match(html, new RegExp(`<script type="module" crossorigin src="\\./assets/${page}-[\\w-]+\\.js">`), page);
+      for (const [, f] of html.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g)) assert.ok(existsSync(path.join(app, 'dist', f)), `${page}: ${f}`);
+    }
+    const landing = readFileSync(path.join(app, 'dist/index.html'), 'utf8');
+    for (const href of ['elkgraph.html', 'json.html', 'examples.html']) assert.ok(landing.includes(`href="${href}"`), href);
     for (const f of ['elk-lean/js/elk-worker.js', 'elk-lean/js/load-wasm.browser.mjs', 'elk-lean/dist/wasm/elk_lean_core.mjs',
       'elk-lean/dist/wasm/elk_lean_core.wasm', 'examples/index.json', 'examples/general/direction.elkt', 'favicon.svg']) {
       assert.ok(existsSync(path.join(app, 'dist', f)), f);

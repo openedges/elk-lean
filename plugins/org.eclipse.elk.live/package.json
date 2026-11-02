@@ -16,6 +16,7 @@
   "dependencies": {
     "elk-lean": "file:../org.eclipse.elk.js",
     "inversify": "6.2.2",
+    "json5": "2.2.3",
     "lz-string": "1.5.0",
     "monaco-editor": "0.57.0",
     "reflect-metadata": "0.2.2",

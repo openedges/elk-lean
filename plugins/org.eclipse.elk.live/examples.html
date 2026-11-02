@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later -->
+<!-- Examples, after elk-live client/src/examples/examples_template.html (EPL-2.0). Navbar and
+     footer are inserted by src/app/chrome.ts. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ELK Examples</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+</head>
+<body class="examples-page">
+  <div class="examples-layout">
+    <aside class="sidebar" aria-label="Examples">
+      <ul id="toc" class="toc"></ul>
+    </aside>
+    <main class="examples-main">
+      <div class="examples-panes">
+        <div class="pane editor-pane">
+          <div id="monaco-editor"></div>
+        </div>
+        <div class="pane diagram-pane">
+          <div id="sprotty" class="sprotty"></div>
+        </div>
+      </div>
+      <section class="example-doc">
+        <h4><small id="title-small" class="muted"></small><br><span id="title"></span></h4>
+        <div id="example-description"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="./src/pages/examples.ts"></script>
+</body>
+</html>
