@@ -12,7 +12,7 @@ with the ELK release they port (see `VERSIONING.md`).
 
 First release: a pure Lean 4 port of the Eclipse Layout Kernel 0.12.0 (reference ELK / elkjs
 0.12.0, performance and secondary parity oracle elk-rs 0.12.1 at `eb586b6d`). Not yet tagged or
-published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
+published; the numbers below are the `AGENTS.md` snapshot of 2026-11-02.
 
 ### Delivered
 - **ELK port**: all layered phases (P1 cycle breaking to P5 edge routing, 59 intermediate
@@ -66,6 +66,12 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   library stay sequential. Hierarchical ptolemy models: 1.39x in total with 8 threads (large models
   about 2x); connected components of a single layered graph are not parallelised because they share
   one `Random`, as in Java.
+- **Development environment**: `mise.toml` pins JDK temurin 21.0.13+9, Maven 3.9.16, Node 24.22.1,
+  Rust 1.97.1 and Python 3.14.6 (Lean v4.35.0 comes from elan through `lean-toolchain`) and defines
+  `mise run` tasks; `scripts/setup_dev.sh` (`mise run setup`) bootstraps a fresh machine idempotently
+  (elan and toolchain, shallow pinned submodules, `lake build` with the 0-warning gate, `lake test`),
+  prepares the references on request (`--only oracle|java-baseline|wasm-toolchain`) and reports the
+  state of every requirement with `--check`.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
@@ -91,7 +97,9 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-01.
   `sin`, `cos`, `asin`, `atan2`, `acos`, `log`, and ELK's option defaults per read site.
 - **Result parity against unmodified ELK Java 0.12.0** (corpus of 1,998 models, 1,997 compared; 1
   fails identically on both sides): 1,878 exact (tolerance 0). The other 119 depend on the Java
-  execution context (see below); against Java with patch 0001 applied all of them match.
+  execution context (see below); against Java with patch 0001 applied all of them match. A baseline
+  regenerated on a second machine on 2026-11-02 gives 1,945 exact and 52 drifts, all in that class
+  (12 change between Java's forward and reverse runs, 39 match Java with patch 0001, 1 is ticket 213).
 - **Layered phase-step traces against ELK Java** (tolerance 0, strict order): 1,817/1,997 match in
   every step. The remaining 180 are caused on the Java side: 170 non-finite intermediate port
   coordinates, 7 self-loop edge orders, 3 partition port orders (details in `HISTORY.md`).

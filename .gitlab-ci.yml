@@ -114,8 +114,8 @@ test:macos:
   cache: *lean-cache
   script:
     - *lean-setup
-    - lake test     # expect: 13777 passed / 0 failed / 1 skipped (AGENTS.md snapshot)
-    - cd plugins/org.eclipse.elk.js && node --test test/   # JS tests (51 in the snapshot)
+    - lake test     # expect: 17317 passed / 0 failed / 1 skipped (AGENTS.md snapshot 2026-11-02)
+    - cd plugins/org.eclipse.elk.js && node --test test/   # JS tests (73 in the snapshot, 1 skipped)
 
 # ---------------------------------------------------------------------------------------------
 # Linux x64 glibc -> npm package elk-lean-linux-x64-gnu

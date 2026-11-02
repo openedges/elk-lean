@@ -15,6 +15,7 @@
 - `HISTORY.md`: 단계별 구현/검증/수치 변화/이슈 분석 등 진행 이력을 모두 기록한다.
 - `TESTING.md`: 검증 환경 준비, 항목 명세, 절차, 릴리즈 체크리스트.
 - `VERSIONING.md`: 버전 관리, 서브모듈/oracle 고정 정책.
+- `PORTING.md`: Rust/Java → Lean 포팅 규약(타입 대응·모나드·속성·열거형·수치 의미론·정렬). `CHANGELOG.md`: 릴리스 노트. `docs/`: 설계·분석 노트(빌드 최적화, GMP, 병렬 레이아웃, 릴리스 예행, 무작위 그래프 견고성). `scripts/README.md`·`tests/README.md`: 디렉터리 안내. 환경 핀은 `mise.toml`(도구)·`lean-toolchain`(Lean), 셋업은 `scripts/setup_dev.sh`.
 - 새 단계 완료 시 `HISTORY.md`를 먼저 갱신하고, 필요 시 `AGENTS.md`의 핵심 스냅샷만 동기화한다.
 - 본문 설명은 한글로 작성한다(코드/명령어/식별자/경로는 원문 영문 유지).
 

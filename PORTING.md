@@ -118,12 +118,13 @@ end Direction
 | `s.trim()` | `s.trimAscii.toString` 또는 `String.jtrim s` (`trimAscii`는 `String.Slice` 반환) |
 | `a / b` (Java int) | `Int.tdiv a b`; `a % b` → `Int.tmod a b` |
 | `a as f64` | `(a : Int).toFloat` / `n.toFloat` (Nat) |
-- `Float` 리터럴은 `2.0`처럼 소수점을 쓴다. `Float` 비교는 `<`, `==` 그대로.
+| Java `Math.sin/cos/asin/acos/atan/atan2/log` | `javaSin`/`javaCos`/`javaAsin`/`javaAcos`/`javaAtan`/`javaAtan2`/`javaLog` (fdlibm·HotSpot 스텁과 비트 일치; ELK Java의 trig 호출은 전부 이 헬퍼를 경유) |
+- `Float` 리터럴은 `2.0`처럼 소수점을 쓴다. `Float` 비교는 `<`, `==` 그대로. 모듈별 `private def fl… : Float := …` 상수 대신 공용 `Elk.Core.Util.FloatConst`를 import 한다(`PLAN.md` 7.1 8·17번: 생성 C에 런타임 `ofScientific`이 남지 않게).
 - `Nat` 뺄셈 절단 주의: `i - 1`에서 `i = 0`이면 `0`. 역순 루프는 `while i > 0 do i := i - 1; …` 형태.
 
 ## 8. 정렬·난수
 - 정렬: `stableSort arr cmp` (`Elk.Core.Util.Sort`). `Array.qsort` 금지. 비교자는 Java `compare`와 동일한 `Ordering` 반환.
-  - Java `Collections.sort(list, comparator)` → `stableSort list comparator`.
+  - Java `Collections.sort(list, comparator)` → 일관 비교자면 `stableSort list comparator`; 비일관·부작용·예외를 던지는 비교자면 `javaSortBy`/`javaSortByM`(`Elk.Core.Util.JavaSort`, JDK 21 `TimSort`를 비교 호출 순서까지 재현, `scripts/run_timsort_diff.sh`). elk-rs 재현용 `rustSortBy`는 결과 기준이 Java인 지점에서는 `javaSortBy`로 바꾼다.
   - `list.sort_by_key(|x| x.k)` → `stableSortByKey list (·.k)`.
 - 난수: `Elk.Core.Util.Random` (java.util.Random 1:1). 값형이므로 상태에 보관하고 갱신한다: `let (v, rnd) := rnd.nextDouble`.
 
@@ -149,9 +150,10 @@ if !supported then throwUnsupportedGraph "Edges connecting different hierarchy l
 
 ## 12. 빌드·검증·보고
 ```sh
-export PATH=$HOME/.elan/bin:$PATH
+export PATH=$HOME/.elan/bin:$PATH    # 또는 mise 활성화(mise.toml의 [env]가 추가)
+sh scripts/setup_dev.sh --check      # 처음이면 sh scripts/setup_dev.sh (= mise run setup)
 lake build <Lib>            # 담당 lib만 (예: lake build ElkCore), 경고 0
-lake build && lake test     # 종료 전 전체
+lake build && lake test     # 종료 전 전체 (= mise run build && mise run test)
 ```
 보고에 포함: 변경/추가 파일, 빌드 경고·오류 수, 테스트 결과, 포팅하지 않은 항목과 사유(TODO 위치), 규약 위반 가능성.
 

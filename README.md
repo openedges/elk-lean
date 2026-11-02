@@ -19,10 +19,16 @@ and [`HISTORY.md`](HISTORY.md) for progress.
 - `plugins/org.eclipse.elk.{ffi,napi,wasm,js}/` — C entry points, Node.js addon,
   WebAssembly build and the elkjs-compatible npm package (Phase 8)
 - `tests/` — Lean test driver (`lake test`) and parity reports
-- `scripts/` — oracle build/run and parity comparison scripts
+- `scripts/` — development setup, reference builds, parity and performance scripts
+  (`scripts/README.md`)
 - `external/` — upstream references as submodules (`elk`, `elkjs`, `elk-models`,
   `elk-live`), pinned to the 0.12.0 release commits; never modified
-- `.reference/` — local release build of the elk-rs oracle (git-ignored)
+- `docs/` — design and analysis notes (build optimisation, GMP licensing, parallel layout,
+  release dry run, random-graph robustness)
+- `mise.toml`, `lean-toolchain` — pinned tool versions and `mise run` tasks (see Setup)
+- `.reference/` — generated references, git-ignored and shared by git worktrees: the elk-rs
+  oracle build, the ELK Java baseline and Maven cache, emsdk, the Lean sources, the PGO profile
+  (`scripts/setup_dev.sh --only oracle|java-baseline|wasm-toolchain`)
 
 ## Prerequisites
 
@@ -81,8 +87,10 @@ lake test         # Lean unit/regression tests
 ## Validation
 
 Every change must keep `lake build` free of errors and warnings and `lake test`
-green. Layout equivalence against the elk-rs oracle (model parity and
-phase-step traces) is described in [`TESTING.md`](TESTING.md).
+green. Layout equivalence is measured against unmodified ELK Java 0.12.0 (final
+results and layered phase-step traces, tolerance 0); elk-rs is the performance
+reference and a secondary trace oracle. Procedures are in [`TESTING.md`](TESTING.md),
+the current numbers in the snapshot section of [`AGENTS.md`](AGENTS.md).
 
 ## Documentation
 
@@ -94,6 +102,9 @@ phase-step traces) is described in [`TESTING.md`](TESTING.md).
 | `TESTING.md` | Validation guide |
 | `VERSIONING.md` | Version and reference pinning policy |
 | `CHANGELOG.md` | Release history |
+| `PORTING.md` | Rust/Java to Lean porting conventions (types, monads, properties, enums, numeric semantics, sorting) |
+| `docs/` | Design and analysis notes |
+| `scripts/README.md`, `tests/README.md` | What each script and test directory is for |
 
 ## License
 

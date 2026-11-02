@@ -25,6 +25,24 @@
 | `build_runtime_nogmp.sh` | Native Lean runtime rebuilt without GMP (`libleanrt_nogmp.a`), `--check` big-number differential test, `--relink elk` GMP-free CLI; used by `build_ffi.sh`/`build_napi.sh` with `ELK_NO_GMP=1` (see `docs/gmp-licensing.md`); env `RT_OUT`, `RT_EXTRA_CXXFLAGS`, `RT_STAMP_EXTRA`, `AR` for the LTO/PGO runtime of `build_release.sh` |
 | `build_release.sh` | Release CLI `.lake/build/release/bin/elk`: Lake's generated C recompiled with Lake's flags + ThinLTO (+ PGO when `.reference/pgo/*.profdata` exists), linked with the no-GMP runtime built as ThinLTO bitcode; also the objects of `build_napi.sh --release`; `--check` byte comparison with the Lake build (see `docs/build-optimization.md`) |
 | `build_pgo.sh` | Regenerates the PGO profile under the main checkout's `.reference/pgo/`: LLVM profile runtime of the toolchain clang's commit (sparse fetch of `compiler-rt/lib/profile`), instrumented `build_release.sh --pgo-generate`, training (synthetic bench, Java corpus batch, random s1/v1/w1 × 200), `llvm-profdata merge` (emsdk's, `LLVM_PROFDATA`) |
+| `run_java_baseline.sh` | ELK Java 0.12.0 reference layouts of a models directory (unmodified Maven Central artifacts, JDK/Maven from mise, driver `java/`): `java_manifest.tsv`, `inputs/` (ELK's own JSON export of `.elkt`/`.elkg`), `layouts/`; `--trace true` layered phase traces, `--reverse`/`--shuffle` for JVM-context-dependent models, `ELK_JAVA_PATCHES=<dir>` patched overlay |
+| `run_java_parity.sh` | Result parity against a Java baseline directory: `elk batch` on exactly Java's inputs, `report_exact.md`/`details_exact.tsv` (tolerance 0) and `report.md` (1e-6) |
+| `run_java_trace_parity.sh` | Layered phase-step trace parity against ELK Java (Java traces via `run_java_baseline.sh --trace true`, `elk batch --trace-dir`, `compare_phase_traces.py --strict-order`, `summarize_trace_report.py`); `JAVA_TRACE_REUSE=1` keeps the Java side |
+| `classify_trace_divergences.py` | Classifies the diverged models of a Java trace run by their first difference (`java-nonfinite`, `selfloop-order`, `partition-order`, `other:<Processor>`) |
+| `summarize_trace_report.py` | Markdown summary of a `compare_phase_traces.py --batch --json` report (first divergent processor per model, histogram) |
+| `java_outcomes.py` | Checks elk-lean outputs against the set of outcomes ELK Java produced in several JVM contexts (forward, reverse, shuffled runs); elk-lean must reproduce one of them |
+| `run_timsort_diff.sh` + `java/TimSortTrace.java` | Differential test of `Elk.Core.Util.JavaSort` against JDK 21 `Collections.sort` (13,767 cases: outcome, comparator call sequence hash, permutation hash); `--fixture` regenerates `tests/fixtures/timsort/cases.jsonl` |
+| `run_trace_parity.sh` | Corpus phase-step trace parity against the elk-rs oracle (one trace directory per model, `trace_report.json`, `trace_summary.md`) |
+| `run_phase_trace_parity.sh` | Phase-step trace parity of one model against the elk-rs oracle (first divergence step) |
+| `compare_bytes.sh` | Byte-for-byte comparison of `elk layout --pretty --sort-keys` with the oracle outputs of a model parity run (secondary indicator) |
+| `run_perf_benchmark.sh` | Synthetic performance benchmark: oracle `perf_benchmark` (rust_api, rust_native) vs `elk bench` on the 26 scenarios, `compare_perf.py` report and 5% gate against `tests/perf/baseline_lean_api.csv` |
+| `run_corpus_benchmark.sh` | Corpus performance benchmark (`--mode models` on both sides over a parity manifest), totals, per-model ratio distribution and slowest models (`compare_perf.py --corpus`) |
+| `compare_perf.py` | Performance report from `perf_benchmark`-format CSVs (per scenario, or `--corpus`), with the regression gate (`--baseline`, `--threshold`) |
+| `gen_p3_graphs.py` | Layered crossing-minimisation / layering option variants of the "v" sets ("p" sets of `run_random_java_parity.sh --sets p`) |
+| `perf/profile_bench.sh` | Samples `elk bench --scenarios S` with macOS `sample` and prints the hottest functions |
+| `perf/sample_inclusive.py`, `perf/sample_callers.py` | Inclusive samples of frames matching a regex; attribution of allocation/copy frames to the nearest elk-lean caller |
+| `perf/scan_generated_c.sh` | Static checks of the generated C (`.lake/build/ir`) for known Lean performance traps (run-time Float literals, big literals, float boxing; `PLAN.md` 7.1) |
+| `perf/scan_modify_order.py` | Finds the `PLAN.md` 7.1 item-16 pattern (array element read then written back after an exclusivity test) in the generated C |
 
 Environment knobs: `ELK_RS_DIR` (default `../elk-rs`), `ORACLE_TARGET_DIR`,
 `ORACLE_RUNNER`.

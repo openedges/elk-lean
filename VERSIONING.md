@@ -29,7 +29,7 @@ revisions of the same version use `vX.Y.Z+lean.N`.
 | elk-rs 0.12.1 (performance reference, secondary trace oracle) | `../elk-rs` | `eb586b6d91ee0b55cda591546cec8f04cc7f2422` |
 | Lean | `lean-toolchain` | `leanprover/lean4:v4.35.0` |
 | **ELK Java 0.12.0 (result reference)** | Maven Central `org.eclipse.elk:*:0.12.0`, cached in `.reference/m2` | release artifacts, unmodified (`scripts/java/pom.xml`) |
-| JDK / Maven for the Java baseline | `mise` (`java@temurin-21.0.13+9.0.LTS`, `maven@3.9.16`) | `scripts/run_java_baseline.sh` (`ELK_JAVA_TOOL`, `ELK_MAVEN_TOOL`) |
+| JDK / Maven (Java baseline), Node.js, Rust, Python | `mise.toml` (`java@temurin-21.0.13+9.0.LTS`, `maven@3.9.16`, `node@24.22.1`, `rust@1.97.1`, `python@3.14.6`) | `mise trust && mise install`; `scripts/run_java_baseline.sh` names its own tools (`ELK_JAVA_TOOL`, `ELK_MAVEN_TOOL`) |
 | emscripten (WASM build) | `.reference/emsdk` | emsdk `6.0.13` (emsdk repo `d7b41306`), `scripts/build_wasm.sh` |
 | Lean 4 source for the WASM runtime | `.reference/lean4-v4.35.0` | tag `v4.35.0` (`eb6cafb7`) |
 
@@ -45,9 +45,12 @@ different commit, rebuild the oracle and record the new commit here and in
 `.reference/` (gitignored, shared by all git worktrees of this repository) holds every
 generated reference: the elk-rs build, the Maven cache and compiled Java driver, the ELK Java
 baseline outputs (`.reference/java-baseline/corpus`, `corpus_reverse`), emsdk and the Lean source.
+`scripts/setup_dev.sh` (`mise run setup`; `--only oracle|java-baseline|wasm-toolchain`) recreates every
+pinned reference on a fresh machine and `--check` reports which ones are present (README "Setup").
 
 ## Upgrading to a new ELK release
-1. Update the four submodule pins and the oracle commit.
+1. Update the four submodule pins and the oracle commit (here, `scripts/build_oracle.sh`,
+   `scripts/setup_dev.sh`, `.gitlab-ci.yml`), and `mise.toml` when a tool version changes.
 2. Diff `external/elk` between the releases; port the changes plugin by plugin.
 3. Rerun the full parity gates (`TESTING.md` § 2) and record the numbers.
 4. Bump the version, update `CHANGELOG.md`, tag.

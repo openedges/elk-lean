@@ -84,8 +84,10 @@ cd plugins/org.eclipse.elk.js && npm pack --dry-run
 
 ```sh
 export PATH=$HOME/.elan/bin:$PATH
-# 0. 깨끗한 체크아웃 + 서브모듈
-git submodule update --init
+# 0. 깨끗한 체크아웃 + 도구·서브모듈 (mise.toml, scripts/setup_dev.sh)
+mise trust && mise install                 # JDK·Maven·Node·Rust·Python 핀
+sh scripts/setup_dev.sh --check            # elan·Lean·cc·서브모듈·참조 환경 상태; 빠진 것은 mise run setup / --only oracle|java-baseline|wasm-toolchain
+git submodule update --init --recursive --depth 1
 git status --short                         # 비어 있어야 함
 # 1. 빌드·테스트
 lake build 2>&1 | tee /tmp/build.log; grep -cE '(warning|error):' /tmp/build.log   # 0
@@ -128,7 +130,7 @@ for d in plugins/org.eclipse.elk.js/npm/*/; do (cd "$d" && npm pack --dry-run); 
    (Lean 공식 릴리스에 musl 호스트 툴체인이 없고(확인하지 못함, 미검증 가정), `build_napi.sh`에 Windows 분기가 없으며
    Lean의 Windows 릴리스는 MinGW 계열이라 `msvc` 패키지명과 맞지 않음. 초안 주석 참조).
 2. GMP(LGPL) 정적 링크: 검토 완료(G1, `docs/gmp-licensing.md`) — 배포되는 네이티브 산출물은 모두 `ELK_NO_GMP=1`(GMP 없는 Lean 런타임)로 만들고 `nm | grep __gmp` 0건을 게이트로 둔다(위 4장 2단계). CI(`.gitlab-ci.yml`)는 `ELK_NO_GMP: "1"`을 전역 변수로 두었으나 Linux에서의 런타임 빌드는 미검증.
-3. WASM 깊은 재귀용 Worker 모드: 완료(W2, `workerStackSizeMb`, `npm test` 56/56). `dist/` 포함 pack 재검증은 남음.
+3. WASM 깊은 재귀용 Worker 모드: 완료(W2, `workerStackSizeMb`; `npm test` 72/73, 1 skip). `dist/` 포함 pack 재검증은 남음.
 4. npm 게시 준비: `private` 제거, 패키지 이름 선점 여부(`elk-lean`, `elk-lean-*`) 확인, README 정리, 레지스트리/권한 결정.
 5. 컨텍스트 의존 119개 모델 목록을 릴리스 노트에 첨부할지 결정.
 6. 메타데이터 parity 최신 수치를 스냅샷에 명시.
