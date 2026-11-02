@@ -14,7 +14,7 @@
     "gen:choices": "node scripts/gen-choices.mjs"
   },
   "dependencies": {
-    "elk-lean": "file:../org.eclipse.elk.js",
+    "@openedges/elk-lean": "file:../org.eclipse.elk.js",
     "inversify": "6.2.2",
     "json5": "2.2.3",
     "lz-string": "1.5.0",

@@ -20,6 +20,13 @@ Layering (imports only go downwards):
 
 package «elk-lean» where
   version := v!"0.12.0"
+  -- Reservoir (reservoir.lean-lang.org) indexes the GitHub repository from these fields
+  description := "Eclipse Layout Kernel (ELK) 0.12.0 ported to pure Lean 4: the same layouts as ELK Java, native CLI and C API, Node.js addon, WebAssembly"
+  keywords := #["elk", "graph", "layout", "layered", "diagram", "eclipse-layout-kernel", "elkjs"]
+  homepage := "https://github.com/openedges/elk-lean"
+  license := "EPL-2.0 OR GPL-3.0-or-later"
+  licenseFiles := #["LICENSE", "NOTICE"]
+  readmeFile := "README.md"
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
     ⟨`relaxedAutoImplicit, false⟩,

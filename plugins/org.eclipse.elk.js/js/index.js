@@ -3,7 +3,7 @@
 /**
  * elk-lean Node.js entry point (port of elk-rs plugins/org.eclipse.elk.js/js/index.js).
  *
- * Backend selection: platform package `elk-lean-<triple>` → local
+ * Backend selection: platform package `@openedges/elk-lean-<triple>` → local
  * `../dist/elk-lean.<triple>.node` → local `../dist/elk-lean.node` → WASM (`./load-wasm.js`).
  * Unlike elkjs, works without a Worker by default (direct mode).
  * Worker mode is available via workerUrl/workerFactory. With `workerUrl`, the worker_threads

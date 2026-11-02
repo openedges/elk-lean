@@ -31,7 +31,7 @@ describe('pipeline (browser WASM build in Node)', { skip: !haveAssets ? 'run `np
     const { default: loadWasm } = await import(pathToFileURL(loader).href);
     const wasmBinary = readFileSync(path.join(pub, 'elk-lean/dist/wasm/elk_lean_core.wasm'));
     const backend = await loadWasm({ wasmBinary });
-    const ELK = require('elk-lean/js/elk-api.js');
+    const ELK = require('@openedges/elk-lean/js/elk-api.js');
     elk = new ELK({ backend });
   });
 

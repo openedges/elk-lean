@@ -1,9 +1,13 @@
 {
-  "name": "elk-lean-linux-arm64-gnu",
+  "name": "@openedges/elk-lean-linux-arm64-gnu",
   "version": "0.12.0",
-  "private": true,
   "description": "elk-lean native Node.js addon for Linux ARM64 (glibc)",
   "license": "EPL-2.0 OR GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openedges/elk-lean.git",
+    "directory": "plugins/org.eclipse.elk.js/npm/linux-arm64-gnu"
+  },
   "os": [
     "linux"
   ],
@@ -21,5 +25,8 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

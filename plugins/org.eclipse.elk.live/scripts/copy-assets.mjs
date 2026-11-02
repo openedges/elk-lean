@@ -7,7 +7,7 @@
 //                                 the Web Worker of the elk-lean npm package and its WASM backend,
 //                                 served unbundled (the app passes `workerUrl` to `new ELK(...)`)
 // Sources: ELK_MODELS_DIR or ../../external/elk-models (in a git worktree without submodules the
-// main checkout's copy); the elk-lean package (node_modules/elk-lean -> ../org.eclipse.elk.js) with
+// main checkout's copy); the elk-lean package (node_modules/@openedges/elk-lean -> ../org.eclipse.elk.js) with
 // its WASM build (sh scripts/build_wasm.sh at the repository root).
 // SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, realpathSync } from 'node:fs';
@@ -64,8 +64,8 @@ index.sort((a, b) => a.category.join('>').localeCompare(b.category.join('>')) ||
 writeFileSync(path.join(exOut, 'index.json'), JSON.stringify(index, null, 1) + '\n');
 
 // --- elk-lean worker + WASM ---
-const pkgLink = path.join(app, 'node_modules/elk-lean');
-if (!existsSync(pkgLink)) fail('node_modules/elk-lean missing: run npm install');
+const pkgLink = path.join(app, 'node_modules/@openedges/elk-lean');
+if (!existsSync(pkgLink)) fail('node_modules/@openedges/elk-lean missing: run npm install');
 const pkg = realpathSync(pkgLink);
 const wasmDir = path.join(pkg, 'dist/wasm');
 for (const f of ['elk_lean_core.mjs', 'elk_lean_core.wasm']) {

@@ -2,7 +2,7 @@
 /// <reference types="vite/client" />
 
 // The ELK class of the elk-lean npm package without its backend loaders (worker mode only).
-declare module 'elk-lean/js/elk-api.js' {
-  import ELK from 'elk-lean';
+declare module '@openedges/elk-lean/js/elk-api.js' {
+  import ELK from '@openedges/elk-lean';
   export default ELK;
 }

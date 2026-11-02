@@ -1,0 +1,283 @@
+# Release pipeline for `v*` tags (VERSIONING.md "Releases", TESTING.md § 3).
+#
+# Every tag builds the native bundles (release CLI, C API with the GMP-free Lean runtime, Node.js
+# addon) for the four platforms below and the WASM bundle. A release tag (`v<version>`, or
+# `v<version>+lean.<N>` for a build-only revision of the same version) additionally publishes the
+# npm packages whose version is not on the registry yet and attaches the bundles to a GitHub
+# Release. A prerelease version (`0.13.0-rc.1`) is build-only. A tag that does not bump the package
+# version publishes nothing either: the publish script skips package@version pairs that exist.
+#
+# npm is reached through Trusted Publishing: the OIDC identity of this workflow (repository
+# openedges/elk-lean, file release.yml, environment `npm`) is registered on npmjs.com for every
+# package. No registry token is stored in GitHub Secrets. A package that is not on the registry yet
+# gets its first version from the maintainer's machine (scripts/publish_npm.sh after `npm login`);
+# every later version comes from here.
+#
+# A manual run (workflow_dispatch, from a branch or a tag) builds everything and dry-runs the
+# publish script; its input asks for a real publish of the missing versions.
+#
+# Platforms the release does not build (no GitHub-hosted runner with a Lean toolchain for them):
+# linux-x64-musl (no musl Lean release), win32-x64-msvc (scripts/build_napi.sh has no Windows
+# branch). Their npm/<triple>/ templates stay for later; the main package does not list them.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish_npm:
+        description: publish the npm packages missing on the registry, as a release tag does
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # distributed native artefacts link the Lean runtime rebuilt without GMP (docs/gmp-licensing.md)
+  ELK_NO_GMP: "1"
+
+jobs:
+  # A tag must name the version every manifest carries; a dispatch takes the manifests' version.
+  preflight:
+    name: the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      node: ${{ steps.pins.outputs.node }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: pins
+        uses: ./.github/actions/pins
+      - id: version
+        name: the package version against the tag
+        run: |
+          version=$(python3 scripts/bump_version.py --check)
+          publish=false
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            # v0.12.0 or v0.12.0+lean.1 -> 0.12.0; v0.13.0-rc.1 -> 0.13.0-rc.1
+            base="${GITHUB_REF_NAME#v}"
+            base="${base%%+*}"
+            if [ "$base" != "$version" ]; then
+              echo "tag $GITHUB_REF_NAME names version $base but the manifests carry $version" >&2
+              exit 1
+            fi
+            # Only a pushed tag publishes by itself; a dispatch started on a tag ref builds and
+            # dry-runs like any other manual run unless its input asks for a publish.
+            if [ "$GITHUB_EVENT_NAME" = push ]; then
+              case "$version" in
+                *-*) echo "prerelease version $version: build only, nothing is published" ;;
+                *) publish=true ;;
+              esac
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "version $version, publish $publish"
+
+  native:
+    name: Native ${{ matrix.triple }}
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: darwin-arm64, os: macos-latest }
+          # GitHub retires its Intel macOS runners in 2027; Lean has no cross build, so x64 stays native.
+          - { triple: darwin-x64, os: macos-15-intel }
+          - { triple: linux-x64-gnu, os: ubuntu-latest }
+          - { triple: linux-arm64-gnu, os: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: "lake build (gate: no warning, no error), lake test"
+        shell: bash
+        run: |
+          set -o pipefail
+          lake build 2>&1 | tee build.log
+          ! grep -E '(warning|error):' build.log
+          lake test
+      - uses: ./.github/actions/lean-sources
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: C API with the GMP-free runtime (smoke test against the CLI)
+        run: sh scripts/build_ffi.sh --check
+      - name: Release CLI and addon (macOS; ThinLTO over the Lean C and the GMP-free runtime, no PGO profile in CI)
+        if: runner.os == 'macOS'
+        run: |
+          sh scripts/build_release.sh --no-pgo --check
+          sh scripts/build_napi.sh --release --copy-to-npm
+          cp .lake/build/release/bin/elk elk-release
+      - name: Release CLI and addon (Linux; the Lake build relinked with the GMP-free runtime)
+        if: runner.os == 'Linux'
+        run: |
+          sh scripts/build_runtime_nogmp.sh --relink elk
+          sh scripts/build_napi.sh --skip-ffi --copy-to-npm
+          cp .lake/build/bin/elk elk-release
+      - name: "Gate: no GMP symbol in the distributed binaries, CLI runs"
+        shell: bash
+        run: |
+          for f in elk-release plugins/org.eclipse.elk.js/npm/${{ matrix.triple }}/*.node .lake/build/ffi/libleanrt_nogmp.a; do
+            if nm -g "$f" 2>/dev/null | grep -q '__gmp'; then echo "$f links GMP" >&2; exit 1; fi
+          done
+          ./elk-release --version
+      - name: npm package tests (addon)
+        working-directory: plugins/org.eclipse.elk.js
+        run: npm test
+      - name: Bundle
+        shell: bash
+        run: |
+          v='${{ needs.preflight.outputs.version }}'
+          b="elk-lean-$v-${{ matrix.triple }}"
+          mkdir -p "$b/bin" "$b/lib" "$b/include"
+          cp elk-release "$b/bin/elk"
+          cp .lake/build/ffi/libelklean.a .lake/build/ffi/libleanrt_nogmp.a "$b/lib/"
+          cp .lake/build/ffi/include/elk_lean.h "$b/include/"
+          cp .lake/build/ffi/ldflags "$b/ldflags"
+          cp LICENSE NOTICE "$b/"
+          cat .lake/build/release/BUILD_INFO.txt .lake/build/runtime-nogmp/BUILD_INFO.txt > "$b/BUILD_INFO.txt" 2>/dev/null || true
+          tar -czf "$b.tar.gz" "$b"
+          ls -l "$b.tar.gz" plugins/org.eclipse.elk.js/npm/${{ matrix.triple }}/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bundle-${{ matrix.triple }}
+          path: elk-lean-*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: addon-${{ matrix.triple }}
+          path: plugins/org.eclipse.elk.js/npm/${{ matrix.triple }}/*.node
+          if-no-files-found: error
+
+  wasm:
+    name: WASM bundle
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - uses: ./.github/actions/lean-sources
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - uses: ./.github/actions/setup-emsdk
+        with:
+          emsdk: ${{ steps.pins.outputs.emsdk }}
+      - name: WASM build (MEMORY64=2)
+        run: sh scripts/build_wasm.sh
+      - name: npm package tests (WASM)
+        working-directory: plugins/org.eclipse.elk.js
+        run: npm test
+      - name: Bundle
+        run: |
+          v='${{ needs.preflight.outputs.version }}'
+          tar -czf "elk-lean-$v-wasm.tar.gz" -C plugins/org.eclipse.elk.js/dist wasm wasm-node
+          ls -l "elk-lean-$v-wasm.tar.gz"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm
+          path: plugins/org.eclipse.elk.js/dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bundle-wasm
+          path: elk-lean-*-wasm.tar.gz
+          if-no-files-found: error
+
+  # A manual run rehearses the publish script (`--dry-run`) when it was not asked to publish.
+  rehearsal:
+    name: dry run
+    needs: [preflight, native, wasm]
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ needs.preflight.outputs.node }}
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Place the addons and the WASM bundle
+        run: sh .github/scripts/place_artifacts.sh artifacts
+      - name: npm dry run
+        run: sh scripts/publish_npm.sh --dry-run --expect-version "${{ needs.preflight.outputs.version }}"
+
+  # npm through Trusted Publishing: each package on npmjs.com trusts this repository, this file
+  # and the `npm` environment; npm attaches provenance to what it publishes.
+  publish-npm:
+    name: npm
+    needs: [preflight, native, wasm]
+    if: needs.preflight.outputs.publish == 'true' || inputs.publish_npm
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+      contents: read
+    # Serialize tag runs; a second run simply skips what the first one published.
+    concurrency:
+      group: release-npm
+      cancel-in-progress: false
+    env:
+      NPM_DIST_TAG: latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ needs.preflight.outputs.node }}
+      # Trusted publishing needs npm 11.5.1 or newer; the major is pinned so a release does not
+      # pick up the next major the day it appears.
+      - run: npm install -g npm@11 && npm --version
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Place the addons and the WASM bundle
+        run: sh .github/scripts/place_artifacts.sh artifacts
+      - name: Publish the packages missing on npm (trusted publishing)
+        run: sh scripts/publish_npm.sh --expect-version "${{ needs.preflight.outputs.version }}"
+
+  # The GitHub Release means "published": it needs the publish job, so a failed publish leaves no
+  # release behind (re-run the failed jobs and the release follows).
+  release:
+    name: GitHub release
+    needs: [preflight, native, wasm, publish-npm]
+    if: github.ref_type == 'tag' && needs.preflight.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Name the assets
+        run: |
+          mkdir -p assets
+          cp artifacts/bundle-*/*.tar.gz assets/
+          cp artifacts/addon-*/*.node assets/
+          ls -l assets
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: assets/*
+          generate_release_notes: true

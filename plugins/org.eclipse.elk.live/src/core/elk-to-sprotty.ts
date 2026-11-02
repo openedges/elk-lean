@@ -13,7 +13,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
-import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, ElkPoint, ElkPort } from 'elk-lean';
+import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, ElkPoint, ElkPort } from '@openedges/elk-lean';
 
 /** Sprotty schema element (the subset of sprotty-protocol `SModelElement` this app emits). */
 export interface SElement {

@@ -6,7 +6,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
-import elkLeanPackage from 'elk-lean/package.json';
+import elkLeanPackage from '@openedges/elk-lean/package.json';
 
 /** Version of the bundled elk-lean engine and of the ELK release it ports. */
 export const ENGINE_VERSION: string = elkLeanPackage.version;

@@ -1,9 +1,13 @@
 {
-  "name": "elk-lean-darwin-x64",
+  "name": "@openedges/elk-lean-darwin-x64",
   "version": "0.12.0",
-  "private": true,
   "description": "elk-lean native Node.js addon for macOS x64 (Intel)",
   "license": "EPL-2.0 OR GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openedges/elk-lean.git",
+    "directory": "plugins/org.eclipse.elk.js/npm/darwin-x64"
+  },
   "os": [
     "darwin"
   ],
@@ -18,5 +22,8 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

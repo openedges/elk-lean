@@ -1,0 +1,64 @@
+# The browser demo (plugins/org.eclipse.elk.live, elk-live without a server) on GitHub Pages:
+# https://openedges.github.io/elk-lean/ — rebuilt from every push to main (WASM build included).
+# Pages must be set to "GitHub Actions" as its source once (repository settings, Pages).
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - uses: ./.github/actions/lean-sources
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - uses: ./.github/actions/setup-emsdk
+        with:
+          emsdk: ${{ steps.pins.outputs.emsdk }}
+      - name: WASM build (MEMORY64=2)
+        run: sh scripts/build_wasm.sh
+      - name: Build the demo (examples + WASM assets, tsc, vite)
+        working-directory: plugins/org.eclipse.elk.live
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: plugins/org.eclipse.elk.live/dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

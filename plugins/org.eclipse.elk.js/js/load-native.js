@@ -4,7 +4,7 @@
  * elk-lean native addon loader (Node.js), shared by index.js and elk-worker.js.
  *
  * Search order (as in elk-rs plugins/org.eclipse.elk.js/js/index.js):
- *  1. the platform package `elk-lean-<triple>` (installed via optionalDependencies)
+ *  1. the platform package `@openedges/elk-lean-<triple>` (installed via optionalDependencies)
  *  2. a local `../dist/elk-lean.<triple>.node` (scripts/build_napi.sh)
  *  3. a local `../dist/elk-lean.node` (generic development build)
  * Returns the addon, or null when none could be loaded; `errors` collects the reasons.
@@ -50,7 +50,7 @@ function loadNativeAddon(errors) {
   var candidates = [];
   if (triple) {
     // 1. platform-specific NAPI package (optionalDependencies)
-    candidates.push('elk-lean-' + triple);
+    candidates.push('@openedges/elk-lean-' + triple);
     // 2. platform-specific local .node file
     candidates.push('../dist/elk-lean.' + triple + '.node');
   }

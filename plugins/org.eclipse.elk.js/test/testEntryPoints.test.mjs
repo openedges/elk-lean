@@ -110,17 +110,23 @@ describe('Entry point', () => {
       for (const triple of triples) {
         assert.ok(loaderSrc.includes("'" + triple + "'"), triple);
         const pkg = JSON.parse(readFileSync(path.join(__dirname, '../npm', triple, 'package.json'), 'utf8'));
-        assert.equal(pkg.name, 'elk-lean-' + triple);
+        assert.equal(pkg.name, '@openedges/elk-lean-' + triple);
         assert.equal(pkg.main, 'elk-lean.' + triple + '.node');
       }
+      // the main package lists the platforms release.yml builds; linux-x64-musl and win32-x64-msvc
+      // stay templates until a Lean toolchain / a Windows addon build exists for them
       const main = JSON.parse(readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
       assert.deepEqual(Object.keys(main.optionalDependencies).sort(),
-        triples.map(t => 'elk-lean-' + t).sort());
+        ['darwin-arm64', 'darwin-x64', 'linux-arm64-gnu', 'linux-x64-gnu'].map(t => '@openedges/elk-lean-' + t));
+      for (const name of Object.keys(main.optionalDependencies)) {
+        assert.ok(triples.includes(name.replace('@openedges/elk-lean-', '')), name);
+        assert.equal(main.optionalDependencies[name], main.version);
+      }
     });
 
     it('should try platform package before local .node and WASM', () => {
       // elk-lean-<triple> package -> platform .node -> generic .node -> WASM
-      const pkgIdx = loaderSrc.indexOf("'elk-lean-'");
+      const pkgIdx = loaderSrc.indexOf("'@openedges/elk-lean-'");
       const platformLocalIdx = loaderSrc.indexOf("'../dist/elk-lean.'");
       const genericLocalIdx = loaderSrc.indexOf("'../dist/elk-lean.node'");
       assert.ok(pkgIdx >= 0 && pkgIdx < platformLocalIdx);

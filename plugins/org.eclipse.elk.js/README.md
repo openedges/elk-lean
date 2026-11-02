@@ -11,7 +11,7 @@ Status: not published (`"private": true`). Requires Node.js 18 or later.
 ## Usage
 
 ```js
-const ELK = require('elk-lean');
+const ELK = require('@openedges/elk-lean');
 const elk = new ELK();
 
 const graph = {
@@ -27,7 +27,7 @@ const graph = {
 elk.layout(graph).then(console.log);
 ```
 
-ESM: `import ELK from 'elk-lean';`. Worker mode (Node.js `worker_threads` or a Web Worker):
+ESM: `import ELK from '@openedges/elk-lean';`. Worker mode (Node.js `worker_threads` or a Web Worker):
 `new ELK({ workerUrl: require.resolve('elk-lean/js/elk-worker.js') })`.
 
 ## Backends
@@ -40,7 +40,7 @@ are the `ELK_LEAN_CONVERT_*` bits of `elk_lean.h`, also `ELK.CONVERT_DEFAULTS` =
 
 `js/index.js` (Node.js) and the `worker_threads` branch of `js/elk-worker.js` load, in order:
 
-1. the platform package `elk-lean-<triple>` (`optionalDependencies`, templates in `npm/<triple>/`),
+1. the platform package `@openedges/elk-lean-<triple>` (`optionalDependencies`, templates in `npm/<triple>/`),
 2. `dist/elk-lean.<triple>.node` (built by `sh scripts/build_napi.sh`),
 3. `dist/elk-lean.node`,
 4. the WASM backend `js/load-wasm.js`: `dist/wasm-node/elk_lean.cjs` + `elk_lean.wasm`, the

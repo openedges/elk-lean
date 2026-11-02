@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
 import JSON5 from 'json5';
-import type { ElkNode } from 'elk-lean';
+import type { ElkNode } from '@openedges/elk-lean';
 import { elkToSprotty, type SGraph } from './elk-to-sprotty.ts';
 
 /** The part of the elk-lean API the pipeline needs (`new ELK(...)`). */

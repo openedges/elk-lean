@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
 // the ELK class only: the WASM backend runs in the Web Worker
-import ELK from 'elk-lean/js/elk-api.js';
+import ELK from '@openedges/elk-lean/js/elk-api.js';
 import { buildMetadata, type Metadata } from '../core/options.ts';
 import choices from '../generated/option-choices.json';
 

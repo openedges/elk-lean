@@ -10,7 +10,7 @@ export default defineConfig({
   base: './',
   optimizeDeps: {
     // elk-lean is a linked (file:) CommonJS package: pre-bundle its API module for the dev server
-    include: ['elk-lean/js/elk-api.js', 'sprotty', 'sprotty-protocol', 'inversify', 'lz-string', 'json5'],
+    include: ['@openedges/elk-lean/js/elk-api.js', 'sprotty', 'sprotty-protocol', 'inversify', 'lz-string', 'json5'],
   },
   build: {
     target: 'es2022',
