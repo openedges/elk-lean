@@ -341,7 +341,8 @@ ELK Java에는 없는 elk-lean 확장이다. 출력·단계별 trace·예외 문
 - **배포 채널**: GitHub Release(플랫폼별 `elk-lean-<v>-<triple>.tar.gz` = `bin/elk`+`lib/libelklean.a`+`lib/libleanrt_nogmp.a`+`include/elk_lean.h`+`ldflags`, `elk-lean-<v>-wasm.tar.gz`, 애드온 `.node`), npm(`@openedges/elk-lean` + 플랫폼 4개; musl·Windows는 툴체인이 생길 때까지 템플릿), Lean은 Reservoir 자동 색인(업로드 없음; 조건: 공개 저장소·루트 `lake-manifest.json`·GitHub 인식 OSI 라이선스·별 2개 이상; `lakefile.lean` 메타데이터). cargo 배포는 없음(사용자 결정: Lean 프로젝트라 크레이트를 만들지 않음).
 - **버전**: `scripts/bump_version.py`(`--check`/설정)가 lakefile·`Api.lean`·npm 매니페스트를 맞춘다. 태그는 `VERSIONING.md`대로(`vX.Y.Z`, `+lean.N`), `release.yml`이 태그와 매니페스트 버전의 일치를 검사한다.
 - **유지보수자 수동 단계**: npmjs.com에 패키지별 trusted publisher 등록(첫 버전은 수동 게시 뒤), GitHub 환경 `npm` 생성, Pages 소스 = GitHub Actions, 저장소 별 2개.
-- **미해결·후속**: `linux-x64-musl`(musl Lean 툴체인 없음)·`win32-x64-msvc`(`build_napi.sh` Windows 분기 없음) 빌드, 릴리스 CLI의 PGO 프로파일(CI는 ThinLTO만), Intel macOS 러너 퇴역(2027) 뒤 darwin-x64 빌드 방법.
+- **Linux 링크**: no-GMP 런타임은 시스템 g++로 컴파일(initial-exec TLS)하고 C API 스모크·애드온·relink된 CLI를 시스템 `c++` + 정적 libstdc++/libgcc로 링크한다(툴체인 libc++ 헤더 미동봉, `HISTORY.md` Phase 9 메모). 따라서 Linux 번들·애드온은 빌드 러너(ubuntu-latest)의 glibc 이상을 요구한다.
+- **미해결·후속**: `linux-x64-musl`(musl Lean 툴체인 없음)·`win32-x64-msvc`(`build_napi.sh` Windows 분기 없음) 빌드, 릴리스 CLI의 PGO 프로파일(CI는 ThinLTO만), Intel macOS 러너 퇴역(2027) 뒤 darwin-x64 빌드 방법, Linux 바이너리의 glibc 하한을 Lean 바이너리 수준으로 낮추기(툴체인 sysroot 스텁 + 옛 glibc 헤더로 런타임 컴파일).
 
 ## 9. 리스크와 대응
 

@@ -179,7 +179,8 @@ modules no longer follow elk-rs where it deviated from Java (`docs/robustness-ra
   were not tested.
 - Only macOS arm64 builds have been exercised. Linux (glibc x64/arm64, musl), Windows and
   CI runs on GitHub Actions (`ci.yml`: Linux x64 and macOS arm64; `release.yml` adds darwin-x64
-  and linux-arm64), including the GMP-free runtime build on
+  and linux-arm64; Linux artefacts link libstdc++ statically and need the glibc of the
+  `ubuntu-latest` runner image or newer), including the GMP-free runtime build on
   Linux and the parallel layout's task manager in the addon. See `docs/release-dry-run-0.12.0.md`.
 
 ## Project scaffold (pre-release history)

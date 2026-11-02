@@ -35,6 +35,9 @@ the demo site run on GitHub Actions (`.github/workflows/`):
 | `parity.yml` | manual, weekly | ELK Java result / ELK Text parity, elk-rs model parity (and traces on request) |
 | `perf.yml` | manual | `elk bench` vs the elk-rs oracle (informational on shared runners) |
 
+Linux bundles and addons are linked on the `ubuntu-latest` runners with libstdc++ static: they
+need that image's glibc or newer; macOS bundles are ThinLTO builds of the release script.
+
 Release steps (TESTING.md § 3): bump the version, update `CHANGELOG.md`, commit,
 `git tag -a vX.Y.Z -m "elk-lean X.Y.Z" && git push github main vX.Y.Z`. The tag
 must name the version the manifests carry (`release.yml` checks it); a
