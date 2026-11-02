@@ -8,7 +8,7 @@ with the ELK release they port (see `VERSIONING.md`).
 
 (nothing yet)
 
-## [0.12.0] - unreleased
+## [0.12.0] - 2026-11-02
 
 First release: a pure Lean 4 port of the Eclipse Layout Kernel 0.12.0 (reference ELK / elkjs
 0.12.0, performance and secondary parity oracle elk-rs 0.12.1 at `eb586b6d`). Not yet tagged or

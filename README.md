@@ -10,8 +10,8 @@ addon and WebAssembly.
 [![demo](https://github.com/openedges/elk-lean/actions/workflows/pages.yml/badge.svg)](https://openedges.github.io/elk-lean/)
 
 Status: **port complete (Phases 0–6), packaging (Phase 8) and the browser demo (Phase 10)
-done, Java parity and optimisation rounds closed; CI and releases on GitHub Actions (Phase 9),
-first npm publish pending** — see
+done, Java parity and optimisation rounds closed; CI and releases on GitHub Actions (Phase 9); 0.12.0 published on 2026-11-02 as
+`@openedges/elk-lean` on npm and as tag `v0.12.0`** — see
 [`PLAN.md`](PLAN.md) for the porting plan, [`AGENTS.md`](AGENTS.md) for the current snapshot
 and [`HISTORY.md`](HISTORY.md) for progress.
 
