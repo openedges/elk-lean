@@ -55,12 +55,19 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-02.
   text loader dropped them until 2026-11-02).
 - **Browser demo** `plugins/org.eclipse.elk.live`: a server-less replacement for elk-live (ElkGraph
   Web) on the elk-lean WASM Web Worker — Monaco editor with `.elkt` highlighting, parser error
-  markers, option/value completion and hovers, sprotty graph view following elk-live's visual
-  model, elk-live's four pages (landing `index.html`, `elkgraph.html`, `json.html` with JSON5
+  markers, option/value completion (no hovers, as in elk-live), sprotty graph view following
+  elk-live's visual model, elk-live's four pages (landing `index.html`, `elkgraph.html`, `json.html` with JSON5
   input, `examples.html` with the category table of contents and `?e=` links; the ELK version menu
   is replaced by an engine badge), elk-live-compatible links, SVG/JSON export.
-  Static `dist/` (about 26 MB, the WASM compresses to about 2 MB); tested in Chrome 156 (26 tests: 45/45
-  examples equal the CLI, headless browser checks of all four pages).
+  Editor and diagram behaviour match a local build of elk-live state by state (computed styles in
+  headless Chrome): Monaco 0.14 editor behaviour (the original `.elkt` grammar; no occurrence
+  highlight, bracket colours, sticky scroll or hovers), folding ranges as elk-live's Xtext language
+  server computes them (closing brace included, block comments) with Monaco 0.14's fold icons, dark
+  mode by CSS inversion of the editor and the examples sidebar, Bootstrap 5.0.0 link and button
+  states, the browser's focus ring on the diagram.
+  Static `dist/` (about 26 MB, the WASM compresses to about 2 MB); tested in Chrome 156 (122 tests:
+  45/45 examples equal the CLI, 94 folding-range cases against the language server's answers,
+  headless browser checks of all four pages).
 - **Parallel layout** (`docs/parallel-layout.md`, an elk-lean extension): the recursive engine lays
   out independent sibling sub-graphs of a compound graph on Lean tasks and merges them back in
   sibling order, with byte-identical output, traces and error messages in every mode (checked on

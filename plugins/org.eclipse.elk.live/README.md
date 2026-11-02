@@ -72,7 +72,7 @@ page load on an M-series Mac (WASM compile in the worker).
 | `src/app/engine.ts` | `ELK` in Web Worker mode and the completion metadata |
 | `src/app/chrome.ts` | navbar (brand, title, engine badge, dark-mode toggle) and footer (model link, status, engine line) |
 | `src/app/dark-mode.ts` | dark mode (`elk-dark-mode` class, remembered under `elk-lean-live-dark-mode`; as in elk-live the editor keeps Monaco's light theme and is inverted by CSS together with the examples sidebar) |
-| `src/style.css`, `src/app/vendor.css` | styles of all pages; Monaco codicons and sprotty CSS (editor pages only) |
+| `src/style.css`, `src/app/vendor.css` | styles of all pages; Monaco codicons, sprotty CSS and the Monaco 0.14 folding icons (`src/editor/folding-icons.css`; editor pages only) |
 | `src/core/pipeline.ts` | DOM-free pipeline: `convertElkt` or JSON5 → `layout` → sprotty model; parse/layout diagnostics with line/column |
 | `src/core/urls.ts` | DOM-free URL handling: model links (`?compressedContent=`), initial content, old-link redirect |
 | `src/core/elk-to-sprotty.ts` | laid-out ELK JSON → sprotty model (elk-live's visual model) |
@@ -82,7 +82,7 @@ page load on an M-series Mac (WASM compile in the worker).
 | `src/diagram/` | sprotty container, model classes, views, diagram CSS, SVG export |
 | `src/generated/option-choices.json` | enum literals of the ENUM/ENUMSET options (`npm run gen:choices`) |
 | `scripts/copy-assets.mjs` | build-time copies into `public/` (gitignored): `examples/**.elkt` + `examples/index.json`, `elk-lean/js/elk-worker.js`, `elk-lean/js/load-wasm.browser.mjs`, `elk-lean/dist/wasm/elk_lean_core.{mjs,wasm}` |
-| `test/pipeline.test.mjs`, `test/browser.test.mjs` | Node smoke test, optional headless browser test |
+| `test/pipeline.test.mjs`, `test/folding.test.mjs`, `test/fixtures/`, `test/browser.test.mjs` | Node smoke test, folding ranges against the Xtext server's answers, optional headless browser test |
 
 `src/core/*` has no DOM dependency (the Node test imports it). Vite builds the four pages
 (`build.rollupOptions.input`); Monaco, sprotty and the app code shared by the three editor pages
@@ -129,7 +129,8 @@ Implemented:
 - Examples page (elk-live's examples page): a sidebar table of contents of the 45
   `external/elk-models/examples` files (copied at build time with their relative names), built like
   elk-live's `createNavigationDepthFirstAlphabetically` (a heading per category, `Parent > Child`
-  for nested ones, indented by depth, examples sorted by label); the `elkex:graph` section in an
+  for nested ones, examples sorted by label; no indentation: elk-live's `pl-N` classes are
+  Bootstrap 4 and have no effect with the Bootstrap 5.0.0 it bundles); the `elkex:graph` section in an
   editor next to its diagram, below them the category, the label and the `elkex:doc` description.
   `?e=<path>` selects an example, otherwise a random one is shown; choosing from the table of
   contents pushes a history entry with `?e=`, Back/Forward reload the example; like elk-live, the
@@ -138,7 +139,8 @@ Implemented:
 - Diagram (sprotty 1.4) with elk-live's visual model and colours: nodes and ports as rectangles,
   labels as text at their laid-out position (hanging baseline), edges as polylines through the
   section start, bend and end points with an arrow head, junction points as small circles; pan,
-  zoom, selection and hover feedback, animated updates. Edge labels are drawn at the position ELK
+  zoom, selection and hover feedback (nodes and ports; edges carry the classes on their group as
+  in elk-live, without a visible change), animated updates. Edge labels are drawn at the position ELK
   computed (the `ElkLabel` model class opts out of sprotty's route-based edge label placement, which
   has no route to work with here). Differences that keep more of the layout:
   every section of a hyperedge is drawn (elk-live joined all sections into one polyline), edges are
@@ -153,7 +155,13 @@ Implemented:
   that the pages start out looking like elk-live's): fit to view (manual only: like elk-live, the diagram starts at
   the top-left corner at zoom 1 and keeps its viewport across updates), SVG export (viewBox around the drawing, diagram
   CSS embedded, dark mode kept), download of the laid-out ELK JSON; dark mode on every page
-  (remembered per browser).
+  (remembered per browser; as in elk-live the editor keeps Monaco's light theme and is inverted by
+  CSS together with the examples sidebar).
+- Look and interaction states checked against a local build of elk-live in headless Chrome
+  (computed styles; the same positions at 1000, 1400 and 1920 px): the navbar brand as a plain
+  Bootstrap 5.0.0 link, sidebar links with the `.btn` corners and focus halo, the browser's focus
+  ring on the clicked diagram, Monaco's margins, fonts, indent guides and fold controls, node and
+  port hover and selection strokes, the folded-line placeholder.
 
 Changed on purpose:
 
@@ -207,6 +215,11 @@ browsers.
   and table of contents order, the completion metadata and that the enum snapshot equals
   `elk options --choices`; after `npm run build` also that `dist/` holds the four pages with their
   scripts.
+- `test/folding.test.mjs`: the `.elkt` folding ranges of `src/editor/elkt-folding.ts` against
+  `test/fixtures/elkt-folding-xtext.json`, the `textDocument/foldingRange` answers of elk-live's
+  Xtext 2.36.0 language server captured from a local build (the 45 examples and 45 crafted inputs;
+  all 85 valid inputs exact, the 5 inputs the ELK Text parser rejects run for robustness only),
+  plus CRLF line ends, offsets and model order.
 - `test/browser.test.mjs` (optional, skipped without `playwright-core` and a Chrome): serves
   `dist/` and drives headless Chrome through the pages. Landing page: links, engine badge, dark
   mode, an old `?compressedContent=` link forwarded to the ELKT editor. ELKT editor: first layout,
@@ -216,7 +229,9 @@ browsers.
   JSON5 syntax error is marked at its line and column. Examples: the table of contents has every
   example, `?e=general/direction` shows it, SVG export, a click on another entry renders it and
   updates the URL, edits re-layout, Back restores the previous example, a random example without
-  `?e=`. No page errors. playwright-core is not a dependency; run it with
+  `?e=`, folding as elk-live (the Xtext ranges hide the closing brace, Monaco 0.14 controls, no
+  folded-line tint, no bracket colours), the brand, a clicked sidebar link and the focused diagram
+  styled as Bootstrap 5.0.0 / elk-live. No page errors. playwright-core is not a dependency; run it with
   `PLAYWRIGHT_CORE=<dir of an installed playwright-core> npm test` (it uses the installed Chrome,
   `CHROME_PATH`, no browser download).
 ## CI

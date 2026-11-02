@@ -6,7 +6,9 @@
 //                  JSON" opens the converted graph in the JSON editor
 //   json.html      the default JSON5 sample renders, a JSON5 syntax error gets a marker
 //   examples.html  the table of contents, `?e=general/direction`, a click on another entry renders
-//                  it and updates the URL, Back restores the previous one, the SVG export
+//                  it and updates the URL, Back restores the previous one, the SVG export, folding
+//                  as elk-live (Xtext ranges, Monaco 0.14 controls), the brand / sidebar link /
+//                  diagram focus styles of Bootstrap 5.0.0
 // Optional: needs `playwright-core` (not a dependency of the app; PLAYWRIGHT_CORE=<dir of the
 // package>, or resolvable from here) and a Chrome/Chromium (CHROME_PATH, else the usual install
 // locations). Skipped otherwise.

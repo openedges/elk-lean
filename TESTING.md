@@ -219,6 +219,19 @@ dependencies, supported features).
   fallbacks and failures. `lake test -- --suite parallel` runs the unit tests (ownership, merge,
   differential, failure order).
 
+### F. Browser demo (Phase 10)
+```bash
+# after a Lean change: rebuild the addon and the WASM the demo serves
+sh scripts/build_ffi.sh && sh scripts/build_napi.sh --skip-ffi && sh scripts/build_wasm.sh
+cd plugins/org.eclipse.elk.live && npm ci && npm run build && npm test
+# 122 tests: pipeline (45/45 examples equal the CLI, JSON5 path, links, metadata), folding ranges
+# against elk-live's Xtext server answers (test/fixtures/elkt-folding-xtext.json), and — with
+# PLAYWRIGHT_CORE=<dir of playwright-core> and a Chrome — headless checks of the four pages
+# (rendering, markers, completion, examples, folding, the Bootstrap 5.0.0 states of brand, sidebar
+# and diagram focus). Look and behaviour were aligned with a local build of elk-live
+# (`.reference/elk-live`, see HISTORY.md LIVE3); the official site was in maintenance.
+```
+
 ## 3. Release checklist
 1. `lake build` and `lake test` clean.
 2. ELK Java result parity (exact) and Java phase-step trace parity regenerated, the models whose
@@ -228,4 +241,5 @@ dependencies, supported features).
 4. Performance within 5% of the recorded baseline (`scripts/run_perf_benchmark.sh`), memory check
    clean, FFI smoke test (`scripts/build_ffi.sh --check`) passing in both runtime modes, release
    artefacts built with `ELK_NO_GMP=1` and free of `__gmp` symbols (section 2.E).
-5. `CHANGELOG.md` updated, tag `vX.Y.Z` (see `VERSIONING.md`).
+5. Browser demo rebuilt and tested (section 2.F), `dist/` up to date.
+6. `CHANGELOG.md` updated, tag `vX.Y.Z` (see `VERSIONING.md`).
