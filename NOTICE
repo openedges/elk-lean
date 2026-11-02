@@ -50,7 +50,8 @@ SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
 - The static build (`dist/`) bundles third-party npm packages under their own
   licenses: Eclipse Sprotty and sprotty-protocol 1.4.0 (EPL-2.0 OR GPL-2.0 WITH
   Classpath-exception-2.0), Monaco Editor 0.57.0 (MIT; includes DOMPurify 3.4.17,
-  MPL-2.0 OR Apache-2.0), InversifyJS 6.2.2 (MIT), snabbdom 3.5.1 (MIT),
+  MPL-2.0 OR Apache-2.0; `src/editor/folding-icons.css` embeds the folding control
+  images of Monaco Editor 0.14.6, MIT), InversifyJS 6.2.2 (MIT), snabbdom 3.5.1 (MIT),
   reflect-metadata 0.2.2 (Apache-2.0), lz-string 1.5.0 (MIT), json5 2.2.3 (MIT), showdown 2.1.0 (MIT), file-saver 2.0.5
   (MIT), autocompleter 9.3.2 (MIT), tinyqueue 2.0.3 (ISC); copies of the
   `external/elk-models/examples` files (EPL-2.0); and the elk-lean npm package's

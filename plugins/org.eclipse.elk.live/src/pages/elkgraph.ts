@@ -8,6 +8,7 @@
 import { monaco } from '../editor/monaco.ts';
 import { ELKT, registerElkt } from '../editor/elkt-language.ts';
 import { registerCompletion } from '../editor/completion.ts';
+import { registerElktFolding } from '../editor/elkt-folding.ts';
 import { parseElktError } from '../core/pipeline.ts';
 import { modelLink } from '../core/urls.ts';
 import { startEditorPage } from '../app/editor-page.ts';
@@ -31,6 +32,7 @@ startEditorPage({
   register: (engine) => {
     registerElkt(monaco);
     registerCompletion(monaco, engine.metadata);
+    registerElktFolding(monaco);
   },
   tools: ({ engine, ctrl, linkHref }) => [{
     id: 'open-json-button',

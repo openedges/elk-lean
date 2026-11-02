@@ -19,7 +19,7 @@ import { createContainer } from '../diagram/sprotty-config.ts';
 import { download, exportSvg } from '../diagram/svg-export.ts';
 import { countElements, runPipeline, type InputFormat, type PipelineResult } from '../core/pipeline.ts';
 import { errorMessage, type Engine } from './engine.ts';
-import { isDark, onDarkModeChange } from './dark-mode.ts';
+import { isDark } from './dark-mode.ts';
 
 const DEBOUNCE_MS = 250;
 
@@ -108,6 +108,9 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
   const ext = opts.format === 'json' ? 'json' : 'elkt';
   const model = monaco.editor.createModel(opts.initialText, opts.language,
     monaco.Uri.parse(`inmemory:/${diagramId}/model.${ext}`));
+  // bracket pair colours are a model option read when the model is created, before the editor's
+  // `bracketPairColorization` option reaches the configuration: switch them off on the model too
+  model.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false } });
   const editor = monaco.editor.create(document.getElementById(editorId)!, {
     model,
     // elk-live creates its editors with Monaco's defaults (font family, size and line height of the
@@ -123,10 +126,10 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
     bracketPairColorization: { enabled: false },
     stickyScroll: { enabled: false },
     renderWhitespace: 'none',
+    foldingHighlight: false, // Monaco 0.14 did not tint folded lines
     unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: false },
     ...opts.editorOptions,
   });
-  onDarkModeChange((dark) => monaco.editor.setTheme(dark ? 'vs-dark' : 'vs'));
 
   // ---------------------------------------------------------------- diagram
   const container = createContainer(diagramId);

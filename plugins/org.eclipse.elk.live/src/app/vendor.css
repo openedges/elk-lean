@@ -3,3 +3,4 @@
 @import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css';
 @import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css';
 @import '../../node_modules/sprotty/css/sprotty.css';
+@import '../editor/folding-icons.css';

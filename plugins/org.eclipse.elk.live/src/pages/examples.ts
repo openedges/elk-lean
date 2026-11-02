@@ -10,6 +10,7 @@
 import { monaco } from '../editor/monaco.ts';
 import { ELKT, registerElkt } from '../editor/elkt-language.ts';
 import { registerCompletion } from '../editor/completion.ts';
+import { registerElktFolding } from '../editor/elkt-folding.ts';
 import { createExampleCategoryTree, navigationItems, parseElkex, type ElkExampleEntry } from '../core/elkex.ts';
 import { renderMarkdown } from '../core/markdown.ts';
 import { modelLink } from '../core/urls.ts';
@@ -28,6 +29,7 @@ setupDarkMode();
 const engine = startEngine();
 registerElkt(monaco);
 registerCompletion(monaco, engine.metadata);
+registerElktFolding(monaco);
 
 let current: string | null = null;
 const ctrl = createEditorDiagram({

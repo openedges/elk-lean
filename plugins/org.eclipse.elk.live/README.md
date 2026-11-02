@@ -71,14 +71,14 @@ page load on an M-series Mac (WASM compile in the worker).
 | `src/app/editor-diagram.ts` | editor + diagram pair: Monaco, sprotty, debounced pipeline, markers, status line, loading overlay, diagram tools (Fit, SVG, JSON) |
 | `src/app/engine.ts` | `ELK` in Web Worker mode and the completion metadata |
 | `src/app/chrome.ts` | navbar (brand, title, engine badge, dark-mode toggle) and footer (model link, status, engine line) |
-| `src/app/dark-mode.ts` | dark mode (`elk-dark-mode` class, remembered under `elk-lean-live-dark-mode`) |
+| `src/app/dark-mode.ts` | dark mode (`elk-dark-mode` class, remembered under `elk-lean-live-dark-mode`; as in elk-live the editor keeps Monaco's light theme and is inverted by CSS together with the examples sidebar) |
 | `src/style.css`, `src/app/vendor.css` | styles of all pages; Monaco codicons and sprotty CSS (editor pages only) |
 | `src/core/pipeline.ts` | DOM-free pipeline: `convertElkt` or JSON5 → `layout` → sprotty model; parse/layout diagnostics with line/column |
 | `src/core/urls.ts` | DOM-free URL handling: model links (`?compressedContent=`), initial content, old-link redirect |
 | `src/core/elk-to-sprotty.ts` | laid-out ELK JSON → sprotty model (elk-live's visual model) |
 | `src/core/options.ts` | completion metadata (`knownLayoutOptions()`, `knownLayoutAlgorithms()`, enum literals), `.elkt` context scan |
 | `src/core/elkex.ts`, `src/core/markdown.ts` | example files (`// elkex:` sections), category tree and table of contents; descriptions rendered with showdown (GitHub flavour, `simpleLineBreaks: false`) exactly as elk-live does |
-| `src/editor/` | Monaco setup (ESM, selected contributions), `.elkt` and `elkj` Monarch grammars, completion provider |
+| `src/editor/` | Monaco setup (ESM, selected contributions), `.elkt` and `elkj` Monarch grammars, completion and folding providers, Monaco 0.14 folding icons |
 | `src/diagram/` | sprotty container, model classes, views, diagram CSS, SVG export |
 | `src/generated/option-choices.json` | enum literals of the ENUM/ENUMSET options (`npm run gen:choices`) |
 | `scripts/copy-assets.mjs` | build-time copies into `public/` (gitignored): `examples/**.elkt` + `examples/index.json`, `elk-lean/js/elk-worker.js`, `elk-lean/js/load-wasm.browser.mjs`, `elk-lean/dist/wasm/elk_lean_core.{mjs,wasm}` |
@@ -102,8 +102,12 @@ Implemented:
   footer ("Link to this model" on the editors). Where elk-live has its ELK version menu, the navbar
   shows an engine badge `elk-lean 0.12.0 · ELK 0.12.0` (tooltip: one engine, nothing to choose).
 - `.elkt` editor (Monaco 0.57) with syntax highlighting (elk-live's Monarch grammar as it is:
-  keywords and comments; strings, numbers and option keys stay plain), bracket matching, folding,
-  comments, find.
+  keywords and comments; strings, numbers and option keys stay plain), bracket matching, comments,
+  find, and folding as in elk-live: the ranges its Xtext language server computes (every node,
+  port, label, edge, section and property entry that spans several lines, closing brace included,
+  and every block comment; no indentation folding — `src/editor/elkt-folding.ts`, checked against
+  the server's answers in `test/fixtures/elkt-folding-xtext.json`), drawn with Monaco 0.14's
+  `[+]`/`[-]` controls.
 - Parser errors as editor markers and in the status line, with the Lean parser's line and column
   (`ELK Text parse error: L:C: …`); layout errors (Java exception text) in the status line. The
   Xtext messages of elk-live are not reproduced (PLAN 8.1).

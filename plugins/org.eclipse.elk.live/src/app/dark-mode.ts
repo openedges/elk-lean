@@ -1,7 +1,8 @@
 /*
  * Dark mode of all pages (elk-live's simple-dark-mode-toggle, without the dependency): the
  * `elk-dark-mode` class on `<body>`, remembered per browser under `elk-lean-live-dark-mode`,
- * defaulting to the system preference. Listeners (the Monaco theme) are called on every change.
+ * defaulting to the system preference. Listeners are called on every change (the editor needs
+ * none: as in elk-live it keeps the light theme and is inverted by CSS).
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */

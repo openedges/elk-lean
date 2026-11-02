@@ -1,0 +1,2806 @@
+{
+ "source": "textDocument/foldingRange results of elk-live's Xtext 2.36.0 language server (ELK 0.12.0 ElkGraph grammar) for these inputs, captured 2026-11-02 from a local build of external/elk-live (cbf63a24); 0-based lines as in the protocol. `invalid` quotes the ELK Text parse error of `elk convert`: Xtext's error recovery is not reproduced, those cases are only run for robustness.",
+ "cases": [
+  {
+   "name": "c01",
+   "text": "node a {\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c02",
+   "text": "node a { node b }\n",
+   "ranges": []
+  },
+  {
+   "name": "c03",
+   "text": "// comment\n// comment 2\nnode a {\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 2,
+     "endLine": 4
+    }
+   ]
+  },
+  {
+   "name": "c04",
+   "text": "/* multi\n   line */\nnode a {\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 1,
+     "kind": "comment"
+    },
+    {
+     "startLine": 2,
+     "endLine": 4
+    }
+   ]
+  },
+  {
+   "name": "c05",
+   "text": "node a {\n    /* inner\n    comment */\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    },
+    {
+     "startLine": 1,
+     "endLine": 2,
+     "kind": "comment"
+    }
+   ]
+  },
+  {
+   "name": "c06",
+   "text": "node a {\n    layout [\n        position: 1, 2\n        size: 3, 4\n    ]\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 6
+    }
+   ]
+  },
+  {
+   "name": "c07",
+   "text": "node a\nnode b\nedge a -> b\n",
+   "ranges": []
+  },
+  {
+   "name": "c08",
+   "text": "node a\nnode b\nedge e: a -> b {\n    layout [\n        start: 1, 2\n        end: 3, 4\n    ]\n}\n",
+   "ranges": [
+    {
+     "startLine": 2,
+     "endLine": 7
+    },
+    {
+     "startLine": 4,
+     "endLine": 5
+    }
+   ]
+  },
+  {
+   "name": "c09",
+   "text": "node a\nnode b\nedge e: a -> b {\n    layout [\n        section s1 {\n            start: 1, 2\n            end: 3, 4\n        }\n    ]\n}\n",
+   "invalid": "ELK Text parse error: 5:20: mismatched input '{' expecting '['",
+   "ranges": [
+    {
+     "startLine": 2,
+     "endLine": 7
+    }
+   ]
+  },
+  {
+   "name": "c10",
+   "text": "node a {\n    port p {\n        label \"x\"\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    },
+    {
+     "startLine": 1,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c11",
+   "text": "node a {\n    label \"x\" {\n        layout [\n            size: 10, 10\n        ]\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 6
+    },
+    {
+     "startLine": 1,
+     "endLine": 5
+    }
+   ]
+  },
+  {
+   "name": "c12",
+   "text": "node a {\n    elk.direction:\n        RIGHT\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    },
+    {
+     "startLine": 1,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c13",
+   "text": "graph g\nlayout [\n    size: 10, 10\n]\nelk.direction: RIGHT\nnode a {\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 5,
+     "endLine": 7
+    }
+   ]
+  },
+  {
+   "name": "c14",
+   "text": "node a {\n    node b\n} node c {\n    node d\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    },
+    {
+     "startLine": 2,
+     "endLine": 4
+    }
+   ]
+  },
+  {
+   "name": "c15",
+   "text": "node a {\n    node b\n} // trailing comment\n\n\nnode c {\n    node d\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    },
+    {
+     "startLine": 5,
+     "endLine": 7
+    }
+   ]
+  },
+  {
+   "name": "c16",
+   "text": "node a {\n\n    node b\n\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    }
+   ]
+  },
+  {
+   "name": "c17",
+   "text": "node a\nnode b\nedge a\n    -> b\n",
+   "ranges": [
+    {
+     "startLine": 2,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c18",
+   "text": "node a {\n    node b {\n        node c\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    },
+    {
+     "startLine": 1,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c19",
+   "text": "node a\n{\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c20",
+   "text": "node a {\n    node b\n}\n/* trailing\n comment */\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    },
+    {
+     "startLine": 3,
+     "endLine": 4,
+     "kind": "comment"
+    }
+   ]
+  },
+  {
+   "name": "c21",
+   "text": "",
+   "ranges": []
+  },
+  {
+   "name": "c22",
+   "text": "node a {\n    node b {\n        node c\n    }\n    node d {\n        node e\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 7
+    },
+    {
+     "startLine": 1,
+     "endLine": 3
+    },
+    {
+     "startLine": 4,
+     "endLine": 6
+    }
+   ]
+  },
+  {
+   "name": "c23",
+   "text": "node a {\n    node b\n    edge b -> b {\n        layout [\n            start: 0, 0\n            bends: 1, 1 | 2, 2\n            end: 3, 3\n        ]\n    }\n}\n",
+   "invalid": "ELK Text parse error: 7:13: mismatched input 'end' expecting ']'",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 9
+    },
+    {
+     "startLine": 2,
+     "endLine": 8
+    },
+    {
+     "startLine": 4,
+     "endLine": 5
+    }
+   ]
+  },
+  {
+   "name": "c24",
+   "text": "node a {\n    port p1\n    port p2 {\n        layout [\n            position: 0, 0\n        ]\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 7
+    },
+    {
+     "startLine": 2,
+     "endLine": 6
+    }
+   ]
+  },
+  {
+   "name": "c25",
+   "text": "node a {\n    node b\n",
+   "invalid": "ELK Text parse error: 3:1: mismatched input '<EOF>' expecting '}'",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 1
+    }
+   ]
+  },
+  {
+   "name": "c26",
+   "text": "node a {\n    node b\n}",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c27",
+   "text": "node a {\n    node b\n}\n\n\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c29",
+   "text": "node a {  // c\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c31",
+   "text": "node a {\n    node b\n}\nnode c { node d }\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c32",
+   "text": "/* a */ node a {\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c33",
+   "text": "node a { node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 1
+    }
+   ]
+  },
+  {
+   "name": "c34",
+   "text": "node a {\n    node b }\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 1
+    }
+   ]
+  },
+  {
+   "name": "c35",
+   "text": "node a {\n\tnode b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    }
+   ]
+  },
+  {
+   "name": "c36",
+   "text": "node a {\n    elk.direction: RIGHT\n    elk.algorithm: layered\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c37",
+   "text": "node a {\n    node b\n}\n\n/* c1\n c2 */ /* d1\n d2 */\nnode c\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    },
+    {
+     "startLine": 4,
+     "endLine": 5,
+     "kind": "comment"
+    },
+    {
+     "startLine": 5,
+     "endLine": 6,
+     "kind": "comment"
+    }
+   ]
+  },
+  {
+   "name": "c38",
+   "text": "node a {\n    node b\n    // line\n    // comments\n    node c\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 5
+    }
+   ]
+  },
+  {
+   "name": "c39",
+   "text": "node a {\n    port p {\n        elk.port.side: NORTH\n        label \"l\" {\n            layout [\n                position: 1, 1\n            ]\n        }\n    }\n}\n",
+   "invalid": "ELK Text parse error: 3:13: mismatched input 'port' expecting RULE_ID",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 9
+    },
+    {
+     "startLine": 1,
+     "endLine": 8
+    },
+    {
+     "startLine": 3,
+     "endLine": 7
+    }
+   ]
+  },
+  {
+   "name": "c40",
+   "text": "node a {\n    node b\n    node c\n    edge e1: b -> c {\n        elk.layered.priority: 2\n        label \"edge\"\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 7
+    },
+    {
+     "startLine": 3,
+     "endLine": 6
+    }
+   ]
+  },
+  {
+   "name": "c41",
+   "text": "node a {\n  node b {\n  node c\n  }\n  }\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    },
+    {
+     "startLine": 1,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c42",
+   "text": "node a {\n    node b\n}\n\n\n\n\n\nnode c {\n    node d\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 2
+    },
+    {
+     "startLine": 8,
+     "endLine": 10
+    }
+   ]
+  },
+  {
+   "name": "c43",
+   "text": "node a { // x\n    node b { // y\n        node c\n    } // z\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 4
+    },
+    {
+     "startLine": 1,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c44",
+   "text": "node a {\n    node b\n    edge b -> b {\n        layout [\n            section s1 {\n                start: 0, 0\n                end: 1, 1\n            }\n            section s2 {\n                incoming: s1\n                start: 1, 1\n                end: 2, 2\n            }\n        ]\n    }\n}\n",
+   "invalid": "ELK Text parse error: 5:24: mismatched input '{' expecting '['",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 15
+    },
+    {
+     "startLine": 2,
+     "endLine": 7
+    }
+   ]
+  },
+  {
+   "name": "c45",
+   "text": "node a {\n    node b\n    node c\n    edge e: b -> c\n    edge f: b\n        -> c {\n        label \"f\"\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8
+    },
+    {
+     "startLine": 4,
+     "endLine": 7
+    }
+   ]
+  },
+  {
+   "name": "c46",
+   "text": "node\na {\n    node b\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 3
+    }
+   ]
+  },
+  {
+   "name": "c47",
+   "text": "node a {\n    label \"multi\"\n    label \"second\" {\n        elk.nodeLabels.placement: \"V_TOP\"\n    }\n}\n",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 5
+    },
+    {
+     "startLine": 2,
+     "endLine": 4
+    }
+   ]
+  },
+  {
+   "name": "ex:edges/insideSelfLoops.elkt",
+   "example": "edges/insideSelfLoops.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 27,
+     "kind": "comment"
+    },
+    {
+     "startLine": 30,
+     "endLine": 35
+    },
+    {
+     "startLine": 37,
+     "endLine": 39
+    },
+    {
+     "startLine": 41,
+     "endLine": 49
+    },
+    {
+     "startLine": 51,
+     "endLine": 53
+    }
+   ]
+  },
+  {
+   "name": "ex:general/direction.elkt",
+   "example": "general/direction.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 19,
+     "kind": "comment"
+    },
+    {
+     "startLine": 22,
+     "endLine": 29
+    },
+    {
+     "startLine": 31,
+     "endLine": 38
+    },
+    {
+     "startLine": 40,
+     "endLine": 47
+    },
+    {
+     "startLine": 49,
+     "endLine": 56
+    }
+   ]
+  },
+  {
+   "name": "ex:general/mixingDirection.elkt",
+   "example": "general/mixingDirection.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 23,
+     "kind": "comment"
+    },
+    {
+     "startLine": 26,
+     "endLine": 49
+    },
+    {
+     "startLine": 31,
+     "endLine": 38
+    },
+    {
+     "startLine": 39,
+     "endLine": 46
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/comments.elkt",
+   "example": "general/spacing/comments.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 24,
+     "kind": "comment"
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/components.elkt",
+   "example": "general/spacing/components.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 25,
+     "kind": "comment"
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/labels.elkt",
+   "example": "general/spacing/labels.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 19,
+     "kind": "comment"
+    },
+    {
+     "startLine": 25,
+     "endLine": 29
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/nodesEdges.elkt",
+   "example": "general/spacing/nodesEdges.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 37,
+     "kind": "comment"
+    },
+    {
+     "startLine": 53,
+     "endLine": 55
+    },
+    {
+     "startLine": 56,
+     "endLine": 59
+    },
+    {
+     "startLine": 60,
+     "endLine": 62
+    },
+    {
+     "startLine": 63,
+     "endLine": 65
+    },
+    {
+     "startLine": 66,
+     "endLine": 69
+    },
+    {
+     "startLine": 70,
+     "endLine": 72
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/padding.elkt",
+   "example": "general/spacing/padding.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 19,
+     "kind": "comment"
+    },
+    {
+     "startLine": 26,
+     "endLine": 29
+    },
+    {
+     "startLine": 32,
+     "endLine": 36
+    },
+    {
+     "startLine": 39,
+     "endLine": 43
+    },
+    {
+     "startLine": 46,
+     "endLine": 50
+    },
+    {
+     "startLine": 54,
+     "endLine": 58
+    },
+    {
+     "startLine": 60,
+     "endLine": 65
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/ports.elkt",
+   "example": "general/spacing/ports.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 37,
+     "kind": "comment"
+    },
+    {
+     "startLine": 43,
+     "endLine": 79
+    },
+    {
+     "startLine": 48,
+     "endLine": 77
+    },
+    {
+     "startLine": 81,
+     "endLine": 109
+    },
+    {
+     "startLine": 86,
+     "endLine": 95
+    },
+    {
+     "startLine": 97,
+     "endLine": 107
+    },
+    {
+     "startLine": 111,
+     "endLine": 131
+    },
+    {
+     "startLine": 116,
+     "endLine": 119
+    },
+    {
+     "startLine": 120,
+     "endLine": 122
+    },
+    {
+     "startLine": 123,
+     "endLine": 126
+    },
+    {
+     "startLine": 127,
+     "endLine": 129
+    }
+   ]
+  },
+  {
+   "name": "ex:general/spacing/portsSurrounding.elkt",
+   "example": "general/spacing/portsSurrounding.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 47,
+     "kind": "comment"
+    },
+    {
+     "startLine": 55,
+     "endLine": 76
+    },
+    {
+     "startLine": 79,
+     "endLine": 103
+    }
+   ]
+  },
+  {
+   "name": "ex:hierarchy/hierarchicalEdges.elkt",
+   "example": "hierarchy/hierarchicalEdges.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 27,
+     "kind": "comment"
+    },
+    {
+     "startLine": 35,
+     "endLine": 41
+    },
+    {
+     "startLine": 36,
+     "endLine": 40
+    }
+   ]
+  },
+  {
+   "name": "ex:hierarchy/hierarchicalLayoutMixing.elkt",
+   "example": "hierarchy/hierarchicalLayoutMixing.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 32,
+     "kind": "comment"
+    },
+    {
+     "startLine": 40,
+     "endLine": 69
+    },
+    {
+     "startLine": 41,
+     "endLine": 45
+    },
+    {
+     "startLine": 47,
+     "endLine": 57
+    },
+    {
+     "startLine": 59,
+     "endLine": 68
+    }
+   ]
+  },
+  {
+   "name": "ex:labels/nodeLabelPlacement.elkt",
+   "example": "labels/nodeLabelPlacement.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 32,
+     "kind": "comment"
+    },
+    {
+     "startLine": 36,
+     "endLine": 54
+    },
+    {
+     "startLine": 38,
+     "endLine": 41
+    },
+    {
+     "startLine": 42,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 49
+    },
+    {
+     "startLine": 50,
+     "endLine": 53
+    },
+    {
+     "startLine": 56,
+     "endLine": 73
+    },
+    {
+     "startLine": 58,
+     "endLine": 62
+    },
+    {
+     "startLine": 63,
+     "endLine": 67
+    },
+    {
+     "startLine": 68,
+     "endLine": 72
+    },
+    {
+     "startLine": 75,
+     "endLine": 87
+    },
+    {
+     "startLine": 77,
+     "endLine": 81
+    },
+    {
+     "startLine": 82,
+     "endLine": 86
+    }
+   ]
+  },
+  {
+   "name": "ex:labels/portLabelsMulti.elkt",
+   "example": "labels/portLabelsMulti.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 27,
+     "kind": "comment"
+    },
+    {
+     "startLine": 31,
+     "endLine": 56
+    },
+    {
+     "startLine": 36,
+     "endLine": 40
+    },
+    {
+     "startLine": 41,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 50
+    },
+    {
+     "startLine": 51,
+     "endLine": 55
+    },
+    {
+     "startLine": 57,
+     "endLine": 82
+    },
+    {
+     "startLine": 62,
+     "endLine": 66
+    },
+    {
+     "startLine": 67,
+     "endLine": 71
+    },
+    {
+     "startLine": 72,
+     "endLine": 76
+    },
+    {
+     "startLine": 77,
+     "endLine": 81
+    }
+   ]
+  },
+  {
+   "name": "ex:ports/allowNonFlowPortsToSwitchSides.elkt",
+   "example": "ports/allowNonFlowPortsToSwitchSides.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 37,
+     "kind": "comment"
+    },
+    {
+     "startLine": 42,
+     "endLine": 52
+    },
+    {
+     "startLine": 45,
+     "endLine": 48
+    },
+    {
+     "startLine": 49,
+     "endLine": 51
+    },
+    {
+     "startLine": 54,
+     "endLine": 68
+    },
+    {
+     "startLine": 56,
+     "endLine": 59
+    },
+    {
+     "startLine": 60,
+     "endLine": 63
+    },
+    {
+     "startLine": 64,
+     "endLine": 67
+    }
+   ]
+  },
+  {
+   "name": "ex:ports/portConstraints.elkt",
+   "example": "ports/portConstraints.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 20,
+     "kind": "comment"
+    },
+    {
+     "startLine": 24,
+     "endLine": 37
+    },
+    {
+     "startLine": 25,
+     "endLine": 29
+    },
+    {
+     "startLine": 30,
+     "endLine": 34
+    },
+    {
+     "startLine": 39,
+     "endLine": 52
+    },
+    {
+     "startLine": 40,
+     "endLine": 44
+    },
+    {
+     "startLine": 45,
+     "endLine": 49
+    },
+    {
+     "startLine": 54,
+     "endLine": 67
+    },
+    {
+     "startLine": 55,
+     "endLine": 59
+    },
+    {
+     "startLine": 60,
+     "endLine": 64
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_circle.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_circle.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 26,
+     "kind": "comment"
+    },
+    {
+     "startLine": 32,
+     "endLine": 35
+    },
+    {
+     "startLine": 36,
+     "endLine": 38
+    },
+    {
+     "startLine": 39,
+     "endLine": 41
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_circle_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_circle_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 21,
+     "kind": "comment"
+    },
+    {
+     "startLine": 28,
+     "endLine": 31
+    },
+    {
+     "startLine": 32,
+     "endLine": 35
+    },
+    {
+     "startLine": 36,
+     "endLine": 39
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_hierarchy.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_hierarchy.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 33,
+     "kind": "comment"
+    },
+    {
+     "startLine": 39,
+     "endLine": 41
+    },
+    {
+     "startLine": 43,
+     "endLine": 57
+    },
+    {
+     "startLine": 47,
+     "endLine": 49
+    },
+    {
+     "startLine": 51,
+     "endLine": 54
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_hierarchyDirection.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_hierarchyDirection.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 24,
+     "kind": "comment"
+    },
+    {
+     "startLine": 30,
+     "endLine": 53
+    },
+    {
+     "startLine": 36,
+     "endLine": 48
+    },
+    {
+     "startLine": 41,
+     "endLine": 43
+    },
+    {
+     "startLine": 44,
+     "endLine": 46
+    },
+    {
+     "startLine": 49,
+     "endLine": 52
+    },
+    {
+     "startLine": 54,
+     "endLine": 56
+    },
+    {
+     "startLine": 57,
+     "endLine": 59
+    },
+    {
+     "startLine": 60,
+     "endLine": 62
+    },
+    {
+     "startLine": 63,
+     "endLine": 65
+    },
+    {
+     "startLine": 66,
+     "endLine": 88
+    },
+    {
+     "startLine": 72,
+     "endLine": 83
+    },
+    {
+     "startLine": 77,
+     "endLine": 79
+    },
+    {
+     "startLine": 80,
+     "endLine": 82
+    },
+    {
+     "startLine": 84,
+     "endLine": 87
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_hierarchyDirection_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_hierarchyDirection_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 19,
+     "kind": "comment"
+    },
+    {
+     "startLine": 25,
+     "endLine": 54
+    },
+    {
+     "startLine": 33,
+     "endLine": 49
+    },
+    {
+     "startLine": 42,
+     "endLine": 44
+    },
+    {
+     "startLine": 45,
+     "endLine": 47
+    },
+    {
+     "startLine": 50,
+     "endLine": 53
+    },
+    {
+     "startLine": 55,
+     "endLine": 57
+    },
+    {
+     "startLine": 58,
+     "endLine": 60
+    },
+    {
+     "startLine": 61,
+     "endLine": 63
+    },
+    {
+     "startLine": 64,
+     "endLine": 66
+    },
+    {
+     "startLine": 67,
+     "endLine": 90
+    },
+    {
+     "startLine": 74,
+     "endLine": 85
+    },
+    {
+     "startLine": 79,
+     "endLine": 81
+    },
+    {
+     "startLine": 82,
+     "endLine": 84
+    },
+    {
+     "startLine": 86,
+     "endLine": 89
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_hierarchy_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_hierarchy_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 30,
+     "kind": "comment"
+    },
+    {
+     "startLine": 37,
+     "endLine": 40
+    },
+    {
+     "startLine": 42,
+     "endLine": 61
+    },
+    {
+     "startLine": 49,
+     "endLine": 52
+    },
+    {
+     "startLine": 54,
+     "endLine": 58
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_motor.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_motor.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 27,
+     "kind": "comment"
+    },
+    {
+     "startLine": 33,
+     "endLine": 37
+    },
+    {
+     "startLine": 38,
+     "endLine": 42
+    },
+    {
+     "startLine": 43,
+     "endLine": 47
+    },
+    {
+     "startLine": 48,
+     "endLine": 52
+    },
+    {
+     "startLine": 53,
+     "endLine": 57
+    },
+    {
+     "startLine": 58,
+     "endLine": 60
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_motor_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_motor_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 22,
+     "kind": "comment"
+    },
+    {
+     "startLine": 31,
+     "endLine": 35
+    },
+    {
+     "startLine": 36,
+     "endLine": 40
+    },
+    {
+     "startLine": 41,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 50
+    },
+    {
+     "startLine": 51,
+     "endLine": 55
+    },
+    {
+     "startLine": 56,
+     "endLine": 58
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_nodeSizes.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_nodeSizes.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 23,
+     "kind": "comment"
+    },
+    {
+     "startLine": 29,
+     "endLine": 33
+    },
+    {
+     "startLine": 35,
+     "endLine": 39
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_nodeSizes_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_nodeSizes_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 18,
+     "kind": "comment"
+    },
+    {
+     "startLine": 26,
+     "endLine": 29
+    },
+    {
+     "startLine": 31,
+     "endLine": 34
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_separateComponents.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_separateComponents.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 37,
+     "kind": "comment"
+    },
+    {
+     "startLine": 43,
+     "endLine": 47
+    },
+    {
+     "startLine": 48,
+     "endLine": 52
+    },
+    {
+     "startLine": 53,
+     "endLine": 57
+    },
+    {
+     "startLine": 58,
+     "endLine": 62
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_separateComponents_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_separateComponents_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 33,
+     "kind": "comment"
+    },
+    {
+     "startLine": 41,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 50
+    },
+    {
+     "startLine": 51,
+     "endLine": 55
+    },
+    {
+     "startLine": 56,
+     "endLine": 60
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_simpleDirectionTest.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_simpleDirectionTest.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 37,
+     "kind": "comment"
+    },
+    {
+     "startLine": 42,
+     "endLine": 44
+    },
+    {
+     "startLine": 45,
+     "endLine": 47
+    },
+    {
+     "startLine": 48,
+     "endLine": 50
+    },
+    {
+     "startLine": 51,
+     "endLine": 53
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_simpleDirectionTest_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_simpleDirectionTest_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 32,
+     "kind": "comment"
+    },
+    {
+     "startLine": 40,
+     "endLine": 42
+    },
+    {
+     "startLine": 43,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 48
+    },
+    {
+     "startLine": 49,
+     "endLine": 51
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_snake.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_snake.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 25,
+     "kind": "comment"
+    },
+    {
+     "startLine": 31,
+     "endLine": 33
+    },
+    {
+     "startLine": 34,
+     "endLine": 36
+    },
+    {
+     "startLine": 37,
+     "endLine": 40
+    },
+    {
+     "startLine": 41,
+     "endLine": 43
+    },
+    {
+     "startLine": 44,
+     "endLine": 47
+    },
+    {
+     "startLine": 48,
+     "endLine": 50
+    },
+    {
+     "startLine": 51,
+     "endLine": 54
+    },
+    {
+     "startLine": 55,
+     "endLine": 57
+    },
+    {
+     "startLine": 58,
+     "endLine": 60
+    },
+    {
+     "startLine": 61,
+     "endLine": 63
+    },
+    {
+     "startLine": 64,
+     "endLine": 67
+    },
+    {
+     "startLine": 68,
+     "endLine": 72
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_snake_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_snake_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 21,
+     "kind": "comment"
+    },
+    {
+     "startLine": 30,
+     "endLine": 34
+    },
+    {
+     "startLine": 35,
+     "endLine": 39
+    },
+    {
+     "startLine": 40,
+     "endLine": 44
+    },
+    {
+     "startLine": 45,
+     "endLine": 49
+    },
+    {
+     "startLine": 50,
+     "endLine": 54
+    },
+    {
+     "startLine": 55,
+     "endLine": 59
+    },
+    {
+     "startLine": 60,
+     "endLine": 64
+    },
+    {
+     "startLine": 65,
+     "endLine": 69
+    },
+    {
+     "startLine": 70,
+     "endLine": 74
+    },
+    {
+     "startLine": 75,
+     "endLine": 80
+    },
+    {
+     "startLine": 81,
+     "endLine": 85
+    },
+    {
+     "startLine": 86,
+     "endLine": 90
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_sortingTask.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_sortingTask.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 26,
+     "kind": "comment"
+    },
+    {
+     "startLine": 32,
+     "endLine": 36
+    },
+    {
+     "startLine": 37,
+     "endLine": 41
+    },
+    {
+     "startLine": 42,
+     "endLine": 46
+    },
+    {
+     "startLine": 47,
+     "endLine": 51
+    },
+    {
+     "startLine": 52,
+     "endLine": 56
+    },
+    {
+     "startLine": 57,
+     "endLine": 61
+    },
+    {
+     "startLine": 62,
+     "endLine": 66
+    },
+    {
+     "startLine": 67,
+     "endLine": 71
+    },
+    {
+     "startLine": 72,
+     "endLine": 76
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayeredLayout_sortingTask_pseudo_positions.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayeredLayout_sortingTask_pseudo_positions.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 26,
+     "kind": "comment"
+    },
+    {
+     "startLine": 34,
+     "endLine": 38
+    },
+    {
+     "startLine": 39,
+     "endLine": 43
+    },
+    {
+     "startLine": 44,
+     "endLine": 48
+    },
+    {
+     "startLine": 49,
+     "endLine": 53
+    },
+    {
+     "startLine": 54,
+     "endLine": 58
+    },
+    {
+     "startLine": 59,
+     "endLine": 63
+    },
+    {
+     "startLine": 64,
+     "endLine": 68
+    },
+    {
+     "startLine": 69,
+     "endLine": 73
+    },
+    {
+     "startLine": 74,
+     "endLine": 78
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayereredLayout_layerConstraint.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayereredLayout_layerConstraint.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 26,
+     "kind": "comment"
+    },
+    {
+     "startLine": 32,
+     "endLine": 35
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveLayout_mixedHierarchy.elkt",
+   "example": "user-hints/interactive-constraints/interactiveLayout_mixedHierarchy.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 26,
+     "kind": "comment"
+    },
+    {
+     "startLine": 36,
+     "endLine": 46
+    },
+    {
+     "startLine": 42,
+     "endLine": 45
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveRectpacking_hierarchy.elkt",
+   "example": "user-hints/interactive-constraints/interactiveRectpacking_hierarchy.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 35,
+     "kind": "comment"
+    },
+    {
+     "startLine": 45,
+     "endLine": 54
+    },
+    {
+     "startLine": 51,
+     "endLine": 53
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/interactive-constraints/interactiveRectpacking_oneBigNode.elkt",
+   "example": "user-hints/interactive-constraints/interactiveRectpacking_oneBigNode.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 9,
+     "endLine": 28,
+     "kind": "comment"
+    },
+    {
+     "startLine": 34,
+     "endLine": 37
+    },
+    {
+     "startLine": 38,
+     "endLine": 41
+    },
+    {
+     "startLine": 42,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 49
+    },
+    {
+     "startLine": 50,
+     "endLine": 52
+    },
+    {
+     "startLine": 53,
+     "endLine": 55
+    },
+    {
+     "startLine": 56,
+     "endLine": 58
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/layered/horizontalOrder.elkt",
+   "example": "user-hints/layered/horizontalOrder.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 48,
+     "kind": "comment"
+    },
+    {
+     "startLine": 53,
+     "endLine": 62
+    },
+    {
+     "startLine": 64,
+     "endLine": 76
+    },
+    {
+     "startLine": 78,
+     "endLine": 91
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/layered/partitioning.elkt",
+   "example": "user-hints/layered/partitioning.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 33,
+     "kind": "comment"
+    },
+    {
+     "startLine": 37,
+     "endLine": 102
+    },
+    {
+     "startLine": 44,
+     "endLine": 47
+    },
+    {
+     "startLine": 48,
+     "endLine": 51
+    },
+    {
+     "startLine": 52,
+     "endLine": 55
+    },
+    {
+     "startLine": 56,
+     "endLine": 59
+    },
+    {
+     "startLine": 60,
+     "endLine": 63
+    },
+    {
+     "startLine": 64,
+     "endLine": 67
+    },
+    {
+     "startLine": 68,
+     "endLine": 71
+    },
+    {
+     "startLine": 72,
+     "endLine": 75
+    },
+    {
+     "startLine": 76,
+     "endLine": 79
+    },
+    {
+     "startLine": 80,
+     "endLine": 83
+    },
+    {
+     "startLine": 84,
+     "endLine": 87
+    },
+    {
+     "startLine": 104,
+     "endLine": 181
+    },
+    {
+     "startLine": 112,
+     "endLine": 116
+    },
+    {
+     "startLine": 117,
+     "endLine": 121
+    },
+    {
+     "startLine": 122,
+     "endLine": 126
+    },
+    {
+     "startLine": 127,
+     "endLine": 131
+    },
+    {
+     "startLine": 132,
+     "endLine": 136
+    },
+    {
+     "startLine": 137,
+     "endLine": 141
+    },
+    {
+     "startLine": 142,
+     "endLine": 146
+    },
+    {
+     "startLine": 147,
+     "endLine": 151
+    },
+    {
+     "startLine": 152,
+     "endLine": 156
+    },
+    {
+     "startLine": 157,
+     "endLine": 161
+    },
+    {
+     "startLine": 162,
+     "endLine": 166
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/layered/reverseEdge.elkt",
+   "example": "user-hints/layered/reverseEdge.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 32,
+     "kind": "comment"
+    },
+    {
+     "startLine": 37,
+     "endLine": 44
+    },
+    {
+     "startLine": 46,
+     "endLine": 53
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/layered/verticalOrder.elkt",
+   "example": "user-hints/layered/verticalOrder.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 48,
+     "kind": "comment"
+    },
+    {
+     "startLine": 53,
+     "endLine": 67
+    },
+    {
+     "startLine": 57,
+     "endLine": 62
+    },
+    {
+     "startLine": 69,
+     "endLine": 86
+    },
+    {
+     "startLine": 76,
+     "endLine": 81
+    },
+    {
+     "startLine": 88,
+     "endLine": 105
+    },
+    {
+     "startLine": 95,
+     "endLine": 100
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/model-order/modelOrderCrossingMinimization.elkt",
+   "example": "user-hints/model-order/modelOrderCrossingMinimization.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 18,
+     "kind": "comment"
+    },
+    {
+     "startLine": 24,
+     "endLine": 103
+    },
+    {
+     "startLine": 35,
+     "endLine": 39
+    },
+    {
+     "startLine": 40,
+     "endLine": 42
+    },
+    {
+     "startLine": 43,
+     "endLine": 45
+    },
+    {
+     "startLine": 46,
+     "endLine": 48
+    },
+    {
+     "startLine": 50,
+     "endLine": 53
+    },
+    {
+     "startLine": 54,
+     "endLine": 56
+    },
+    {
+     "startLine": 58,
+     "endLine": 61
+    },
+    {
+     "startLine": 62,
+     "endLine": 64
+    },
+    {
+     "startLine": 66,
+     "endLine": 69
+    },
+    {
+     "startLine": 70,
+     "endLine": 72
+    },
+    {
+     "startLine": 75,
+     "endLine": 78
+    },
+    {
+     "startLine": 79,
+     "endLine": 81
+    },
+    {
+     "startLine": 83,
+     "endLine": 86
+    },
+    {
+     "startLine": 87,
+     "endLine": 89
+    },
+    {
+     "startLine": 91,
+     "endLine": 94
+    },
+    {
+     "startLine": 95,
+     "endLine": 97
+    },
+    {
+     "startLine": 99,
+     "endLine": 102
+    },
+    {
+     "startLine": 104,
+     "endLine": 160
+    },
+    {
+     "startLine": 113,
+     "endLine": 116
+    },
+    {
+     "startLine": 117,
+     "endLine": 119
+    },
+    {
+     "startLine": 120,
+     "endLine": 122
+    },
+    {
+     "startLine": 124,
+     "endLine": 127
+    },
+    {
+     "startLine": 128,
+     "endLine": 130
+    },
+    {
+     "startLine": 132,
+     "endLine": 135
+    },
+    {
+     "startLine": 136,
+     "endLine": 138
+    },
+    {
+     "startLine": 140,
+     "endLine": 143
+    },
+    {
+     "startLine": 144,
+     "endLine": 146
+    },
+    {
+     "startLine": 148,
+     "endLine": 151
+    },
+    {
+     "startLine": 152,
+     "endLine": 154
+    },
+    {
+     "startLine": 156,
+     "endLine": 159
+    },
+    {
+     "startLine": 162,
+     "endLine": 219
+    },
+    {
+     "startLine": 172,
+     "endLine": 175
+    },
+    {
+     "startLine": 176,
+     "endLine": 178
+    },
+    {
+     "startLine": 179,
+     "endLine": 181
+    },
+    {
+     "startLine": 183,
+     "endLine": 186
+    },
+    {
+     "startLine": 187,
+     "endLine": 189
+    },
+    {
+     "startLine": 191,
+     "endLine": 194
+    },
+    {
+     "startLine": 195,
+     "endLine": 197
+    },
+    {
+     "startLine": 199,
+     "endLine": 202
+    },
+    {
+     "startLine": 203,
+     "endLine": 205
+    },
+    {
+     "startLine": 207,
+     "endLine": 210
+    },
+    {
+     "startLine": 211,
+     "endLine": 213
+    },
+    {
+     "startLine": 215,
+     "endLine": 218
+    },
+    {
+     "startLine": 221,
+     "endLine": 279
+    },
+    {
+     "startLine": 232,
+     "endLine": 235
+    },
+    {
+     "startLine": 236,
+     "endLine": 238
+    },
+    {
+     "startLine": 239,
+     "endLine": 241
+    },
+    {
+     "startLine": 243,
+     "endLine": 246
+    },
+    {
+     "startLine": 247,
+     "endLine": 249
+    },
+    {
+     "startLine": 251,
+     "endLine": 254
+    },
+    {
+     "startLine": 255,
+     "endLine": 257
+    },
+    {
+     "startLine": 259,
+     "endLine": 262
+    },
+    {
+     "startLine": 263,
+     "endLine": 265
+    },
+    {
+     "startLine": 267,
+     "endLine": 270
+    },
+    {
+     "startLine": 271,
+     "endLine": 273
+    },
+    {
+     "startLine": 275,
+     "endLine": 278
+    },
+    {
+     "startLine": 281,
+     "endLine": 316
+    },
+    {
+     "startLine": 288,
+     "endLine": 291
+    },
+    {
+     "startLine": 292,
+     "endLine": 294
+    },
+    {
+     "startLine": 295,
+     "endLine": 297
+    },
+    {
+     "startLine": 298,
+     "endLine": 300
+    },
+    {
+     "startLine": 302,
+     "endLine": 305
+    },
+    {
+     "startLine": 307,
+     "endLine": 310
+    },
+    {
+     "startLine": 312,
+     "endLine": 315
+    },
+    {
+     "startLine": 318,
+     "endLine": 358
+    },
+    {
+     "startLine": 330,
+     "endLine": 333
+    },
+    {
+     "startLine": 334,
+     "endLine": 336
+    },
+    {
+     "startLine": 337,
+     "endLine": 339
+    },
+    {
+     "startLine": 340,
+     "endLine": 342
+    },
+    {
+     "startLine": 344,
+     "endLine": 347
+    },
+    {
+     "startLine": 349,
+     "endLine": 352
+    },
+    {
+     "startLine": 354,
+     "endLine": 357
+    },
+    {
+     "startLine": 360,
+     "endLine": 401
+    },
+    {
+     "startLine": 373,
+     "endLine": 376
+    },
+    {
+     "startLine": 377,
+     "endLine": 379
+    },
+    {
+     "startLine": 380,
+     "endLine": 382
+    },
+    {
+     "startLine": 383,
+     "endLine": 385
+    },
+    {
+     "startLine": 387,
+     "endLine": 390
+    },
+    {
+     "startLine": 392,
+     "endLine": 395
+    },
+    {
+     "startLine": 397,
+     "endLine": 400
+    },
+    {
+     "startLine": 403,
+     "endLine": 448
+    },
+    {
+     "startLine": 420,
+     "endLine": 423
+    },
+    {
+     "startLine": 424,
+     "endLine": 426
+    },
+    {
+     "startLine": 427,
+     "endLine": 429
+    },
+    {
+     "startLine": 430,
+     "endLine": 432
+    },
+    {
+     "startLine": 434,
+     "endLine": 437
+    },
+    {
+     "startLine": 439,
+     "endLine": 442
+    },
+    {
+     "startLine": 444,
+     "endLine": 447
+    },
+    {
+     "startLine": 450,
+     "endLine": 489
+    },
+    {
+     "startLine": 461,
+     "endLine": 464
+    },
+    {
+     "startLine": 465,
+     "endLine": 467
+    },
+    {
+     "startLine": 468,
+     "endLine": 470
+    },
+    {
+     "startLine": 471,
+     "endLine": 473
+    },
+    {
+     "startLine": 475,
+     "endLine": 478
+    },
+    {
+     "startLine": 480,
+     "endLine": 483
+    },
+    {
+     "startLine": 485,
+     "endLine": 488
+    },
+    {
+     "startLine": 491,
+     "endLine": 531
+    },
+    {
+     "startLine": 503,
+     "endLine": 506
+    },
+    {
+     "startLine": 507,
+     "endLine": 509
+    },
+    {
+     "startLine": 510,
+     "endLine": 512
+    },
+    {
+     "startLine": 513,
+     "endLine": 515
+    },
+    {
+     "startLine": 517,
+     "endLine": 520
+    },
+    {
+     "startLine": 522,
+     "endLine": 525
+    },
+    {
+     "startLine": 527,
+     "endLine": 530
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/model-order/modelOrderCycleBreaking.elkt",
+   "example": "user-hints/model-order/modelOrderCycleBreaking.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 19,
+     "kind": "comment"
+    },
+    {
+     "startLine": 23,
+     "endLine": 53
+    },
+    {
+     "startLine": 29,
+     "endLine": 31
+    },
+    {
+     "startLine": 32,
+     "endLine": 35
+    },
+    {
+     "startLine": 38,
+     "endLine": 40
+    },
+    {
+     "startLine": 43,
+     "endLine": 45
+    },
+    {
+     "startLine": 48,
+     "endLine": 50
+    },
+    {
+     "startLine": 55,
+     "endLine": 85
+    },
+    {
+     "startLine": 61,
+     "endLine": 63
+    },
+    {
+     "startLine": 64,
+     "endLine": 67
+    },
+    {
+     "startLine": 70,
+     "endLine": 72
+    },
+    {
+     "startLine": 75,
+     "endLine": 77
+    },
+    {
+     "startLine": 80,
+     "endLine": 82
+    },
+    {
+     "startLine": 87,
+     "endLine": 118
+    },
+    {
+     "startLine": 94,
+     "endLine": 96
+    },
+    {
+     "startLine": 97,
+     "endLine": 100
+    },
+    {
+     "startLine": 103,
+     "endLine": 105
+    },
+    {
+     "startLine": 108,
+     "endLine": 110
+    },
+    {
+     "startLine": 113,
+     "endLine": 115
+    },
+    {
+     "startLine": 120,
+     "endLine": 152
+    },
+    {
+     "startLine": 128,
+     "endLine": 130
+    },
+    {
+     "startLine": 131,
+     "endLine": 134
+    },
+    {
+     "startLine": 137,
+     "endLine": 139
+    },
+    {
+     "startLine": 142,
+     "endLine": 144
+    },
+    {
+     "startLine": 147,
+     "endLine": 149
+    },
+    {
+     "startLine": 153,
+     "endLine": 185
+    },
+    {
+     "startLine": 161,
+     "endLine": 163
+    },
+    {
+     "startLine": 164,
+     "endLine": 167
+    },
+    {
+     "startLine": 170,
+     "endLine": 172
+    },
+    {
+     "startLine": 175,
+     "endLine": 177
+    },
+    {
+     "startLine": 180,
+     "endLine": 182
+    }
+   ]
+  },
+  {
+   "name": "ex:user-hints/model-order/modelOrderNoCrossingMin.elkt",
+   "example": "user-hints/model-order/modelOrderNoCrossingMin.elkt",
+   "ranges": [
+    {
+     "startLine": 0,
+     "endLine": 8,
+     "kind": "comment"
+    },
+    {
+     "startLine": 10,
+     "endLine": 20,
+     "kind": "comment"
+    },
+    {
+     "startLine": 28,
+     "endLine": 30
+    },
+    {
+     "startLine": 34,
+     "endLine": 36
+    },
+    {
+     "startLine": 39,
+     "endLine": 41
+    },
+    {
+     "startLine": 44,
+     "endLine": 46
+    },
+    {
+     "startLine": 48,
+     "endLine": 50
+    }
+   ]
+  }
+ ]
+}

@@ -250,7 +250,9 @@ body.examples-page { height: auto; min-height: 100%; }
   padding: 0 12px;
   background: #f8f9fa;
 }
-body.elk-dark-mode .sidebar { background: var(--panel); }
+/* elk-live: the editor keeps Monaco's light `vs` theme (its fold icons included) and is inverted
+   together with the examples sidebar — `filter: invert(0.8) hue-rotate(180deg)` of common.css */
+body.elk-dark-mode #monaco-editor, body.elk-dark-mode .sidebar { filter: invert(0.8) hue-rotate(180deg); }
 
 /* elk-live: ul.nav.flex-column (a flex column: the headings' margins do not collapse) */
 .toc {

@@ -256,6 +256,37 @@ describe('browser (headless Chrome, built site)', { skip }, () => {
       if (process.env.ELK_LIVE_SVG) writeFileSync(process.env.ELK_LIVE_SVG, text);
     });
 
+    it('folds as elk-live: Xtext ranges, Monaco 0.14 controls', async () => {
+      await page.goto(`${base}examples.html?e=general/direction`);
+      await svgHas(['leftToRight']);
+      await statusOk();
+      const control = '.monaco-editor .margin-view-overlays .cldr[class*="codicon-folding-"]';
+      await page.waitForSelector(control, { state: 'attached' });
+      // the control of line 1 (`node leftToRight {`): the topmost one
+      const top = await page.evaluateHandle((sel) => [...document.querySelectorAll(sel)]
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0], control);
+      const style = await top.evaluate((e) => {
+        const cs = getComputedStyle(e);
+        return { image: cs.backgroundImage.startsWith('url("data:image/svg+xml;'), size: cs.backgroundSize, margin: cs.marginLeft,
+          glyph: getComputedStyle(e, '::before').content, cls: [...e.classList].filter((c) => c.startsWith('codicon-')).join(' ') };
+      });
+      assert.equal(style.cls, 'codicon-folding-expanded');
+      assert.equal(style.image, true, 'Monaco 0.14 box image');
+      assert.equal(style.glyph, 'none', 'no codicon chevron');
+      assert.equal(style.size.split(' ')[0] + ' ' + style.margin, '15px 5px');
+      // Monaco 0.14 had no bracket pair colours: `{` is plain text
+      assert.equal(await page.$('.monaco-editor .view-line [class*="bracket-highlighting-"]'), null);
+      await top.click();
+      await page.waitForSelector('.monaco-editor .margin-view-overlays .cldr.codicon-folding-collapsed', { state: 'attached' });
+      const lines = await page.$$eval('.monaco-editor .line-numbers', (es) => es
+        .map((e) => [e.getBoundingClientRect().top, e.textContent.trim()]).filter((l) => l[1]).sort((a, b) => a[0] - b[0]).map((l) => l[1]).slice(0, 3));
+      // the whole object is hidden, its closing brace (line 8) too; Monaco's indentation folding
+      // would keep it and show 1,8,9
+      assert.deepEqual(lines, ['1', '9', '10']);
+      assert.equal(await page.$('.monaco-editor .folded-background'), null, 'no folded-line tint (Monaco 0.14)');
+      assert.equal(await page.$eval('.monaco-editor .inline-folded', (e) => getComputedStyle(e, '::after').content), '"⋯"');
+    });
+
     it('renders another TOC entry, updates the URL, and goes back', async () => {
       await page.click('#toc button[data-path="hierarchy/hierarchicalEdges"]');
       await page.waitForURL(/\/examples\.html\?e=hierarchy%2FhierarchicalEdges$/);
