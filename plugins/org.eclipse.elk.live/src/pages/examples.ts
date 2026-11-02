@@ -59,13 +59,17 @@ async function loadIndex(): Promise<ElkExampleEntry[]> {
 
 const tocButtons = new Map<string, HTMLButtonElement>();
 
+/** Bootstrap's spacing scale behind elk-live's `pl-${indent}` classes (rem). */
+const PADDING_SCALE = [0, 0.25, 0.5, 1, 1.5, 3];
+const paddingLeft = (indent: number): number => PADDING_SCALE[Math.min(indent, PADDING_SCALE.length - 1)];
+
 /** elk-live `createNavigationDepthFirstAlphabetically` (headings and buttons per example). */
 function buildToc(examples: ElkExampleEntry[]): void {
   for (const item of navigationItems(createExampleCategoryTree(examples))) {
     if (item.kind === 'heading') {
       const h = document.createElement('h6');
       h.className = 'sidebar-heading';
-      h.style.paddingLeft = `${item.indent * 0.5}rem`;
+      h.style.paddingLeft = `${paddingLeft(item.indent)}rem`;
       h.textContent = item.text;
       toc.append(h);
     } else {
@@ -73,7 +77,8 @@ function buildToc(examples: ElkExampleEntry[]): void {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'sidebar-link';
-      b.style.paddingLeft = `${item.indent * 0.5}rem`;
+      // elk-live: `btn btn-link pl-${indent}` (the button's own .75rem padding plus the scale)
+      b.style.paddingLeft = `${paddingLeft(item.indent) + 0.75}rem`;
       b.textContent = item.example.label;
       b.dataset.path = item.example.path;
       b.addEventListener('click', () => void loadExample(item.example.path, 'push'));

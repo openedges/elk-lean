@@ -140,7 +140,8 @@ Implemented:
   WASM initialises.
 - Link sharing compatible with elk-live (`?compressedContent=` LZString, `?initialContent=`),
   "Link to this model" and "Copy link"; `examples.html?e=<example path>`.
-- Diagram tools on every editor page: fit to view (manual only: like elk-live, the diagram starts at
+- Diagram tools on every editor page (an elk-lean extra, shown while the pointer is over the diagram so
+  that the pages start out looking like elk-live's): fit to view (manual only: like elk-live, the diagram starts at
   the top-left corner at zoom 1 and keeps its viewport across updates), SVG export (viewBox around the drawing, diagram
   CSS embedded, dark mode kept), download of the laid-out ELK JSON; dark mode on every page
   (remembered per browser).
