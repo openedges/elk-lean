@@ -125,8 +125,8 @@ Implemented:
   for nested ones, indented by depth, examples sorted by label); the `elkex:graph` section in an
   editor next to its diagram, below them the category, the label and the `elkex:doc` description.
   `?e=<path>` selects an example, otherwise a random one is shown; choosing from the table of
-  contents pushes a history entry with `?e=`, Back/Forward reload the example (the initial load
-  also writes `?e=` into the URL, so a random example can be shared). Editing the text re-layouts
+  contents pushes a history entry with `?e=`, Back/Forward reload the example; like elk-live, the
+  initial load leaves the URL as opened (a random example is not written into it). Editing the text re-layouts
   live with markers; "Open in editor" takes the (edited) text to the ELKT editor.
 - Diagram (sprotty 1.4) with elk-live's visual model and colours: nodes and ports as rectangles,
   labels as text at their laid-out position (hanging baseline), edges as polylines through the

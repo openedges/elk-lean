@@ -116,9 +116,10 @@ async function loadExample(path: string, historyMode: HistoryMode = 'ignore'): P
   }
   tocButtons.get(ex.path)?.scrollIntoView({ block: 'nearest' });
   ctrl.setText(ex.graph);
-  const url = `${location.pathname}?e=${encodeURIComponent(ex.path)}`;
-  if (historyMode === 'push') history.pushState({ e: ex.path }, '', url);
-  else if (historyMode === 'replace') history.replaceState({ e: ex.path }, '', url);
+  // elk-live: a click pushes `?e=<path>`; the initial example (random or from `?e=`) only records
+  // its state, the URL stays as opened
+  if (historyMode === 'push') history.pushState({ e: ex.path }, '', `${location.pathname}?e=${encodeURIComponent(ex.path)}`);
+  else if (historyMode === 'replace') history.replaceState({ e: ex.path }, '');
   return true;
 }
 

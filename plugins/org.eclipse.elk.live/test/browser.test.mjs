@@ -269,16 +269,20 @@ describe('browser (headless Chrome, built site)', { skip }, () => {
       });
       await svgHas(['addedByTest']);
       await page.goBack();
-      await page.waitForURL(/\/examples\.html\?e=general%2Fdirection$/);
+      // the URL this page was opened with is kept as typed (the slash is not re-encoded)
+      await page.waitForURL(/\/examples\.html\?e=general(%2F|\/)direction$/);
       await svgHas(['leftToRight', 'topToBottom']);
       assert.equal(await page.textContent('#title-small'), 'General > Direction');
     });
 
-    it('shows a random example without ?e=', async () => {
+    it('shows a random example without ?e= and leaves the URL alone (elk-live)', async () => {
       await page.goto(`${base}examples.html`);
-      await page.waitForURL(/\/examples\.html\?e=/);
       await statusOk();
       assert.ok((await page.textContent('#title')).length > 0);
+      assert.match(page.url(), /\/examples\.html$/);
+      // the choice is recorded as history state (Back/Forward), not in the URL
+      const state = await page.evaluate(() => history.state);
+      assert.equal(typeof state?.e, 'string');
     });
   });
 
