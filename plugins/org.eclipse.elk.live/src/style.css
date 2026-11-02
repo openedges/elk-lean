@@ -3,13 +3,13 @@
 
 :root {
   --bg: #ffffff;
-  --fg: #1f2328;
-  --muted: #656d76;
+  --fg: #212529; /* Bootstrap body colour (elk-live) */
+  --muted: #6c757d; /* Bootstrap .text-muted */
   --border: #d0d7de;
   --panel: #f6f8fa;
   --card: #ffffff;
   --accent: #448;
-  --link: #0b5cad;
+  --link: #0d6efd; /* Bootstrap link colour */
   --error: #b42318;
   --ok: #1a7f37;
   color-scheme: light;
@@ -46,7 +46,14 @@ body {
 }
 
 a { color: var(--link); }
-code { font-size: 0.92em; }
+/* Bootstrap `code` (elk-live) */
+code {
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875em;
+  color: #d63384;
+  word-wrap: break-word;
+}
+body.elk-dark-mode code { color: #f58fc0; }
 
 .spacer { flex: 1; }
 .muted { color: var(--muted); }
@@ -300,10 +307,22 @@ body.examples-page { height: auto; min-height: 100%; }
   margin: 0 auto;
   padding: 4px;
 }
-.example-doc h4 { margin: 0 0 8px; font-weight: 300; }
+/* elk-live: <h4><small id=title-small class=text-muted/><br/><span id=title/></h4> with Bootstrap's h4 */
+.example-doc h4 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 500; line-height: 1.2; }
 #title-small { font-size: 70%; font-weight: 100; }
-#title { font-size: 1.9rem; line-height: 1.2; }
-#example-description p { margin: 6px 0; }
+#title { font-size: 1.9rem; font-weight: 300; line-height: 1.2; }
+/* the showdown output with Bootstrap's reboot: p/ul margin-bottom 1rem, h1-h6 weight 500 line-height 1.2 */
+#example-description p, #example-description ul, #example-description ol { margin: 0 0 1rem; }
+#example-description ul, #example-description ol { padding-left: 2rem; }
+#example-description h1, #example-description h2, #example-description h3, #example-description h4, #example-description h5, #example-description h6 { margin: 0 0 0.5rem; font-weight: 500; line-height: 1.2; }
+#example-description h1 { font-size: 2.5rem; }
+#example-description h2 { font-size: 2rem; }
+#example-description h3 { font-size: 1.75rem; }
+#example-description h4 { font-size: 1.5rem; }
+#example-description h5 { font-size: 1.25rem; }
+#example-description h6 { font-size: 1rem; }
+#example-description pre { margin: 0 0 1rem; font-size: 0.875em; overflow: auto; }
+#example-description img { max-width: 100%; }
 
 /* ------------------------------------------------------------------ landing page (elk-live app/index.html) */
 body.landing {

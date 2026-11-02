@@ -215,7 +215,11 @@ describe('core helpers', () => {
     const ex = parseElkex('general/x', '/*\n// elkex:category\nA > B\n\n// elkex:label\nX\n\n// elkex:doc\nSome `code` and _emph_.\n*/\n// elkex:graph\nnode a\n');
     assert.deepEqual([ex.label, ex.category, ex.graph], ['X', ['A', 'B'], 'node a']);
     assert.equal(renderMarkdown(ex.doc), '<p>Some <code>code</code> and <em>emph</em>.</p>');
-    assert.equal(renderMarkdown('<script>x</script> [l](javascript:alert(1))'), '<p>&lt;script&gt;x&lt;/script&gt; l)</p>');
+    // showdown, GitHub flavour (elk-live): headings with ids, lists, links; a single newline is no break
+    const html = renderMarkdown('#### `BEGIN`, `CENTER`\nline one\nline two\n\n- a\n- [b](https://example.org)');
+    assert.match(html, /^<h4 id="[^"]+"><code>BEGIN<\/code>, <code>CENTER<\/code><\/h4>/);
+    assert.ok(html.includes('<p>line one\nline two</p>'), html);
+    assert.ok(html.includes('<li>a</li>') && html.includes('<a href="https://example.org">b</a>'), html);
   });
 });
 

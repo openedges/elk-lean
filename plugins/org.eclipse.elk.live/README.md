@@ -77,7 +77,7 @@ page load on an M-series Mac (WASM compile in the worker).
 | `src/core/urls.ts` | DOM-free URL handling: model links (`?compressedContent=`), initial content, old-link redirect |
 | `src/core/elk-to-sprotty.ts` | laid-out ELK JSON → sprotty model (elk-live's visual model) |
 | `src/core/options.ts` | completion metadata (`knownLayoutOptions()`, `knownLayoutAlgorithms()`, enum literals), `.elkt` context scan |
-| `src/core/elkex.ts`, `src/core/markdown.ts` | example files (`// elkex:` sections), category tree and table of contents; descriptions |
+| `src/core/elkex.ts`, `src/core/markdown.ts` | example files (`// elkex:` sections), category tree and table of contents; descriptions rendered with showdown (GitHub flavour, `simpleLineBreaks: false`) exactly as elk-live does |
 | `src/editor/` | Monaco setup (ESM, selected contributions), `.elkt` and `elkj` Monarch grammars, completion and hover providers |
 | `src/diagram/` | sprotty container, model classes, views, diagram CSS, SVG export |
 | `src/generated/option-choices.json` | enum literals of the ENUM/ENUMSET options (`npm run gen:choices`) |
