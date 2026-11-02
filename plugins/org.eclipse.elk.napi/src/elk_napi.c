@@ -25,6 +25,11 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later
  */
+/* glibc hides sigaction, sigaltstack and the other POSIX/XSI declarations under -std=c11 unless
+ * a feature macro asks for them (macOS and the BSDs expose them regardless) */
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #define NAPI_VERSION 8
 #include <node_api.h>
 
