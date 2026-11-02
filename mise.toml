@@ -1,0 +1,65 @@
+# elk-lean development tools (AGENTS.md "현재 핵심 스냅샷", TESTING.md § 1, README "Setup").
+#
+#   mise trust && mise install   install the pinned tools below (Lean itself comes from elan, see
+#                                lean-toolchain; scripts/setup_dev.sh installs elan when missing)
+#   mise run setup               explicit bootstrap: elan + Lean v4.35.0, submodules, lake build,
+#                                lake test (scripts/setup_dev.sh; also works without mise)
+#   mise run check               report the state of every requirement without changing anything
+#   mise tasks                   the other tasks (oracle, java-baseline, wasm-toolchain, parity, bench)
+#
+# Pins follow VERSIONING.md. Versions are exact so that a fresh machine reproduces the environment
+# the recorded parity and performance numbers were measured in.
+
+[tools]
+java = "temurin-21.0.13+9.0.LTS" # ELK Java 0.12.0 result baseline (scripts/run_java_baseline.sh)
+maven = "3.9.16"                 # same (scripts/java/pom.xml resolves the Maven Central artifacts)
+node = "24.22.1"                 # npm package tests, WASM tests, browser demo (Node 24 line)
+rust = "1.97.1"                  # elk-rs oracle build (../elk-rs/rust-toolchain.toml pins the same)
+python = "3.14.6"                # comparison scripts (>= 3.9); emsdk needs >= 3.10
+
+[env]
+# elan's proxies (lean, lake, elan) are not on the shell PATH by default in this environment
+_.path = ["{{env.HOME}}/.elan/bin"]
+
+[tasks.setup]
+description = "Bootstrap: elan + Lean toolchain, submodules, lake build, lake test"
+run = "sh scripts/setup_dev.sh"
+
+[tasks.check]
+description = "Report the state of every development requirement (read-only)"
+run = "sh scripts/setup_dev.sh --check"
+
+[tasks.build]
+description = "lake build (gate: 0 errors, 0 warnings)"
+run = "lake build"
+
+[tasks.test]
+description = "lake test (gate: 0 failures)"
+run = "lake test"
+
+[tasks.oracle]
+description = "Clone ../elk-rs at the pinned commit and build the elk-rs oracle into .reference/elk-rs-target"
+run = "sh scripts/setup_dev.sh --only oracle"
+
+[tasks.java-baseline]
+description = "ELK Java 0.12.0 result baseline of elk-models into .reference/java-baseline/corpus"
+run = "sh scripts/setup_dev.sh --only java-baseline"
+
+[tasks.wasm-toolchain]
+description = "emsdk 6.0.13 and the Lean v4.35.0 sources into .reference/ (WASM and no-GMP runtime builds)"
+run = "sh scripts/setup_dev.sh --only wasm-toolchain"
+
+[tasks."parity:java"]
+description = "Result parity against the ELK Java baseline (tests/tmp/java_parity)"
+run = "sh scripts/run_java_parity.sh .reference/java-baseline/corpus tests/tmp/java_parity"
+
+[tasks."parity:rs"]
+description = "Secondary model parity against the elk-rs oracle (tests/model_parity)"
+run = [
+  "sh scripts/run_model_parity.sh external/elk-models tests/model_parity",
+  "sh scripts/compare_bytes.sh tests/model_parity",
+]
+
+[tasks.bench]
+description = "Synthetic performance benchmark, elk bench vs elk-rs perf_benchmark (tests/perf/report.md)"
+run = "sh scripts/run_perf_benchmark.sh"

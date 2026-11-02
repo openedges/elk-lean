@@ -9,17 +9,25 @@ procedures; the parity pipeline becomes operational in Phase 2 (see `PLAN.md`).
 |------|---------|---------|
 | Lean / Lake | v4.35.0 / 5.0 (`lean-toolchain`) | build, tests |
 | cc (clang) | any C11 | `plugins/org.eclipse.elk.core/c/elk_core_ffi.c` |
-| Rust | 1.97.1 (`../elk-rs/rust-toolchain.toml`, via `mise`) | building the elk-rs oracle |
-| Python | 3.9+ | comparison scripts |
-| Node.js | 24 (`mise`) | JS package tests, WASM tests |
+| Rust | 1.97.1 (`mise.toml`; `../elk-rs/rust-toolchain.toml` pins the same) | building the elk-rs oracle |
+| Python | 3.14.6 (`mise.toml`; any 3.9+ works, emsdk needs 3.10+) | comparison scripts |
+| Node.js | 24.22.1 (`mise.toml`) | JS package tests, WASM tests, browser demo |
 | emscripten | emsdk 6.0.13 (`.reference/emsdk`, `scripts/build_wasm.sh`) | WASM build |
-| JDK / Maven | temurin 21.0.13 / 3.9.16 (`mise`) | ELK Java result baseline (`scripts/run_java_baseline.sh`) |
+| JDK / Maven | temurin 21.0.13+9 / 3.9.16 (`mise.toml`) | ELK Java result baseline (`scripts/run_java_baseline.sh`) |
 
-`~/.elan/bin` is not on the shell PATH by default in this environment:
+`~/.elan/bin` is not on the shell PATH by default in this environment (`mise.toml` adds it through
+its `[env]` section when mise is activated):
 
 ```sh
 export PATH=$HOME/.elan/bin:$PATH
 ```
+
+The environment is declared in `mise.toml` (JDK, Maven, Node.js, Rust, Python: `mise trust && mise
+install`) and `lean-toolchain` (Lean, through elan). `scripts/setup_dev.sh` (`mise run setup`)
+installs elan and the toolchain, initialises the submodules, runs `lake build` with the 0-warning
+gate and `lake test`; `--check` (`mise run check`) reports the state of every requirement, including
+the optional references below, without changing anything; `--only oracle`, `--only java-baseline`
+and `--only wasm-toolchain` prepare those references (README "Setup").
 
 ### References
 

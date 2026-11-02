@@ -5,8 +5,10 @@ Pure Lean 4 port of the [Eclipse Layout Kernel (ELK)](https://www.eclipse.org/el
 same intermediate phase results) while compiling to native code, a Node.js
 addon and WebAssembly.
 
-Status: **Phase 0 (project setup) complete** — see [`PLAN.md`](PLAN.md) for the
-porting plan and [`HISTORY.md`](HISTORY.md) for progress.
+Status: **port complete (Phases 0–6), packaging (Phase 8) and the browser demo (Phase 10)
+done, Java parity and optimisation rounds closed; release (Phase 9) pending** — see
+[`PLAN.md`](PLAN.md) for the porting plan, [`AGENTS.md`](AGENTS.md) for the current snapshot
+and [`HISTORY.md`](HISTORY.md) for progress.
 
 ## Repository Layout
 
@@ -24,17 +26,53 @@ porting plan and [`HISTORY.md`](HISTORY.md) for progress.
 
 ## Prerequisites
 
-- [elan](https://github.com/leanprover/elan) with Lean `v4.35.0` (pinned in
-  `lean-toolchain`; `elan` installs it on first use)
-- A C compiler (`cc`) for the small helper shim in `plugins/org.eclipse.elk.core/c`
-- For parity checks: the sibling checkout `../elk-rs` (0.12.1) built with
-  `scripts/build_oracle.sh` (needs Rust 1.97.1 via `mise`), Python 3
-- For the JS package (Phase 8): Node.js 24, emscripten
+Every tool version is pinned in a file: `lean-toolchain` (Lean `v4.35.0`, managed by
+[elan](https://github.com/leanprover/elan)) and `mise.toml` (JDK, Maven, Node.js, Rust,
+Python, managed by [mise](https://mise.jdx.dev)). A C compiler (`cc`) must be present.
+
+| Tool | Version | Needed for |
+|------|---------|-----------|
+| Lean / Lake | v4.35.0 / 5.0 (`lean-toolchain`, elan) | build, tests |
+| cc | any C11 compiler (Apple clang, clang, gcc) | the helper shim in `plugins/org.eclipse.elk.core/c` |
+| Python | 3.14.6 (`mise.toml`; any 3.9+ works) | comparison scripts |
+| Node.js | 24.22.1 (`mise.toml`) | npm package tests, WASM tests, browser demo |
+| Rust | 1.97.1 (`mise.toml`) | elk-rs oracle: performance reference, secondary parity |
+| JDK / Maven | temurin 21.0.13+9 / 3.9.16 (`mise.toml`) | ELK Java result baseline |
+| emscripten | emsdk 6.0.13 (`.reference/emsdk`) | WASM build only |
 
 ## Setup
 
+With mise:
+
 ```sh
-git submodule update --init --recursive
+mise trust && mise install      # the pinned tools above (Lean comes from elan)
+mise run setup                  # elan + Lean toolchain, submodules, lake build, lake test
+mise run check                  # state of every requirement, changes nothing
+```
+
+Without mise, or step by step (`scripts/setup_dev.sh` is idempotent; its header documents
+every step and option):
+
+```sh
+export PATH=$HOME/.elan/bin:$PATH
+sh scripts/setup_dev.sh                 # default steps: tools, elan, submodules, build, test
+sh scripts/setup_dev.sh --no-mise       # tools looked up on PATH instead of mise
+sh scripts/setup_dev.sh --check         # report only
+```
+
+The reference environments of the parity and performance gates are optional steps of the
+same script; they live outside git, under `.reference/` and the sibling `../elk-rs`:
+
+```sh
+sh scripts/setup_dev.sh --only oracle           # ../elk-rs at the pinned commit + oracle build
+sh scripts/setup_dev.sh --only java-baseline    # ELK Java 0.12.0 layouts of the corpus (long)
+sh scripts/setup_dev.sh --only wasm-toolchain   # emsdk 6.0.13 + Lean sources (WASM, no-GMP runtime)
+```
+
+The same steps by hand:
+
+```sh
+git submodule update --init --recursive --depth 1
 lake build        # all libraries, the CLI and the test driver
 lake test         # Lean unit/regression tests
 .lake/build/bin/elk --version

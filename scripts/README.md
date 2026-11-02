@@ -2,6 +2,7 @@
 
 | Script | Purpose |
 |--------|---------|
+| `setup_dev.sh` | Explicit, idempotent development bootstrap (`mise run setup`): mise tools (`mise.toml`), elan + the Lean toolchain of `lean-toolchain`, submodules (shallow, pinned), `lake build` with the 0-warning gate, `lake test`; `--check` reports the state of every requirement; `--only oracle\|java-baseline\|wasm-toolchain` prepare the references under `.reference/` and `../elk-rs`; `--no-mise` uses the tools on PATH |
 | `build_oracle.sh` | Release build of the elk-rs oracle into `.reference/elk-rs-target` |
 | `oracle_layout.sh` | Lay out one JSON model with the oracle (optional phase trace dir) |
 | `compare_model_parity_layouts.py` | Semantic layout JSON comparison (copied from elk-rs) |

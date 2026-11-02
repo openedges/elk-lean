@@ -5,6 +5,10 @@
 # Reference builds of elk-rs (oracle binaries, cargo target dir)
 /.reference/
 
+# mise local overrides (mise.toml is tracked)
+mise.local.toml
+.mise.local.toml
+
 # Editor/OS noise
 .DS_Store
 .idea/
