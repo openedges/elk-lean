@@ -315,6 +315,28 @@ describe('browser (headless Chrome, built site)', { skip }, () => {
       const state = await page.evaluate(() => history.state);
       assert.equal(typeof state?.e, 'string');
     });
+
+    it('styles the brand, a clicked sidebar link and the focused diagram as elk-live (Bootstrap 5.0)', async () => {
+      await page.goto(`${base}examples.html?e=general/direction`);
+      await svgHas(['leftToRight']);
+      await statusOk();
+      // the brand is an ordinary link (elk-live's navbar is neither navbar-light nor navbar-dark)
+      assert.equal(await page.$eval('a.navbar-brand', (a) => getComputedStyle(a).color), 'rgb(13, 110, 253)');
+      const links = await page.$$('#toc button.sidebar-link');
+      await links[1].click();
+      await statusOk();
+      // Bootstrap 5.0 .btn:focus: the .25rem halo instead of the browser's focus outline, .25rem corners
+      // (the halo fades in over .15s)
+      await page.waitForFunction(() => { const b = document.querySelectorAll('#toc button.sidebar-link')[1];
+        return document.activeElement === b && getComputedStyle(b).boxShadow.endsWith(' 4px'); }, null, { timeout: 5000 });
+      assert.deepEqual(await links[1].evaluate((b) => { const s = getComputedStyle(b); return [s.boxShadow, s.borderRadius, s.outlineStyle, s.borderColor]; }),
+        ['rgba(13, 110, 253, 0.25) 0px 0px 0px 4px', '4px', 'none', 'rgba(0, 0, 0, 0)']);
+      // the clicked diagram: the SVG is focused and keeps the browser's focus ring
+      const box = await (await page.$('#sprotty svg')).boundingBox();
+      await page.mouse.click(box.x + box.width - 12, box.y + box.height - 12);
+      assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'svg');
+      assert.equal(await page.$eval('#sprotty svg', (s) => getComputedStyle(s).outlineStyle), 'auto');
+    });
   });
 
   it('logs no page errors', () => {
