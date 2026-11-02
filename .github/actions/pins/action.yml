@@ -1,0 +1,41 @@
+# The pinned versions every workflow reads from the files that own them (VERSIONING.md):
+# lean-toolchain (Lean), mise.toml (Node.js, Java, Maven, Rust, Python), scripts/build_wasm.sh (emsdk).
+name: pins
+description: Pinned tool versions (lean-toolchain, mise.toml, scripts/build_wasm.sh)
+outputs:
+  lean:
+    description: Lean version, e.g. 4.35.0
+    value: ${{ steps.read.outputs.lean }}
+  node:
+    description: Node.js version
+    value: ${{ steps.read.outputs.node }}
+  java:
+    description: Java version (mise tool spec), e.g. temurin-21.0.13+9.0.LTS
+    value: ${{ steps.read.outputs.java }}
+  maven:
+    description: Maven version
+    value: ${{ steps.read.outputs.maven }}
+  rust:
+    description: Rust version
+    value: ${{ steps.read.outputs.rust }}
+  emsdk:
+    description: emsdk version
+    value: ${{ steps.read.outputs.emsdk }}
+runs:
+  using: composite
+  steps:
+    - id: read
+      shell: bash
+      run: |
+        lean=$(sed -n 's/^leanprover\/lean4:v\(.*\)$/\1/p' lean-toolchain)
+        node=$(sed -n 's/^node = "\([^"]*\)".*/\1/p' mise.toml)
+        java=$(sed -n 's/^java = "\([^"]*\)".*/\1/p' mise.toml)
+        maven=$(sed -n 's/^maven = "\([^"]*\)".*/\1/p' mise.toml)
+        rust=$(sed -n 's/^rust = "\([^"]*\)".*/\1/p' mise.toml)
+        emsdk=$(sed -n 's/^EMSDK_VERSION=\(.*\)$/\1/p' scripts/build_wasm.sh)
+        for v in lean node java maven rust emsdk; do
+          eval "val=\$$v"
+          test -n "$val" || { echo "pins: $v not found" >&2; exit 1; }
+          echo "$v=$val" >> "$GITHUB_OUTPUT"
+        done
+        echo "lean $lean, node $node, java $java, maven $maven, rust $rust, emsdk $emsdk"

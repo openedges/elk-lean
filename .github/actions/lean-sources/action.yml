@@ -1,0 +1,24 @@
+# The Lean sources of the toolchain release under .reference/lean4-v<version> (cached): the GMP-free
+# runtime (scripts/build_runtime_nogmp.sh, docs/gmp-licensing.md) and the WASM build
+# (scripts/build_wasm.sh) compile src/runtime from them.
+name: lean-sources
+description: Clone the pinned Lean sources into .reference/
+inputs:
+  lean:
+    description: Lean version (output of the pins action)
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: .reference/lean4-v${{ inputs.lean }}
+        key: lean4-sources-${{ inputs.lean }}
+    - shell: bash
+      run: |
+        v='${{ inputs.lean }}'
+        if [ ! -f ".reference/lean4-v$v/src/runtime/object.cpp" ]; then
+          mkdir -p .reference
+          git clone --depth 1 --branch "v$v" https://github.com/leanprover/lean4 ".reference/lean4-v$v"
+        fi
+        git -C ".reference/lean4-v$v" log -1 --format='lean4 sources %h %s'

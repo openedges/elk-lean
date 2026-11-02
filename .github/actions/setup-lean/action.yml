@@ -1,0 +1,24 @@
+# elan and the Lean toolchain named in lean-toolchain (cached under ~/.elan), on PATH afterwards.
+name: setup-lean
+description: Install elan and the pinned Lean toolchain
+inputs:
+  lean:
+    description: Lean version (output of the pins action)
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: ~/.elan
+        key: elan-${{ runner.os }}-${{ runner.arch }}-${{ inputs.lean }}
+    - shell: bash
+      run: |
+        if [ ! -x "$HOME/.elan/bin/elan" ]; then
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none --no-modify-path
+        fi
+        echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+        "$HOME/.elan/bin/elan" toolchain install "$(cat lean-toolchain)"
+        "$HOME/.elan/bin/lean" --version
+        "$HOME/.elan/bin/lake" --version

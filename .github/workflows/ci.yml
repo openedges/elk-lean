@@ -1,0 +1,152 @@
+# Continuous integration of elk-lean (TESTING.md § 2, the gates of AGENTS.md).
+#
+#   lean   per platform: the pinned Lean toolchain, `lake build` (gate: no warning, no error),
+#          `lake test`, the C API linked with the GMP-free Lean runtime (scripts/build_ffi.sh --check,
+#          docs/gmp-licensing.md), the Node.js addon (scripts/build_napi.sh) and the npm package tests
+#          (the WASM tests skip in this job)
+#   wasm   the emscripten build (scripts/build_wasm.sh) and the npm package tests against it
+#   demo   the browser demo (plugins/org.eclipse.elk.live): Vite build, Node tests, headless Chrome
+#
+# Parity against ELK Java and elk-rs and the performance benchmark are the slower, manual or
+# scheduled workflows parity.yml and perf.yml; tags are released by release.yml.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # distributed native artefacts link the Lean runtime rebuilt without GMP (docs/gmp-licensing.md)
+  ELK_NO_GMP: "1"
+
+jobs:
+  lean:
+    name: Lean ${{ matrix.triple }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: linux-x64-gnu, os: ubuntu-latest }
+          - { triple: darwin-arm64, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: "lake build (gate: no warning, no error)"
+        shell: bash
+        run: |
+          set -o pipefail
+          lake build 2>&1 | tee build.log
+          ! grep -E '(warning|error):' build.log
+          .lake/build/bin/elk --version
+      - name: lake test
+        run: lake test
+      - uses: ./.github/actions/lean-sources
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - name: "C API with the GMP-free runtime, smoke test against the CLI"
+        run: sh scripts/build_ffi.sh --check
+      - name: Node.js addon
+        run: sh scripts/build_napi.sh --skip-ffi --copy-to-npm
+      - name: npm package tests (the WASM tests skip here)
+        working-directory: plugins/org.eclipse.elk.js
+        run: npm test
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.triple }}
+          path: |
+            .lake/build/bin/elk
+            .lake/build/ffi/libelklean.a
+            .lake/build/ffi/libleanrt_nogmp.a
+            .lake/build/ffi/include/
+            .lake/build/ffi/ldflags
+            plugins/org.eclipse.elk.js/npm/${{ matrix.triple }}/*.node
+          if-no-files-found: error
+
+  wasm:
+    name: WASM (emscripten)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+      - uses: ./.github/actions/setup-lean
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - uses: ./.github/actions/lean-sources
+        with:
+          lean: ${{ steps.pins.outputs.lean }}
+      - uses: ./.github/actions/setup-emsdk
+        with:
+          emsdk: ${{ steps.pins.outputs.emsdk }}
+      - name: "WASM build (MEMORY64=2; runs `lake build elk ElkFfi:static` itself)"
+        run: sh scripts/build_wasm.sh
+      - name: npm package tests against the WASM build (the addon tests skip here)
+        working-directory: plugins/org.eclipse.elk.js
+        run: npm test
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm
+          path: plugins/org.eclipse.elk.js/dist/
+          if-no-files-found: error
+
+  demo:
+    name: Browser demo
+    needs: wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: pins
+        uses: ./.github/actions/pins
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm
+          path: plugins/org.eclipse.elk.js/dist
+      - name: Build (examples + WASM assets, tsc, vite)
+        working-directory: plugins/org.eclipse.elk.live
+        run: |
+          npm ci
+          npm run build
+      - name: "playwright-core for the headless Chrome tests (no browser download: the runner's Chrome)"
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pw" --no-save --no-audit --no-fund playwright-core@1.56.1
+          echo "PLAYWRIGHT_CORE=$RUNNER_TEMP/pw/node_modules/playwright-core" >> "$GITHUB_ENV"
+          echo "CHROME_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          google-chrome --version
+      - name: Tests (Node pipeline, folding ranges, headless Chrome pages)
+        working-directory: plugins/org.eclipse.elk.live
+        run: npm test
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo
+          path: plugins/org.eclipse.elk.live/dist/
+          if-no-files-found: error

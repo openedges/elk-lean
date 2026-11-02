@@ -1,0 +1,24 @@
+# emsdk at the version scripts/build_wasm.sh pins, under .reference/emsdk (cached), activated for
+# the build script (which sources .reference/emsdk/emsdk_env.sh itself).
+name: setup-emsdk
+description: Install the pinned emsdk into .reference/emsdk
+inputs:
+  emsdk:
+    description: emsdk version (output of the pins action)
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: .reference/emsdk
+        key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ inputs.emsdk }}
+    - shell: bash
+      run: |
+        v='${{ inputs.emsdk }}'
+        mkdir -p .reference
+        test -d .reference/emsdk || git clone --depth 1 https://github.com/emscripten-core/emsdk.git .reference/emsdk
+        cd .reference/emsdk
+        ./emsdk install "$v"
+        ./emsdk activate "$v"
+        ./upstream/emscripten/emcc --version | head -1
