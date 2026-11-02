@@ -136,6 +136,21 @@ def graphTests : Suite := suite "json.import.graph" do
   let n1 := nodeById m.g "n1"
   checkFloat "n1 width" (m.g.node n1).width 40.0
   checkFloat "n1 height" (m.g.node n1).height 40.0
+  -- a `spacing.individual` string in `layoutOptions` (Java: `IndividualSpacings.parse`), next to the
+  -- `individualSpacings` object the JSON exporter writes; an unparsable string is ignored
+  let m ← importText "
+    {
+      \"id\": \"root\",
+      \"children\": [
+        {\"id\": \"a\", \"layoutOptions\": {\"org.eclipse.elk.spacing.individual\": \"spacing.nodeNode:12.5;,;spacing.portsSurrounding:[top=40.0,left=10.0,bottom=10.0,right=30.0]\"}},
+        {\"id\": \"b\", \"layoutOptions\": {\"spacing.individual\": \"no.such.option:1\"}}]
+    }"
+  match (m.g.node (nodeById m.g "a")).props.get CoreOptions.SPACING_INDIVIDUAL with
+  | some ind => do
+    checkFloat "individual string nodeNode" ((ind.props.get CoreOptions.SPACING_NODE_NODE).getD 0.0) 12.5
+    checkFloat "individual string portsSurrounding top" ((ind.props.get CoreOptions.SPACING_PORTS_SURROUNDING).map (·.top) |>.getD 0.0) 40.0
+  | none => check "individual string parsed" false
+  checkEq "unparsable individual string ignored" (m.g.node (nodeById m.g "b")).props.size 0
   -- reject_sloppy_json_when_not_lenient / accept_sloppy_json_when_lenient
   let sloppy := "
         {

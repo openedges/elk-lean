@@ -50,7 +50,9 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-02.
   `elk_lean_convert_elkt(_flags)`, NAPI `convert_elkt`, WASM `backend.convert_elkt`, npm
   `elk.convertElkt(text, { defaults })` in all worker modes): byte-identical to `elk convert` on all
   898 `.elkt` models of elk-models, with the parser's line/column error messages. `elk options
-  --choices` adds the enum literals to the option metadata.
+  --choices` adds the enum literals to the option metadata. `spacing.individual` values are parsed
+  like Java's `IndividualSpacings.parse` both in `.elkt` and in JSON `layoutOptions` strings (the
+  text loader dropped them until 2026-11-02).
 - **Browser demo** `plugins/org.eclipse.elk.live`: a server-less replacement for elk-live (ElkGraph
   Web) on the elk-lean WASM Web Worker — Monaco editor with `.elkt` highlighting, parser error
   markers, option/value completion and hovers, sprotty graph view following elk-live's visual
@@ -77,7 +79,7 @@ published; the numbers below are the `AGENTS.md` snapshot of 2026-11-02.
 - License: EPL-2.0 OR GPL-3.0-or-later, as ELK.
 
 ### Verification status
-- `lake build`: 0 warnings, 0 errors. `lake test`: 17317 passed, 0 failed (1 skipped: BK oracle
+- `lake build`: 0 warnings, 0 errors. `lake test`: 17326 passed, 0 failed (1 skipped: BK oracle
   replay, needs `ELK_BK_ORACLE_TRACES`).
 - **Random-input parity against ELK Java** (`scripts/run_random_java_parity.sh`, 12,000 generated
   graphs per run plus option-focused, crossing-minimisation, DisCo, hierarchical model-order and

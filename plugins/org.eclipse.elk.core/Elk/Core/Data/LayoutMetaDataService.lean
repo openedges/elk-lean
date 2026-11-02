@@ -283,11 +283,26 @@ def parseIndividualSpacings (value : String) : IO (Except String (Array (PropKey
     match entry.splitOn ":" with
     | [] | [_] => return .error "Invalid option entry."
     | optionId :: rest =>
-      let optionValue := ":".intercalate rest
+      -- Java: `optionString.split("\\:")` and `option[1]`, i.e. only the second segment
+      let optionValue := rest.headD ""
       let some data ← getOptionDataBySuffix optionId | return .error s!"Invalid option id: {optionId}"
       let some parsed := data.parseValue optionValue | return .error s!"Invalid option value: {optionValue}"
       entries := entries.push (PropKey.ofString data.id, parsed)
   return .ok entries
+
+/-- `LayoutOptionData.parseValue` for the readers of textual option values (`.elkt`, JSON
+`layoutOptions`): like the pure `parseValue`, plus the one OBJECT option whose
+`IDataObject.parse` needs the registry, `spacing.individual` (`IndividualSpacings.parse`: entries
+`id:value;,;id:value`, ids resolved by suffix). A failed parse yields `none`, as Java's
+`parseValue` returns `null` for the `IllegalArgumentException` thrown by `parse`. -/
+def parseValueIO (d : LayoutOptionData) (valueString : String) : IO (Option PropValue) := do
+  if d.type == .object && d.id == "org.eclipse.elk.spacing.individual" then
+    if valueString.isEmpty || valueString == "null" then return none
+    match ← parseIndividualSpacings valueString with
+    | .ok entries => return some (.individualSpacings entries)
+    | .error _ => return none
+  else
+    return d.parseValue valueString
 
 end LayoutMetaDataService
 

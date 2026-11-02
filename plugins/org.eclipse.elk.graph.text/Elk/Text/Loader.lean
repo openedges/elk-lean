@@ -15,7 +15,8 @@ it loads an `.elkt` resource with `ElkGraph.xtext`:
 * **Property values** (`PropertyKeyValueConverter`, `PropertyValueValueConverter`):
   a property key is resolved with `LayoutMetaDataService.getOptionDataBySuffix`
   after removing the `^` escapes; the value text (quotes stripped, no
-  unescaping) is parsed with `LayoutOptionData.parseValue`. Unknown options and
+  unescaping) is parsed with `LayoutOptionData.parseValue` (`LayoutMetaDataService.parseValueIO`:
+  `spacing.individual` goes through `IndividualSpacings.parse`). Unknown options and
   unparsable values are ignored, exactly like `JsonImporter.setOption`
   (`LoadOptions.keepUnknownOptions` stores them as `PropValue.proxy`
   instead, which corresponds to Java's `LayoutOptionProxy`). `key: null` is
@@ -114,7 +115,8 @@ private def resolveProps (props : Array PropertyAst) (init : PropertyMap) : Load
     let some s := valueString p.value | continue
     match ← lookupOption p.keySegs with
     | some od =>
-      match od.parseValue s with
+      -- `parseValueIO`: `parseValue` plus `spacing.individual` (`IndividualSpacings.parse`)
+      match ← LayoutMetaDataService.parseValueIO od s with
       | some v => pm := pm.setRawById od.id v
       | none => if keep then pm := pm.setRawById od.id (.proxy s)
     | none => if keep then pm := pm.setRawById p.keyRaw (.proxy s)

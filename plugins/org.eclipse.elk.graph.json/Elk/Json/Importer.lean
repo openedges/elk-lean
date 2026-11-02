@@ -59,6 +59,7 @@ def parseOptionValue (od : LayoutOptionData) (value : String) : ImportM (Option 
       if memo.size < ENUM_MEMO_SIZE then modI (·.pushEnumMemo (od.id, value, v))
       return some v
     | none => return none
+  | .object => LayoutMetaDataService.parseValueIO od value
   | _ => return od.parseValue value
 
 /-- The options ELK Java 0.12.0 registers with type `OBJECT` and a class that is no `IDataObject`

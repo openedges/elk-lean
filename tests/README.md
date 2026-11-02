@@ -2,7 +2,7 @@
 
 - `lean/` — Lean test driver (`lake test`, executable `elktest`): `Tests/Main.lean` lists the suites,
   one module per plugin or topic (`Tests/<Plugin>/*.lean`, `Tests/<Algorithm>.lean`);
-  `lake test -- --suite <prefix>` runs a subset. Snapshot (2026-11-02): 17,317 passed, 0 failed,
+  `lake test -- --suite <prefix>` runs a subset. Snapshot (2026-11-02): 17,326 passed, 0 failed,
   1 skipped (BK oracle replay, needs `ELK_BK_ORACLE_TRACES`).
 - `fixtures/` — tracked inputs and expected values of the suites: reduced random-parity cases of the
   Java parity rounds (`cov`, `ext`, `gs`, `hmo`, `ledge`, `lm`, `lnode`, `p3java`, `promotion`,

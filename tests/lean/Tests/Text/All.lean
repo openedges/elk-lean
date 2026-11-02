@@ -489,6 +489,25 @@ node n {
     let some n := nodeByName g "n" | check "n exists" false
     checkEq "caret key and single quoted value" (g.getNodeProp n CoreOptions.DIRECTION) (some Direction.up)
     checkEq "null drops the entry" (g.node n).props.size 1
+  -- `spacing.individual` is an OBJECT option whose value Java parses with `IndividualSpacings.parse`
+  -- (`id:value;,;id:value`, ids by suffix); an unparsable value is ignored like any other
+  withGraph "individual spacings" r#"
+spacing.individual: "spacing.nodeNode:12.5;,;spacing.portsSurrounding:[top=40.0,left=10.0,bottom=10.0,right=30.0]"
+node n { spacing.individual: "no.such.option:1" }
+node m { spacing.individual: "spacing.nodeNode:not-a-number" }
+"# fun root g => do
+    match g.getNodeProp root CoreOptions.SPACING_INDIVIDUAL with
+    | some ind => do
+      checkFloat "individual nodeNode" ((ind.props.get CoreOptions.SPACING_NODE_NODE).getD 0.0) 12.5
+      match ind.props.get CoreOptions.SPACING_PORTS_SURROUNDING with
+      | some m => do checkFloat "individual portsSurrounding top" m.top 40.0; checkFloat "individual portsSurrounding right" m.right 30.0
+      | none => check "individual portsSurrounding set" false
+      checkEq "individual entry count" ind.props.size 2
+    | none => check "individual spacings set" false
+    let some n := nodeByName g "n" | check "n exists" false
+    checkEq "unknown individual option is ignored" (g.node n).props.size 0
+    let some m := nodeByName g "m" | check "m exists" false
+    checkEq "unparsable individual value is ignored" (g.node m).props.size 0
   -- keepUnknownOptions stores proxies under the raw key
   match ← parseElkt "unknown.option: 5\ndirection: NOT_A_DIRECTION" { keepUnknownOptions := true } with
   | .ok (root, g) =>
