@@ -15,11 +15,11 @@
 import 'reflect-metadata';
 import { Container, ContainerModule } from 'inversify';
 import {
-  ConsoleLogger, LocalModelSource, LogLevel, SGraphImpl, SLabelImpl, TYPES, boundsModule, configureModelElement,
+  ConsoleLogger, LocalModelSource, LogLevel, SGraphImpl, TYPES, boundsModule, configureModelElement,
   configureViewerOptions, defaultModule, exportModule, fadeModule, hoverModule, modelSourceModule, moveModule,
   routingModule, selectModule, undoRedoModule, updateModule, viewportModule,
 } from 'sprotty';
-import { ElkEdge, ElkJunction, ElkNode, ElkPort } from './sprotty-model.ts';
+import { ElkEdge, ElkJunction, ElkLabel, ElkNode, ElkPort } from './sprotty-model.ts';
 import { ElkEdgeView, ElkGraphView, ElkLabelView, ElkNodeView, ElkPortView, JunctionView } from './views.ts';
 
 export function createContainer(baseDiv: string): Container {
@@ -32,7 +32,7 @@ export function createContainer(baseDiv: string): Container {
     configureModelElement(context, 'node', ElkNode, ElkNodeView);
     configureModelElement(context, 'port', ElkPort, ElkPortView);
     configureModelElement(context, 'edge', ElkEdge, ElkEdgeView);
-    configureModelElement(context, 'label', SLabelImpl, ElkLabelView);
+    configureModelElement(context, 'label', ElkLabel, ElkLabelView);
     configureModelElement(context, 'junction', ElkJunction, JunctionView);
     configureViewerOptions(context, {
       baseDiv,

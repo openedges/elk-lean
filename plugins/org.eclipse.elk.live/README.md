@@ -131,7 +131,9 @@ Implemented:
 - Diagram (sprotty 1.4) with elk-live's visual model and colours: nodes and ports as rectangles,
   labels as text at their laid-out position (hanging baseline), edges as polylines through the
   section start, bend and end points with an arrow head, junction points as small circles; pan,
-  zoom, selection and hover feedback, animated updates. Differences that keep more of the layout:
+  zoom, selection and hover feedback, animated updates. Edge labels are drawn at the position ELK
+  computed (the `ElkLabel` model class opts out of sprotty's route-based edge label placement, which
+  has no route to work with here). Differences that keep more of the layout:
   every section of a hyperedge is drawn (elk-live joined all sections into one polyline), edges are
   placed in their coordinate container, `elk.json.shapeCoords`/`edgeCoords` are honoured, and edges
   are drawn exactly through their routing points (no sprotty anchor computation).

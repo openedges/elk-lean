@@ -12,8 +12,8 @@
  * Changed for elk-lean: `ElkEdge.arrow` (only sections that end at a target shape get an arrow head).
  */
 import {
-  RectangularNode, RectangularPort, SEdgeImpl, SNodeImpl, editFeature, hoverFeedbackFeature, moveFeature,
-  selectFeature,
+  RectangularNode, RectangularPort, SEdgeImpl, SLabelImpl, SNodeImpl, edgeLayoutFeature, editFeature,
+  hoverFeedbackFeature, moveFeature, selectFeature,
 } from 'sprotty';
 
 export class ElkNode extends RectangularNode {
@@ -33,6 +33,18 @@ export class ElkEdge extends SEdgeImpl {
 
   override hasFeature(feature: symbol): boolean {
     return feature === editFeature ? false : super.hasFeature(feature);
+  }
+}
+
+/**
+ * Labels keep the position ELK computed, also under an edge: without `edgeLayoutFeature`, sprotty's
+ * `LocationPostprocessor` translates them by their position like node and port labels, instead of
+ * `EdgeLayoutPostprocessor` placing them along a router-computed route (the edges here are drawn from
+ * their ELK routing points and have no sprotty route, which left edge labels at the edge's origin).
+ */
+export class ElkLabel extends SLabelImpl {
+  override hasFeature(feature: symbol): boolean {
+    return feature === edgeLayoutFeature ? false : super.hasFeature(feature);
   }
 }
 
