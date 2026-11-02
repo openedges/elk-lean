@@ -246,7 +246,7 @@
 | G1. npm 스코프 전환 `@openedges/elk-lean`(+플랫폼 6 템플릿, 빌드되는 4개만 `optionalDependencies`), `private` 제거, `scripts/bump_version.py`·`scripts/publish_npm.sh` | elk-rs `scripts/publish_npm.sh`·`bump_version.py` | fable(주) | medium | 주 에이전트 | 완료: npm 테스트 72/73(1 skip), 데모 122/122 |
 | G2. `ci.yml` + composite action 4개(`pins`·`setup-lean`·`lean-sources`·`setup-emsdk`) | elk-rs `ci.yml`, `.gitlab-ci.yml` 초안 | fable(주) | high | 주 에이전트 | 1차 실행: macOS 통과, Linux 애드온 feature macro 수정 후 재실행 |
 | G3. `release.yml`(4 플랫폼 번들·WASM·npm trusted publishing·GitHub Release) + `.github/scripts/place_artifacts.sh` | elk-rs `release.yml` | fable(주) | high | 주 에이전트 | 작성, 수동 실행(dry run)으로 검증 예정 |
-| G4. `pages.yml` + Pages 설정(Actions 소스) | elk-rs 없음(GitLab `.pages` 초안) | fable(주) | medium | 주 에이전트 | 작성, 첫 배포 확인 예정 |
+| G4. `pages.yml` + Pages 설정(Actions 소스; 주소 `openedges.github.io/elk-lean/` — 커스텀 도메인 `elk-live.openedges.com`을 잠시 설정했다가 사용자 결정으로 철회. 조직 사이트의 커스텀 도메인 때문에 GitHub가 github.io 주소를 그 도메인 아래로 넘기는 것은 GitHub 동작이며 이 저장소의 설정이 아님) | elk-rs 없음(GitLab `.pages` 초안) | fable(주) | medium | 주 에이전트 | 작성, 첫 배포 확인 예정 |
 | G5. `parity.yml`(Java·ELK Text·elk-rs, `parity_gate.sh` 최소 일치 수)·`perf.yml` | elk-rs `parity.yml`·`perf.yml` | fable(주) | medium | 주 에이전트 | 작성, 수동 실행으로 검증 예정 |
 | G6. 문서(README 배지·설치, VERSIONING Releases, TESTING §3, PLAN 8.2, AGENTS, CHANGELOG, dry-run, README들), `.gitlab-ci.yml` 제거, LICENSE 분리·lakefile Reservoir 메타데이터 | — | fable(주) | medium | 주 에이전트 | 완료 |
 | G7. 유지보수자 수동 단계: npm 첫 게시·trusted publisher 등록, GitHub 환경 `npm`, 별 2개 | — | 사용자 | — | 사용자 | 대기 |

@@ -1,6 +1,6 @@
 # The browser demo (plugins/org.eclipse.elk.live, elk-live without a server) on GitHub Pages:
 # https://openedges.github.io/elk-lean/ — rebuilt from every push to main (WASM build included).
-# Pages must be set to "GitHub Actions" as its source once (repository settings, Pages).
+# The repository's Pages source is "GitHub Actions", no custom domain of its own.
 name: pages
 
 on:
