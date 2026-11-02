@@ -63,7 +63,7 @@ export interface EditorDiagram {
   model: Monaco.editor.ITextModel;
   /** lays out the current text now (a newer edit drops the result of an older one) */
   update(): Promise<void>;
-  /** replaces the text, moves the cursor to the start and fits the next diagram */
+  /** replaces the text and moves the cursor to the start (the viewport is kept, as in elk-live) */
   setText(text: string): void;
   lastResult(): PipelineResult | null;
   fit(animate?: boolean): void;
@@ -145,7 +145,6 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
   // ---------------------------------------------------------------- pipeline
   let pending = false;
   let running = false;
-  let fitNext = true;
   let timer: number | undefined;
 
   function markers(result: PipelineResult): void {
@@ -190,11 +189,8 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
           } else {
             await modelSource.updateModel(result.model);
           }
-          if (fitNext) {
-            // the first model needs the canvas bounds of its initial render before it can be fitted
-            window.setTimeout(() => fit(false), first ? 100 : 0);
-            fitNext = false;
-          }
+          // no automatic fit: like elk-live, the diagram starts at the top-left corner at zoom 1 and
+          // the viewport is kept across updates; "Fit" is a manual action
           setStatus(`Laid out ${countElements(result.laidOut!)} (${timing})`, 'ok');
         } else if (result.diagnostic) {
           const d = result.diagnostic;
@@ -223,7 +219,6 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
   model.onDidChangeContent(() => schedule());
 
   function setText(text: string): void {
-    fitNext = true;
     model.setValue(text);
     editor.setPosition({ lineNumber: 1, column: 1 });
     editor.revealLine(1);
