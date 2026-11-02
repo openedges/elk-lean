@@ -110,10 +110,10 @@ export function createEditorDiagram(opts: EditorDiagramOptions): EditorDiagram {
     monaco.Uri.parse(`inmemory:/${diagramId}/model.${ext}`));
   const editor = monaco.editor.create(document.getElementById(editorId)!, {
     model,
+    // elk-live creates its editors with Monaco's defaults (font family, size and line height of the
+    // platform; minimap off); only the examples page sets scrollBeyondLastLine: false
     minimap: { enabled: false },
     automaticLayout: true,
-    fontSize: 13,
-    scrollBeyondLastLine: false,
     quickSuggestions: { other: true, comments: false, strings: false },
     suggestOnTriggerCharacters: true,
     ...opts.editorOptions,

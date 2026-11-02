@@ -35,6 +35,7 @@ const ctrl = createEditorDiagram({
   format: 'elkt',
   language: ELKT,
   initialText: '',
+  editorOptions: { scrollBeyondLastLine: false }, // elk-live examples.ts
   fileName: () => current?.split('/').pop() || 'graph',
   tools: [{
     id: 'open-elkt-button',

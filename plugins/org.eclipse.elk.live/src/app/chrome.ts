@@ -57,11 +57,13 @@ export function mountFooter(opts: { modelLink: boolean }): void {
       el('a', { id: 'model-link', href: '#', title: 'Link to this model (the text is compressed into the URL)' }, 'Link to this model'),
       el('button', { type: 'button', id: 'copy-link-button', title: 'Copy the link to this model' }, 'Copy link'));
   }
+  // one row like elk-live's footer ("Link to this model" left, project line right); the status
+  // line takes the middle and is clipped with an ellipsis instead of wrapping
   const status = el('span', { id: 'status' }, 'Starting…');
   status.setAttribute('role', 'status');
-  const engine = el('span', { className: 'muted' });
-  engine.innerHTML = `layout in the browser by <a href="https://www.eclipse.org/elk/">ELK</a> ${ELK_VERSION} in Lean 4 `
-    + `(elk-lean ${ENGINE_VERSION}, WebAssembly) &middot; EPL-2.0 OR GPL-3.0-or-later`;
-  footer.append(status, el('span', { className: 'spacer' }), engine);
+  const engine = el('span', { className: 'muted footer-engine' });
+  engine.innerHTML = `<a href="https://www.eclipse.org/elk/">ELK</a> ${ELK_VERSION} in Lean 4 `
+    + `(<span title="EPL-2.0 OR GPL-3.0-or-later">elk-lean ${ENGINE_VERSION}</span>, WebAssembly)`;
+  footer.append(status, engine);
   document.body.append(footer);
 }
