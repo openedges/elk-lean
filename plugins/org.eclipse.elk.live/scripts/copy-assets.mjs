@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build-time assets of the demo (run by `npm run dev` / `npm run build`):
 //   public/examples/<path>.elkt   the example files of external/elk-models/examples (relative names kept)
-//   public/examples/index.json    [{ path, label, category, doc }] for the example menu (elkex sections)
+//   public/examples/index.json    [{ path, label, category, doc }] for the examples page (elkex sections)
 //   public/elk-lean/js/{elk-worker.js,load-wasm.browser.mjs}
 //   public/elk-lean/dist/wasm/elk_lean_core.{mjs,wasm}
 //                                 the Web Worker of the elk-lean npm package and its WASM backend,

@@ -1,58 +1,107 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later -->
+<!-- Landing page, after elk-live client/app/index.html (EPL-2.0). -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ELK Live (elk-lean)</title>
+  <title>ELK Demonstrators (elk-lean)</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 </head>
-<body>
-  <header class="toolbar">
-    <span class="brand">ELK Live <small>elk-lean <span id="engine-version">0.12.0</span></small></span>
-    <label class="field">Example
-      <select id="example-select" aria-label="Example">
-        <option value="">(custom)</option>
-      </select>
-    </label>
-    <label class="field">Format
-      <select id="format-select" aria-label="Input format">
-        <option value="elkt">ELK Text (.elkt)</option>
-        <option value="json">ELK JSON</option>
-      </select>
-    </label>
-    <span class="spacer"></span>
-    <button id="fit-button" type="button" title="Fit the diagram to the view">Fit</button>
-    <button id="svg-button" type="button" title="Download the diagram as SVG">SVG</button>
-    <button id="json-button" type="button" title="Download the laid-out graph as ELK JSON">JSON</button>
-    <a id="model-link" href="#" title="Link to this model (the text is compressed into the URL)">Link</a>
-    <button id="copy-link-button" type="button" title="Copy the link to this model">Copy link</button>
-    <button id="dark-toggle" type="button" title="Toggle dark mode" aria-pressed="false">Dark</button>
-  </header>
-  <section id="example-doc" class="example-doc" hidden>
-    <strong id="example-title"></strong> <span id="example-category" class="muted"></span>
-    <div id="example-description"></div>
-  </section>
-  <main class="panes">
-    <div class="pane editor-pane">
-      <div id="monaco-editor"></div>
+<body class="landing">
+  <div id="landing-tools" class="landing-tools"></div>
+  <main class="landing-container">
+    <header class="landing-header">
+      <img class="logo-large" src="./favicon.svg" alt="">
+      <h1>ELK Demonstrators</h1>
+      <p class="lead">
+        Automatic layout algorithms compute layouts for diagrams.
+        Never tried them? Well, here's your chance.
+        Choose one of the thingies below and start playing!
+      </p>
+      <p class="muted">
+        Everything runs in your browser: the layout is computed by elk-lean, the Eclipse Layout
+        Kernel 0.12.0 ported to pure Lean 4 and compiled to WebAssembly. No server is involved.
+      </p>
+    </header>
+
+    <div class="cards">
+      <section class="card">
+        <h3><a id="link-editor" href="elkgraph.html">Interactive Editor</a></h3>
+        <p>
+          Interactively edit a textual description of a graph while a corresponding diagram is
+          generated on-the-fly. Basically, build your own graphs and see what automatic layout does
+          with them. You can choose out of the following two formats:
+        </p>
+        <div class="card-formats">
+          <div>
+            <h5><a id="link-elkt" href="elkgraph.html"><code>elkt</code></a></h5>
+            <p>
+              ELK's <a href="https://www.eclipse.org/elk/documentation/tooldevelopers/graphdatastructure/elktextformat.html">textual graph DSL</a>,
+              with highlighting, error markers and content assist (<code>Ctrl+Space</code>) for layout options.
+              Parsed and laid out within your browser by elk-lean (WebAssembly).
+            </p>
+          </div>
+          <div>
+            <h5><a id="link-json" href="json.html"><code>json</code></a></h5>
+            <p>
+              ELK's <a href="https://www.eclipse.org/elk/documentation/tooldevelopers/graphdatastructure/jsonformat.html">JSON format</a>
+              (JSON5 syntax accepted).
+              Laid out within your browser by elk-lean (WebAssembly).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3><a id="link-examples" href="examples.html">Examples</a></h3>
+        <p>
+          An annotated collection of example graphs. Their main purpose is to illustrate various
+          configuration possibilities, in particular those that are often-used.
+        </p>
+        <p>
+          The source of the examples can be found in ELK's
+          <a href="https://github.com/eclipse/elk-models">models repository</a>.
+        </p>
+      </section>
+
+      <section class="card card-disabled" aria-disabled="true">
+        <h3>Model Browser</h3>
+        <p>
+          elk-live's browser for ELK's repository of test models is not part of this demo: it would
+          copy about 1,450 more models (some 60 MB) into the static site.
+        </p>
+      </section>
+
+      <section class="card card-disabled" aria-disabled="true">
+        <h3>Graph Format Conversion</h3>
+        <p>
+          Not available: elk-lean converts ELK Text to ELK JSON only (no <code>elkg</code>/XMI, no
+          JSON to ELK Text). The ELKT editor's "Open as JSON" covers that direction.
+        </p>
+      </section>
     </div>
-    <div class="pane diagram-pane">
-      <div id="sprotty" class="sprotty"></div>
-      <div id="loading" class="loading-overlay">
-        <div class="spinner" aria-hidden="true"></div>
-        <div id="loading-text">Loading the layout engine (WebAssembly)&hellip;</div>
-      </div>
-    </div>
+
+    <section class="card technologies">
+      <h4>Used Technologies</h4>
+      <dl>
+        <dt><a href="https://www.eclipse.org/elk/">Eclipse Layout Kernel (ELK)</a></dt>
+        <dd>Java-based implementations of automatic layout algorithms; elk-lean ports its version 0.12.0.</dd>
+        <dt>elk-lean</dt>
+        <dd>
+          ELK ported to pure Lean 4, compiled to WebAssembly and run in a Web Worker. Parses ELK Text
+          and computes the layouts of the diagrams so you don't have to.
+        </dd>
+        <dt><a href="https://github.com/eclipse-sprotty/sprotty">Sprotty</a></dt>
+        <dd>A web-based diagramming framework. This is what shows the diagrams.</dd>
+        <dt><a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a></dt>
+        <dd>The code editor that powers Visual Studio Code. The thing that lets you specify your graphs.</dd>
+        <dt><a href="https://github.com/kieler/elk-live">elk-live</a></dt>
+        <dd>The original ELK demonstrators (Java server, elkjs), whose pages this demo follows.</dd>
+      </dl>
+      <p class="muted">EPL-2.0 OR GPL-3.0-or-later; parts ported from elk-live are EPL-2.0.</p>
+    </section>
   </main>
-  <footer class="statusbar">
-    <span id="status" role="status">Starting&hellip;</span>
-    <span class="spacer"></span>
-    <span class="muted">
-      <a href="https://www.eclipse.org/elk/documentation/tooldevelopers/graphdatastructure/elktextformat.html">ELK Text</a>
-      &middot; layout by elk-lean (ELK 0.12.0 in Lean 4, WebAssembly) &middot; EPL-2.0 OR GPL-3.0-or-later
-    </span>
-  </footer>
-  <script type="module" src="./src/main.ts"></script>
+  <script type="module" src="./src/pages/index.ts"></script>
 </body>
 </html>

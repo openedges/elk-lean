@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: EPL-2.0 OR GPL-3.0-or-later */
+/* Styles of the bundled editor and diagram libraries (editor pages only, not the landing page). */
+@import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css';
+@import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css';
+@import '../../node_modules/sprotty/css/sprotty.css';
